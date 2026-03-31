@@ -29,25 +29,31 @@ export async function GET(
         door_type,
         frame_type,
         fire_rating,
-        hand,
+        status,
+        notes,
         created_at,
         updated_at,
         hardware_items(
           id,
-          qty,
-          name,
-          model,
-          finish,
+          category,
+          product,
           manufacturer,
+          model_number,
+          finish,
+          quantity,
+          notes,
+          status,
           created_at
         ),
         checklist_progress(
           id,
-          user_id,
-          item_id,
-          checked,
-          created_at,
-          updated_at
+          hardware_item_id,
+          step_name,
+          completed,
+          completed_by,
+          completed_at,
+          notes,
+          created_at
         )
       `)
       .eq('id', openingId)

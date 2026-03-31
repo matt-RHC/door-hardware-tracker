@@ -5,29 +5,35 @@ export type Database = {
         Row: {
           id: string
           name: string
-          description: string | null
-          status: 'active' | 'completed' | 'archived'
-          created_by: string
+          job_number: string | null
+          general_contractor: string | null
+          architect: string | null
+          address: string | null
+          submittal_date: string | null
           created_at: string
-          updated_at: string
+          created_by: string | null
         }
         Insert: {
           id?: string
           name: string
-          description?: string | null
-          status?: 'active' | 'completed' | 'archived'
-          created_by: string
+          job_number?: string | null
+          general_contractor?: string | null
+          architect?: string | null
+          address?: string | null
+          submittal_date?: string | null
           created_at?: string
-          updated_at?: string
+          created_by?: string | null
         }
         Update: {
           id?: string
           name?: string
-          description?: string | null
-          status?: 'active' | 'completed' | 'archived'
-          created_by?: string
+          job_number?: string | null
+          general_contractor?: string | null
+          architect?: string | null
+          address?: string | null
+          submittal_date?: string | null
           created_at?: string
-          updated_at?: string
+          created_by?: string | null
         }
       }
       project_members: {
@@ -57,30 +63,45 @@ export type Database = {
         Row: {
           id: string
           project_id: string
-          name: string
-          description: string | null
+          door_number: string
+          hw_set: string | null
+          hw_heading: string | null
+          fire_rating: string | null
+          door_type: string | null
+          frame_type: string | null
           location: string | null
-          status: 'pending' | 'in_progress' | 'completed'
+          status: 'not_started' | 'in_progress' | 'installed' | 'inspected' | 'issue'
+          notes: string | null
           created_at: string
           updated_at: string
         }
         Insert: {
           id?: string
           project_id: string
-          name: string
-          description?: string | null
+          door_number: string
+          hw_set?: string | null
+          hw_heading?: string | null
+          fire_rating?: string | null
+          door_type?: string | null
+          frame_type?: string | null
           location?: string | null
-          status?: 'pending' | 'in_progress' | 'completed'
+          status?: 'not_started' | 'in_progress' | 'installed' | 'inspected' | 'issue'
+          notes?: string | null
           created_at?: string
           updated_at?: string
         }
         Update: {
           id?: string
           project_id?: string
-          name?: string
-          description?: string | null
+          door_number?: string
+          hw_set?: string | null
+          hw_heading?: string | null
+          fire_rating?: string | null
+          door_type?: string | null
+          frame_type?: string | null
           location?: string | null
-          status?: 'pending' | 'in_progress' | 'completed'
+          status?: 'not_started' | 'in_progress' | 'installed' | 'inspected' | 'issue'
+          notes?: string | null
           created_at?: string
           updated_at?: string
         }

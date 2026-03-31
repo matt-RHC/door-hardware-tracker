@@ -8,12 +8,16 @@ import ProgressBar from "@/components/ProgressBar";
 interface OpeningWithProgress {
   id: string;
   project_id: string;
-  name: string;
+  door_number: string;
+  hw_set: string | null;
+  hw_heading: string | null;
   location: string | null;
-  description: string | null;
-  status: string;
+  door_type: string | null;
+  frame_type: string | null;
+  fire_rating: string | null;
+  status: string | null;
+  notes: string | null;
   created_at: string;
-  updated_at: string;
   total_items: number;
   checked_items: number;
 }
@@ -60,7 +64,8 @@ export default function ProjectDetailPage() {
       const query = searchQuery.toLowerCase();
       filtered = filtered.filter(
         (opening) =>
-          opening.name.toLowerCase().includes(query) ||
+          opening.door_number.toLowerCase().includes(query) ||
+          opening.hw_set?.toLowerCase().includes(query) ||
           opening.location?.toLowerCase().includes(query)
       );
     }
@@ -184,17 +189,22 @@ export default function ProjectDetailPage() {
                   }
                   className="bg-slate-900 rounded-lg border border-slate-800 p-6 hover:border-blue-500 cursor-pointer transition-colors"
                 >
-                  <h2 className="text-2xl font-bold text-white mb-2">
-                    {opening.name}
+                  <h2 className="text-2xl font-bold text-white mb-1">
+                    Door {opening.door_number}
                   </h2>
-                  {opening.location && (
-                    <p className="text-slate-400 text-sm mb-4">
-                      {opening.location}
+                  {opening.hw_set && (
+                    <p className="text-blue-400 text-sm mb-1">
+                      HW Set: {opening.hw_set}
                     </p>
                   )}
-                  {opening.description && (
-                    <p className="text-slate-500 text-xs mb-4">
-                      {opening.description}
+                  {opening.fire_rating && (
+                    <p className="text-amber-400 text-xs mb-1">
+                      {opening.fire_rating} Fire Rating
+                    </p>
+                  )}
+                  {opening.location && (
+                    <p className="text-slate-400 text-sm mb-3">
+                      {opening.location}
                     </p>
                   )}
 

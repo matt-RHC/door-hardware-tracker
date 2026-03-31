@@ -68,22 +68,27 @@ export default function DashboardPage() {
                 <h2 className="text-xl font-bold text-white mb-2">
                   {project.name}
                 </h2>
-                <p className="text-slate-400 text-sm mb-4">
-                  {project.description || "No description"}
-                </p>
+                {project.job_number && (
+                  <p className="text-blue-400 text-sm mb-1">
+                    Job #{project.job_number}
+                  </p>
+                )}
+                {project.general_contractor && (
+                  <p className="text-slate-400 text-sm mb-1">
+                    GC: {project.general_contractor}
+                  </p>
+                )}
+                {project.address && (
+                  <p className="text-slate-500 text-xs mb-3">
+                    {project.address}
+                  </p>
+                )}
                 <div className="flex justify-between items-center text-sm">
-                  <span className="text-slate-400">
-                    Status: {project.status}
-                  </span>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      /* TODO: Open PDF upload modal */
-                    }}
-                    className="px-3 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded text-xs"
-                  >
-                    Upload PDF
-                  </button>
+                  {project.submittal_date && (
+                    <span className="text-slate-400 text-xs">
+                      Submittal: {new Date(project.submittal_date).toLocaleDateString()}
+                    </span>
+                  )}
                 </div>
               </div>
             ))}

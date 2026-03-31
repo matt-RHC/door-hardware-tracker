@@ -3,7 +3,11 @@ import { createServerSupabaseClient } from '@/lib/supabase/server'
 
 interface CreateProjectRequest {
   name: string
-  description?: string
+  job_number?: string
+  general_contractor?: string
+  architect?: string
+  address?: string
+  submittal_date?: string
 }
 
 export async function GET(request: NextRequest) {
@@ -17,17 +21,38 @@ export async function GET(request: NextRequest) {
     }
 
     // Get projects where user is a member
+    const { data: memberships, error: membershipsError } = await supabase
+      .from('project_members')
+      .select('project_id')
+      .eq('user_id', user.id)
+
+    if (membershipsError) {
+      console.error('Error fetching memberships:', membershipsError)
+      return NextResponse.json(
+        { error: 'Failed to fetch projects' },
+        { status: 500 }
+      )
+    }
+
+    const projectIds = (memberships || []).map((m: any) => m.project_id)
+
+    if (projectIds.length === 0) {
+      return NextResponse.json([])
+    }
+
     const { data: projects, error: projectsError } = await supabase
       .from('projects')
       .select(`
         id,
         name,
-        description,
-        status,
-        created_at,
-        updated_at
+        job_number,
+        general_contractor,
+        architect,
+        address,
+        submittal_date,
+        created_at
       `)
-      .eq('created_by', user.id)
+      .in('id', projectIds)
 
     if (projectsError) {
       console.error('Error fetching projects:', projectsError)
@@ -58,7 +83,7 @@ export async function POST(request: NextRequest) {
     }
 
     const body: CreateProjectRequest = await request.json()
-    const { name, description } = body
+    const { name, job_number, general_contractor, architect, address, submittal_date } = body
 
     if (!name) {
       return NextResponse.json(
@@ -72,8 +97,11 @@ export async function POST(request: NextRequest) {
       .from('projects')
       .insert([{
         name,
-        description: description || null,
-        status: 'active',
+        job_number: job_number || null,
+        general_contractor: general_contractor || null,
+        architect: architect || null,
+        address: address || null,
+        submittal_date: submittal_date || null,
         created_by: user.id,
       }] as any)
       .select()
