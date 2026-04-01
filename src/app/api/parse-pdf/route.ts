@@ -158,6 +158,13 @@ Extract EVERY hardware set definition from this document. Return valid JSON:
   ]
 }
 
+CRITICAL RULES FOR QTY:
+- The "qty" field must be the quantity PER INDIVIDUAL DOOR/OPENING, NOT the total across all doors.
+- For example, a typical single door has 3 hinges, 1 lockset, 1 closer, 1 kick plate, etc.
+- If the document shows a total quantity column and a per-opening quantity column, use the PER-OPENING quantity.
+- If only a total is shown, divide by the number of openings in that set to get per-opening qty.
+- Common per-opening quantities: hinges = 3 or 4, closers = 1, locksets = 1, stops = 1, kick plates = 1, seals = 1 set, silencers = 1 set.
+
 IMPORTANT: Extract ALL hardware sets with ALL items in each. No markdown, only JSON.`
 
         let pass1Data: { hardware_sets: HardwareSet[] }
@@ -314,23 +321,85 @@ No headers, no markdown, just data lines.`
         send(87, `Saved ${insertedOpenings.length} doors. Loading hardware items...`)
 
         // Build all hardware item rows at once, then batch insert
+        // Each opening gets: door(s), frame, then hardware set items
         const allHardwareRows: Array<Record<string, unknown>> = []
 
-        for (const opening of insertedOpenings) {
-          const hwSet = setMap.get(opening.hw_set)
-          if (!hwSet?.items?.length) continue
+        // Build a lookup for door_type and frame_type from allDoors
+        const doorInfoMap = new Map<string, { door_type: string; frame_type: string }>()
+        for (const door of allDoors) {
+          doorInfoMap.set(door.door_number, {
+            door_type: door.door_type || '',
+            frame_type: door.frame_type || '',
+          })
+        }
 
-          for (let idx = 0; idx < hwSet.items.length; idx++) {
-            const item = hwSet.items[idx]
+        for (const opening of insertedOpenings) {
+          let sortOrder = 0
+          const doorInfo = doorInfoMap.get(opening.door_number)
+
+          // Determine if pair (two doors) based on door_type or hw_heading
+          const hwSet = setMap.get(opening.hw_set)
+          const heading = (hwSet?.heading || '').toLowerCase()
+          const doorType = (doorInfo?.door_type || '').toLowerCase()
+          const isPair = heading.includes('pair') || heading.includes('double') ||
+                         doorType.includes('pr') || doorType.includes('pair')
+
+          // Add door(s) as checkable items
+          if (isPair) {
             allHardwareRows.push({
               opening_id: opening.id,
-              name: item.name,
-              qty: item.qty || 1,
-              manufacturer: item.manufacturer || null,
-              model: item.model || null,
-              finish: item.finish || null,
-              sort_order: idx,
+              name: `Door (Active Leaf)`,
+              qty: 1,
+              manufacturer: null,
+              model: doorInfo?.door_type || null,
+              finish: null,
+              sort_order: sortOrder++,
             })
+            allHardwareRows.push({
+              opening_id: opening.id,
+              name: `Door (Inactive Leaf)`,
+              qty: 1,
+              manufacturer: null,
+              model: doorInfo?.door_type || null,
+              finish: null,
+              sort_order: sortOrder++,
+            })
+          } else {
+            allHardwareRows.push({
+              opening_id: opening.id,
+              name: `Door`,
+              qty: 1,
+              manufacturer: null,
+              model: doorInfo?.door_type || null,
+              finish: null,
+              sort_order: sortOrder++,
+            })
+          }
+
+          // Add frame as checkable item
+          allHardwareRows.push({
+            opening_id: opening.id,
+            name: `Frame`,
+            qty: 1,
+            manufacturer: null,
+            model: doorInfo?.frame_type || null,
+            finish: null,
+            sort_order: sortOrder++,
+          })
+
+          // Add hardware set items
+          if (hwSet?.items?.length) {
+            for (const item of hwSet.items) {
+              allHardwareRows.push({
+                opening_id: opening.id,
+                name: item.name,
+                qty: item.qty || 1,
+                manufacturer: item.manufacturer || null,
+                model: item.model || null,
+                finish: item.finish || null,
+                sort_order: sortOrder++,
+              })
+            }
           }
         }
 
