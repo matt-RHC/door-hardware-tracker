@@ -61,7 +61,8 @@ export default function DoorDetailPage() {
     itemId: string;
     itemName: string;
     installType: 'bench' | 'field';
-    similarItemIds: string[];
+    totalAcrossProject: number;
+    unclassifiedAcrossProject: number;
   } | null>(null);
 
   const supabase = createClient();
@@ -143,40 +144,58 @@ export default function DoorDetailPage() {
     }
   };
 
-  const handleInstallTypeClick = (itemId: string, installType: 'bench' | 'field') => {
+  const handleInstallTypeClick = async (itemId: string, installType: 'bench' | 'field') => {
     if (!opening) return;
     const item = opening.hardware_items.find(i => i.id === itemId);
     if (!item) return;
 
-    // Find similar items (same name, no install_type set yet)
-    const similarItems = opening.hardware_items.filter(
-      i => i.name === item.name && i.id !== itemId && !i.install_type
-    );
+    // Check how many items with this name exist across the whole project
+    try {
+      const res = await fetch(
+        `/api/projects/${projectId}/classify-items?item_name=${encodeURIComponent(item.name)}`
+      );
+      const counts = await res.json();
 
-    if (similarItems.length > 0) {
-      setClassifyConfirm({
-        itemId,
-        itemName: item.name,
-        installType,
-        similarItemIds: similarItems.map(i => i.id),
-      });
-    } else {
-      // No similar items, just apply to this one
-      applyInstallType([itemId], installType);
+      if (counts.total > 1) {
+        setClassifyConfirm({
+          itemId,
+          itemName: item.name,
+          installType,
+          totalAcrossProject: counts.total,
+          unclassifiedAcrossProject: counts.unclassified,
+        });
+      } else {
+        // Only one in the whole project, just apply
+        applyInstallType(item.name, installType, false);
+      }
+    } catch (err) {
+      // Fallback: just apply to this one
+      applyInstallType(item.name, installType, false, [itemId]);
     }
   };
 
-  const applyInstallType = async (itemIds: string[], installType: 'bench' | 'field') => {
+  const applyInstallType = async (
+    itemName: string,
+    installType: 'bench' | 'field',
+    applyToAll: boolean,
+    specificIds?: string[]
+  ) => {
     try {
-      await Promise.all(
-        itemIds.map(id =>
-          fetch(`/api/openings/${doorId}/items/${id}`, {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ install_type: installType }),
-          })
-        )
-      );
+      const body: any = { item_name: itemName, install_type: installType };
+      if (!applyToAll && specificIds) {
+        body.item_ids = specificIds;
+      } else if (!applyToAll) {
+        // "Just this one" — find the item id from classifyConfirm or opening
+        const item = opening?.hardware_items.find(i => i.name === itemName);
+        if (item) body.item_ids = [classifyConfirm?.itemId || item.id];
+      }
+      // If applyToAll is true, don't pass item_ids — API updates all matching by name
+
+      await fetch(`/api/projects/${projectId}/classify-items`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
       await fetchOpeningData();
     } catch (err) {
       console.error("Error updating install type:", err);
@@ -901,12 +920,16 @@ export default function DoorDetailPage() {
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
           <div className="bg-slate-900 border border-slate-700 rounded-lg w-full max-w-md p-6">
             <h2 className="text-lg font-bold text-white mb-3">
-              Classify as {classifyConfirm.installType === 'bench' ? 'Bench' : 'Field'}?
+              Classify &quot;{classifyConfirm.itemName}&quot; as{' '}
+              <span className={classifyConfirm.installType === 'bench' ? 'text-purple-300' : 'text-green-300'}>
+                {classifyConfirm.installType === 'bench' ? 'Bench' : 'Field'}
+              </span>?
             </h2>
             <p className="text-slate-400 text-sm mb-4">
-              There {classifyConfirm.similarItemIds.length === 1 ? 'is' : 'are'}{' '}
-              <span className="text-white font-medium">{classifyConfirm.similarItemIds.length}</span>{' '}
-              other &quot;{classifyConfirm.itemName}&quot; item{classifyConfirm.similarItemIds.length !== 1 ? 's' : ''} in this opening.
+              There {classifyConfirm.totalAcrossProject === 1 ? 'is' : 'are'}{' '}
+              <span className="text-white font-medium">{classifyConfirm.totalAcrossProject}</span>{' '}
+              &quot;{classifyConfirm.itemName}&quot; item{classifyConfirm.totalAcrossProject !== 1 ? 's' : ''}{' '}
+              across all openings in this project.
               Apply{' '}
               <span className={classifyConfirm.installType === 'bench' ? 'text-purple-300' : 'text-green-300'}>
                 {classifyConfirm.installType === 'bench' ? 'Bench' : 'Field'}
@@ -914,22 +937,25 @@ export default function DoorDetailPage() {
               to all of them?
             </p>
             <p className="text-slate-500 text-xs mb-4">
-              You can always change individual items later.
+              You can always change individual items later on each opening.
             </p>
             <div className="flex gap-3">
               <button
                 onClick={() => applyInstallType(
-                  [classifyConfirm.itemId, ...classifyConfirm.similarItemIds],
-                  classifyConfirm.installType
+                  classifyConfirm.itemName,
+                  classifyConfirm.installType,
+                  true
                 )}
                 className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors text-sm"
               >
-                Yes, apply to all
+                Yes, apply to all ({classifyConfirm.totalAcrossProject})
               </button>
               <button
                 onClick={() => applyInstallType(
-                  [classifyConfirm.itemId],
-                  classifyConfirm.installType
+                  classifyConfirm.itemName,
+                  classifyConfirm.installType,
+                  false,
+                  [classifyConfirm.itemId]
                 )}
                 className="flex-1 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded transition-colors text-sm"
               >
