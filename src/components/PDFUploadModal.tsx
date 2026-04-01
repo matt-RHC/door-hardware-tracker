@@ -50,7 +50,10 @@ export default function PDFUploadModal({
         body: formData,
       });
 
-      if (!response.ok) throw new Error("Failed to upload PDF");
+      if (!response.ok) {
+        const errData = await response.json().catch(() => null);
+        throw new Error(errData?.error || `Upload failed (${response.status})`);
+      }
 
       onSuccess();
       onClose();
@@ -102,7 +105,7 @@ export default function PDFUploadModal({
               disabled={loading || !file}
               className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-700 text-white rounded transition-colors"
             >
-              {loading ? "Uploading..." : "Upload"}
+              {loading ? "Parsing PDF... (this may take 30-60s)" : "Upload"}
             </button>
           </div>
         </form>

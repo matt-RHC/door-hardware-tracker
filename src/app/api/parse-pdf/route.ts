@@ -65,7 +65,7 @@ export async function POST(request: NextRequest) {
     // Call Claude API with PDF
     const response = await client.messages.create({
       model: 'claude-sonnet-4-20250514',
-      max_tokens: 4096,
+      max_tokens: 16384,
       system: `You are an expert at extracting door hardware information from architectural submittals and schedules.
 Extract all openings and their associated hardware items from the provided PDF document.
 Return the data as valid JSON matching this structure exactly:
@@ -108,6 +108,15 @@ Only return valid JSON, no other text.`,
       ],
     })
 
+    // Check if response was truncated
+    if (response.stop_reason === 'max_tokens') {
+      console.error('Claude response was truncated (hit max_tokens limit)')
+      return NextResponse.json(
+        { error: 'PDF too large - Claude response was truncated. Try uploading fewer pages.' },
+        { status: 413 }
+      )
+    }
+
     // Extract JSON from response
     const textContent = response.content.find((block) => block.type === 'text')
     if (!textContent || textContent.type !== 'text') {
@@ -119,10 +128,16 @@ Only return valid JSON, no other text.`,
 
     let parsedData: ParsedContent
     try {
-      parsedData = JSON.parse(textContent.text)
-    } catch (error) {
+      // Strip markdown code fences if present (```json ... ```)
+      let jsonText = textContent.text.trim()
+      if (jsonText.startsWith('```')) {
+        jsonText = jsonText.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '')
+      }
+      parsedData = JSON.parse(jsonText)
+    } catch (parseErr) {
+      console.error('Failed to parse Claude response:', textContent.text.substring(0, 500))
       return NextResponse.json(
-        { error: 'Failed to parse Claude response as JSON' },
+        { error: 'Failed to parse Claude response as JSON', detail: String(parseErr) },
         { status: 500 }
       )
     }
@@ -198,8 +213,9 @@ Only return valid JSON, no other text.`,
     })
   } catch (error) {
     console.error('PDF parsing error:', error)
+    const message = error instanceof Error ? error.message : 'Internal server error'
     return NextResponse.json(
-      { error: 'Internal server error' },
+      { error: message },
       { status: 500 }
     )
   }
