@@ -70,6 +70,7 @@ export default function DoorDetailPage() {
       if (!response.ok) throw new Error("Failed to fetch opening");
       const data: OpeningDetail = await response.json();
       setOpening(data);
+      setNotes(data.notes || "");
       await cacheOpening(data);
       setError(null);
     } catch (err) {
@@ -129,7 +130,6 @@ export default function DoorDetailPage() {
     setSavingNotes(true);
     try {
       // TODO: Implement notes save to Supabase
-      // For now just set success state
       setSavingNotes(false);
     } catch (err) {
       console.error("Error saving notes:", err);
@@ -187,6 +187,15 @@ export default function DoorDetailPage() {
   const progress = totalItems > 0 ? (checkedItems / totalItems) * 100 : 0;
   const qrUrl = `${typeof window !== "undefined" ? window.location.origin : ""}/project/${projectId}/door/${doorId}`;
 
+  // Build a display label for the item spec line
+  const formatSpec = (item: HardwareItemWithProgress) => {
+    const parts: string[] = [];
+    if (item.manufacturer) parts.push(item.manufacturer);
+    if (item.model) parts.push(item.model);
+    if (item.finish) parts.push(item.finish);
+    return parts.join(" · ");
+  };
+
   return (
     <div className="min-h-screen bg-slate-950">
       <OfflineIndicator />
@@ -198,7 +207,7 @@ export default function DoorDetailPage() {
             onClick={() => router.push(`/project/${projectId}`)}
             className="text-blue-400 hover:text-blue-300 mb-4 text-sm"
           >
-            ← Back to Project
+            &larr; Back to Project
           </button>
 
           <div className="flex justify-between items-start mb-6">
@@ -206,9 +215,32 @@ export default function DoorDetailPage() {
               <h1 className="text-3xl font-bold text-white mb-2">
                 Door {opening.door_number}
               </h1>
+              {opening.hw_set && (
+                <p className="text-slate-300 text-sm mb-1">
+                  HW Set: {opening.hw_set}
+                  {opening.hw_heading ? ` — ${opening.hw_heading}` : ""}
+                </p>
+              )}
               {opening.location && (
                 <p className="text-slate-400">{opening.location}</p>
               )}
+              <div className="flex flex-wrap gap-2 mt-2">
+                {opening.door_type && (
+                  <span className="text-xs bg-slate-800 text-slate-300 px-2 py-1 rounded">
+                    {opening.door_type}
+                  </span>
+                )}
+                {opening.fire_rating && (
+                  <span className="text-xs bg-red-900/40 text-red-300 px-2 py-1 rounded">
+                    {opening.fire_rating}
+                  </span>
+                )}
+                {opening.hand && (
+                  <span className="text-xs bg-slate-800 text-slate-300 px-2 py-1 rounded">
+                    {opening.hand}
+                  </span>
+                )}
+              </div>
             </div>
 
             {/* QR Code */}
@@ -266,21 +298,22 @@ export default function DoorDetailPage() {
                   <div className="flex-1">
                     <div className="flex justify-between items-start mb-1">
                       <h3 className="font-medium text-white">{item.name}</h3>
-                      {item.qty && (
+                      {item.qty > 0 && (
                         <span className="text-sm text-slate-400">
                           Qty: {item.qty}
                         </span>
                       )}
                     </div>
 
-                    {item.manufacturer && (
+                    {formatSpec(item) && (
                       <p className="text-sm text-slate-400 mb-1">
-                        {item.manufacturer} {item.model && `— ${item.model}`}
+                        {formatSpec(item)}
                       </p>
                     )}
-                    {item.finish && (
-                      <p className="text-sm text-slate-500 mb-2">
-                        Finish: {item.finish}
+
+                    {item.options && (
+                      <p className="text-xs text-slate-500 mb-1">
+                        {item.options}
                       </p>
                     )}
 

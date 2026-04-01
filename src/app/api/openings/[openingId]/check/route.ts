@@ -73,9 +73,8 @@ export async function POST(
           opening_id: openingId,
           item_id,
           checked,
-          checked_by: checked ? checkedBy : null,
+          checked_by: checked ? user.id : null,
           checked_at: checked ? new Date().toISOString() : null,
-          updated_at: new Date().toISOString(),
         }],
         {
           onConflict: 'opening_id,item_id',

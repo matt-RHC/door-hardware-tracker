@@ -13,10 +13,8 @@ interface OpeningWithProgress {
   hw_heading: string | null;
   location: string | null;
   door_type: string | null;
-  frame_type: string | null;
   fire_rating: string | null;
   hand: string | null;
-  notes: string | null;
   created_at: string;
   total_items: number;
   checked_items: number;
@@ -65,7 +63,6 @@ export default function ProjectDetailPage() {
       filtered = filtered.filter(
         (opening) =>
           opening.door_number.toLowerCase().includes(query) ||
-          opening.hw_set?.toLowerCase().includes(query) ||
           opening.location?.toLowerCase().includes(query)
       );
     }
@@ -189,21 +186,16 @@ export default function ProjectDetailPage() {
                   }
                   className="bg-slate-900 rounded-lg border border-slate-800 p-6 hover:border-blue-500 cursor-pointer transition-colors"
                 >
-                  <h2 className="text-2xl font-bold text-white mb-1">
+                  <h2 className="text-2xl font-bold text-white mb-2">
                     Door {opening.door_number}
                   </h2>
                   {opening.hw_set && (
-                    <p className="text-blue-400 text-sm mb-1">
+                    <p className="text-slate-300 text-xs mb-1">
                       HW Set: {opening.hw_set}
                     </p>
                   )}
-                  {opening.fire_rating && (
-                    <p className="text-amber-400 text-xs mb-1">
-                      {opening.fire_rating} Fire Rating
-                    </p>
-                  )}
                   {opening.location && (
-                    <p className="text-slate-400 text-sm mb-3">
+                    <p className="text-slate-400 text-sm mb-4">
                       {opening.location}
                     </p>
                   )}

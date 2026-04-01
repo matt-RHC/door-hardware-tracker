@@ -137,10 +137,14 @@ Only return valid JSON, no other text.`,
         .from('openings')
         .insert([{
           project_id: projectId,
-          name: opening.door_number,
-          description: `${opening.location || ''} - ${opening.door_type || ''}`.trim(),
-          location: opening.location,
-          status: 'pending',
+          door_number: opening.door_number,
+          hw_set: opening.hw_set || null,
+          hw_heading: opening.hw_heading || null,
+          location: opening.location || null,
+          door_type: opening.door_type || null,
+          frame_type: opening.frame_type || null,
+          fire_rating: opening.fire_rating || null,
+          hand: opening.hand || null,
         }] as any)
         .select()
         .single()
@@ -154,12 +158,14 @@ Only return valid JSON, no other text.`,
         openingsCount++
 
         // Insert hardware items for this opening
-        const hardwareInserts = opening.hardware_items.map((item: any) => ({
+        const hardwareInserts = opening.hardware_items.map((item: any, index: number) => ({
           opening_id: insertedOpening.id,
           name: item.name,
-          category: item.category || 'general',
-          quantity: item.qty || 1,
-          specification: `${item.model || ''} ${item.finish || ''}`.trim(),
+          qty: item.qty || 1,
+          manufacturer: item.manufacturer || null,
+          model: item.model || null,
+          finish: item.finish || null,
+          sort_order: index,
         }))
 
         const { error: itemsError, data: insertedItems } = await (supabase as any)
