@@ -117,6 +117,7 @@ export type Database = {
           finish: string | null
           options: string | null
           sort_order: number
+          install_type: 'bench' | 'field' | null
           created_at: string
         }
         Insert: {
@@ -129,6 +130,7 @@ export type Database = {
           finish?: string | null
           options?: string | null
           sort_order?: number
+          install_type?: 'bench' | 'field' | null
           created_at?: string
         }
         Update: {
@@ -141,6 +143,7 @@ export type Database = {
           finish?: string | null
           options?: string | null
           sort_order?: number
+          install_type?: 'bench' | 'field' | null
           created_at?: string
         }
       }
@@ -152,6 +155,18 @@ export type Database = {
           checked: boolean
           checked_by: string | null
           checked_at: string | null
+          received: boolean
+          received_by: string | null
+          received_at: string | null
+          pre_install: boolean
+          pre_install_by: string | null
+          pre_install_at: string | null
+          installed: boolean
+          installed_by: string | null
+          installed_at: string | null
+          qa_qc: boolean
+          qa_qc_by: string | null
+          qa_qc_at: string | null
           notes: string | null
           created_at: string
         }
@@ -162,6 +177,18 @@ export type Database = {
           checked?: boolean
           checked_by?: string | null
           checked_at?: string | null
+          received?: boolean
+          received_by?: string | null
+          received_at?: string | null
+          pre_install?: boolean
+          pre_install_by?: string | null
+          pre_install_at?: string | null
+          installed?: boolean
+          installed_by?: string | null
+          installed_at?: string | null
+          qa_qc?: boolean
+          qa_qc_by?: string | null
+          qa_qc_at?: string | null
           notes?: string | null
           created_at?: string
         }
@@ -172,6 +199,18 @@ export type Database = {
           checked?: boolean
           checked_by?: string | null
           checked_at?: string | null
+          received?: boolean
+          received_by?: string | null
+          received_at?: string | null
+          pre_install?: boolean
+          pre_install_by?: string | null
+          pre_install_at?: string | null
+          installed?: boolean
+          installed_by?: string | null
+          installed_at?: string | null
+          qa_qc?: boolean
+          qa_qc_by?: string | null
+          qa_qc_at?: string | null
           notes?: string | null
           created_at?: string
         }

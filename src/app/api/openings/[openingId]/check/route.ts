@@ -1,10 +1,14 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { createServerSupabaseClient, createAdminSupabaseClient } from '@/lib/supabase/server'
 import { v4 as uuidv4 } from 'uuid'
+
+type WorkflowStep = 'received' | 'pre_install' | 'installed' | 'qa_qc' | 'checked'
 
 interface CheckItemRequest {
   item_id: string
-  checked: boolean
+  checked?: boolean  // legacy support
+  step?: WorkflowStep
+  value?: boolean
 }
 
 export async function POST(
@@ -22,11 +26,11 @@ export async function POST(
 
     const { openingId } = await params
     const body: CheckItemRequest = await request.json()
-    const { item_id, checked } = body
+    const { item_id } = body
 
-    if (!item_id || checked === undefined) {
+    if (!item_id) {
       return NextResponse.json(
-        { error: 'Missing item_id or checked field' },
+        { error: 'Missing item_id' },
         { status: 400 }
       )
     }
@@ -60,21 +64,49 @@ export async function POST(
       )
     }
 
-    // Get user email for checked_by
-    const { data: { user: userData } } = await supabase.auth.getUser()
-    const checkedBy = userData?.email || 'unknown'
+    const adminSupabase = createAdminSupabaseClient()
+    const now = new Date().toISOString()
+
+    // Determine what to update
+    let step: WorkflowStep = body.step || 'checked'
+    let value: boolean = body.value !== undefined ? body.value : (body.checked !== undefined ? body.checked : true)
+
+    // Build update payload based on step
+    const updatePayload: Record<string, any> = {
+      opening_id: openingId,
+      item_id,
+    }
+
+    if (step === 'checked') {
+      // Legacy mode: toggle the old checked field
+      updatePayload.checked = value
+      updatePayload.checked_by = value ? user.id : null
+      updatePayload.checked_at = value ? now : null
+    } else if (step === 'received') {
+      updatePayload.received = value
+      updatePayload.received_by = value ? user.id : null
+      updatePayload.received_at = value ? now : null
+    } else if (step === 'pre_install') {
+      updatePayload.pre_install = value
+      updatePayload.pre_install_by = value ? user.id : null
+      updatePayload.pre_install_at = value ? now : null
+    } else if (step === 'installed') {
+      updatePayload.installed = value
+      updatePayload.installed_by = value ? user.id : null
+      updatePayload.installed_at = value ? now : null
+    } else if (step === 'qa_qc') {
+      updatePayload.qa_qc = value
+      updatePayload.qa_qc_by = value ? user.id : null
+      updatePayload.qa_qc_at = value ? now : null
+    }
 
     // Upsert checklist progress
-    const { data: result, error: upsertError } = await (supabase as any)
+    const { data: result, error: upsertError } = await (adminSupabase as any)
       .from('checklist_progress')
       .upsert(
         [{
           id: uuidv4(),
-          opening_id: openingId,
-          item_id,
-          checked,
-          checked_by: checked ? user.id : null,
-          checked_at: checked ? new Date().toISOString() : null,
+          ...updatePayload,
         }],
         {
           onConflict: 'opening_id,item_id',

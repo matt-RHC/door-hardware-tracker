@@ -18,6 +18,27 @@ interface OpeningDetail extends Opening {
   attachments: Attachment[];
 }
 
+interface EditingItemState {
+  itemId: string;
+  name: string;
+  qty: number;
+  manufacturer: string | null;
+  model: string | null;
+  finish: string | null;
+  options: string | null;
+  install_type: 'bench' | 'field' | null;
+}
+
+interface EditingOpeningState {
+  door_number: string;
+  hw_set: string | null;
+  location: string | null;
+  door_type: string | null;
+  frame_type: string | null;
+  fire_rating: string | null;
+  hand: string | null;
+}
+
 export default function DoorDetailPage() {
   const params = useParams();
   const projectId = params.projectId as string;
@@ -30,6 +51,12 @@ export default function DoorDetailPage() {
   const [notes, setNotes] = useState("");
   const [savingNotes, setSavingNotes] = useState(false);
   const [attachmentLoading, setAttachmentLoading] = useState(false);
+  const [editingItemId, setEditingItemId] = useState<string | null>(null);
+  const [editingItem, setEditingItem] = useState<EditingItemState | null>(null);
+  const [savingItem, setSavingItem] = useState(false);
+  const [editingOpening, setEditingOpening] = useState(false);
+  const [editingOpeningData, setEditingOpeningData] = useState<EditingOpeningState | null>(null);
+  const [savingOpening, setSavingOpening] = useState(false);
 
   const supabase = createClient();
 
@@ -86,6 +113,48 @@ export default function DoorDetailPage() {
     }
   };
 
+  type WorkflowStep = 'received' | 'pre_install' | 'installed' | 'qa_qc';
+
+  const handleStepToggle = async (itemId: string, step: WorkflowStep, currentValue: boolean) => {
+    try {
+      const response = await fetch(
+        `/api/openings/${doorId}/check`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            item_id: itemId,
+            step,
+            value: !currentValue,
+          }),
+        }
+      );
+
+      if (!response.ok) throw new Error("Failed to update step");
+      await fetchOpeningData();
+    } catch (err) {
+      console.error("Error toggling step:", err);
+    }
+  };
+
+  const handleInstallTypeChange = async (itemId: string, installType: 'bench' | 'field' | null) => {
+    try {
+      const response = await fetch(
+        `/api/openings/${doorId}/items/${itemId}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ install_type: installType }),
+        }
+      );
+      if (!response.ok) throw new Error("Failed to update install type");
+      await fetchOpeningData();
+    } catch (err) {
+      console.error("Error updating install type:", err);
+    }
+  };
+
+  // Legacy toggle for backward compat
   const handleItemToggle = async (itemId: string, currentChecked: boolean) => {
     try {
       const response = await fetch(
@@ -104,25 +173,6 @@ export default function DoorDetailPage() {
       await fetchOpeningData();
     } catch (err) {
       console.error("Error toggling item:", err);
-      // Still update locally
-      setOpening((prev) => {
-        if (!prev) return prev;
-        return {
-          ...prev,
-          hardware_items: prev.hardware_items.map((item) => {
-            if (item.id === itemId) {
-              return {
-                ...item,
-                progress: {
-                  ...item.progress,
-                  checked: !currentChecked,
-                } as any,
-              };
-            }
-            return item;
-          }),
-        };
-      });
     }
   };
 
@@ -134,6 +184,100 @@ export default function DoorDetailPage() {
     } catch (err) {
       console.error("Error saving notes:", err);
       setSavingNotes(false);
+    }
+  };
+
+  const startEditItem = (item: HardwareItemWithProgress) => {
+    setEditingItemId(item.id);
+    setEditingItem({
+      itemId: item.id,
+      name: item.name,
+      qty: item.qty,
+      manufacturer: item.manufacturer,
+      model: item.model,
+      finish: item.finish,
+      options: item.options,
+      install_type: item.install_type || null,
+    });
+  };
+
+  const cancelEditItem = () => {
+    setEditingItemId(null);
+    setEditingItem(null);
+  };
+
+  const saveEditItem = async () => {
+    if (!editingItem) return;
+    setSavingItem(true);
+    try {
+      const response = await fetch(
+        `/api/openings/${doorId}/items/${editingItem.itemId}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: editingItem.name,
+            qty: editingItem.qty,
+            manufacturer: editingItem.manufacturer,
+            model: editingItem.model,
+            finish: editingItem.finish,
+            options: editingItem.options,
+            install_type: editingItem.install_type,
+          }),
+        }
+      );
+
+      if (!response.ok) throw new Error("Failed to save item");
+      await fetchOpeningData();
+      setEditingItemId(null);
+      setEditingItem(null);
+    } catch (err) {
+      console.error("Error saving item:", err);
+    } finally {
+      setSavingItem(false);
+    }
+  };
+
+  const startEditOpening = () => {
+    if (!opening) return;
+    setEditingOpening(true);
+    setEditingOpeningData({
+      door_number: opening.door_number,
+      hw_set: opening.hw_set,
+      location: opening.location,
+      door_type: opening.door_type,
+      frame_type: opening.frame_type,
+      fire_rating: opening.fire_rating,
+      hand: opening.hand,
+    });
+  };
+
+  const cancelEditOpening = () => {
+    setEditingOpening(false);
+    setEditingOpeningData(null);
+  };
+
+  const saveEditOpening = async () => {
+    if (!editingOpeningData) return;
+    setSavingOpening(true);
+    try {
+      const response = await fetch(
+        `/api/projects/${projectId}/openings/${doorId}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(editingOpeningData),
+        }
+      );
+
+      if (!response.ok) throw new Error("Failed to save opening");
+      await fetchOpeningData();
+      setEditingOpening(false);
+      setEditingOpeningData(null);
+    } catch (err) {
+      console.error("Error saving opening:", err);
+    } finally {
+      setSavingOpening(false);
     }
   };
 
@@ -181,10 +325,36 @@ export default function DoorDetailPage() {
   if (!opening) return null;
 
   const totalItems = opening.hardware_items.length;
+  // An item is "complete" when its final step (qa_qc) is checked
+  const completedItems = opening.hardware_items.filter(
+    (item) => item.progress?.qa_qc
+  ).length;
+  // For backward compat: also count old-style checked items
   const checkedItems = opening.hardware_items.filter(
-    (item) => item.progress?.checked
+    (item) => item.progress?.qa_qc || item.progress?.checked
   ).length;
   const progress = totalItems > 0 ? (checkedItems / totalItems) * 100 : 0;
+
+  // Workflow step helper
+  const getStepLabel = (item: HardwareItemWithProgress, step: WorkflowStep): string => {
+    if (step === 'received') return 'Received';
+    if (step === 'pre_install') return 'Pre-Install';
+    if (step === 'installed') return 'Installed';
+    if (step === 'qa_qc') return 'QA/QC';
+    return step;
+  };
+
+  const getStepValue = (item: HardwareItemWithProgress, step: WorkflowStep): boolean => {
+    if (!item.progress) return false;
+    return !!(item.progress as any)[step];
+  };
+
+  const getWorkflowSteps = (item: HardwareItemWithProgress): WorkflowStep[] => {
+    if (item.install_type === 'bench') return ['received', 'pre_install', 'qa_qc'];
+    if (item.install_type === 'field') return ['received', 'installed', 'qa_qc'];
+    // Default: show received and qa_qc until install_type is set
+    return ['received', 'qa_qc'];
+  };
   const qrUrl = `${typeof window !== "undefined" ? window.location.origin : ""}/project/${projectId}/door/${doorId}`;
 
   // Build a display label for the item spec line
@@ -211,40 +381,153 @@ export default function DoorDetailPage() {
           </button>
 
           <div className="flex justify-between items-start mb-6">
-            <div>
-              <h1 className="text-3xl font-bold text-white mb-2">
-                Door {opening.door_number}
-              </h1>
-              {opening.hw_set && (
-                <p className="text-slate-300 text-sm mb-1">
-                  HW Set: {opening.hw_set}
-                  {opening.hw_heading ? ` — ${opening.hw_heading}` : ""}
-                </p>
+            <div className="flex-1">
+              {!editingOpening ? (
+                <>
+                  <div className="flex items-start gap-2 mb-2">
+                    <h1 className="text-3xl font-bold text-white">
+                      Door {opening.door_number}
+                    </h1>
+                    <button
+                      onClick={startEditOpening}
+                      className="text-slate-400 hover:text-slate-300 p-1 mt-1"
+                      title="Edit door details"
+                    >
+                      <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                      </svg>
+                    </button>
+                  </div>
+                  {opening.hw_set && (
+                    <p className="text-slate-300 text-sm mb-1">
+                      HW Set: {opening.hw_set}
+                      {opening.hw_heading ? ` — ${opening.hw_heading}` : ""}
+                    </p>
+                  )}
+                  {opening.location && (
+                    <p className="text-slate-400">{opening.location}</p>
+                  )}
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    {opening.door_type && (
+                      <span className="text-xs bg-slate-800 text-slate-300 px-2 py-1 rounded">
+                        {opening.door_type}
+                      </span>
+                    )}
+                    {opening.fire_rating && (
+                      <span className="text-xs bg-red-900/40 text-red-300 px-2 py-1 rounded">
+                        {opening.fire_rating}
+                      </span>
+                    )}
+                    {opening.hand && (
+                      <span className="text-xs bg-slate-800 text-slate-300 px-2 py-1 rounded">
+                        {opening.hand}
+                      </span>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <div className="space-y-4 bg-slate-800 p-4 rounded border border-slate-700">
+                  <div>
+                    <label className="block text-sm text-slate-400 mb-1">Door Number</label>
+                    <input
+                      type="text"
+                      value={editingOpeningData?.door_number || ""}
+                      onChange={(e) => setEditingOpeningData(prev => prev ? { ...prev, door_number: e.target.value } : null)}
+                      className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm text-slate-400 mb-1">HW Set</label>
+                      <input
+                        type="text"
+                        value={editingOpeningData?.hw_set || ""}
+                        onChange={(e) => setEditingOpeningData(prev => prev ? { ...prev, hw_set: e.target.value || null } : null)}
+                        placeholder="Optional"
+                        className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm text-slate-400 mb-1">Location</label>
+                      <input
+                        type="text"
+                        value={editingOpeningData?.location || ""}
+                        onChange={(e) => setEditingOpeningData(prev => prev ? { ...prev, location: e.target.value || null } : null)}
+                        placeholder="Optional"
+                        className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm text-slate-400 mb-1">Door Type</label>
+                      <input
+                        type="text"
+                        value={editingOpeningData?.door_type || ""}
+                        onChange={(e) => setEditingOpeningData(prev => prev ? { ...prev, door_type: e.target.value || null } : null)}
+                        placeholder="Optional"
+                        className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm text-slate-400 mb-1">Frame Type</label>
+                      <input
+                        type="text"
+                        value={editingOpeningData?.frame_type || ""}
+                        onChange={(e) => setEditingOpeningData(prev => prev ? { ...prev, frame_type: e.target.value || null } : null)}
+                        placeholder="Optional"
+                        className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm text-slate-400 mb-1">Fire Rating</label>
+                      <input
+                        type="text"
+                        value={editingOpeningData?.fire_rating || ""}
+                        onChange={(e) => setEditingOpeningData(prev => prev ? { ...prev, fire_rating: e.target.value || null } : null)}
+                        placeholder="Optional"
+                        className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm text-slate-400 mb-1">Hand</label>
+                      <input
+                        type="text"
+                        value={editingOpeningData?.hand || ""}
+                        onChange={(e) => setEditingOpeningData(prev => prev ? { ...prev, hand: e.target.value || null } : null)}
+                        placeholder="Optional"
+                        className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <button
+                      onClick={saveEditOpening}
+                      disabled={savingOpening}
+                      className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-700 text-white rounded transition-colors"
+                    >
+                      {savingOpening ? "Saving..." : "Save"}
+                    </button>
+                    <button
+                      onClick={cancelEditOpening}
+                      disabled={savingOpening}
+                      className="flex-1 px-4 py-2 bg-slate-700 hover:bg-slate-600 disabled:bg-slate-800 text-white rounded transition-colors"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
               )}
-              {opening.location && (
-                <p className="text-slate-400">{opening.location}</p>
-              )}
-              <div className="flex flex-wrap gap-2 mt-2">
-                {opening.door_type && (
-                  <span className="text-xs bg-slate-800 text-slate-300 px-2 py-1 rounded">
-                    {opening.door_type}
-                  </span>
-                )}
-                {opening.fire_rating && (
-                  <span className="text-xs bg-red-900/40 text-red-300 px-2 py-1 rounded">
-                    {opening.fire_rating}
-                  </span>
-                )}
-                {opening.hand && (
-                  <span className="text-xs bg-slate-800 text-slate-300 px-2 py-1 rounded">
-                    {opening.hand}
-                  </span>
-                )}
-              </div>
             </div>
 
             {/* QR Code */}
-            <div className="bg-slate-900 p-4 rounded border border-slate-800">
+            <div className="bg-slate-900 p-4 rounded border border-slate-800 ml-4">
               <QRCodeSVG
                 value={qrUrl}
                 size={120}
@@ -284,46 +567,226 @@ export default function DoorDetailPage() {
               {opening.hardware_items.map((item) => (
                 <div
                   key={item.id}
-                  className="flex items-start gap-4 p-4 bg-slate-800 rounded border border-slate-700 hover:border-slate-600 transition-colors"
+                  className="p-4 bg-slate-800 rounded border border-slate-700 hover:border-slate-600 transition-colors"
                 >
-                  <input
-                    type="checkbox"
-                    checked={item.progress?.checked || false}
-                    onChange={() =>
-                      handleItemToggle(item.id, item.progress?.checked || false)
-                    }
-                    className="mt-1 w-5 h-5 rounded accent-blue-600 cursor-pointer"
-                  />
+                  {editingItemId === item.id && editingItem ? (
+                    // Edit mode
+                    <div className="space-y-3">
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-sm text-slate-400 mb-1">Name</label>
+                          <input
+                            type="text"
+                            value={editingItem.name}
+                            onChange={(e) => setEditingItem({ ...editingItem, name: e.target.value })}
+                            className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm text-slate-400 mb-1">Qty</label>
+                          <input
+                            type="number"
+                            value={editingItem.qty}
+                            onChange={(e) => setEditingItem({ ...editingItem, qty: parseInt(e.target.value) || 0 })}
+                            className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          />
+                        </div>
+                      </div>
 
-                  <div className="flex-1">
-                    <div className="flex justify-between items-start mb-1">
-                      <h3 className="font-medium text-white">{item.name}</h3>
-                      {item.qty > 0 && (
-                        <span className="text-sm text-slate-400">
-                          Qty: {item.qty}
-                        </span>
-                      )}
+                      <div className="grid grid-cols-3 gap-3">
+                        <div>
+                          <label className="block text-sm text-slate-400 mb-1">Manufacturer</label>
+                          <input
+                            type="text"
+                            value={editingItem.manufacturer || ""}
+                            onChange={(e) => setEditingItem({ ...editingItem, manufacturer: e.target.value || null })}
+                            placeholder="Optional"
+                            className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm text-slate-400 mb-1">Model</label>
+                          <input
+                            type="text"
+                            value={editingItem.model || ""}
+                            onChange={(e) => setEditingItem({ ...editingItem, model: e.target.value || null })}
+                            placeholder="Optional"
+                            className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm text-slate-400 mb-1">Finish</label>
+                          <input
+                            type="text"
+                            value={editingItem.finish || ""}
+                            onChange={(e) => setEditingItem({ ...editingItem, finish: e.target.value || null })}
+                            placeholder="Optional"
+                            className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-sm text-slate-400 mb-1">Options</label>
+                          <input
+                            type="text"
+                            value={editingItem.options || ""}
+                            onChange={(e) => setEditingItem({ ...editingItem, options: e.target.value || null })}
+                            placeholder="Optional"
+                            className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-sm text-slate-400 mb-1">Install Type</label>
+                          <select
+                            value={editingItem.install_type || ""}
+                            onChange={(e) => setEditingItem({ ...editingItem, install_type: (e.target.value as 'bench' | 'field') || null })}
+                            className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          >
+                            <option value="">Not set</option>
+                            <option value="bench">Bench</option>
+                            <option value="field">Field</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <div className="flex gap-2">
+                        <button
+                          onClick={saveEditItem}
+                          disabled={savingItem}
+                          className="flex-1 px-3 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-700 text-white text-sm rounded transition-colors"
+                        >
+                          {savingItem ? "Saving..." : "Save"}
+                        </button>
+                        <button
+                          onClick={cancelEditItem}
+                          disabled={savingItem}
+                          className="flex-1 px-3 py-2 bg-slate-700 hover:bg-slate-600 disabled:bg-slate-800 text-white text-sm rounded transition-colors"
+                        >
+                          Cancel
+                        </button>
+                      </div>
                     </div>
+                  ) : (
+                    // View mode
+                    <>
+                      <div className="flex items-start gap-4">
+                        <div className="flex-1">
+                          <div className="flex justify-between items-start mb-1">
+                            <div className="flex items-center gap-2">
+                              <h3 className="font-medium text-white">{item.name}</h3>
+                              {/* Install type badge */}
+                              {item.install_type && (
+                                <span className={`text-xs px-2 py-0.5 rounded ${
+                                  item.install_type === 'bench'
+                                    ? 'bg-purple-900/40 text-purple-300'
+                                    : 'bg-green-900/40 text-green-300'
+                                }`}>
+                                  {item.install_type === 'bench' ? 'Bench' : 'Field'}
+                                </span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-3">
+                              {item.qty > 0 && (
+                                <span className="text-sm text-slate-400">
+                                  Qty: {item.qty}
+                                </span>
+                              )}
+                              <button
+                                onClick={() => startEditItem(item)}
+                                className="text-slate-500 hover:text-slate-300 p-1"
+                                title="Edit item"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                </svg>
+                              </button>
+                            </div>
+                          </div>
 
-                    {formatSpec(item) && (
-                      <p className="text-sm text-slate-400 mb-1">
-                        {formatSpec(item)}
-                      </p>
-                    )}
+                          {formatSpec(item) && (
+                            <p className="text-sm text-slate-400 mb-2">
+                              {formatSpec(item)}
+                            </p>
+                          )}
 
-                    {item.options && (
-                      <p className="text-xs text-slate-500 mb-1">
-                        {item.options}
-                      </p>
-                    )}
+                          {item.options && (
+                            <p className="text-xs text-slate-500 mb-2">
+                              {item.options}
+                            </p>
+                          )}
 
-                    {item.progress?.checked && item.progress?.checked_at && (
-                      <p className="text-xs text-slate-500">
-                        Checked by {item.progress.checked_by} on{" "}
-                        {new Date(item.progress.checked_at).toLocaleDateString()}
-                      </p>
-                    )}
-                  </div>
+                          {/* Install type selector (if not set) */}
+                          {!item.install_type && (
+                            <div className="flex items-center gap-2 mb-2">
+                              <span className="text-xs text-slate-500">Classify:</span>
+                              <button
+                                onClick={() => handleInstallTypeChange(item.id, 'bench')}
+                                className="text-xs px-2 py-1 bg-slate-700 hover:bg-purple-900/40 text-slate-400 hover:text-purple-300 rounded transition-colors"
+                              >
+                                Bench
+                              </button>
+                              <button
+                                onClick={() => handleInstallTypeChange(item.id, 'field')}
+                                className="text-xs px-2 py-1 bg-slate-700 hover:bg-green-900/40 text-slate-400 hover:text-green-300 rounded transition-colors"
+                              >
+                                Field
+                              </button>
+                            </div>
+                          )}
+
+                          {/* Workflow steps */}
+                          <div className="flex items-center gap-1 mt-2">
+                            {getWorkflowSteps(item).map((step, idx) => {
+                              const isActive = getStepValue(item, step);
+                              const label = getStepLabel(item, step);
+                              return (
+                                <div key={step} className="flex items-center">
+                                  {idx > 0 && (
+                                    <div className={`w-4 h-0.5 ${isActive ? 'bg-blue-500' : 'bg-slate-600'}`} />
+                                  )}
+                                  <button
+                                    onClick={() => handleStepToggle(item.id, step, isActive)}
+                                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium transition-colors ${
+                                      isActive
+                                        ? 'bg-blue-600/30 text-blue-300 border border-blue-500/50'
+                                        : 'bg-slate-700/50 text-slate-400 border border-slate-600 hover:bg-slate-700 hover:text-slate-300'
+                                    }`}
+                                  >
+                                    {isActive ? (
+                                      <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                      </svg>
+                                    ) : (
+                                      <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <circle cx="12" cy="12" r="9" strokeWidth={2} />
+                                      </svg>
+                                    )}
+                                    {label}
+                                  </button>
+                                </div>
+                              );
+                            })}
+
+                            {/* Change install type */}
+                            {item.install_type && (
+                              <button
+                                onClick={() => handleInstallTypeChange(
+                                  item.id,
+                                  item.install_type === 'bench' ? 'field' : 'bench'
+                                )}
+                                className="ml-2 text-xs text-slate-500 hover:text-slate-400 underline"
+                                title={`Switch to ${item.install_type === 'bench' ? 'field' : 'bench'}`}
+                              >
+                                Switch to {item.install_type === 'bench' ? 'Field' : 'Bench'}
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </div>
               ))}
             </div>

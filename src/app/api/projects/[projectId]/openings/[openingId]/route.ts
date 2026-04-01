@@ -1,5 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { createServerSupabaseClient, createAdminSupabaseClient } from '@/lib/supabase/server'
+import { OpeningUpdate } from '@/lib/types/database'
+
+interface UpdateOpeningRequest {
+  door_number?: string
+  hw_set?: string | null
+  hw_heading?: string | null
+  location?: string | null
+  door_type?: string | null
+  frame_type?: string | null
+  fire_rating?: string | null
+  hand?: string | null
+  notes?: string | null
+}
 
 export async function GET(
   request: NextRequest,
@@ -112,6 +125,91 @@ export async function GET(
     })
   } catch (error) {
     console.error('Opening GET error:', error)
+    return NextResponse.json(
+      { error: 'Internal server error' },
+      { status: 500 }
+    )
+  }
+}
+
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ projectId: string; openingId: string }> }
+) {
+  try {
+    const supabase = await createServerSupabaseClient()
+
+    // Check authentication
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const { projectId, openingId } = await params
+    const body: UpdateOpeningRequest = await request.json()
+
+    // Verify user has access to project
+    const { data: projectMember, error: memberError } = await supabase
+      .from('project_members')
+      .select('role')
+      .eq('project_id', projectId)
+      .eq('user_id', user.id)
+      .single()
+
+    if (memberError || !projectMember) {
+      return NextResponse.json(
+        { error: 'Access denied to this project' },
+        { status: 403 }
+      )
+    }
+
+    // Verify opening belongs to project
+    const { data: opening, error: openingError } = await supabase
+      .from('openings')
+      .select('id')
+      .eq('id', openingId)
+      .eq('project_id', projectId)
+      .single()
+
+    if (openingError || !opening) {
+      return NextResponse.json(
+        { error: 'Opening not found' },
+        { status: 404 }
+      )
+    }
+
+    // Use admin client for the update to bypass RLS if needed
+    const adminSupabase = createAdminSupabaseClient()
+
+    const updateData: OpeningUpdate = {}
+    if (body.door_number !== undefined) updateData.door_number = body.door_number
+    if ('hw_set' in body) updateData.hw_set = body.hw_set
+    if ('hw_heading' in body) updateData.hw_heading = body.hw_heading
+    if ('location' in body) updateData.location = body.location
+    if ('door_type' in body) updateData.door_type = body.door_type
+    if ('frame_type' in body) updateData.frame_type = body.frame_type
+    if ('fire_rating' in body) updateData.fire_rating = body.fire_rating
+    if ('hand' in body) updateData.hand = body.hand
+    if ('notes' in body) updateData.notes = body.notes
+
+    const { data: updatedOpening, error: updateError } = await (adminSupabase as any)
+      .from('openings')
+      .update(updateData as any)
+      .eq('id', openingId)
+      .select()
+      .single()
+
+    if (updateError) {
+      console.error('Error updating opening:', updateError)
+      return NextResponse.json(
+        { error: 'Failed to update opening' },
+        { status: 500 }
+      )
+    }
+
+    return NextResponse.json(updatedOpening)
+  } catch (error) {
+    console.error('Opening PATCH error:', error)
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }

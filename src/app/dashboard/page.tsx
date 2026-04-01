@@ -158,16 +158,19 @@ export default function DashboardPage() {
             {projects.map((project) => (
               <div
                 key={project.id}
+                onClick={() => router.push(`/project/${project.id}`)}
                 className="bg-slate-900 rounded-lg border border-slate-800 p-6 hover:border-blue-500 cursor-pointer transition-colors relative"
               >
-                {/* Actions menu */}
-                <div className="absolute top-4 right-4">
+                {/* Actions menu - z-10 and stopPropagation prevent card navigation */}
+                <div
+                  className="absolute top-2 right-2 z-10"
+                  onClick={(e) => e.stopPropagation()}
+                >
                   <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setMenuOpen(menuOpen === project.id ? null : project.id);
-                    }}
-                    className="p-1 text-slate-500 hover:text-slate-300 transition-colors"
+                    onClick={() =>
+                      setMenuOpen(menuOpen === project.id ? null : project.id)
+                    }
+                    className="p-2 text-slate-500 hover:text-slate-300 hover:bg-slate-800 rounded transition-colors"
                   >
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
@@ -180,19 +183,15 @@ export default function DashboardPage() {
                   </button>
 
                   {menuOpen === project.id && (
-                    <div className="absolute right-0 mt-1 w-36 bg-slate-800 border border-slate-700 rounded shadow-lg z-10">
+                    <div className="absolute right-0 mt-1 w-36 bg-slate-800 border border-slate-700 rounded shadow-lg z-20">
                       <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          openEditProject(project);
-                        }}
+                        onClick={() => openEditProject(project)}
                         className="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 transition-colors"
                       >
                         Edit
                       </button>
                       <button
-                        onClick={(e) => {
-                          e.stopPropagation();
+                        onClick={() => {
                           setDeleteConfirm(project.id);
                           setMenuOpen(null);
                         }}
@@ -204,23 +203,21 @@ export default function DashboardPage() {
                   )}
                 </div>
 
-                <div onClick={() => router.push(`/project/${project.id}`)}>
-                  <h2 className="text-xl font-bold text-white mb-2 pr-8">
-                    {project.name}
-                  </h2>
-                  {project.general_contractor && (
-                    <p className="text-slate-400 text-sm mb-1">
-                      GC: {project.general_contractor}
-                    </p>
-                  )}
-                  {project.job_number && (
-                    <p className="text-slate-500 text-xs mb-4">
-                      Job #{project.job_number}
-                    </p>
-                  )}
-                  <div className="text-sm text-slate-400">
-                    {project.address || ""}
-                  </div>
+                <h2 className="text-xl font-bold text-white mb-2 pr-8">
+                  {project.name}
+                </h2>
+                {project.general_contractor && (
+                  <p className="text-slate-400 text-sm mb-1">
+                    GC: {project.general_contractor}
+                  </p>
+                )}
+                {project.job_number && (
+                  <p className="text-slate-500 text-xs mb-4">
+                    Job #{project.job_number}
+                  </p>
+                )}
+                <div className="text-sm text-slate-400">
+                  {project.address || ""}
                 </div>
               </div>
             ))}
