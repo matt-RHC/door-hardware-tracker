@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { createServerSupabaseClient, createAdminSupabaseClient } from '@/lib/supabase/server'
 
 interface CreateProjectRequest {
   name: string
@@ -115,8 +115,10 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Add current user as admin
-    const { error: memberError } = await (supabase as any)
+    // Add current user as admin (use admin client to bypass RLS chicken-and-egg:
+    // the project_members INSERT policy requires an existing admin, but this IS the first member)
+    const adminSupabase = createAdminSupabaseClient()
+    const { error: memberError } = await (adminSupabase as any)
       .from('project_members')
       .insert([{
         project_id: (project as any).id,
