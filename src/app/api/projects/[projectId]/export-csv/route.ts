@@ -66,7 +66,7 @@ export async function GET(
       .from('projects')
       .select('name, job_number')
       .eq('id', projectId)
-      .single()
+      .single() as { data: { name: string; job_number: string | null } | null }
 
     // Get all openings with hardware items and checklist status
     const { data: openings, error: openingsError } = await supabase
@@ -94,7 +94,7 @@ export async function GET(
         )
       `)
       .eq('project_id', projectId)
-      .order('door_number', { ascending: true })
+      .order('door_number', { ascending: true }) as { data: OpeningWithHardware[] | null; error: any }
 
     if (openingsError) {
       console.error('CSV export error:', openingsError)
@@ -122,7 +122,7 @@ export async function GET(
 
     const rows: string[] = [headers.map(escapeCSV).join(',')]
 
-    for (const opening of (openings as OpeningWithHardware[])) {
+    for (const opening of (openings || [])) {
       const items = opening.hardware_items || []
       // Sort by sort_order
       items.sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
