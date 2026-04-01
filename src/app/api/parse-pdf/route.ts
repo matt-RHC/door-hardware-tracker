@@ -152,6 +152,13 @@ Only return valid JSON, no other text.`,
       console.error('Error deleting existing openings:', deleteError)
     }
 
+    // Log parsing results
+    console.log(`Parsed ${parsedData.openings.length} openings from PDF`)
+    if (parsedData.openings.length > 0) {
+      const firstOpening = parsedData.openings[0]
+      console.log(`First opening: ${firstOpening.door_number}, hardware_items: ${firstOpening.hardware_items?.length ?? 0}`)
+    }
+
     // Insert openings and hardware items
     let openingsCount = 0
     let itemsCount = 0
@@ -183,6 +190,11 @@ Only return valid JSON, no other text.`,
         openingsCount++
 
         // Insert hardware items for this opening
+        if (!opening.hardware_items || opening.hardware_items.length === 0) {
+          console.log(`Opening ${opening.door_number}: no hardware items to insert`)
+          continue
+        }
+
         const hardwareInserts = opening.hardware_items.map((item: any, index: number) => ({
           opening_id: insertedOpening.id,
           name: item.name,
@@ -205,6 +217,8 @@ Only return valid JSON, no other text.`,
         }
       }
     }
+
+    console.log(`PDF parse complete: ${openingsCount} openings, ${itemsCount} hardware items inserted`)
 
     return NextResponse.json({
       success: true,
