@@ -747,7 +747,7 @@ export default function DoorDetailPage() {
         </div>
 
         {/* Hardware Tab */}
-        {activeTab === 'hardware' && (
+        {activeTab === 'hardware' && (<>
         <div className="bg-slate-900 rounded-lg border border-slate-800 p-6 mb-8">
           <h2 className="text-xl font-bold text-white mb-4">Hardware Items</h2>
 
@@ -1038,7 +1038,7 @@ export default function DoorDetailPage() {
             </label>
           </div>
         </div>
-        )}
+        </>)}
 
         {/* Drawing Tabs (Floor Plan, Door Drawing, Frame Drawing) */}
         {activeTab !== 'hardware' && (
