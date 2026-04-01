@@ -130,59 +130,48 @@ async function callClaude(
   }
 }
 
-function repairPartialJson(text: string): string {
-  // Attempt to repair truncated JSON by closing open brackets/braces
-  let repaired = text.trim()
+// Parse compact pipe-delimited hardware set lines into structured data
+// Format: SET:ID|Heading
+//         qty|name|manufacturer|model|finish
+function parseHardwareSetLines(raw: string): HardwareSet[] {
+  const sets: HardwareSet[] = []
+  let currentSet: HardwareSet | null = null
 
-  // If it ends mid-string, close the string
-  const quoteCount = (repaired.match(/(?<!\\)"/g) || []).length
-  if (quoteCount % 2 !== 0) {
-    repaired += '"'
-  }
+  for (const line of raw.split('\n')) {
+    const trimmed = line.trim()
+    if (!trimmed || trimmed.startsWith('#') || trimmed.startsWith('---')) continue
 
-  // Count open vs close braces/brackets
-  let braces = 0
-  let brackets = 0
-  let inString = false
-  for (let i = 0; i < repaired.length; i++) {
-    const ch = repaired[i]
-    if (ch === '"' && (i === 0 || repaired[i - 1] !== '\\')) {
-      inString = !inString
+    // Check for set header: SET:DH1|Interior Single Door
+    if (trimmed.startsWith('SET:')) {
+      const headerParts = trimmed.substring(4).split('|').map(p => p.trim())
+      if (headerParts[0]) {
+        currentSet = {
+          set_id: headerParts[0],
+          heading: headerParts[1] || '',
+          items: [],
+        }
+        sets.push(currentSet)
+      }
       continue
     }
-    if (inString) continue
-    if (ch === '{') braces++
-    else if (ch === '}') braces--
-    else if (ch === '[') brackets++
-    else if (ch === ']') brackets--
-  }
 
-  // Remove any trailing comma or colon before closing
-  repaired = repaired.replace(/[,:\s]+$/, '')
-
-  // Close open brackets then braces
-  while (brackets > 0) { repaired += ']'; brackets-- }
-  while (braces > 0) { repaired += '}'; braces-- }
-
-  return repaired
-}
-
-function parsePartialHardwareSets(text: string): HardwareSet[] {
-  // Try to parse hardware sets from potentially truncated JSON
-  try {
-    const data = JSON.parse(text)
-    return data.hardware_sets || []
-  } catch {
-    // Try repairing the JSON
-    try {
-      const repaired = repairPartialJson(text)
-      const data = JSON.parse(repaired)
-      return (data.hardware_sets || []).filter((s: HardwareSet) => s.set_id && s.items)
-    } catch {
-      console.error('Could not parse partial hardware sets JSON')
-      return []
+    // Otherwise it's an item line: qty|name|manufacturer|model|finish
+    if (currentSet) {
+      const parts = trimmed.split('|').map(p => p.trim())
+      if (parts.length >= 2) {
+        const qty = parseInt(parts[0], 10)
+        currentSet.items.push({
+          qty: isNaN(qty) ? 1 : qty,
+          name: parts[1] || '',
+          manufacturer: parts[2] || '',
+          model: parts[3] || '',
+          finish: parts[4] || '',
+        })
+      }
     }
   }
+
+  return sets
 }
 
 function parseDoorLines(raw: string): DoorEntry[] {
@@ -253,6 +242,9 @@ export async function POST(request: NextRequest) {
 
         // ==========================================
         // PASS 1: Extract hardware set definitions
+        // Uses compact pipe-delimited format for token efficiency.
+        // JSON is ~3-4x more tokens for the same data — with large PDFs
+        // that leave <15K output tokens, JSON truncates too badly to parse.
         // ==========================================
         send(8, 'Analyzing hardware sets...')
 
@@ -260,18 +252,21 @@ export async function POST(request: NextRequest) {
 
 A hardware set (e.g. DH1, DH2, EX1, EX3-NR) defines a list of hardware items installed on doors assigned to that set.
 
-Extract EVERY hardware set definition from this document. Return valid JSON:
-{
-  "hardware_sets": [
-    {
-      "set_id": "DH1",
-      "heading": "Interior Single Door - Office",
-      "items": [
-        { "qty": 3, "name": "Hinges", "manufacturer": "IV", "model": "5BB1 HW 4 1/2 x 4 1/2 NRP", "finish": "626" }
-      ]
-    }
-  ]
-}
+Extract EVERY hardware set definition from this document. Return in COMPACT PIPE-DELIMITED format:
+
+SET:DH1|Interior Single Door - Office
+3|Hinges|IV|5BB1 HW 4 1/2 x 4 1/2 NRP|626
+1|Lockset|SC|ND50PD RHO|626
+1|Closer|LCN|4041 DEL|689
+SET:DH2|Interior Single Door - Storage
+3|Hinges|IV|5BB1 HW 4 1/2 x 4 1/2 NRP|626
+1|Passage Set|SC|ND10S RHO|626
+
+Format rules:
+- Each set starts with SET:ID|Heading
+- Each item line: qty|name|manufacturer|model|finish
+- One item per line, no blank lines between items within a set
+- No JSON, no markdown, no explanation — just the data lines
 
 CRITICAL RULES FOR QTY:
 - The "qty" field must be the quantity PER INDIVIDUAL DOOR/OPENING, NOT the total across all doors.
@@ -280,27 +275,26 @@ CRITICAL RULES FOR QTY:
 - If only a total is shown, divide by the number of openings in that set to get per-opening qty.
 - Common per-opening quantities: hinges = 3 or 4, closers = 1, locksets = 1, stops = 1, kick plates = 1, seals = 1 set, silencers = 1 set.
 
-IMPORTANT: Extract ALL hardware sets with ALL items in each. No markdown, only JSON.`
+IMPORTANT: Extract ALL hardware sets with ALL items in each.`
 
         let pass1Data: { hardware_sets: HardwareSet[] } = { hardware_sets: [] }
         try {
           const { text, truncated } = await callClaude(client, base64, pass1System,
-            'Extract ALL hardware set definitions from this submittal. Return only valid JSON.', 32768)
+            'Extract ALL hardware set definitions from this submittal. Use the compact pipe-delimited format (SET:ID|Heading then qty|name|mfr|model|finish). No JSON.', 32768)
 
+          const parsedSets = parseHardwareSetLines(text)
+          console.log(`Pass 1: parsed ${parsedSets.length} hardware sets (truncated: ${truncated})`)
+
+          if (parsedSets.length === 0) {
+            send(0, 'Error', 'No hardware sets found in the document. The PDF may not be a hardware submittal.')
+            controller.close()
+            return
+          }
+
+          pass1Data.hardware_sets = parsedSets
+
+          // If truncated, continuation loop — ask for remaining sets
           if (truncated) {
-            // Parse whatever we got from the truncated response
-            const partialSets = parsePartialHardwareSets(text)
-            console.log(`Pass 1 truncated — recovered ${partialSets.length} hardware sets from partial response`)
-
-            if (partialSets.length === 0) {
-              send(0, 'Error', 'Failed to parse hardware sets from truncated response. The PDF may be too large.')
-              controller.close()
-              return
-            }
-
-            pass1Data.hardware_sets = partialSets
-
-            // Continuation loop — ask for remaining sets
             const MAX_CONTINUATIONS = 5
             let continuations = 0
 
@@ -315,28 +309,22 @@ IMPORTANT: Extract ALL hardware sets with ALL items in each. No markdown, only J
 
 Extract ONLY the hardware sets that come AFTER "${lastSetId}" in the document. Do NOT re-extract any of the sets listed above.
 
-Return valid JSON in the same format:
-{
-  "hardware_sets": [ ... ]
-}
+Use the same compact format:
+SET:ID|Heading
+qty|name|manufacturer|model|finish
 
-If there are no more hardware sets after "${lastSetId}", return: {"hardware_sets": []}`
+If there are no more hardware sets after "${lastSetId}", respond with just: DONE`
 
               const { text: contText, truncated: contTruncated } = await callClaude(
                 client, base64, pass1System, contPrompt, 32768
               )
 
-              let moreSets: HardwareSet[]
-              if (contTruncated) {
-                moreSets = parsePartialHardwareSets(contText)
-              } else {
-                try {
-                  const contData = JSON.parse(contText)
-                  moreSets = contData.hardware_sets || []
-                } catch {
-                  moreSets = parsePartialHardwareSets(contText)
-                }
+              if (contText.trim() === 'DONE') {
+                console.log(`Pass 1 continuation ${continuations}: DONE signal received`)
+                break
               }
+
+              const moreSets = parseHardwareSetLines(contText)
 
               if (moreSets.length === 0) {
                 console.log(`Pass 1 continuation ${continuations}: no more sets found`)
@@ -357,8 +345,6 @@ If there are no more hardware sets after "${lastSetId}", return: {"hardware_sets
 
               if (!contTruncated) break // Got a complete response, we're done
             }
-          } else {
-            pass1Data = JSON.parse(text)
           }
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err)
@@ -379,6 +365,7 @@ If there are no more hardware sets after "${lastSetId}", return: {"hardware_sets
 
         // ==========================================
         // PASS 2: Extract door schedule (compact)
+        // Also uses pipe-delimited format with continuation loop
         // ==========================================
         const setIds = pass1Data.hardware_sets.map((s) => s.set_id).join(', ')
 
@@ -409,13 +396,18 @@ Rules:
           allDoors = parseDoorLines(text)
           send(55, `Found ${allDoors.length} doors${truncated ? ' (partial — fetching more)...' : '.'}`)
 
-          // If truncated, fetch continuation
+          // If truncated, continuation loop (not single-shot)
           if (truncated && allDoors.length > 0) {
-            const lastDoor = allDoors[allDoors.length - 1].door_number
+            const MAX_DOOR_CONTINUATIONS = 8
+            let doorCont = 0
 
-            send(58, `Response was cut off after ${allDoors.length} doors. Fetching remaining...`)
+            while (doorCont < MAX_DOOR_CONTINUATIONS) {
+              doorCont++
+              const lastDoor = allDoors[allDoors.length - 1].door_number
 
-            const contSystem = `You extract door schedules from door hardware submittals.
+              send(55 + doorCont * 2, `Fetching doors after ${lastDoor}... (${allDoors.length} so far)`)
+
+              const contSystem = `You extract door schedules from door hardware submittals.
 
 Continue extracting doors. The previous extraction stopped at door "${lastDoor}".
 
@@ -423,16 +415,39 @@ Return ONLY doors that come AFTER "${lastDoor}" in the document. Use pipe-delimi
 door_number|hw_set|location|door_type|frame_type|fire_rating|hand
 
 hw_set must be one of: ${setIds}
-No headers, no markdown, just data lines.`
+No headers, no markdown, just data lines.
+If there are no more doors after "${lastDoor}", respond with just: DONE`
 
-            const { text: contText } = await callClaude(client, base64, contSystem,
-              `Continue the door list from after "${lastDoor}". Only doors AFTER that one. Pipe-delimited, one per line.`, 16384)
+              const { text: contText, truncated: contTruncated } = await callClaude(client, base64, contSystem,
+                `Continue the door list from after "${lastDoor}". Only doors AFTER that one. Pipe-delimited, one per line.`, 16384)
 
-            const moreDoors = parseDoorLines(contText)
-            if (moreDoors.length > 0) {
-              allDoors = allDoors.concat(moreDoors)
-              send(65, `Found ${moreDoors.length} more doors. Total: ${allDoors.length}.`)
+              if (contText.trim() === 'DONE') {
+                console.log(`Pass 2 continuation ${doorCont}: DONE signal received`)
+                break
+              }
+
+              const moreDoors = parseDoorLines(contText)
+              if (moreDoors.length === 0) {
+                console.log(`Pass 2 continuation ${doorCont}: no more doors found`)
+                break
+              }
+
+              // Deduplicate by door_number
+              const existingDoors = new Set(allDoors.map(d => d.door_number))
+              const newDoors = moreDoors.filter(d => !existingDoors.has(d.door_number))
+
+              if (newDoors.length === 0) {
+                console.log(`Pass 2 continuation ${doorCont}: all returned doors already known`)
+                break
+              }
+
+              allDoors = allDoors.concat(newDoors)
+              console.log(`Pass 2 continuation ${doorCont}: added ${newDoors.length} doors (total: ${allDoors.length})`)
+
+              if (!contTruncated) break // Complete response, done
             }
+
+            send(68, `Door schedule complete: ${allDoors.length} doors total.`)
           }
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err)
@@ -477,8 +492,8 @@ No headers, no markdown, just data lines.`
           hand: door.hand || null,
         }))
 
-        // Insert in chunks of 50 to avoid request size limits
-        const CHUNK_SIZE = 50
+        // Insert in chunks of 200 for efficiency
+        const CHUNK_SIZE = 200
         const insertedOpenings: Array<{ id: string; door_number: string; hw_set: string }> = []
 
         for (let i = 0; i < openingRows.length; i += CHUNK_SIZE) {
@@ -587,7 +602,7 @@ No headers, no markdown, just data lines.`
         for (let i = 0; i < allHardwareRows.length; i += CHUNK_SIZE) {
           const chunk = allHardwareRows.slice(i, i + CHUNK_SIZE)
           const progress = 87 + Math.round((i / allHardwareRows.length) * 10)
-          if (i % 200 === 0) {
+          if (i % 400 === 0) {
             send(progress, `Loading hardware items ${i + 1}–${Math.min(i + CHUNK_SIZE, allHardwareRows.length)} of ${allHardwareRows.length}...`)
           }
 
