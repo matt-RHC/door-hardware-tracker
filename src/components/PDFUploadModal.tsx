@@ -55,8 +55,12 @@ export default function PDFUploadModal({
         throw new Error(errData?.error || `Upload failed (${response.status})`);
       }
 
+      const result = await response.json();
       onSuccess();
       onClose();
+      if (result.unmatchedSets) {
+        console.warn('Some hardware sets could not be matched:', result.unmatchedSets);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Upload failed");
     } finally {
@@ -105,7 +109,7 @@ export default function PDFUploadModal({
               disabled={loading || !file}
               className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-700 text-white rounded transition-colors"
             >
-              {loading ? "Parsing PDF... (this may take 30-60s)" : "Upload"}
+              {loading ? "Analyzing submittal... (may take 1-2 min)" : "Upload"}
             </button>
           </div>
         </form>
