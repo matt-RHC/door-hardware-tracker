@@ -37,21 +37,26 @@ export async function GET(
       .select(`
         id,
         project_id,
-        name,
-        description,
+        door_number,
+        hw_set,
+        hw_heading,
         location,
-        status,
+        door_type,
+        frame_type,
+        fire_rating,
+        hand,
+        notes,
         created_at,
-        updated_at,
         hardware_items(
           id,
           name,
-          category,
-          quantity,
-          specification,
-          notes,
-          created_at,
-          updated_at
+          qty,
+          manufacturer,
+          model,
+          finish,
+          options,
+          sort_order,
+          created_at
         ),
         checklist_progress(
           id,
@@ -59,17 +64,16 @@ export async function GET(
           checked,
           checked_by,
           checked_at,
-          created_at,
-          updated_at
+          notes,
+          created_at
         ),
         attachments(
           id,
           file_name,
           file_url,
           file_type,
-          file_size,
           uploaded_by,
-          created_at
+          uploaded_at
         )
       `)
       .eq('id', openingId)
