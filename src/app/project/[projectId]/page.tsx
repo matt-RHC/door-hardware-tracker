@@ -6,6 +6,23 @@ import OfflineIndicator from "@/components/OfflineIndicator";
 import ProgressBar from "@/components/ProgressBar";
 import PDFUploadModal from "@/components/PDFUploadModal";
 
+interface ProjectSummary {
+  project: {
+    name: string;
+    job_number: string | null;
+    general_contractor: string | null;
+    architect: string | null;
+    address: string | null;
+    submittal_date: string | null;
+  } | null;
+  totals: { openings: number; hardware_items: number; checked: number };
+  classification: { bench: number; field: number; unclassified: number };
+  workflow: { received: number; pre_install: number; installed: number; qa_qc: number };
+  attachments: { floor_plan: number; door_drawing: number; frame_drawing: number; total: number };
+  openings_complete: number;
+  openings_incomplete: number;
+}
+
 interface OpeningWithProgress {
   id: string;
   project_id: string;
@@ -51,9 +68,12 @@ export default function ProjectDetailPage() {
   const [filters, setFilters] = useState<Filters>(defaultFilters);
   const [showFilters, setShowFilters] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);
+  const [summary, setSummary] = useState<ProjectSummary | null>(null);
+  const [showDashboard, setShowDashboard] = useState(true);
 
   useEffect(() => {
     fetchProjectData();
+    fetchSummary();
   }, [projectId]);
 
   const fetchProjectData = async () => {
@@ -68,6 +88,16 @@ export default function ProjectDetailPage() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const fetchSummary = async () => {
+    try {
+      const response = await fetch(`/api/projects/${projectId}/summary`);
+      if (response.ok) {
+        const data = await response.json();
+        setSummary(data);
+      }
+    } catch {}
   };
 
   // Build unique filter options from data
@@ -187,6 +217,130 @@ export default function ProjectDetailPage() {
             <ProgressBar value={overallProgress} size="lg" showLabel={true} />
           </div>
         </div>
+
+        {/* Dashboard Summary */}
+        {summary && (
+          <div className="mb-6">
+            <button
+              onClick={() => setShowDashboard(!showDashboard)}
+              className="flex items-center gap-2 text-sm text-slate-400 hover:text-slate-300 mb-3 transition-colors"
+            >
+              <svg
+                className={`w-4 h-4 transition-transform ${showDashboard ? "rotate-90" : ""}`}
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+              {showDashboard ? "Hide Dashboard" : "Show Dashboard"}
+            </button>
+
+            {showDashboard && (
+              <>
+                {/* Project Info Bar */}
+                {summary.project && (
+                  <div className="flex flex-wrap gap-x-6 gap-y-1 text-sm text-slate-400 mb-4 px-1">
+                    {summary.project.name && (
+                      <span className="text-white font-medium">{summary.project.name}</span>
+                    )}
+                    {summary.project.job_number && (
+                      <span>Job # {summary.project.job_number}</span>
+                    )}
+                    {summary.project.general_contractor && (
+                      <span>GC: {summary.project.general_contractor}</span>
+                    )}
+                    {summary.project.architect && (
+                      <span>Architect: {summary.project.architect}</span>
+                    )}
+                    {summary.project.submittal_date && (
+                      <span>Submittal: {new Date(summary.project.submittal_date).toLocaleDateString()}</span>
+                    )}
+                  </div>
+                )}
+
+                {/* Stat Cards Row 1: Totals */}
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+                  <div className="bg-slate-900 border border-slate-800 rounded-lg p-4">
+                    <p className="text-xs text-slate-500 uppercase tracking-wide mb-1">Openings</p>
+                    <p className="text-2xl font-bold text-white">{summary.totals.openings}</p>
+                    <p className="text-xs text-slate-500 mt-1">
+                      <span className="text-green-400">{summary.openings_complete}</span> complete
+                      {summary.openings_incomplete > 0 && (
+                        <> &middot; <span className="text-amber-400">{summary.openings_incomplete}</span> remaining</>
+                      )}
+                    </p>
+                  </div>
+
+                  <div className="bg-slate-900 border border-slate-800 rounded-lg p-4">
+                    <p className="text-xs text-slate-500 uppercase tracking-wide mb-1">Hardware Items</p>
+                    <p className="text-2xl font-bold text-white">{summary.totals.hardware_items}</p>
+                    <p className="text-xs text-slate-500 mt-1">
+                      <span className="text-green-400">{summary.totals.checked}</span> checked off
+                    </p>
+                  </div>
+
+                  <div className="bg-slate-900 border border-slate-800 rounded-lg p-4">
+                    <p className="text-xs text-slate-500 uppercase tracking-wide mb-1">Classification</p>
+                    <div className="flex items-baseline gap-2 mt-1">
+                      <span className="text-lg font-bold text-blue-400">{summary.classification.bench}</span>
+                      <span className="text-xs text-slate-500">bench</span>
+                      <span className="text-lg font-bold text-purple-400">{summary.classification.field}</span>
+                      <span className="text-xs text-slate-500">field</span>
+                    </div>
+                    {summary.classification.unclassified > 0 && (
+                      <p className="text-xs text-amber-400 mt-1">
+                        {summary.classification.unclassified} unclassified
+                      </p>
+                    )}
+                  </div>
+
+                  <div className="bg-slate-900 border border-slate-800 rounded-lg p-4">
+                    <p className="text-xs text-slate-500 uppercase tracking-wide mb-1">Drawings</p>
+                    <p className="text-2xl font-bold text-white">{summary.attachments.total}</p>
+                    <p className="text-xs text-slate-500 mt-1">
+                      {summary.attachments.floor_plan} floor &middot; {summary.attachments.door_drawing} door &middot; {summary.attachments.frame_drawing} frame
+                    </p>
+                  </div>
+                </div>
+
+                {/* Workflow Pipeline */}
+                {summary.totals.hardware_items > 0 && (
+                  <div className="bg-slate-900 border border-slate-800 rounded-lg p-4">
+                    <p className="text-xs text-slate-500 uppercase tracking-wide mb-3">Workflow Pipeline</p>
+                    <div className="grid grid-cols-4 gap-2">
+                      {[
+                        { label: "Received", value: summary.workflow.received, color: "bg-blue-500" },
+                        { label: "Pre-Install", value: summary.workflow.pre_install, color: "bg-amber-500" },
+                        { label: "Installed", value: summary.workflow.installed, color: "bg-green-500" },
+                        { label: "QA/QC", value: summary.workflow.qa_qc, color: "bg-purple-500" },
+                      ].map((step) => {
+                        const pct = summary.totals.hardware_items > 0
+                          ? Math.round((step.value / summary.totals.hardware_items) * 100)
+                          : 0;
+                        return (
+                          <div key={step.label} className="text-center">
+                            <p className="text-xs text-slate-500 mb-2">{step.label}</p>
+                            <div className="w-full bg-slate-800 rounded-full h-2 mb-1">
+                              <div
+                                className={`${step.color} h-2 rounded-full transition-all`}
+                                style={{ width: `${pct}%` }}
+                              />
+                            </div>
+                            <p className="text-sm font-medium text-white">
+                              {step.value}
+                              <span className="text-xs text-slate-500 ml-1">({pct}%)</span>
+                            </p>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        )}
 
         {/* Search + Action Buttons */}
         <div className="flex flex-col md:flex-row gap-4 mb-4">
