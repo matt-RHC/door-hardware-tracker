@@ -39,6 +39,96 @@ interface EditingOpeningState {
   hand: string | null;
 }
 
+function DrawingTab({
+  category,
+  label,
+  attachments,
+  onUpload,
+  uploading,
+}: {
+  category: string;
+  label: string;
+  attachments: any[];
+  onUpload: (file: File) => void;
+  uploading: boolean;
+}) {
+  const latestImage = attachments.length > 0 ? attachments[attachments.length - 1] : null;
+
+  return (
+    <div className="bg-slate-900 rounded-lg border border-slate-800 p-6">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-xl font-bold text-white">{label}</h2>
+        {attachments.length > 1 && (
+          <span className="text-xs text-slate-500">
+            {attachments.length} version{attachments.length !== 1 ? 's' : ''} uploaded
+          </span>
+        )}
+      </div>
+
+      {latestImage ? (
+        <div className="mb-4">
+          {latestImage.file_type?.startsWith('image/') || latestImage.file_name?.match(/\.(png|jpg|jpeg|gif|webp|svg)$/i) ? (
+            <div className="relative group">
+              <img
+                src={latestImage.file_url}
+                alt={label}
+                className="w-full rounded-lg border border-slate-700 bg-slate-800"
+              />
+              <a
+                href={latestImage.file_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-900/80 text-blue-400 hover:text-blue-300 px-3 py-1.5 rounded text-xs"
+              >
+                Open full size
+              </a>
+            </div>
+          ) : (
+            <a
+              href={latestImage.file_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-3 p-4 bg-slate-800 rounded-lg border border-slate-700 hover:border-slate-600 transition-colors"
+            >
+              <svg className="w-8 h-8 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+              </svg>
+              <div>
+                <p className="text-blue-400 hover:text-blue-300 text-sm font-medium">{latestImage.file_name}</p>
+                <p className="text-slate-500 text-xs">Click to view</p>
+              </div>
+            </a>
+          )}
+          <p className="text-xs text-slate-500 mt-2">
+            Uploaded {new Date(latestImage.uploaded_at).toLocaleDateString()}
+          </p>
+        </div>
+      ) : (
+        <div className="flex flex-col items-center justify-center py-12 text-slate-500 border border-dashed border-slate-700 rounded-lg mb-4">
+          <svg className="w-12 h-12 mb-3 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
+          </svg>
+          <p className="text-sm">No {label.toLowerCase()} uploaded yet</p>
+        </div>
+      )}
+
+      <label className="block w-full px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded cursor-pointer transition-colors text-center text-sm">
+        <input
+          type="file"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) onUpload(file);
+          }}
+          disabled={uploading}
+          className="hidden"
+          accept="image/*,application/pdf"
+        />
+        {uploading ? "Uploading..." : latestImage ? `Replace ${label}` : `Upload ${label}`}
+      </label>
+    </div>
+  );
+}
+
 export default function DoorDetailPage() {
   const params = useParams();
   const projectId = params.projectId as string;
@@ -51,6 +141,7 @@ export default function DoorDetailPage() {
   const [notes, setNotes] = useState("");
   const [savingNotes, setSavingNotes] = useState(false);
   const [attachmentLoading, setAttachmentLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState<'hardware' | 'floor_plan' | 'door_drawing' | 'frame_drawing'>('hardware');
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [editingItem, setEditingItem] = useState<EditingItemState | null>(null);
   const [savingItem, setSavingItem] = useState(false);
@@ -347,11 +438,12 @@ export default function DoorDetailPage() {
     }
   };
 
-  const handleFileUpload = async (file: File) => {
+  const handleFileUpload = async (file: File, category: string = 'general') => {
     setAttachmentLoading(true);
     try {
       const formData = new FormData();
       formData.append("file", file);
+      formData.append("category", category);
 
       const response = await fetch(
         `/api/openings/${doorId}/attachments`,
@@ -368,6 +460,11 @@ export default function DoorDetailPage() {
     } finally {
       setAttachmentLoading(false);
     }
+  };
+
+  const getAttachmentsByCategory = (category: string) => {
+    if (!opening?.attachments) return [];
+    return opening.attachments.filter((a: any) => (a.category || 'general') === category);
   };
 
   if (loading) {
@@ -622,7 +719,35 @@ export default function DoorDetailPage() {
           </div>
         </div>
 
-        {/* Hardware Checklist */}
+        {/* Tab Bar */}
+        <div className="flex border-b border-slate-800 mb-6 overflow-x-auto">
+          {([
+            { key: 'hardware', label: 'Hardware' },
+            { key: 'floor_plan', label: 'Floor Plan' },
+            { key: 'door_drawing', label: 'Door Drawing' },
+            { key: 'frame_drawing', label: 'Frame Drawing' },
+          ] as const).map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              className={`px-5 py-3 text-sm font-medium whitespace-nowrap transition-colors border-b-2 -mb-px ${
+                activeTab === tab.key
+                  ? 'border-blue-500 text-blue-400'
+                  : 'border-transparent text-slate-500 hover:text-slate-300 hover:border-slate-600'
+              }`}
+            >
+              {tab.label}
+              {tab.key !== 'hardware' && getAttachmentsByCategory(tab.key).length > 0 && (
+                <span className="ml-2 text-xs bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded">
+                  {getAttachmentsByCategory(tab.key).length}
+                </span>
+              )}
+            </button>
+          ))}
+        </div>
+
+        {/* Hardware Tab */}
+        {activeTab === 'hardware' && (
         <div className="bg-slate-900 rounded-lg border border-slate-800 p-6 mb-8">
           <h2 className="text-xl font-bold text-white mb-4">Hardware Items</h2>
 
@@ -877,13 +1002,13 @@ export default function DoorDetailPage() {
           </button>
         </div>
 
-        {/* Attachments Section */}
+        {/* General Attachments */}
         <div className="bg-slate-900 rounded-lg border border-slate-800 p-6">
           <h2 className="text-xl font-bold text-white mb-4">Attachments</h2>
 
-          {opening.attachments && opening.attachments.length > 0 && (
+          {getAttachmentsByCategory('general').length > 0 && (
             <div className="mb-6 space-y-2">
-              {opening.attachments.map((attachment) => (
+              {getAttachmentsByCategory('general').map((attachment: any) => (
                 <a
                   key={attachment.id}
                   href={attachment.file_url}
@@ -903,7 +1028,7 @@ export default function DoorDetailPage() {
                 type="file"
                 onChange={(e) => {
                   const file = e.target.files?.[0];
-                  if (file) handleFileUpload(file);
+                  if (file) handleFileUpload(file, 'general');
                 }}
                 disabled={attachmentLoading}
                 className="hidden"
@@ -913,6 +1038,18 @@ export default function DoorDetailPage() {
             </label>
           </div>
         </div>
+        )}
+
+        {/* Drawing Tabs (Floor Plan, Door Drawing, Frame Drawing) */}
+        {activeTab !== 'hardware' && (
+          <DrawingTab
+            category={activeTab}
+            label={activeTab === 'floor_plan' ? 'Floor Plan' : activeTab === 'door_drawing' ? 'Door Drawing' : 'Frame Drawing'}
+            attachments={getAttachmentsByCategory(activeTab)}
+            onUpload={(file: File) => handleFileUpload(file, activeTab)}
+            uploading={attachmentLoading}
+          />
+        )}
       </main>
 
       {/* Bulk Classification Confirmation Modal */}

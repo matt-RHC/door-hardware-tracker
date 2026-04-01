@@ -49,7 +49,7 @@ export async function GET(
     // Get attachments
     const { data: attachments, error: attachmentsError } = await supabase
       .from('attachments')
-      .select('id, opening_id, file_name, file_size, file_url, created_at, created_by')
+      .select('id, opening_id, file_name, file_size, file_url, category, created_at, created_by')
       .eq('opening_id', openingId)
       .order('created_at', { ascending: false })
 
@@ -118,6 +118,7 @@ export async function POST(
     // Parse form data
     const formData = await request.formData()
     const file = formData.get('file') as File
+    const category = (formData.get('category') as string) || 'general'
 
     if (!file) {
       return NextResponse.json(
@@ -160,6 +161,7 @@ export async function POST(
         file_name: file.name,
         file_size: file.size,
         file_url: publicUrl,
+        category,
         uploaded_by: user.id,
       } as any] as any)
       .select()

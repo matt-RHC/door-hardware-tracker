@@ -98,6 +98,7 @@ export async function GET(
           file_name,
           file_url,
           file_type,
+          category,
           uploaded_by,
           uploaded_at
         )

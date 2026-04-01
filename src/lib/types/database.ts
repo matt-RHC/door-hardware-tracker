@@ -222,6 +222,7 @@ export type Database = {
           file_url: string
           file_name: string | null
           file_type: string | null
+          category: 'floor_plan' | 'door_drawing' | 'frame_drawing' | 'general'
           uploaded_by: string | null
           uploaded_at: string
         }
@@ -231,6 +232,7 @@ export type Database = {
           file_url: string
           file_name?: string | null
           file_type?: string | null
+          category?: 'floor_plan' | 'door_drawing' | 'frame_drawing' | 'general'
           uploaded_by?: string | null
           uploaded_at?: string
         }
@@ -240,6 +242,7 @@ export type Database = {
           file_url?: string
           file_name?: string | null
           file_type?: string | null
+          category?: 'floor_plan' | 'door_drawing' | 'frame_drawing' | 'general'
           uploaded_by?: string | null
           uploaded_at?: string
         }
