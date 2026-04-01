@@ -30,10 +30,16 @@ interface DoorEntry {
 
 // --- Helpers ---
 
-async function callClaude(client: Anthropic, base64: string, systemPrompt: string, userPrompt: string): Promise<string> {
+async function callClaude(
+  client: Anthropic,
+  base64: string,
+  systemPrompt: string,
+  userPrompt: string,
+  maxTokens = 16384
+): Promise<{ text: string; truncated: boolean }> {
   const stream = client.messages.stream({
     model: 'claude-sonnet-4-20250514',
-    max_tokens: 16384,
+    max_tokens: maxTokens,
     system: systemPrompt,
     messages: [
       {
@@ -50,10 +56,7 @@ async function callClaude(client: Anthropic, base64: string, systemPrompt: strin
   })
 
   const response = await stream.finalMessage()
-
-  if (response.stop_reason === 'max_tokens') {
-    throw new Error('TRUNCATED')
-  }
+  const truncated = response.stop_reason === 'max_tokens'
 
   const textBlock = response.content.find((b) => b.type === 'text')
   if (!textBlock || textBlock.type !== 'text') {
@@ -64,7 +67,30 @@ async function callClaude(client: Anthropic, base64: string, systemPrompt: strin
   if (text.startsWith('```')) {
     text = text.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '')
   }
-  return text
+  return { text, truncated }
+}
+
+function parseDoorLines(raw: string): DoorEntry[] {
+  const doors: DoorEntry[] = []
+  for (const line of raw.split('\n')) {
+    const trimmed = line.trim()
+    if (!trimmed || trimmed.startsWith('door_number') || trimmed.startsWith('---') || trimmed.startsWith('#')) {
+      continue // skip headers and blanks
+    }
+    const parts = trimmed.split('|').map((p) => p.trim())
+    if (parts.length >= 2) {
+      doors.push({
+        door_number: parts[0] || '',
+        hw_set: parts[1] || '',
+        location: parts[2] || '',
+        door_type: parts[3] || '',
+        frame_type: parts[4] || '',
+        fire_rating: parts[5] || '',
+        hand: parts[6] || '',
+      })
+    }
+  }
+  return doors
 }
 
 // --- Main handler (streaming progress) ---
@@ -74,7 +100,6 @@ export async function POST(request: NextRequest) {
 
   const stream = new ReadableStream({
     async start(controller) {
-      // Helper to send a progress event to the client
       function send(progress: number, status: string, error?: string, result?: Record<string, unknown>) {
         const event = JSON.stringify({ progress, status, error, result })
         controller.enqueue(encoder.encode(event + '\n'))
@@ -86,7 +111,7 @@ export async function POST(request: NextRequest) {
         const supabase = await createServerSupabaseClient()
         const { data: { user }, error: authError } = await supabase.auth.getUser()
         if (authError || !user) {
-          send(0, 'Unauthorized', 'You must be signed in to upload')
+          send(0, 'Error', 'You must be signed in to upload')
           controller.close()
           return
         }
@@ -111,21 +136,16 @@ export async function POST(request: NextRequest) {
         const base64 = Buffer.from(buffer).toString('base64')
         const client = new Anthropic()
 
-        // ============================
-        // PASS 1: Extract hardware sets
-        // ============================
-        send(10, 'Analyzing hardware sets...')
+        // ==========================================
+        // PASS 1: Extract hardware set definitions
+        // ==========================================
+        send(8, 'Analyzing hardware sets...')
 
         const pass1System = `You extract hardware set definitions from door hardware submittals.
 
-A hardware set (e.g. DH1, DH2, EX1, EX3-NR) defines a list of hardware items that get installed on doors assigned to that set.
+A hardware set (e.g. DH1, DH2, EX1, EX3-NR) defines a list of hardware items installed on doors assigned to that set.
 
-Extract EVERY hardware set definition from this document. Each set has:
-- A set ID (e.g. "DH1", "DH4A", "EX3-NR")
-- A heading/description (e.g. "Interior Single Door - Office")
-- A list of hardware items with qty, name, manufacturer, model, and finish
-
-Return valid JSON only:
+Extract EVERY hardware set definition from this document. Return valid JSON:
 {
   "hardware_sets": [
     {
@@ -138,93 +158,114 @@ Return valid JSON only:
   ]
 }
 
-IMPORTANT: Extract ALL hardware sets, not just a few. Include every item in each set.`
+IMPORTANT: Extract ALL hardware sets with ALL items in each. No markdown, only JSON.`
 
         let pass1Data: { hardware_sets: HardwareSet[] }
         try {
-          const pass1Json = await callClaude(client, base64, pass1System,
-            'Extract ALL hardware set definitions from this submittal. Return only valid JSON.')
-          pass1Data = JSON.parse(pass1Json)
+          const { text, truncated } = await callClaude(client, base64, pass1System,
+            'Extract ALL hardware set definitions from this submittal. Return only valid JSON.', 32768)
+
+          if (truncated) {
+            console.error('Pass 1 truncated even at 32K tokens')
+            send(0, 'Error', 'Submittal has too many hardware sets to process at once. Contact support.')
+            controller.close()
+            return
+          }
+
+          pass1Data = JSON.parse(text)
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err)
-          if (msg === 'TRUNCATED') {
-            send(0, 'Error', 'Too many hardware sets — response was truncated')
-          } else {
-            send(0, 'Error', `Failed to extract hardware sets: ${msg}`)
-          }
+          console.error('Pass 1 failed:', msg)
+          send(0, 'Error', `Failed to extract hardware sets: ${msg}`)
           controller.close()
           return
         }
 
         const setCount = pass1Data.hardware_sets.length
         const totalItems = pass1Data.hardware_sets.reduce((sum, s) => sum + (s.items?.length || 0), 0)
-        send(40, `Found ${setCount} hardware sets (${totalItems} items). Extracting door schedule...`)
+        send(35, `Found ${setCount} hardware sets (${totalItems} items). Reading door schedule...`)
 
-        // Build lookup map
         const setMap = new Map<string, HardwareSet>()
         for (const set of pass1Data.hardware_sets) {
           setMap.set(set.set_id, set)
         }
 
-        // ============================
-        // PASS 2: Extract door schedule
-        // ============================
-        const setIds = pass1Data.hardware_sets.map(s => s.set_id).join(', ')
+        // ==========================================
+        // PASS 2: Extract door schedule (compact)
+        // ==========================================
+        const setIds = pass1Data.hardware_sets.map((s) => s.set_id).join(', ')
 
-        const pass2System = `You extract door/opening schedules from door hardware submittals.
+        const pass2System = `You extract door schedules from door hardware submittals.
 
-The document contains a door schedule or opening index that lists every door and which hardware set it uses.
+Extract EVERY door/opening. Return a PIPE-DELIMITED list (one door per line):
+door_number|hw_set|location|door_type|frame_type|fire_rating|hand
 
-The hardware sets in this document are: ${setIds}
+Example output:
+110-01A|DH1|Office 110 from Corridor|WD|HM|20Min|LHR
+110-02A|DH4A|Storage from Corridor|HM|HM|45Min|A
+1201A|EX3-NR|Exterior Equipment Yard|HM|HM|NR|RHR
 
-Extract EVERY door/opening from the schedule. For each door, capture:
-- door_number (e.g. "110-01A", "1201A", "ST-1C")
-- hw_set (which hardware set it references, must be one of: ${setIds})
-- location (room name or description)
-- door_type (e.g. "WD", "HM", "AL")
-- frame_type (e.g. "HM", "AL", "WD")
-- fire_rating (e.g. "20Min", "45Min", "90Min", "NR")
-- hand (e.g. "A", "LHR", "RHR")
+Rules:
+- One door per line, no blank lines between doors
+- hw_set MUST be one of: ${setIds}
+- Use empty string if a field is unknown (e.g. 110-01A|DH1|||HM|20Min|)
+- Extract EVERY door from ALL pages. Do NOT stop early.
+- No headers, no markdown, no explanation — just the data lines.`
 
-Return valid JSON only:
-{
-  "doors": [
-    {
-      "door_number": "110-01A",
-      "hw_set": "DH1",
-      "location": "Office 110 from Corridor 100",
-      "door_type": "WD",
-      "frame_type": "HM",
-      "fire_rating": "20Min",
-      "hand": "LHR"
-    }
-  ]
-}
+        let allDoors: DoorEntry[] = []
 
-CRITICAL: Extract EVERY SINGLE door from ALL pages. There may be 30-100+ doors. Do NOT stop early.`
-
-        let pass2Data: { doors: DoorEntry[] }
         try {
-          const pass2Json = await callClaude(client, base64, pass2System,
-            'Extract EVERY door/opening from the door schedule in this document. Include ALL doors from ALL pages. Return only valid JSON.')
-          pass2Data = JSON.parse(pass2Json)
+          send(40, 'Extracting door schedule...')
+          const { text, truncated } = await callClaude(client, base64, pass2System,
+            'List EVERY door from the door schedule. Pipe-delimited, one per line. No headers. Do NOT stop early.', 16384)
+
+          allDoors = parseDoorLines(text)
+          send(55, `Found ${allDoors.length} doors${truncated ? ' (partial — fetching more)...' : '.'}`)
+
+          // If truncated, fetch continuation
+          if (truncated && allDoors.length > 0) {
+            const lastDoor = allDoors[allDoors.length - 1].door_number
+
+            send(58, `Response was cut off after ${allDoors.length} doors. Fetching remaining...`)
+
+            const contSystem = `You extract door schedules from door hardware submittals.
+
+Continue extracting doors. The previous extraction stopped at door "${lastDoor}".
+
+Return ONLY doors that come AFTER "${lastDoor}" in the document. Use pipe-delimited format:
+door_number|hw_set|location|door_type|frame_type|fire_rating|hand
+
+hw_set must be one of: ${setIds}
+No headers, no markdown, just data lines.`
+
+            const { text: contText } = await callClaude(client, base64, contSystem,
+              `Continue the door list from after "${lastDoor}". Only doors AFTER that one. Pipe-delimited, one per line.`, 16384)
+
+            const moreDoors = parseDoorLines(contText)
+            if (moreDoors.length > 0) {
+              allDoors = allDoors.concat(moreDoors)
+              send(65, `Found ${moreDoors.length} more doors. Total: ${allDoors.length}.`)
+            }
+          }
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err)
-          if (msg === 'TRUNCATED') {
-            send(0, 'Error', 'Too many doors — response was truncated')
-          } else {
-            send(0, 'Error', `Failed to extract door schedule: ${msg}`)
-          }
+          console.error('Pass 2 failed:', msg)
+          send(0, 'Error', `Failed to extract door schedule: ${msg}`)
           controller.close()
           return
         }
 
-        const doorCount = pass2Data.doors.length
-        send(70, `Found ${doorCount} doors. Saving to database...`)
+        if (allDoors.length === 0) {
+          send(0, 'Error', 'No doors found in the document. The PDF may not contain a door schedule.')
+          controller.close()
+          return
+        }
 
-        // ============================
-        // COMBINE & INSERT
-        // ============================
+        send(70, `Saving ${allDoors.length} doors to database...`)
+
+        // ==========================================
+        // COMBINE & BATCH INSERT
+        // ==========================================
 
         // Delete existing openings (cascade deletes children)
         const { error: deleteError } = await (supabase as any)
@@ -236,69 +277,88 @@ CRITICAL: Extract EVERY SINGLE door from ALL pages. There may be 30-100+ doors. 
           console.error('Error deleting existing openings:', deleteError)
         }
 
-        let openingsCount = 0
-        let itemsCount = 0
-        const unmatchedSets: string[] = []
+        // Batch insert all openings at once
+        const openingRows = allDoors.map((door) => ({
+          project_id: projectId,
+          door_number: door.door_number,
+          hw_set: door.hw_set || null,
+          hw_heading: setMap.get(door.hw_set)?.heading || null,
+          location: door.location || null,
+          door_type: door.door_type || null,
+          frame_type: door.frame_type || null,
+          fire_rating: door.fire_rating || null,
+          hand: door.hand || null,
+        }))
 
-        for (let i = 0; i < pass2Data.doors.length; i++) {
-          const door = pass2Data.doors[i]
+        // Insert in chunks of 50 to avoid request size limits
+        const CHUNK_SIZE = 50
+        const insertedOpenings: Array<{ id: string; door_number: string; hw_set: string }> = []
 
-          // Progress: 70-95% spread across door inserts
-          const insertProgress = 70 + Math.round((i / pass2Data.doors.length) * 25)
-          if (i % 5 === 0) {
-            send(insertProgress, `Saving door ${i + 1} of ${doorCount}...`)
-          }
+        for (let i = 0; i < openingRows.length; i += CHUNK_SIZE) {
+          const chunk = openingRows.slice(i, i + CHUNK_SIZE)
+          const progress = 70 + Math.round((i / openingRows.length) * 15)
+          send(progress, `Saving doors ${i + 1}–${Math.min(i + CHUNK_SIZE, openingRows.length)} of ${openingRows.length}...`)
 
-          const { data: insertedOpening, error: openingError } = await (supabase as any)
+          const { data, error } = await (supabase as any)
             .from('openings')
-            .insert([{
-              project_id: projectId,
-              door_number: door.door_number,
-              hw_set: door.hw_set || null,
-              hw_heading: setMap.get(door.hw_set)?.heading || null,
-              location: door.location || null,
-              door_type: door.door_type || null,
-              frame_type: door.frame_type || null,
-              fire_rating: door.fire_rating || null,
-              hand: door.hand || null,
-            }] as any)
-            .select()
-            .single()
+            .insert(chunk as any)
+            .select('id, door_number, hw_set')
 
-          if (openingError) {
-            console.error(`Error inserting opening ${door.door_number}:`, openingError)
-            continue
+          if (error) {
+            console.error(`Error inserting openings chunk at ${i}:`, error)
+          } else if (data) {
+            insertedOpenings.push(...data)
+          }
+        }
+
+        send(87, `Saved ${insertedOpenings.length} doors. Loading hardware items...`)
+
+        // Build all hardware item rows at once, then batch insert
+        const allHardwareRows: Array<Record<string, unknown>> = []
+
+        for (const opening of insertedOpenings) {
+          const hwSet = setMap.get(opening.hw_set)
+          if (!hwSet?.items?.length) continue
+
+          for (let idx = 0; idx < hwSet.items.length; idx++) {
+            const item = hwSet.items[idx]
+            allHardwareRows.push({
+              opening_id: opening.id,
+              name: item.name,
+              qty: item.qty || 1,
+              manufacturer: item.manufacturer || null,
+              model: item.model || null,
+              finish: item.finish || null,
+              sort_order: idx,
+            })
+          }
+        }
+
+        let itemsInserted = 0
+        for (let i = 0; i < allHardwareRows.length; i += CHUNK_SIZE) {
+          const chunk = allHardwareRows.slice(i, i + CHUNK_SIZE)
+          const progress = 87 + Math.round((i / allHardwareRows.length) * 10)
+          if (i % 200 === 0) {
+            send(progress, `Loading hardware items ${i + 1}–${Math.min(i + CHUNK_SIZE, allHardwareRows.length)} of ${allHardwareRows.length}...`)
           }
 
-          openingsCount++
-
-          const hwSet = setMap.get(door.hw_set)
-          if (!hwSet || !hwSet.items || hwSet.items.length === 0) {
-            if (door.hw_set && !unmatchedSets.includes(door.hw_set)) {
-              unmatchedSets.push(door.hw_set)
-            }
-            continue
-          }
-
-          const hardwareInserts = hwSet.items.map((item, index) => ({
-            opening_id: insertedOpening.id,
-            name: item.name,
-            qty: item.qty || 1,
-            manufacturer: item.manufacturer || null,
-            model: item.model || null,
-            finish: item.finish || null,
-            sort_order: index,
-          }))
-
-          const { error: itemsError, data: insertedItems } = await (supabase as any)
+          const { data, error } = await (supabase as any)
             .from('hardware_items')
-            .insert(hardwareInserts as any)
-            .select()
+            .insert(chunk as any)
+            .select('id')
 
-          if (!itemsError && insertedItems) {
-            itemsCount += insertedItems.length
-          } else if (itemsError) {
-            console.error(`Error inserting hardware items for ${door.door_number}:`, itemsError)
+          if (error) {
+            console.error(`Error inserting hardware items chunk at ${i}:`, error)
+          } else if (data) {
+            itemsInserted += data.length
+          }
+        }
+
+        // Check for unmatched sets
+        const unmatchedSets: string[] = []
+        for (const door of allDoors) {
+          if (door.hw_set && !setMap.has(door.hw_set) && !unmatchedSets.includes(door.hw_set)) {
+            unmatchedSets.push(door.hw_set)
           }
         }
 
@@ -306,16 +366,21 @@ CRITICAL: Extract EVERY SINGLE door from ALL pages. There may be 30-100+ doors. 
           console.warn(`Unmatched hardware sets: ${unmatchedSets.join(', ')}`)
         }
 
-        console.log(`PDF parse complete: ${openingsCount} openings, ${itemsCount} hardware items`)
+        console.log(`PDF parse complete: ${insertedOpenings.length} openings, ${itemsInserted} hardware items`)
 
-        const summary = unmatchedSets.length > 0
-          ? `Done! ${openingsCount} doors, ${itemsCount} hardware items. Warning: ${unmatchedSets.length} unmatched set(s).`
-          : `Done! ${openingsCount} doors, ${itemsCount} hardware items loaded.`
+        const warnings: string[] = []
+        if (unmatchedSets.length > 0) {
+          warnings.push(`${unmatchedSets.length} hardware set(s) not found: ${unmatchedSets.join(', ')}`)
+        }
+
+        const summary = warnings.length > 0
+          ? `Done! ${insertedOpenings.length} doors, ${itemsInserted} items. ⚠ ${warnings.join('; ')}`
+          : `Done! ${insertedOpenings.length} doors, ${itemsInserted} hardware items loaded.`
 
         send(100, summary, undefined, {
           success: true,
-          openingsCount,
-          itemsCount,
+          openingsCount: insertedOpenings.length,
+          itemsCount: itemsInserted,
           hardwareSets: setCount,
           unmatchedSets: unmatchedSets.length > 0 ? unmatchedSets : undefined,
         })
