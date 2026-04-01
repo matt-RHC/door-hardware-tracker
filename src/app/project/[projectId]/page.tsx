@@ -152,6 +152,17 @@ export default function ProjectDetailPage() {
               Print QR Codes
             </button>
             <button
+              onClick={() => {
+                const a = document.createElement("a");
+                a.href = `/api/projects/${projectId}/export-csv`;
+                a.download = "";
+                a.click();
+              }}
+              className="flex-1 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded transition-colors text-sm"
+            >
+              Export CSV
+            </button>
+            <button
               onClick={() => setShowUploadModal(true)}
               className="flex-1 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded transition-colors text-sm"
             >
