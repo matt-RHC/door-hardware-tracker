@@ -65,28 +65,40 @@ export async function POST(request: NextRequest) {
     // Call Claude API with PDF
     const response = await client.messages.create({
       model: 'claude-sonnet-4-20250514',
-      max_tokens: 16384,
+      max_tokens: 32768,
       system: `You are an expert at extracting door hardware information from architectural submittals and schedules.
-Extract all openings and their associated hardware items from the provided PDF document.
+
+CRITICAL: You MUST extract EVERY SINGLE opening/door from the ENTIRE document. Do NOT stop early or skip any pages. Go through ALL pages of the PDF from start to finish.
+
+The PDF typically contains:
+- A hardware set schedule listing each hardware set (e.g. DH1, DH2, EX1) with its hardware items
+- A door schedule or opening index listing every door number and which hardware set it belongs to
+
+For each unique door/opening listed, create an entry with ALL hardware items from its hardware set.
+
 Return the data as valid JSON matching this structure exactly:
 {
   "openings": [
     {
-      "door_number": "string",
-      "hw_set": "string",
-      "hw_heading": "string",
-      "location": "string",
-      "door_type": "string",
-      "frame_type": "string",
-      "fire_rating": "string",
-      "hand": "string",
+      "door_number": "string (e.g. 110-01A, 1201A, ST-1C)",
+      "hw_set": "string (e.g. DH1-10, EX3-NR)",
+      "hw_heading": "string (the hardware set description/heading)",
+      "location": "string (room name/location if listed)",
+      "door_type": "string (e.g. WD, HM, AL)",
+      "frame_type": "string (e.g. HM, AL, WD)",
+      "fire_rating": "string (e.g. 20Min, 45Min, 90Min, NR)",
+      "hand": "string (e.g. A, LHR, RHR)",
       "hardware_items": [
-        { "qty": number, "name": "string", "model": "string", "finish": "string", "manufacturer": "string" }
+        { "qty": number, "name": "string (e.g. Hinges, Closer, Lockset)", "model": "string", "finish": "string", "manufacturer": "string (2-letter abbreviation)" }
       ]
     }
   ]
 }
-Only return valid JSON, no other text.`,
+
+IMPORTANT:
+- Extract ALL openings, not just a sample. There may be 30-100+ openings.
+- Each opening must have its complete hardware_items array populated from its hardware set.
+- Only return valid JSON, no other text or markdown formatting.`,
       messages: [
         {
           role: 'user',
@@ -101,7 +113,7 @@ Only return valid JSON, no other text.`,
             },
             {
               type: 'text',
-              text: 'Extract all door openings and hardware items from this PDF document. Return only valid JSON.',
+              text: 'Extract EVERY door opening and ALL hardware items from this entire PDF document. Do not skip any doors or pages. Return only valid JSON.',
             },
           ],
         },
