@@ -41,22 +41,25 @@ export type Database = {
           id: string
           project_id: string
           user_id: string
-          role: 'owner' | 'admin' | 'member'
-          created_at: string
+          role: 'admin' | 'member'
+          invited_email: string | null
+          joined_at: string
         }
         Insert: {
           id?: string
           project_id: string
           user_id: string
-          role?: 'owner' | 'admin' | 'member'
-          created_at?: string
+          role?: 'admin' | 'member'
+          invited_email?: string | null
+          joined_at?: string
         }
         Update: {
           id?: string
           project_id?: string
           user_id?: string
-          role?: 'owner' | 'admin' | 'member'
-          created_at?: string
+          role?: 'admin' | 'member'
+          invited_email?: string | null
+          joined_at?: string
         }
       }
       openings: {
@@ -66,14 +69,13 @@ export type Database = {
           door_number: string
           hw_set: string | null
           hw_heading: string | null
-          fire_rating: string | null
+          location: string | null
           door_type: string | null
           frame_type: string | null
-          location: string | null
-          status: 'not_started' | 'in_progress' | 'installed' | 'inspected' | 'issue'
+          fire_rating: string | null
+          hand: string | null
           notes: string | null
           created_at: string
-          updated_at: string
         }
         Insert: {
           id?: string
@@ -81,14 +83,13 @@ export type Database = {
           door_number: string
           hw_set?: string | null
           hw_heading?: string | null
-          fire_rating?: string | null
+          location?: string | null
           door_type?: string | null
           frame_type?: string | null
-          location?: string | null
-          status?: 'not_started' | 'in_progress' | 'installed' | 'inspected' | 'issue'
+          fire_rating?: string | null
+          hand?: string | null
           notes?: string | null
           created_at?: string
-          updated_at?: string
         }
         Update: {
           id?: string
@@ -96,14 +97,13 @@ export type Database = {
           door_number?: string
           hw_set?: string | null
           hw_heading?: string | null
-          fire_rating?: string | null
+          location?: string | null
           door_type?: string | null
           frame_type?: string | null
-          location?: string | null
-          status?: 'not_started' | 'in_progress' | 'installed' | 'inspected' | 'issue'
+          fire_rating?: string | null
+          hand?: string | null
           notes?: string | null
           created_at?: string
-          updated_at?: string
         }
       }
       hardware_items: {
@@ -111,34 +111,37 @@ export type Database = {
           id: string
           opening_id: string
           name: string
-          category: string
-          quantity: number
-          specification: string | null
-          notes: string | null
+          qty: number
+          manufacturer: string | null
+          model: string | null
+          finish: string | null
+          options: string | null
+          sort_order: number
           created_at: string
-          updated_at: string
         }
         Insert: {
           id?: string
           opening_id: string
           name: string
-          category: string
-          quantity: number
-          specification?: string | null
-          notes?: string | null
+          qty?: number
+          manufacturer?: string | null
+          model?: string | null
+          finish?: string | null
+          options?: string | null
+          sort_order?: number
           created_at?: string
-          updated_at?: string
         }
         Update: {
           id?: string
           opening_id?: string
           name?: string
-          category?: string
-          quantity?: number
-          specification?: string | null
-          notes?: string | null
+          qty?: number
+          manufacturer?: string | null
+          model?: string | null
+          finish?: string | null
+          options?: string | null
+          sort_order?: number
           created_at?: string
-          updated_at?: string
         }
       }
       checklist_progress: {
@@ -149,8 +152,8 @@ export type Database = {
           checked: boolean
           checked_by: string | null
           checked_at: string | null
+          notes: string | null
           created_at: string
-          updated_at: string
         }
         Insert: {
           id?: string
@@ -159,8 +162,8 @@ export type Database = {
           checked?: boolean
           checked_by?: string | null
           checked_at?: string | null
+          notes?: string | null
           created_at?: string
-          updated_at?: string
         }
         Update: {
           id?: string
@@ -169,40 +172,37 @@ export type Database = {
           checked?: boolean
           checked_by?: string | null
           checked_at?: string | null
+          notes?: string | null
           created_at?: string
-          updated_at?: string
         }
       }
       attachments: {
         Row: {
           id: string
           opening_id: string
-          file_name: string
           file_url: string
-          file_type: string
-          file_size: number
-          uploaded_by: string
-          created_at: string
+          file_name: string | null
+          file_type: string | null
+          uploaded_by: string | null
+          uploaded_at: string
         }
         Insert: {
           id?: string
           opening_id: string
-          file_name: string
           file_url: string
-          file_type: string
-          file_size: number
-          uploaded_by: string
-          created_at?: string
+          file_name?: string | null
+          file_type?: string | null
+          uploaded_by?: string | null
+          uploaded_at?: string
         }
         Update: {
           id?: string
           opening_id?: string
-          file_name?: string
           file_url?: string
-          file_type?: string
-          file_size?: number
-          uploaded_by?: string
-          created_at?: string
+          file_name?: string | null
+          file_type?: string | null
+          uploaded_by?: string | null
+          uploaded_at?: string
         }
       }
     }

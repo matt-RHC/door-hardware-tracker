@@ -204,7 +204,7 @@ export default function DoorDetailPage() {
           <div className="flex justify-between items-start mb-6">
             <div>
               <h1 className="text-3xl font-bold text-white mb-2">
-                {opening.name}
+                Door {opening.door_number}
               </h1>
               {opening.location && (
                 <p className="text-slate-400">{opening.location}</p>
@@ -266,16 +266,21 @@ export default function DoorDetailPage() {
                   <div className="flex-1">
                     <div className="flex justify-between items-start mb-1">
                       <h3 className="font-medium text-white">{item.name}</h3>
-                      {item.quantity && (
+                      {item.qty && (
                         <span className="text-sm text-slate-400">
-                          Qty: {item.quantity}
+                          Qty: {item.qty}
                         </span>
                       )}
                     </div>
 
-                    {item.specification && (
-                      <p className="text-sm text-slate-400 mb-2">
-                        {item.specification}
+                    {item.manufacturer && (
+                      <p className="text-sm text-slate-400 mb-1">
+                        {item.manufacturer} {item.model && `— ${item.model}`}
+                      </p>
+                    )}
+                    {item.finish && (
+                      <p className="text-sm text-slate-500 mb-2">
+                        Finish: {item.finish}
                       </p>
                     )}
 

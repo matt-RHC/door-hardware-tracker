@@ -11,11 +11,11 @@ interface OpeningWithCounts {
   door_type: string | null
   frame_type: string | null
   fire_rating: string | null
-  status: string | null
+  hand: string | null
   notes: string | null
   created_at: string
   hardware_items: Array<{ id: string }>
-  checklist_progress: Array<{ id: string; completed: boolean }>
+  checklist_progress: Array<{ id: string; checked: boolean }>
 }
 
 export async function GET(
@@ -61,11 +61,11 @@ export async function GET(
         door_type,
         frame_type,
         fire_rating,
-        status,
+        hand,
         notes,
         created_at,
         hardware_items:hardware_items(id),
-        checklist_progress(id, completed)
+        checklist_progress(id, checked)
       `)
       .eq('project_id', projectId)
       .order('door_number', { ascending: true })
@@ -82,7 +82,7 @@ export async function GET(
     const transformedOpenings = (openings as OpeningWithCounts[]).map((opening) => ({
       ...opening,
       total_items: opening.hardware_items?.length || 0,
-      checked_items: opening.checklist_progress?.filter((cp) => cp.completed).length || 0,
+      checked_items: opening.checklist_progress?.filter((cp) => cp.checked).length || 0,
       total_checklist: opening.checklist_progress?.length || 0,
       hardware_items: undefined,
       checklist_progress: undefined,

@@ -82,7 +82,7 @@ export default function QRCodesPrintPage() {
                   includeMargin={true}
                 />
                 <div className="text-center mt-4 text-xs text-slate-700">
-                  <p className="font-bold">{opening.name}</p>
+                  <p className="font-bold">Door {opening.door_number}</p>
                   {opening.location && (
                     <p className="text-slate-600">{opening.location}</p>
                   )}

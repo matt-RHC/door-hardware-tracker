@@ -15,7 +15,7 @@ interface OpeningWithProgress {
   door_type: string | null;
   frame_type: string | null;
   fire_rating: string | null;
-  status: string | null;
+  hand: string | null;
   notes: string | null;
   created_at: string;
   total_items: number;
