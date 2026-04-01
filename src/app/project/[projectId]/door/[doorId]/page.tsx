@@ -52,63 +52,74 @@ function DrawingTab({
   onUpload: (file: File) => void;
   uploading: boolean;
 }) {
-  const latestImage = attachments.length > 0 ? attachments[attachments.length - 1] : null;
+  const latest = attachments.length > 0 ? attachments[attachments.length - 1] : null;
+  const isPdf = latest?.file_type === 'application/pdf' || latest?.file_name?.match(/\.pdf$/i);
+  const isImage = latest?.file_type?.startsWith('image/') || latest?.file_name?.match(/\.(png|jpg|jpeg|gif|webp|svg)$/i);
 
   return (
     <div className="bg-slate-900 rounded-lg border border-slate-800 p-6">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-xl font-bold text-white">{label}</h2>
-        {attachments.length > 1 && (
-          <span className="text-xs text-slate-500">
-            {attachments.length} version{attachments.length !== 1 ? 's' : ''} uploaded
-          </span>
-        )}
-      </div>
-
-      {latestImage ? (
-        <div className="mb-4">
-          {latestImage.file_type?.startsWith('image/') || latestImage.file_name?.match(/\.(png|jpg|jpeg|gif|webp|svg)$/i) ? (
-            <div className="relative group">
-              <img
-                src={latestImage.file_url}
-                alt={label}
-                className="w-full rounded-lg border border-slate-700 bg-slate-800"
-              />
-              <a
-                href={latestImage.file_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity bg-slate-900/80 text-blue-400 hover:text-blue-300 px-3 py-1.5 rounded text-xs"
-              >
-                Open full size
-              </a>
-            </div>
-          ) : (
+        <div className="flex items-center gap-3">
+          {attachments.length > 1 && (
+            <span className="text-xs text-slate-500">
+              {attachments.length} version{attachments.length !== 1 ? 's' : ''} uploaded
+            </span>
+          )}
+          {latest && (
             <a
-              href={latestImage.file_url}
+              href={latest.file_url}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex items-center gap-3 p-4 bg-slate-800 rounded-lg border border-slate-700 hover:border-slate-600 transition-colors"
+              className="text-xs text-blue-400 hover:text-blue-300"
             >
+              Open in new tab
+            </a>
+          )}
+        </div>
+      </div>
+
+      {latest ? (
+        <div className="mb-4">
+          {isPdf ? (
+            <div className="relative rounded-lg border border-slate-700 overflow-hidden bg-white">
+              <iframe
+                src={`${latest.file_url}#toolbar=1&navpanes=0&view=FitH`}
+                className="w-full border-0"
+                style={{ height: '75vh', minHeight: '500px' }}
+                title={label}
+              />
+            </div>
+          ) : isImage ? (
+            <div className="relative group rounded-lg border border-slate-700 overflow-hidden">
+              <img
+                src={latest.file_url}
+                alt={label}
+                className="w-full bg-slate-800"
+              />
+            </div>
+          ) : (
+            <div className="flex items-center gap-3 p-4 bg-slate-800 rounded-lg border border-slate-700">
               <svg className="w-8 h-8 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
               </svg>
               <div>
-                <p className="text-blue-400 hover:text-blue-300 text-sm font-medium">{latestImage.file_name}</p>
-                <p className="text-slate-500 text-xs">Click to view</p>
+                <p className="text-white text-sm font-medium">{latest.file_name}</p>
+                <p className="text-slate-500 text-xs">Uploaded {new Date(latest.uploaded_at).toLocaleDateString()}</p>
               </div>
-            </a>
+            </div>
           )}
           <p className="text-xs text-slate-500 mt-2">
-            Uploaded {new Date(latestImage.uploaded_at).toLocaleDateString()}
+            {latest.file_name} — uploaded {new Date(latest.uploaded_at).toLocaleDateString()}
           </p>
         </div>
       ) : (
-        <div className="flex flex-col items-center justify-center py-12 text-slate-500 border border-dashed border-slate-700 rounded-lg mb-4">
+        <div className="flex flex-col items-center justify-center py-16 text-slate-500 border border-dashed border-slate-700 rounded-lg mb-4">
           <svg className="w-12 h-12 mb-3 text-slate-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
           </svg>
           <p className="text-sm">No {label.toLowerCase()} uploaded yet</p>
+          <p className="text-xs text-slate-600 mt-1">Supports PDF and image files</p>
         </div>
       )}
 
@@ -123,7 +134,7 @@ function DrawingTab({
           className="hidden"
           accept="image/*,application/pdf"
         />
-        {uploading ? "Uploading..." : latestImage ? `Replace ${label}` : `Upload ${label}`}
+        {uploading ? "Uploading..." : latest ? `Replace ${label}` : `Upload ${label}`}
       </label>
     </div>
   );
