@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerSupabaseClient } from '@/lib/supabase/server'
-import { createAdminSupabaseClient } from '@/lib/supabase/admin'
+import { createServerSupabaseClient, createAdminSupabaseClient } from '@/lib/supabase/server'
 
 export async function GET(
   request: NextRequest,
@@ -38,7 +37,7 @@ export async function GET(
       .single()
 
     // Fetch all openings with hardware items, checklist, and attachments
-    const { data: openings } = await admin
+    const { data: openingsRaw } = await admin
       .from('openings')
       .select(`
         id,
@@ -47,6 +46,17 @@ export async function GET(
         attachments(id, category)
       `)
       .eq('project_id', projectId)
+
+    const openings = openingsRaw as Array<{
+      id: string;
+      hardware_items: Array<{ id: string; install_type: string | null }>;
+      checklist_progress: Array<{
+        id: string; checked: boolean;
+        received: boolean | null; pre_install: boolean | null;
+        installed: boolean | null; qa_qc: boolean | null;
+      }>;
+      attachments: Array<{ id: string; category: string }>;
+    }> | null
 
     if (!openings) {
       return NextResponse.json({
@@ -84,13 +94,9 @@ export async function GET(
     let openingsWithFrameDrawing = 0
 
     for (const opening of openings) {
-      const items = opening.hardware_items as Array<{ id: string; install_type: string | null }> || []
-      const checklists = opening.checklist_progress as Array<{
-        id: string; checked: boolean;
-        received: boolean | null; pre_install: boolean | null;
-        installed: boolean | null; qa_qc: boolean | null;
-      }> || []
-      const atts = opening.attachments as Array<{ id: string; category: string }> || []
+      const items = opening.hardware_items || []
+      const checklists = opening.checklist_progress || []
+      const atts = opening.attachments || []
 
       totalItems += items.length
       totalChecked += checklists.filter(c => c.checked).length

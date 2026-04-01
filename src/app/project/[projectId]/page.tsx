@@ -189,6 +189,35 @@ export default function ProjectDetailPage() {
 
   return (
     <div className="min-h-screen bg-slate-950">
+      <style>{`
+        .card-press {
+          transition: transform 0.15s cubic-bezier(0.2, 0, 0.2, 1),
+                      box-shadow 0.15s cubic-bezier(0.2, 0, 0.2, 1),
+                      border-color 0.15s ease;
+          will-change: transform;
+        }
+        .card-press:hover {
+          transform: translateY(-2px);
+          box-shadow: 0 4px 20px rgba(59, 130, 246, 0.15);
+        }
+        .card-press:active {
+          transform: scale(0.97) translateY(0px);
+          box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.4), 0 2px 12px rgba(59, 130, 246, 0.2);
+          transition: transform 0.08s cubic-bezier(0.3, 0, 0.5, 1),
+                      box-shadow 0.08s cubic-bezier(0.3, 0, 0.5, 1);
+        }
+        @keyframes card-ripple {
+          0% { opacity: 0.5; transform: scale(0); }
+          100% { opacity: 0; transform: scale(2.5); }
+        }
+        .card-press .ripple {
+          position: absolute;
+          border-radius: 50%;
+          background: rgba(59, 130, 246, 0.3);
+          animation: card-ripple 0.5s ease-out forwards;
+          pointer-events: none;
+        }
+      `}</style>
       <OfflineIndicator />
 
       <main className="max-w-7xl mx-auto px-4 py-8">
@@ -520,10 +549,20 @@ export default function ProjectDetailPage() {
               return (
                 <div
                   key={opening.id}
-                  onClick={() =>
-                    router.push(`/project/${projectId}/door/${opening.id}`)
-                  }
-                  className="bg-slate-900 rounded-lg border border-slate-800 p-6 hover:border-blue-500 cursor-pointer transition-colors"
+                  onClick={(e) => {
+                    const card = e.currentTarget;
+                    const rect = card.getBoundingClientRect();
+                    const ripple = document.createElement("span");
+                    const size = Math.max(rect.width, rect.height);
+                    ripple.className = "ripple";
+                    ripple.style.width = ripple.style.height = `${size}px`;
+                    ripple.style.left = `${e.clientX - rect.left - size / 2}px`;
+                    ripple.style.top = `${e.clientY - rect.top - size / 2}px`;
+                    card.appendChild(ripple);
+                    setTimeout(() => ripple.remove(), 500);
+                    setTimeout(() => router.push(`/project/${projectId}/door/${opening.id}`), 150);
+                  }}
+                  className="card-press relative overflow-hidden bg-slate-900 rounded-lg border border-slate-800 p-6 hover:border-blue-500 cursor-pointer"
                 >
                   <h2 className="text-2xl font-bold text-white mb-2">
                     Door {opening.door_number}
