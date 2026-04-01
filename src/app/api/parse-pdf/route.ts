@@ -1,8 +1,7 @@
 import { NextRequest } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import Anthropic from '@anthropic-ai/sdk'
-import * as pdfParseModule from 'pdf-parse'
-const pdfParse = (pdfParseModule as any).default || pdfParseModule
+// pdf-parse removed — requires DOMMatrix (browser-only) which crashes in serverless
 
 // --- Types ---
 
@@ -32,109 +31,100 @@ interface DoorEntry {
 
 // --- Helpers ---
 
-function isContextLengthError(err: unknown): boolean {
+function parseContextLimitError(err: unknown): number | null {
   const msg = err instanceof Error ? err.message : String(err)
-  return msg.includes('context_length') || msg.includes('exceed context limit') ||
-         msg.includes('max_tokens') && msg.includes('exceed') ||
-         (typeof err === 'object' && err !== null && 'status' in err && (err as any).status === 400 &&
-          msg.includes('input length'))
-}
-
-async function callClaudeWithPdf(
-  client: Anthropic,
-  base64: string,
-  systemPrompt: string,
-  userPrompt: string,
-  maxTokens = 16384
-): Promise<{ text: string; truncated: boolean }> {
-  const stream = client.messages.stream({
-    model: 'claude-sonnet-4-20250514',
-    max_tokens: maxTokens,
-    system: systemPrompt,
-    messages: [
-      {
-        role: 'user',
-        content: [
-          {
-            type: 'document',
-            source: { type: 'base64', media_type: 'application/pdf', data: base64 },
-          },
-          { type: 'text', text: userPrompt },
-        ],
-      },
-    ],
-  })
-
-  const response = await stream.finalMessage()
-  const truncated = response.stop_reason === 'max_tokens'
-
-  const textBlock = response.content.find((b) => b.type === 'text')
-  if (!textBlock || textBlock.type !== 'text') {
-    throw new Error('No text in Claude response')
+  // Match: "input length and `max_tokens` exceed context limit: 185135 + 32768 > 200000"
+  const match = msg.match(/input length.*?(\d+)\s*\+\s*(\d+)\s*>\s*(\d+)/)
+  if (match) {
+    return parseInt(match[1], 10) // return the input token count
   }
-
-  let text = textBlock.text.trim()
-  if (text.startsWith('```')) {
-    text = text.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '')
+  // Also check for generic context length errors
+  if (msg.includes('context_length') || msg.includes('exceed context limit')) {
+    return -1 // unknown input length, but it is a context error
   }
-  return { text, truncated }
-}
-
-async function callClaudeWithText(
-  client: Anthropic,
-  extractedText: string,
-  systemPrompt: string,
-  userPrompt: string,
-  maxTokens = 16384
-): Promise<{ text: string; truncated: boolean }> {
-  // Estimate tokens (~4 chars per token) and truncate if needed to stay under ~180K tokens
-  const MAX_CHARS = 700000 // ~175K tokens, leaving room for system + max_tokens
-  const truncatedInput = extractedText.length > MAX_CHARS
-    ? extractedText.slice(0, MAX_CHARS) + '\n\n[... document truncated due to length ...]'
-    : extractedText
-
-  const stream = client.messages.stream({
-    model: 'claude-sonnet-4-20250514',
-    max_tokens: maxTokens,
-    system: systemPrompt,
-    messages: [
-      {
-        role: 'user',
-        content: `Here is the extracted text from a door hardware submittal PDF:\n\n---\n${truncatedInput}\n---\n\n${userPrompt}`,
-      },
-    ],
-  })
-
-  const response = await stream.finalMessage()
-  const truncated = response.stop_reason === 'max_tokens'
-
-  const textBlock = response.content.find((b) => b.type === 'text')
-  if (!textBlock || textBlock.type !== 'text') {
-    throw new Error('No text in Claude response')
-  }
-
-  let text = textBlock.text.trim()
-  if (text.startsWith('```')) {
-    text = text.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '')
-  }
-  return { text, truncated }
+  return null
 }
 
 async function callClaude(
   client: Anthropic,
   base64: string,
-  extractedText: string | null,
   systemPrompt: string,
   userPrompt: string,
   maxTokens = 16384
 ): Promise<{ text: string; truncated: boolean }> {
-  // Try PDF document mode first
   try {
-    return await callClaudeWithPdf(client, base64, systemPrompt, userPrompt, maxTokens)
+    const stream = client.messages.stream({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: maxTokens,
+      system: systemPrompt,
+      messages: [
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'document',
+              source: { type: 'base64', media_type: 'application/pdf', data: base64 },
+            },
+            { type: 'text', text: userPrompt },
+          ],
+        },
+      ],
+    })
+
+    const response = await stream.finalMessage()
+    const truncated = response.stop_reason === 'max_tokens'
+
+    const textBlock = response.content.find((b) => b.type === 'text')
+    if (!textBlock || textBlock.type !== 'text') {
+      throw new Error('No text in Claude response')
+    }
+
+    let text = textBlock.text.trim()
+    if (text.startsWith('```')) {
+      text = text.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '')
+    }
+    return { text, truncated }
   } catch (err) {
-    if (isContextLengthError(err) && extractedText) {
-      console.log('PDF too large for document mode, falling back to text extraction')
-      return await callClaudeWithText(client, extractedText, systemPrompt, userPrompt, maxTokens)
+    const inputTokens = parseContextLimitError(err)
+    if (inputTokens !== null && inputTokens > 0) {
+      // Retry with reduced max_tokens that fits within the 200K context limit
+      const reducedMaxTokens = Math.floor(199000 - inputTokens)
+      if (reducedMaxTokens >= 4096) {
+        console.log(`Context limit hit (${inputTokens} input tokens). Retrying with max_tokens=${reducedMaxTokens}`)
+        const stream = client.messages.stream({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: reducedMaxTokens,
+          system: systemPrompt,
+          messages: [
+            {
+              role: 'user',
+              content: [
+                {
+                  type: 'document',
+                  source: { type: 'base64', media_type: 'application/pdf', data: base64 },
+                },
+                { type: 'text', text: userPrompt },
+              ],
+            },
+          ],
+        })
+
+        const response = await stream.finalMessage()
+        const truncated = response.stop_reason === 'max_tokens'
+
+        const textBlock = response.content.find((b) => b.type === 'text')
+        if (!textBlock || textBlock.type !== 'text') {
+          throw new Error('No text in Claude response')
+        }
+
+        let text = textBlock.text.trim()
+        if (text.startsWith('```')) {
+          text = text.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '')
+        }
+        return { text, truncated }
+      } else {
+        throw new Error(`PDF is too large to process (${inputTokens} tokens). Maximum supported is ~195,000 tokens.`)
+      }
     }
     throw err
   }
@@ -206,17 +196,6 @@ export async function POST(request: NextRequest) {
         const base64 = Buffer.from(buffer).toString('base64')
         const client = new Anthropic()
 
-        // Pre-extract text as fallback for large PDFs
-        send(6, 'Extracting text from PDF...')
-        let extractedText: string | null = null
-        try {
-          const pdfData = await pdfParse(Buffer.from(buffer))
-          extractedText = pdfData.text
-          console.log(`PDF text extracted: ${extractedText!.length} chars (~${Math.round(extractedText!.length / 4)} tokens)`)
-        } catch (textErr) {
-          console.warn('Could not extract text from PDF, will rely on document mode:', textErr)
-        }
-
         // ==========================================
         // PASS 1: Extract hardware set definitions
         // ==========================================
@@ -250,7 +229,7 @@ IMPORTANT: Extract ALL hardware sets with ALL items in each. No markdown, only J
 
         let pass1Data: { hardware_sets: HardwareSet[] }
         try {
-          const { text, truncated } = await callClaude(client, base64, extractedText, pass1System,
+          const { text, truncated } = await callClaude(client, base64, pass1System,
             'Extract ALL hardware set definitions from this submittal. Return only valid JSON.', 32768)
 
           if (truncated) {
@@ -304,7 +283,7 @@ Rules:
 
         try {
           send(40, 'Extracting door schedule...')
-          const { text, truncated } = await callClaude(client, base64, extractedText, pass2System,
+          const { text, truncated } = await callClaude(client, base64, pass2System,
             'List EVERY door from the door schedule. Pipe-delimited, one per line. No headers. Do NOT stop early.', 16384)
 
           allDoors = parseDoorLines(text)
@@ -326,7 +305,7 @@ door_number|hw_set|location|door_type|frame_type|fire_rating|hand
 hw_set must be one of: ${setIds}
 No headers, no markdown, just data lines.`
 
-            const { text: contText } = await callClaude(client, base64, extractedText, contSystem,
+            const { text: contText } = await callClaude(client, base64, contSystem,
               `Continue the door list from after "${lastDoor}". Only doors AFTER that one. Pipe-delimited, one per line.`, 16384)
 
             const moreDoors = parseDoorLines(contText)
