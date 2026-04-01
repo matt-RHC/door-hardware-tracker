@@ -274,8 +274,6 @@ export default function ProjectDetailPage() {
   const [filters, setFilters] = useState<Filters>(defaultFilters);
   const [showFilters, setShowFilters] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);
-  const [syncing, setSyncing] = useState(false);
-  const [syncResult, setSyncResult] = useState<{ success: boolean; message: string; permalink?: string } | null>(null);
   const [summary, setSummary] = useState<ProjectSummary | null>(null);
   const [activeTab, setActiveTab] = useState<"dashboard" | "openings">("dashboard");
 
@@ -396,34 +394,6 @@ export default function ProjectDetailPage() {
 
   const updateFilter = (key: keyof Filters, value: string) => {
     setFilters((prev) => ({ ...prev, [key]: value }));
-  };
-
-  const syncToSmartsheet = async () => {
-    setSyncing(true);
-    setSyncResult(null);
-    try {
-      const response = await fetch(`/api/projects/${projectId}/sync-smartsheet`, {
-        method: "POST",
-      });
-      const data = await response.json();
-      if (!response.ok) {
-        setSyncResult({ success: false, message: data.error || "Sync failed" });
-      } else {
-        const verb = data.created ? "Created" : "Updated";
-        setSyncResult({
-          success: true,
-          message: `${verb} Smartsheet with ${data.rowsSynced} openings`,
-          permalink: data.permalink,
-        });
-      }
-    } catch (err) {
-      setSyncResult({
-        success: false,
-        message: err instanceof Error ? err.message : "Sync failed",
-      });
-    } finally {
-      setSyncing(false);
-    }
   };
 
   return (
@@ -648,27 +618,6 @@ export default function ProjectDetailPage() {
                 Export CSV
               </button>
               <button
-                onClick={syncToSmartsheet}
-                disabled={syncing}
-                className={`interactive-el px-4 py-2 rounded-lg text-sm flex items-center gap-2 ${
-                  syncing
-                    ? "bg-green-800/50 text-green-300 cursor-wait"
-                    : "bg-green-700 hover:bg-green-600 text-white"
-                }`}
-              >
-                {syncing ? (
-                  <>
-                    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
-                    </svg>
-                    Syncing...
-                  </>
-                ) : (
-                  "Sync to Smartsheet"
-                )}
-              </button>
-              <button
                 onClick={() => setShowUploadModal(true)}
                 className="interactive-el px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-sm"
               >
@@ -676,37 +625,6 @@ export default function ProjectDetailPage() {
               </button>
             </div>
           </div>
-
-          {/* Smartsheet Sync Result Banner */}
-          {syncResult && (
-            <div
-              className={`p-3 rounded-lg flex items-center justify-between text-sm ${
-                syncResult.success
-                  ? "bg-green-900/30 border border-green-800 text-green-200"
-                  : "bg-red-900/30 border border-red-800 text-red-200"
-              }`}
-            >
-              <span>{syncResult.message}</span>
-              <div className="flex items-center gap-3">
-                {syncResult.permalink && (
-                  <a
-                    href={syncResult.permalink}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-green-400 hover:text-green-300 underline"
-                  >
-                    Open in Smartsheet
-                  </a>
-                )}
-                <button
-                  onClick={() => setSyncResult(null)}
-                  className="text-slate-400 hover:text-white"
-                >
-                  &times;
-                </button>
-              </div>
-            </div>
-          )}
 
           {/* Tab Bar */}
           <div className="flex gap-1 bg-slate-900/50 p-1 rounded-xl border border-slate-800 w-fit">
