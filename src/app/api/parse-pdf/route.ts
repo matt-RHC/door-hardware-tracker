@@ -62,8 +62,8 @@ export async function POST(request: NextRequest) {
     // Initialize Anthropic client
     const client = new Anthropic()
 
-    // Call Claude API with PDF
-    const response = await client.messages.create({
+    // Call Claude API with PDF (use streaming for long requests)
+    const stream = client.messages.stream({
       model: 'claude-sonnet-4-20250514',
       max_tokens: 32768,
       system: `You are an expert at extracting door hardware information from architectural submittals and schedules.
@@ -119,6 +119,9 @@ IMPORTANT:
         },
       ],
     })
+
+    // Wait for the full streamed response
+    const response = await stream.finalMessage()
 
     // Check if response was truncated
     if (response.stop_reason === 'max_tokens') {
