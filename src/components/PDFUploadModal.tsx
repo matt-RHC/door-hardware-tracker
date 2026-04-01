@@ -16,6 +16,8 @@ export default function PDFUploadModal({
   const [file, setFile] = useState<File | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [progress, setProgress] = useState(0);
+  const [status, setStatus] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
@@ -39,6 +41,8 @@ export default function PDFUploadModal({
 
     setLoading(true);
     setError(null);
+    setProgress(0);
+    setStatus("Starting upload...");
 
     try {
       const formData = new FormData();
@@ -50,19 +54,74 @@ export default function PDFUploadModal({
         body: formData,
       });
 
-      if (!response.ok) {
-        const errData = await response.json().catch(() => null);
-        throw new Error(errData?.error || `Upload failed (${response.status})`);
+      if (!response.ok && !response.body) {
+        throw new Error(`Upload failed (${response.status})`);
       }
 
-      const result = await response.json();
-      onSuccess();
-      onClose();
-      if (result.unmatchedSets) {
-        console.warn('Some hardware sets could not be matched:', result.unmatchedSets);
+      const reader = response.body?.getReader();
+      if (!reader) {
+        throw new Error("No response stream");
+      }
+
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let lastEvent: { progress: number; status: string; error?: string; result?: Record<string, unknown> } | null = null;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() || "";
+
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          try {
+            const event = JSON.parse(line);
+            lastEvent = event;
+            setProgress(event.progress);
+            setStatus(event.status);
+            if (event.error) {
+              setError(event.error);
+            }
+          } catch {
+            // skip malformed lines
+          }
+        }
+      }
+
+      // Process any remaining buffer
+      if (buffer.trim()) {
+        try {
+          const event = JSON.parse(buffer);
+          lastEvent = event;
+          setProgress(event.progress);
+          setStatus(event.status);
+          if (event.error) {
+            setError(event.error);
+          }
+        } catch {
+          // skip
+        }
+      }
+
+      if (lastEvent?.error) {
+        throw new Error(lastEvent.error);
+      }
+
+      if (lastEvent?.result?.success) {
+        // Brief pause so user sees 100% before closing
+        await new Promise((resolve) => setTimeout(resolve, 1500));
+        onSuccess();
+        onClose();
+      } else {
+        throw new Error("Upload completed but no success response received");
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Upload failed");
+      setProgress(0);
+      setStatus("");
     } finally {
       setLoading(false);
     }
@@ -79,6 +138,24 @@ export default function PDFUploadModal({
           </div>
         )}
 
+        {loading && (
+          <div className="mb-4">
+            <div className="flex justify-between text-sm mb-1">
+              <span className="text-slate-300">{status}</span>
+              <span className="text-slate-400">{progress}%</span>
+            </div>
+            <div className="w-full bg-slate-800 rounded-full h-3 overflow-hidden">
+              <div
+                className="h-full rounded-full transition-all duration-500 ease-out"
+                style={{
+                  width: `${progress}%`,
+                  backgroundColor: progress === 100 ? '#22c55e' : '#3b82f6',
+                }}
+              />
+            </div>
+          </div>
+        )}
+
         <form onSubmit={handleSubmit}>
           <div className="mb-4">
             <label className="block text-sm font-medium text-slate-200 mb-2">
@@ -89,9 +166,10 @@ export default function PDFUploadModal({
               type="file"
               accept=".pdf"
               onChange={handleFileChange}
-              className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded text-white cursor-pointer file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-700"
+              disabled={loading}
+              className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded text-white cursor-pointer file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-700 disabled:opacity-50"
             />
-            {file && (
+            {file && !loading && (
               <p className="mt-2 text-sm text-slate-400">{file.name}</p>
             )}
           </div>
@@ -100,7 +178,8 @@ export default function PDFUploadModal({
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded transition-colors"
+              disabled={loading}
+              className="flex-1 px-4 py-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-white rounded transition-colors"
             >
               Cancel
             </button>
@@ -109,7 +188,7 @@ export default function PDFUploadModal({
               disabled={loading || !file}
               className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-700 text-white rounded transition-colors"
             >
-              {loading ? "Analyzing submittal... (may take 1-2 min)" : "Upload"}
+              {loading ? "Processing..." : "Upload"}
             </button>
           </div>
         </form>
