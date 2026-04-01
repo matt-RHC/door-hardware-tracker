@@ -92,8 +92,12 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Use admin client for project creation to bypass RLS issues with cookie-based auth
+    // We've already verified authentication above via getUser(), so this is safe
+    const adminSupabase = createAdminSupabaseClient()
+
     // Create project
-    const { data: project, error: projectError } = await (supabase as any)
+    const { data: project, error: projectError } = await (adminSupabase as any)
       .from('projects')
       .insert([{
         name,
@@ -115,9 +119,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Add current user as admin (use admin client to bypass RLS chicken-and-egg:
-    // the project_members INSERT policy requires an existing admin, but this IS the first member)
-    const adminSupabase = createAdminSupabaseClient()
+    // Add current user as admin
     const { error: memberError } = await (adminSupabase as any)
       .from('project_members')
       .insert([{
