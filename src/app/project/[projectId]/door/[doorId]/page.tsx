@@ -542,6 +542,77 @@ export default function DoorDetailPage() {
 
   return (
     <div className="min-h-screen bg-slate-950">
+      <style>{`
+        .interactive-el {
+          transition: all 0.15s cubic-bezier(0.2, 0, 0.2, 1);
+        }
+        .interactive-el:hover {
+          transform: translateY(-1px);
+          box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        }
+        .interactive-el:active {
+          transform: scale(0.96) translateY(0);
+          transition: transform 0.08s ease;
+        }
+        .tag-chip {
+          transition: all 0.15s cubic-bezier(0.2, 0, 0.2, 1);
+        }
+        .tag-chip:hover {
+          filter: brightness(1.2);
+          transform: translateY(-1px);
+        }
+        .check-btn {
+          transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        .check-btn:active {
+          transform: scale(0.85);
+        }
+        .check-btn:hover {
+          transform: scale(1.1);
+          box-shadow: 0 0 12px rgba(59, 130, 246, 0.3);
+        }
+        .workflow-step {
+          transition: all 0.2s cubic-bezier(0.2, 0, 0.2, 1);
+        }
+        .workflow-step:hover {
+          transform: translateY(-1px);
+          filter: brightness(1.15);
+        }
+        .workflow-step:active {
+          transform: scale(0.95);
+          transition: transform 0.08s ease;
+        }
+        .classify-btn {
+          transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        .classify-btn:hover {
+          transform: translateY(-2px) scale(1.02);
+          box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+        }
+        .classify-btn:active {
+          transform: scale(0.96);
+          transition: transform 0.08s ease;
+        }
+        .tab-pill-door {
+          transition: all 0.2s cubic-bezier(0.2, 0, 0.2, 1);
+          position: relative;
+          overflow: hidden;
+        }
+        .tab-pill-door:active {
+          transform: scale(0.96);
+        }
+        @keyframes fadeSlideIn {
+          from { opacity: 0; transform: translateY(8px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .fade-in { animation: fadeSlideIn 0.3s cubic-bezier(0.2, 0, 0.2, 1) both; }
+        @keyframes checkPop {
+          0% { transform: scale(1); }
+          50% { transform: scale(1.3); }
+          100% { transform: scale(1); }
+        }
+        .check-pop { animation: checkPop 0.25s cubic-bezier(0.34, 1.56, 0.64, 1); }
+      `}</style>
       <OfflineIndicator />
 
       <main className="max-w-4xl mx-auto px-4 py-8">
@@ -549,7 +620,7 @@ export default function DoorDetailPage() {
         <div className="mb-8">
           <button
             onClick={() => router.push(`/project/${projectId}`)}
-            className="text-blue-400 hover:text-blue-300 mb-4 text-sm"
+            className="interactive-el text-blue-400 hover:text-blue-300 mb-4 text-sm inline-block"
           >
             &larr; Back to Project
           </button>
@@ -583,17 +654,17 @@ export default function DoorDetailPage() {
                   )}
                   <div className="flex flex-wrap gap-2 mt-2">
                     {opening.door_type && (
-                      <span className="text-xs bg-slate-800 text-slate-300 px-2 py-1 rounded">
+                      <span className="tag-chip text-xs bg-slate-800 text-slate-300 px-2 py-1 rounded-full border border-slate-700">
                         {opening.door_type}
                       </span>
                     )}
                     {opening.fire_rating && (
-                      <span className="text-xs bg-red-900/40 text-red-300 px-2 py-1 rounded">
+                      <span className="tag-chip text-xs bg-red-900/40 text-red-300 px-2 py-1 rounded-full border border-red-800/40">
                         {opening.fire_rating}
                       </span>
                     )}
                     {opening.hand && (
-                      <span className="text-xs bg-slate-800 text-slate-300 px-2 py-1 rounded">
+                      <span className="tag-chip text-xs bg-slate-800 text-slate-300 px-2 py-1 rounded-full border border-slate-700">
                         {opening.hand}
                       </span>
                     )}
@@ -731,25 +802,28 @@ export default function DoorDetailPage() {
         </div>
 
         {/* Tab Bar */}
-        <div className="flex gap-2 mb-6 overflow-x-auto">
+        <div className="flex gap-1 bg-slate-900/50 p-1 rounded-xl border border-slate-800 mb-6 overflow-x-auto w-fit">
           {([
-            { key: 'hardware', label: 'Hardware' },
-            { key: 'floor_plan', label: 'Floor Plan' },
-            { key: 'door_drawing', label: 'Door Drawing' },
-            { key: 'frame_drawing', label: 'Frame Drawing' },
+            { key: 'hardware', label: 'Hardware', icon: 'M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z' },
+            { key: 'floor_plan', label: 'Floor Plan', icon: 'M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7' },
+            { key: 'door_drawing', label: 'Door Drawing', icon: 'M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z' },
+            { key: 'frame_drawing', label: 'Frame Drawing', icon: 'M4 5a1 1 0 011-1h14a1 1 0 011 1v2a1 1 0 01-1 1H5a1 1 0 01-1-1V5zM4 13a1 1 0 011-1h6a1 1 0 011 1v6a1 1 0 01-1 1H5a1 1 0 01-1-1v-6zM16 13a1 1 0 011-1h2a1 1 0 011 1v6a1 1 0 01-1 1h-2a1 1 0 01-1-1v-6z' },
           ] as const).map((tab) => (
             <button
               key={tab.key}
               onClick={() => setActiveTab(tab.key)}
-              className={`px-4 py-2 text-sm font-medium whitespace-nowrap rounded-lg border transition-colors ${
+              className={`tab-pill-door flex items-center gap-2 px-4 py-2.5 text-sm font-medium whitespace-nowrap rounded-lg ${
                 activeTab === tab.key
-                  ? 'bg-blue-600/20 border-blue-500 text-blue-400'
-                  : 'bg-slate-900 border-slate-700 text-slate-400 hover:text-white hover:border-slate-500'
+                  ? 'bg-slate-800 text-white shadow-md'
+                  : 'text-slate-400 hover:text-slate-300 hover:bg-slate-800/50'
               }`}
             >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d={tab.icon} />
+              </svg>
               {tab.label}
               {tab.key !== 'hardware' && getAttachmentsByCategory(tab.key).length > 0 && (
-                <span className="ml-2 text-xs bg-slate-700 text-slate-300 px-1.5 py-0.5 rounded">
+                <span className="text-xs bg-blue-500/20 text-blue-400 px-1.5 py-0.5 rounded-full">
                   {getAttachmentsByCategory(tab.key).length}
                 </span>
               )}
@@ -925,13 +999,13 @@ export default function DoorDetailPage() {
                               <span className="text-xs text-slate-500">Classify:</span>
                               <button
                                 onClick={() => handleInstallTypeClick(item.id, 'bench')}
-                                className="text-xs px-2 py-1 bg-slate-700 hover:bg-purple-900/40 text-slate-400 hover:text-purple-300 rounded transition-colors"
+                                className="classify-btn text-xs px-3 py-1.5 bg-blue-900/20 hover:bg-blue-900/40 text-blue-400 border border-blue-800/30 hover:border-blue-600/50 rounded-lg"
                               >
                                 Bench
                               </button>
                               <button
                                 onClick={() => handleInstallTypeClick(item.id, 'field')}
-                                className="text-xs px-2 py-1 bg-slate-700 hover:bg-green-900/40 text-slate-400 hover:text-green-300 rounded transition-colors"
+                                className="classify-btn text-xs px-3 py-1.5 bg-purple-900/20 hover:bg-purple-900/40 text-purple-400 border border-purple-800/30 hover:border-purple-600/50 rounded-lg"
                               >
                                 Field
                               </button>
@@ -950,9 +1024,9 @@ export default function DoorDetailPage() {
                                   )}
                                   <button
                                     onClick={() => handleStepToggle(item.id, step, isActive)}
-                                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded text-xs font-medium transition-colors ${
+                                    className={`workflow-step flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium ${
                                       isActive
-                                        ? 'bg-blue-600/30 text-blue-300 border border-blue-500/50'
+                                        ? 'bg-blue-600/30 text-blue-300 border border-blue-500/50 shadow-sm shadow-blue-500/10'
                                         : 'bg-slate-700/50 text-slate-400 border border-slate-600 hover:bg-slate-700 hover:text-slate-300'
                                     }`}
                                   >
