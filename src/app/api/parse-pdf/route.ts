@@ -130,6 +130,61 @@ async function callClaude(
   }
 }
 
+function repairPartialJson(text: string): string {
+  // Attempt to repair truncated JSON by closing open brackets/braces
+  let repaired = text.trim()
+
+  // If it ends mid-string, close the string
+  const quoteCount = (repaired.match(/(?<!\\)"/g) || []).length
+  if (quoteCount % 2 !== 0) {
+    repaired += '"'
+  }
+
+  // Count open vs close braces/brackets
+  let braces = 0
+  let brackets = 0
+  let inString = false
+  for (let i = 0; i < repaired.length; i++) {
+    const ch = repaired[i]
+    if (ch === '"' && (i === 0 || repaired[i - 1] !== '\\')) {
+      inString = !inString
+      continue
+    }
+    if (inString) continue
+    if (ch === '{') braces++
+    else if (ch === '}') braces--
+    else if (ch === '[') brackets++
+    else if (ch === ']') brackets--
+  }
+
+  // Remove any trailing comma or colon before closing
+  repaired = repaired.replace(/[,:\s]+$/, '')
+
+  // Close open brackets then braces
+  while (brackets > 0) { repaired += ']'; brackets-- }
+  while (braces > 0) { repaired += '}'; braces-- }
+
+  return repaired
+}
+
+function parsePartialHardwareSets(text: string): HardwareSet[] {
+  // Try to parse hardware sets from potentially truncated JSON
+  try {
+    const data = JSON.parse(text)
+    return data.hardware_sets || []
+  } catch {
+    // Try repairing the JSON
+    try {
+      const repaired = repairPartialJson(text)
+      const data = JSON.parse(repaired)
+      return (data.hardware_sets || []).filter((s: HardwareSet) => s.set_id && s.items)
+    } catch {
+      console.error('Could not parse partial hardware sets JSON')
+      return []
+    }
+  }
+}
+
 function parseDoorLines(raw: string): DoorEntry[] {
   const doors: DoorEntry[] = []
   for (const line of raw.split('\n')) {
@@ -227,19 +282,84 @@ CRITICAL RULES FOR QTY:
 
 IMPORTANT: Extract ALL hardware sets with ALL items in each. No markdown, only JSON.`
 
-        let pass1Data: { hardware_sets: HardwareSet[] }
+        let pass1Data: { hardware_sets: HardwareSet[] } = { hardware_sets: [] }
         try {
           const { text, truncated } = await callClaude(client, base64, pass1System,
             'Extract ALL hardware set definitions from this submittal. Return only valid JSON.', 32768)
 
           if (truncated) {
-            console.error('Pass 1 truncated even at 32K tokens')
-            send(0, 'Error', 'Submittal has too many hardware sets to process at once. Contact support.')
-            controller.close()
-            return
-          }
+            // Parse whatever we got from the truncated response
+            const partialSets = parsePartialHardwareSets(text)
+            console.log(`Pass 1 truncated — recovered ${partialSets.length} hardware sets from partial response`)
 
-          pass1Data = JSON.parse(text)
+            if (partialSets.length === 0) {
+              send(0, 'Error', 'Failed to parse hardware sets from truncated response. The PDF may be too large.')
+              controller.close()
+              return
+            }
+
+            pass1Data.hardware_sets = partialSets
+
+            // Continuation loop — ask for remaining sets
+            const MAX_CONTINUATIONS = 5
+            let continuations = 0
+
+            while (continuations < MAX_CONTINUATIONS) {
+              continuations++
+              const lastSetId = pass1Data.hardware_sets[pass1Data.hardware_sets.length - 1].set_id
+              const knownSetIds = pass1Data.hardware_sets.map(s => s.set_id).join(', ')
+
+              send(8 + continuations * 5, `Found ${pass1Data.hardware_sets.length} sets so far (last: ${lastSetId}). Fetching more...`)
+
+              const contPrompt = `Continue extracting hardware set definitions. You already extracted these sets: ${knownSetIds}
+
+Extract ONLY the hardware sets that come AFTER "${lastSetId}" in the document. Do NOT re-extract any of the sets listed above.
+
+Return valid JSON in the same format:
+{
+  "hardware_sets": [ ... ]
+}
+
+If there are no more hardware sets after "${lastSetId}", return: {"hardware_sets": []}`
+
+              const { text: contText, truncated: contTruncated } = await callClaude(
+                client, base64, pass1System, contPrompt, 32768
+              )
+
+              let moreSets: HardwareSet[]
+              if (contTruncated) {
+                moreSets = parsePartialHardwareSets(contText)
+              } else {
+                try {
+                  const contData = JSON.parse(contText)
+                  moreSets = contData.hardware_sets || []
+                } catch {
+                  moreSets = parsePartialHardwareSets(contText)
+                }
+              }
+
+              if (moreSets.length === 0) {
+                console.log(`Pass 1 continuation ${continuations}: no more sets found`)
+                break
+              }
+
+              // Deduplicate — only add sets we don't already have
+              const existingIds = new Set(pass1Data.hardware_sets.map(s => s.set_id))
+              const newSets = moreSets.filter(s => !existingIds.has(s.set_id))
+
+              if (newSets.length === 0) {
+                console.log(`Pass 1 continuation ${continuations}: all returned sets already known`)
+                break
+              }
+
+              pass1Data.hardware_sets.push(...newSets)
+              console.log(`Pass 1 continuation ${continuations}: added ${newSets.length} new sets (total: ${pass1Data.hardware_sets.length})`)
+
+              if (!contTruncated) break // Got a complete response, we're done
+            }
+          } else {
+            pass1Data = JSON.parse(text)
+          }
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err)
           console.error('Pass 1 failed:', msg)
