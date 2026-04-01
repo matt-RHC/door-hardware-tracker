@@ -2,7 +2,16 @@
   "framework": "nextjs",
   "functions": {
     "src/app/api/parse-pdf/route.ts": {
-      "maxDuration": 60
+      "maxDuration": 300
+    },
+    "src/app/api/parse-pdf/chunk/route.ts": {
+      "maxDuration": 120
+    },
+    "src/app/api/parse-pdf/save/route.ts": {
+      "maxDuration": 120
+    },
+    "src/app/api/sync-smartsheet/route.ts": {
+      "maxDuration": 120
     }
   }
 }
