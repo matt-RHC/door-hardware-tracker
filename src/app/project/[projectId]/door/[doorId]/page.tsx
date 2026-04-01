@@ -720,7 +720,7 @@ export default function DoorDetailPage() {
         </div>
 
         {/* Tab Bar */}
-        <div className="flex border-b border-slate-800 mb-6 overflow-x-auto">
+        <div className="flex gap-2 mb-6 overflow-x-auto">
           {([
             { key: 'hardware', label: 'Hardware' },
             { key: 'floor_plan', label: 'Floor Plan' },
@@ -730,15 +730,15 @@ export default function DoorDetailPage() {
             <button
               key={tab.key}
               onClick={() => setActiveTab(tab.key)}
-              className={`px-5 py-3 text-sm font-medium whitespace-nowrap transition-colors border-b-2 -mb-px ${
+              className={`px-4 py-2 text-sm font-medium whitespace-nowrap rounded-lg border transition-colors ${
                 activeTab === tab.key
-                  ? 'border-blue-500 text-blue-400'
-                  : 'border-transparent text-slate-500 hover:text-slate-300 hover:border-slate-600'
+                  ? 'bg-blue-600/20 border-blue-500 text-blue-400'
+                  : 'bg-slate-900 border-slate-700 text-slate-400 hover:text-white hover:border-slate-500'
               }`}
             >
               {tab.label}
               {tab.key !== 'hardware' && getAttachmentsByCategory(tab.key).length > 0 && (
-                <span className="ml-2 text-xs bg-slate-800 text-slate-400 px-1.5 py-0.5 rounded">
+                <span className="ml-2 text-xs bg-slate-700 text-slate-300 px-1.5 py-0.5 rounded">
                   {getAttachmentsByCategory(tab.key).length}
                 </span>
               )}

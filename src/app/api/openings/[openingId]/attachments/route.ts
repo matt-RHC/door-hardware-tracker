@@ -49,7 +49,7 @@ export async function GET(
     // Get attachments
     const { data: attachments, error: attachmentsError } = await supabase
       .from('attachments')
-      .select('id, opening_id, file_name, file_size, file_url, category, created_at, created_by')
+      .select('id, opening_id, file_name, file_url, file_type, category, created_at, uploaded_by, uploaded_at')
       .eq('opening_id', openingId)
       .order('created_at', { ascending: false })
 
@@ -159,7 +159,7 @@ export async function POST(
       .insert([{
         opening_id: openingId,
         file_name: file.name,
-        file_size: file.size,
+        file_type: file.type,
         file_url: publicUrl,
         category,
         uploaded_by: user.id,
