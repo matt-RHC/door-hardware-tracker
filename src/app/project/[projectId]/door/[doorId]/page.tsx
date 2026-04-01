@@ -57,6 +57,12 @@ export default function DoorDetailPage() {
   const [editingOpening, setEditingOpening] = useState(false);
   const [editingOpeningData, setEditingOpeningData] = useState<EditingOpeningState | null>(null);
   const [savingOpening, setSavingOpening] = useState(false);
+  const [classifyConfirm, setClassifyConfirm] = useState<{
+    itemId: string;
+    itemName: string;
+    installType: 'bench' | 'field';
+    similarItemIds: string[];
+  } | null>(null);
 
   const supabase = createClient();
 
@@ -135,6 +141,47 @@ export default function DoorDetailPage() {
     } catch (err) {
       console.error("Error toggling step:", err);
     }
+  };
+
+  const handleInstallTypeClick = (itemId: string, installType: 'bench' | 'field') => {
+    if (!opening) return;
+    const item = opening.hardware_items.find(i => i.id === itemId);
+    if (!item) return;
+
+    // Find similar items (same name, no install_type set yet)
+    const similarItems = opening.hardware_items.filter(
+      i => i.name === item.name && i.id !== itemId && !i.install_type
+    );
+
+    if (similarItems.length > 0) {
+      setClassifyConfirm({
+        itemId,
+        itemName: item.name,
+        installType,
+        similarItemIds: similarItems.map(i => i.id),
+      });
+    } else {
+      // No similar items, just apply to this one
+      applyInstallType([itemId], installType);
+    }
+  };
+
+  const applyInstallType = async (itemIds: string[], installType: 'bench' | 'field') => {
+    try {
+      await Promise.all(
+        itemIds.map(id =>
+          fetch(`/api/openings/${doorId}/items/${id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ install_type: installType }),
+          })
+        )
+      );
+      await fetchOpeningData();
+    } catch (err) {
+      console.error("Error updating install type:", err);
+    }
+    setClassifyConfirm(null);
   };
 
   const handleInstallTypeChange = async (itemId: string, installType: 'bench' | 'field' | null) => {
@@ -722,13 +769,13 @@ export default function DoorDetailPage() {
                             <div className="flex items-center gap-2 mb-2">
                               <span className="text-xs text-slate-500">Classify:</span>
                               <button
-                                onClick={() => handleInstallTypeChange(item.id, 'bench')}
+                                onClick={() => handleInstallTypeClick(item.id, 'bench')}
                                 className="text-xs px-2 py-1 bg-slate-700 hover:bg-purple-900/40 text-slate-400 hover:text-purple-300 rounded transition-colors"
                               >
                                 Bench
                               </button>
                               <button
-                                onClick={() => handleInstallTypeChange(item.id, 'field')}
+                                onClick={() => handleInstallTypeClick(item.id, 'field')}
                                 className="text-xs px-2 py-1 bg-slate-700 hover:bg-green-900/40 text-slate-400 hover:text-green-300 rounded transition-colors"
                               >
                                 Field
@@ -848,6 +895,56 @@ export default function DoorDetailPage() {
           </div>
         </div>
       </main>
+
+      {/* Bulk Classification Confirmation Modal */}
+      {classifyConfirm && (
+        <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-900 border border-slate-700 rounded-lg w-full max-w-md p-6">
+            <h2 className="text-lg font-bold text-white mb-3">
+              Classify as {classifyConfirm.installType === 'bench' ? 'Bench' : 'Field'}?
+            </h2>
+            <p className="text-slate-400 text-sm mb-4">
+              There {classifyConfirm.similarItemIds.length === 1 ? 'is' : 'are'}{' '}
+              <span className="text-white font-medium">{classifyConfirm.similarItemIds.length}</span>{' '}
+              other &quot;{classifyConfirm.itemName}&quot; item{classifyConfirm.similarItemIds.length !== 1 ? 's' : ''} in this opening.
+              Apply{' '}
+              <span className={classifyConfirm.installType === 'bench' ? 'text-purple-300' : 'text-green-300'}>
+                {classifyConfirm.installType === 'bench' ? 'Bench' : 'Field'}
+              </span>{' '}
+              to all of them?
+            </p>
+            <p className="text-slate-500 text-xs mb-4">
+              You can always change individual items later.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => applyInstallType(
+                  [classifyConfirm.itemId, ...classifyConfirm.similarItemIds],
+                  classifyConfirm.installType
+                )}
+                className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors text-sm"
+              >
+                Yes, apply to all
+              </button>
+              <button
+                onClick={() => applyInstallType(
+                  [classifyConfirm.itemId],
+                  classifyConfirm.installType
+                )}
+                className="flex-1 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded transition-colors text-sm"
+              >
+                Just this one
+              </button>
+              <button
+                onClick={() => setClassifyConfirm(null)}
+                className="px-4 py-2 text-slate-500 hover:text-slate-400 text-sm"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -69,6 +69,7 @@ export async function GET(
           finish,
           options,
           sort_order,
+          install_type,
           created_at
         ),
         checklist_progress(
@@ -77,6 +78,18 @@ export async function GET(
           checked,
           checked_by,
           checked_at,
+          received,
+          received_by,
+          received_at,
+          pre_install,
+          pre_install_by,
+          pre_install_at,
+          installed,
+          installed_by,
+          installed_at,
+          qa_qc,
+          qa_qc_by,
+          qa_qc_at,
           notes,
           created_at
         ),
