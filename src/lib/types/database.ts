@@ -12,6 +12,8 @@ export type Database = {
           submittal_date: string | null
           created_at: string
           created_by: string | null
+          smartsheet_sheet_id: number | null
+          smartsheet_last_synced: string | null
         }
         Insert: {
           id?: string
@@ -23,6 +25,8 @@ export type Database = {
           submittal_date?: string | null
           created_at?: string
           created_by?: string | null
+          smartsheet_sheet_id?: number | null
+          smartsheet_last_synced?: string | null
         }
         Update: {
           id?: string
@@ -34,6 +38,8 @@ export type Database = {
           submittal_date?: string | null
           created_at?: string
           created_by?: string | null
+          smartsheet_sheet_id?: number | null
+          smartsheet_last_synced?: string | null
         }
       }
       project_members: {
