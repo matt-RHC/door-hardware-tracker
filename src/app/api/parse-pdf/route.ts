@@ -127,6 +127,16 @@ Only return valid JSON, no other text.`,
       )
     }
 
+    // Delete existing openings for this project (cascade deletes hardware_items, checklist_progress, attachments)
+    const { error: deleteError } = await (supabase as any)
+      .from('openings')
+      .delete()
+      .eq('project_id', projectId)
+
+    if (deleteError) {
+      console.error('Error deleting existing openings:', deleteError)
+    }
+
     // Insert openings and hardware items
     let openingsCount = 0
     let itemsCount = 0

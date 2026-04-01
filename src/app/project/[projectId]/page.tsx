@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
 import OfflineIndicator from "@/components/OfflineIndicator";
 import ProgressBar from "@/components/ProgressBar";
+import PDFUploadModal from "@/components/PDFUploadModal";
 
 interface OpeningWithProgress {
   id: string;
@@ -31,6 +32,7 @@ export default function ProjectDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState<"all" | "complete" | "incomplete">("all");
+  const [showUploadModal, setShowUploadModal] = useState(false);
 
   useEffect(() => {
     fetchProjectData();
@@ -150,9 +152,7 @@ export default function ProjectDetailPage() {
               Print QR Codes
             </button>
             <button
-              onClick={() => {
-                /* TODO: Open PDF upload modal */
-              }}
+              onClick={() => setShowUploadModal(true)}
               className="flex-1 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded transition-colors text-sm"
             >
               Upload PDF
@@ -219,6 +219,14 @@ export default function ProjectDetailPage() {
           </div>
         )}
       </main>
+
+      {showUploadModal && (
+        <PDFUploadModal
+          projectId={projectId}
+          onClose={() => setShowUploadModal(false)}
+          onSuccess={() => fetchProjectData()}
+        />
+      )}
     </div>
   );
 }
