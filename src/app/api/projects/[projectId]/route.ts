@@ -21,7 +21,7 @@ export async function GET(
       .select('role')
       .eq('project_id', projectId)
       .eq('user_id', user.id)
-      .single()
+      .single() as { data: { role: string } | null; error: any }
 
     if (!member) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 })
@@ -64,7 +64,7 @@ export async function PATCH(
       .select('role')
       .eq('project_id', projectId)
       .eq('user_id', user.id)
-      .single()
+      .single() as { data: { role: string } | null; error: any }
 
     if (!member || member.role !== 'admin') {
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
@@ -122,7 +122,7 @@ export async function DELETE(
       .select('role')
       .eq('project_id', projectId)
       .eq('user_id', user.id)
-      .single()
+      .single() as { data: { role: string } | null; error: any }
 
     if (!member || member.role !== 'admin') {
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
