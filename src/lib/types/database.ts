@@ -12,6 +12,13 @@ export type Database = {
           submittal_date: string | null
           created_at: string
           created_by: string | null
+          smartsheet_sheet_id: number | null
+          smartsheet_last_synced: string | null
+          smartsheet_webhook_id: number | null
+          smartsheet_submittal_sheet_id: number | null
+          smartsheet_delivery_sheet_id: number | null
+          smartsheet_issues_sheet_id: number | null
+          smartsheet_folder_id: number | null
         }
         Insert: {
           id?: string
@@ -23,6 +30,13 @@ export type Database = {
           submittal_date?: string | null
           created_at?: string
           created_by?: string | null
+          smartsheet_sheet_id?: number | null
+          smartsheet_last_synced?: string | null
+          smartsheet_webhook_id?: number | null
+          smartsheet_submittal_sheet_id?: number | null
+          smartsheet_delivery_sheet_id?: number | null
+          smartsheet_issues_sheet_id?: number | null
+          smartsheet_folder_id?: number | null
         }
         Update: {
           id?: string
@@ -34,6 +48,13 @@ export type Database = {
           submittal_date?: string | null
           created_at?: string
           created_by?: string | null
+          smartsheet_sheet_id?: number | null
+          smartsheet_last_synced?: string | null
+          smartsheet_webhook_id?: number | null
+          smartsheet_submittal_sheet_id?: number | null
+          smartsheet_delivery_sheet_id?: number | null
+          smartsheet_issues_sheet_id?: number | null
+          smartsheet_folder_id?: number | null
         }
       }
       project_members: {
@@ -247,6 +268,172 @@ export type Database = {
           uploaded_at?: string
         }
       }
+      issues: {
+        Row: {
+          id: string
+          project_id: string
+          issue_id_short: string
+          door_number: string | null
+          hardware_item: string | null
+          description: string
+          severity: 'low' | 'medium' | 'high' | 'critical'
+          status: 'open' | 'in_progress' | 'resolved' | 'closed'
+          assigned_to: string | null
+          created_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          project_id: string
+          issue_id_short: string
+          door_number?: string | null
+          hardware_item?: string | null
+          description: string
+          severity?: 'low' | 'medium' | 'high' | 'critical'
+          status?: 'open' | 'in_progress' | 'resolved' | 'closed'
+          assigned_to?: string | null
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          project_id?: string
+          issue_id_short?: string
+          door_number?: string | null
+          hardware_item?: string | null
+          description?: string
+          severity?: 'low' | 'medium' | 'high' | 'critical'
+          status?: 'open' | 'in_progress' | 'resolved' | 'closed'
+          assigned_to?: string | null
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      deliveries: {
+        Row: {
+          id: string
+          project_id: string
+          po_number: string | null
+          vendor: string | null
+          items_description: string | null
+          expected_date: string | null
+          actual_date: string | null
+          status: 'ordered' | 'shipped' | 'delivered' | 'partial' | 'delayed'
+          notes: string | null
+          created_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          project_id: string
+          po_number?: string | null
+          vendor?: string | null
+          items_description?: string | null
+          expected_date?: string | null
+          actual_date?: string | null
+          status?: 'ordered' | 'shipped' | 'delivered' | 'partial' | 'delayed'
+          notes?: string | null
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          project_id?: string
+          po_number?: string | null
+          vendor?: string | null
+          items_description?: string | null
+          expected_date?: string | null
+          actual_date?: string | null
+          status?: 'ordered' | 'shipped' | 'delivered' | 'partial' | 'delayed'
+          notes?: string | null
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      smartsheet_row_map: {
+        Row: {
+          id: string
+          sheet_type: string
+          local_record_id: string
+          smartsheet_sheet_id: number
+          smartsheet_row_id: number
+          sync_hash: string | null
+          last_synced: string
+        }
+        Insert: {
+          id?: string
+          sheet_type: string
+          local_record_id: string
+          smartsheet_sheet_id: number
+          smartsheet_row_id: number
+          sync_hash?: string | null
+          last_synced?: string
+        }
+        Update: {
+          id?: string
+          sheet_type?: string
+          local_record_id?: string
+          smartsheet_sheet_id?: number
+          smartsheet_row_id?: number
+          sync_hash?: string | null
+          last_synced?: string
+        }
+      }
+      smartsheet_webhooks: {
+        Row: {
+          id: string
+          project_id: string
+          sheet_type: string
+          smartsheet_webhook_id: number
+          smartsheet_sheet_id: number
+          active: boolean
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          project_id: string
+          sheet_type: string
+          smartsheet_webhook_id: number
+          smartsheet_sheet_id: number
+          active?: boolean
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          project_id?: string
+          sheet_type?: string
+          smartsheet_webhook_id?: number
+          smartsheet_sheet_id?: number
+          active?: boolean
+          created_at?: string
+        }
+      }
+      smartsheet_portfolio: {
+        Row: {
+          id: string
+          project_id: string
+          smartsheet_row_id: number | null
+          last_synced: string | null
+        }
+        Insert: {
+          id?: string
+          project_id: string
+          smartsheet_row_id?: number | null
+          last_synced?: string | null
+        }
+        Update: {
+          id?: string
+          project_id?: string
+          smartsheet_row_id?: number | null
+          last_synced?: string | null
+        }
+      }
     }
     Views: {}
     Functions: {}
@@ -278,3 +465,15 @@ export type ChecklistProgressUpdate = Database['public']['Tables']['checklist_pr
 export type Attachment = Database['public']['Tables']['attachments']['Row']
 export type AttachmentInsert = Database['public']['Tables']['attachments']['Insert']
 export type AttachmentUpdate = Database['public']['Tables']['attachments']['Update']
+
+export type Issue = Database['public']['Tables']['issues']['Row']
+export type IssueInsert = Database['public']['Tables']['issues']['Insert']
+export type IssueUpdate = Database['public']['Tables']['issues']['Update']
+
+export type Delivery = Database['public']['Tables']['deliveries']['Row']
+export type DeliveryInsert = Database['public']['Tables']['deliveries']['Insert']
+export type DeliveryUpdate = Database['public']['Tables']['deliveries']['Update']
+
+export type SmartsheetRowMap = Database['public']['Tables']['smartsheet_row_map']['Row']
+export type SmartsheetWebhook = Database['public']['Tables']['smartsheet_webhooks']['Row']
+export type SmartsheetPortfolio = Database['public']['Tables']['smartsheet_portfolio']['Row']

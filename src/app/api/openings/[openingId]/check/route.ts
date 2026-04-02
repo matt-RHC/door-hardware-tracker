@@ -123,6 +123,16 @@ export async function POST(
       )
     }
 
+    // Auto-push to Smartsheet (fire-and-forget)
+    const projectId = (opening as any).project_id
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+    fetch(`${baseUrl}/api/projects/${projectId}/sync-smartsheet`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    }).catch(() => {
+      // Ignore errors — sync is best-effort
+    })
+
     return NextResponse.json(result)
   } catch (error) {
     console.error('Check item POST error:', error)

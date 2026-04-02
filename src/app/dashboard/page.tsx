@@ -32,6 +32,8 @@ export default function DashboardPage() {
   const [saving, setSaving] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
   const [menuOpen, setMenuOpen] = useState<string | null>(null);
+  const [syncingPortfolio, setSyncingPortfolio] = useState(false);
+  const [portfolioResult, setPortfolioResult] = useState<{ success: boolean; message: string } | null>(null);
   const router = useRouter();
 
   useEffect(() => {
@@ -55,6 +57,24 @@ export default function DashboardPage() {
       setError(err instanceof Error ? err.message : "An error occurred");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const syncPortfolio = async () => {
+    setSyncingPortfolio(true);
+    setPortfolioResult(null);
+    try {
+      const res = await fetch("/api/portfolio/sync", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) {
+        setPortfolioResult({ success: false, message: data.error || "Sync failed" });
+      } else {
+        setPortfolioResult({ success: true, message: `Portfolio synced: ${data.projectCount} projects` });
+      }
+    } catch (err) {
+      setPortfolioResult({ success: false, message: err instanceof Error ? err.message : "Sync failed" });
+    } finally {
+      setSyncingPortfolio(false);
     }
   };
 
@@ -129,13 +149,45 @@ export default function DashboardPage() {
       <main className="max-w-7xl mx-auto px-4 py-8">
         <div className="flex justify-between items-center mb-8">
           <h1 className="text-3xl font-bold text-[#f5f5f7]">Projects</h1>
-          <button
-            onClick={openNewProject}
-            className="px-4 py-2 bg-[#0a84ff] hover:bg-[#0a84ff]/90 text-[#f5f5f7] font-medium rounded-lg transition-colors"
-          >
-            New Project
-          </button>
+          <div className="flex gap-3">
+            <button
+              onClick={syncPortfolio}
+              disabled={syncingPortfolio}
+              className={`px-4 py-2 rounded-lg transition-all text-sm flex items-center gap-2 ${
+                syncingPortfolio
+                  ? "bg-[rgba(48,209,88,0.15)] text-[#30d158] cursor-wait border border-[rgba(48,209,88,0.2)]"
+                  : "bg-[rgba(48,209,88,0.15)] border border-[rgba(48,209,88,0.3)] text-[#30d158] hover:bg-[rgba(48,209,88,0.25)]"
+              }`}
+            >
+              {syncingPortfolio ? "Syncing..." : "Sync Portfolio"}
+            </button>
+            <button
+              onClick={openNewProject}
+              className="px-4 py-2 bg-[#0a84ff] hover:bg-[#0a84ff]/90 text-[#f5f5f7] font-medium rounded-lg transition-colors"
+            >
+              New Project
+            </button>
+          </div>
         </div>
+
+        {/* Portfolio sync result */}
+        {portfolioResult && (
+          <div
+            className={`mb-6 p-4 rounded-xl flex items-center justify-between text-sm border ${
+              portfolioResult.success
+                ? "bg-[rgba(48,209,88,0.1)] border-[rgba(48,209,88,0.2)] text-[#30d158]"
+                : "bg-[rgba(255,69,58,0.1)] border-[rgba(255,69,58,0.2)] text-[#ff6961]"
+            }`}
+          >
+            <span>{portfolioResult.message}</span>
+            <button
+              onClick={() => setPortfolioResult(null)}
+              className="text-[#a1a1a6] hover:text-[#f5f5f7] transition-colors"
+            >
+              &times;
+            </button>
+          </div>
+        )}
 
         {loading ? (
           <div className="text-center py-12 text-[#a1a1a6]">Loading...</div>

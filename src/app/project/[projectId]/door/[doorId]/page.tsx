@@ -6,6 +6,7 @@ import { QRCodeSVG } from "qrcode.react";
 import OfflineIndicator from "@/components/OfflineIndicator";
 import ProgressBar from "@/components/ProgressBar";
 import FileViewer from "@/components/FileViewer";
+import IssueReportModal from "@/components/IssueReportModal";
 import { createClient } from "@/lib/supabase/client";
 import { initDB, cacheOpening, getCachedOpening } from "@/lib/offline/db";
 import { Opening, HardwareItem, ChecklistProgress, Attachment } from "@/lib/types/database";
@@ -61,6 +62,7 @@ export default function DoorDetailPage() {
   const [activeTab, setActiveTab] = useState<'hardware' | 'files' | 'notes' | 'qr'>('hardware');
   const [viewingAttachment, setViewingAttachment] = useState<Attachment | null>(null);
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
+  const [issueModal, setIssueModal] = useState<{ doorNumber: string; hardwareItem: string } | null>(null);
 
   const supabase = createClient();
 
@@ -801,6 +803,16 @@ export default function DoorDetailPage() {
                             Switch to {item.install_type === 'bench' ? 'Field' : 'Bench'}
                           </button>
                         )}
+
+                        <button
+                          onClick={() => setIssueModal({
+                            doorNumber: opening.door_number,
+                            hardwareItem: item.name,
+                          })}
+                          className="ml-auto text-[11px] text-[#ff453a] hover:text-[#ff6961] transition-colors"
+                        >
+                          Report Issue
+                        </button>
                       </div>
                     </>
                   )}
@@ -1026,6 +1038,16 @@ export default function DoorDetailPage() {
         <FileViewer
           attachment={viewingAttachment}
           onClose={() => setViewingAttachment(null)}
+        />
+      )}
+
+      {issueModal && (
+        <IssueReportModal
+          projectId={projectId}
+          doorNumber={issueModal.doorNumber}
+          hardwareItem={issueModal.hardwareItem}
+          onClose={() => setIssueModal(null)}
+          onCreated={() => setIssueModal(null)}
         />
       )}
     </div>
