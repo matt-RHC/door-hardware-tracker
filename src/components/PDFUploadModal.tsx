@@ -560,68 +560,6 @@ export default function PDFUploadModal({
   };
 
   // ==========================================
-  // Parse-only for small PDFs (stream parse, collect results, don't save)
-  // ==========================================
-  const parseSmallPDFOnly = async (formData: FormData): Promise<{ doors: DoorEntry[]; sets: HardwareSet[] }> => {
-    setStatus("Uploading to server...");
-    setProgress(5);
-
-    const response = await fetch("/api/parse-pdf", {
-      method: "POST",
-      body: formData,
-    });
-
-    if (!response.ok && !response.body) throw new Error(`Upload failed (${response.status})`);
-
-    const reader = response.body?.getReader();
-    if (!reader) throw new Error("No response stream");
-
-    const decoder = new TextDecoder();
-    let buffer = "";
-    let lastEvent: { progress: number; status: string; error?: string; result?: Record<string, unknown> } | null = null;
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split("\n");
-      buffer = lines.pop() || "";
-      for (const line of lines) {
-        if (!line.trim()) continue;
-        try {
-          const event = JSON.parse(line);
-          lastEvent = event;
-          setProgress(event.progress);
-          setStatus(event.status);
-          if (event.error) setError(event.error);
-        } catch { /* skip */ }
-      }
-    }
-
-    if (buffer.trim()) {
-      try {
-        const event = JSON.parse(buffer);
-        lastEvent = event;
-        setProgress(event.progress);
-        setStatus(event.status);
-        if (event.error) setError(event.error);
-      } catch { /* skip */ }
-    }
-
-    if (lastEvent?.error) throw new Error(lastEvent.error);
-    if (!lastEvent?.result?.success) throw new Error("Parse completed but no success response received");
-
-    // For the wizard, we need the parsed data. The small flow saves directly,
-    // so we need to re-fetch what was just saved. The data is now in the DB.
-    // Return empty to signal that data was saved (wizard will re-compare from DB).
-    // Actually, for a true parse-only we'd need a separate endpoint.
-    // For now, the small flow saves, and the wizard's compare will diff against it.
-    // This means for small PDFs with existing data, we save first then compare.
-    // Not ideal but functional — the wizard can still let the user undo/modify.
-    return { doors: [], sets: [] };
-  };
-
-  // ==========================================
   // Submit handler: routes to appropriate flow
   // ==========================================
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
@@ -653,35 +591,17 @@ export default function PDFUploadModal({
       const hasExisting = await checkExistingOpenings();
 
       if (hasExisting) {
-        // ─── WIZARD MODE: parse only, then show wizard ───
-        if (pageCount > CHUNK_THRESHOLD) {
-          setStatus(`${pageCount}-page PDF detected. Parsing for comparison...`);
-          setProgress(2);
-          const result = await processLargePDF(buffer, pageCount, true);
-          if (result) {
-            setWizardData({ doors: result.doors, sets: result.sets });
-          }
-        } else {
-          // For small PDFs, use the chunked approach with 1 chunk (parse-only)
-          setStatus("Parsing PDF for comparison...");
-          setProgress(5);
-          const base64 = btoa(
-            new Uint8Array(buffer).reduce((data, byte) => data + String.fromCharCode(byte), "")
-          );
-          const resp = await fetch("/api/parse-pdf/chunk", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ chunkBase64: base64, chunkIndex: 0, totalChunks: 1 }),
-          });
-          if (!resp.ok) {
-            const errBody = await resp.json().catch(() => ({}));
-            throw new Error(errBody.error || `Parse failed (${resp.status})`);
-          }
-          const result: ChunkResult = await resp.json();
+        // ─── WIZARD MODE: parse only (chunked), then show wizard ───
+        // Always use chunked processing for re-uploads — even "small" PDFs
+        // can be 40+ pages which is too large for a single Claude API call.
+        setStatus(`Parsing ${pageCount > 0 ? `${pageCount}-page ` : ""}PDF for comparison...`);
+        setProgress(2);
+        const result = await processLargePDF(buffer, pageCount || 50, true);
+        if (result) {
           if (result.doors.length === 0) {
             throw new Error("No doors found in the document.");
           }
-          setWizardData({ doors: result.doors, sets: result.hardwareSets });
+          setWizardData({ doors: result.doors, sets: result.sets });
         }
         // Don't close — wizard will render
         setLoading(false);
