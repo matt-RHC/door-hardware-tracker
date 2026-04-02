@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect, ChangeEvent, FormEvent } from "react";
 import { PDFDocument } from "pdf-lib";
+import SubmittalWizard from "./SubmittalWizard";
 
 /* ─── Holographic Loading Overlay ─── */
 function HoloLoader({ progress, status }: { progress: number; status: string }) {
@@ -360,6 +361,12 @@ export default function PDFUploadModal({
   const [status, setStatus] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Wizard mode: when project has existing openings, parse-only then show wizard
+  const [wizardData, setWizardData] = useState<{
+    doors: DoorEntry[];
+    sets: HardwareSet[];
+  } | null>(null);
+
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
     if (selectedFile) {
@@ -442,8 +449,13 @@ export default function PDFUploadModal({
 
   // ==========================================
   // LARGE PDF: Chunked multi-request flow
+  // Returns parsed data if parseOnly=true, otherwise saves to DB
   // ==========================================
-  const processLargePDF = async (buffer: ArrayBuffer, pageCount: number) => {
+  const processLargePDF = async (
+    buffer: ArrayBuffer,
+    pageCount: number,
+    parseOnly = false
+  ): Promise<{ doors: DoorEntry[]; sets: HardwareSet[] } | void> => {
     setStatus(`Splitting ${pageCount}-page PDF into chunks...`);
     setProgress(3);
 
@@ -453,25 +465,19 @@ export default function PDFUploadModal({
     setStatus(`Split into ${totalChunks} chunks. Starting analysis...`);
     setProgress(5);
 
-    // Process each chunk sequentially, collecting results
     const allHardwareSets: HardwareSet[] = [];
     const allDoors: DoorEntry[] = [];
     const knownSetIds: string[] = [];
 
     for (let i = 0; i < totalChunks; i++) {
-      const chunkPct = Math.round(5 + (i / totalChunks) * 75); // 5% to 80%
+      const chunkPct = Math.round(5 + (i / totalChunks) * 75);
       setStatus(`Processing chunk ${i + 1} of ${totalChunks}...`);
       setProgress(chunkPct);
 
       const resp = await fetch("/api/parse-pdf/chunk", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          chunkBase64: chunks[i],
-          chunkIndex: i,
-          totalChunks,
-          knownSetIds,
-        }),
+        body: JSON.stringify({ chunkBase64: chunks[i], chunkIndex: i, totalChunks, knownSetIds }),
       });
 
       if (!resp.ok) {
@@ -480,47 +486,42 @@ export default function PDFUploadModal({
       }
 
       const result: ChunkResult = await resp.json();
-
-      // Accumulate results
       allHardwareSets.push(...result.hardwareSets);
       allDoors.push(...result.doors);
 
-      // Track discovered set IDs for subsequent chunks
       for (const set of result.hardwareSets) {
-        if (!knownSetIds.includes(set.set_id)) {
-          knownSetIds.push(set.set_id);
-        }
+        if (!knownSetIds.includes(set.set_id)) knownSetIds.push(set.set_id);
       }
 
       const setsSoFar = new Set(allHardwareSets.map((s) => s.set_id)).size;
-      setStatus(
-        `Chunk ${i + 1}/${totalChunks} done. ${setsSoFar} sets, ${allDoors.length} doors so far.`
-      );
+      setStatus(`Chunk ${i + 1}/${totalChunks} done. ${setsSoFar} sets, ${allDoors.length} doors so far.`);
     }
 
-    // Merge & deduplicate
     setStatus("Merging results across chunks...");
     setProgress(82);
 
     const mergedSets = mergeHardwareSets(allHardwareSets);
     const mergedDoors = mergeDoors(allDoors);
 
-    setStatus(`Merged: ${mergedSets.length} hardware sets, ${mergedDoors.length} unique doors. Saving...`);
-    setProgress(85);
-
     if (mergedDoors.length === 0) {
       throw new Error("No doors found across all chunks. The PDF may not contain a door schedule.");
     }
 
-    // Save to database
+    // Parse-only mode: return data for wizard
+    if (parseOnly) {
+      setProgress(100);
+      setStatus(`Parsed ${mergedSets.length} hardware sets, ${mergedDoors.length} doors. Ready for review.`);
+      return { doors: mergedDoors, sets: mergedSets };
+    }
+
+    // Save mode: write to DB
+    setStatus(`Merged: ${mergedSets.length} hardware sets, ${mergedDoors.length} unique doors. Saving...`);
+    setProgress(85);
+
     const saveResp = await fetch("/api/parse-pdf/save", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        projectId,
-        hardwareSets: mergedSets,
-        doors: mergedDoors,
-      }),
+      body: JSON.stringify({ projectId, hardwareSets: mergedSets, doors: mergedDoors }),
     });
 
     if (!saveResp.ok) {
@@ -529,25 +530,99 @@ export default function PDFUploadModal({
     }
 
     const saveResult = await saveResp.json();
-    if (!saveResult.success) {
-      throw new Error("Save completed but no success response received");
-    }
+    if (!saveResult.success) throw new Error("Save completed but no success response received");
 
     const warnings: string[] = [];
     if (saveResult.unmatchedSets?.length) {
       warnings.push(`${saveResult.unmatchedSets.length} set(s) not found: ${saveResult.unmatchedSets.join(", ")}`);
     }
 
-    const summary = warnings.length > 0
-      ? `Done! ${saveResult.openingsCount} doors, ${saveResult.itemsCount} items. ⚠ ${warnings.join("; ")}`
-      : `Done! ${saveResult.openingsCount} doors, ${saveResult.itemsCount} hardware items loaded.`;
-
-    setStatus(summary);
+    setStatus(
+      warnings.length > 0
+        ? `Done! ${saveResult.openingsCount} doors, ${saveResult.itemsCount} items. ⚠ ${warnings.join("; ")}`
+        : `Done! ${saveResult.openingsCount} doors, ${saveResult.itemsCount} hardware items loaded.`
+    );
     setProgress(100);
   };
 
   // ==========================================
-  // Submit handler: routes to small or large flow
+  // Check if project already has openings (for wizard mode)
+  // ==========================================
+  const checkExistingOpenings = async (): Promise<boolean> => {
+    try {
+      const resp = await fetch(`/api/projects/${projectId}/openings`);
+      if (!resp.ok) return false;
+      const data = await resp.json();
+      return Array.isArray(data) && data.length > 0;
+    } catch {
+      return false;
+    }
+  };
+
+  // ==========================================
+  // Parse-only for small PDFs (stream parse, collect results, don't save)
+  // ==========================================
+  const parseSmallPDFOnly = async (formData: FormData): Promise<{ doors: DoorEntry[]; sets: HardwareSet[] }> => {
+    setStatus("Uploading to server...");
+    setProgress(5);
+
+    const response = await fetch("/api/parse-pdf", {
+      method: "POST",
+      body: formData,
+    });
+
+    if (!response.ok && !response.body) throw new Error(`Upload failed (${response.status})`);
+
+    const reader = response.body?.getReader();
+    if (!reader) throw new Error("No response stream");
+
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let lastEvent: { progress: number; status: string; error?: string; result?: Record<string, unknown> } | null = null;
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() || "";
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        try {
+          const event = JSON.parse(line);
+          lastEvent = event;
+          setProgress(event.progress);
+          setStatus(event.status);
+          if (event.error) setError(event.error);
+        } catch { /* skip */ }
+      }
+    }
+
+    if (buffer.trim()) {
+      try {
+        const event = JSON.parse(buffer);
+        lastEvent = event;
+        setProgress(event.progress);
+        setStatus(event.status);
+        if (event.error) setError(event.error);
+      } catch { /* skip */ }
+    }
+
+    if (lastEvent?.error) throw new Error(lastEvent.error);
+    if (!lastEvent?.result?.success) throw new Error("Parse completed but no success response received");
+
+    // For the wizard, we need the parsed data. The small flow saves directly,
+    // so we need to re-fetch what was just saved. The data is now in the DB.
+    // Return empty to signal that data was saved (wizard will re-compare from DB).
+    // Actually, for a true parse-only we'd need a separate endpoint.
+    // For now, the small flow saves, and the wizard's compare will diff against it.
+    // This means for small PDFs with existing data, we save first then compare.
+    // Not ideal but functional — the wizard can still let the user undo/modify.
+    return { doors: [], sets: [] };
+  };
+
+  // ==========================================
+  // Submit handler: routes to appropriate flow
   // ==========================================
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -564,30 +639,67 @@ export default function PDFUploadModal({
     try {
       const buffer = await file.arrayBuffer();
 
-      // Check page count to decide flow
+      // Check page count
       let pageCount = 0;
       try {
         const pdfDoc = await PDFDocument.load(buffer);
         pageCount = pdfDoc.getPageCount();
       } catch {
-        // If we can't count pages, fall back to small flow
         pageCount = 0;
       }
 
+      // Check if project has existing openings → wizard mode
+      setStatus("Checking existing data...");
+      const hasExisting = await checkExistingOpenings();
+
+      if (hasExisting) {
+        // ─── WIZARD MODE: parse only, then show wizard ───
+        if (pageCount > CHUNK_THRESHOLD) {
+          setStatus(`${pageCount}-page PDF detected. Parsing for comparison...`);
+          setProgress(2);
+          const result = await processLargePDF(buffer, pageCount, true);
+          if (result) {
+            setWizardData({ doors: result.doors, sets: result.sets });
+          }
+        } else {
+          // For small PDFs, use the chunked approach with 1 chunk (parse-only)
+          setStatus("Parsing PDF for comparison...");
+          setProgress(5);
+          const base64 = btoa(
+            new Uint8Array(buffer).reduce((data, byte) => data + String.fromCharCode(byte), "")
+          );
+          const resp = await fetch("/api/parse-pdf/chunk", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ chunkBase64: base64, chunkIndex: 0, totalChunks: 1 }),
+          });
+          if (!resp.ok) {
+            const errBody = await resp.json().catch(() => ({}));
+            throw new Error(errBody.error || `Parse failed (${resp.status})`);
+          }
+          const result: ChunkResult = await resp.json();
+          if (result.doors.length === 0) {
+            throw new Error("No doors found in the document.");
+          }
+          setWizardData({ doors: result.doors, sets: result.hardwareSets });
+        }
+        // Don't close — wizard will render
+        setLoading(false);
+        return;
+      }
+
+      // ─── FRESH UPLOAD: no existing data, save directly ───
       if (pageCount > CHUNK_THRESHOLD) {
-        // Large PDF: client-side chunking
         setStatus(`${pageCount}-page PDF detected. Using chunked processing...`);
         setProgress(2);
         await processLargePDF(buffer, pageCount);
       } else {
-        // Small PDF: original single-request flow
         const formData = new FormData();
         formData.append("file", file);
         formData.append("projectId", projectId);
         await processSmallPDF(formData);
       }
 
-      // Brief pause so user sees 100% before closing
       await new Promise((resolve) => setTimeout(resolve, 1500));
       onSuccess();
       onClose();
@@ -599,6 +711,19 @@ export default function PDFUploadModal({
       setLoading(false);
     }
   };
+
+  // If wizard data is ready, show the wizard instead of the upload modal
+  if (wizardData) {
+    return (
+      <SubmittalWizard
+        projectId={projectId}
+        parsedDoors={wizardData.doors}
+        parsedSets={wizardData.sets}
+        onClose={onClose}
+        onComplete={onSuccess}
+      />
+    );
+  }
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">

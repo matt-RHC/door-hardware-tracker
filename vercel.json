@@ -10,6 +10,12 @@
     "src/app/api/parse-pdf/save/route.ts": {
       "maxDuration": 120
     },
+    "src/app/api/parse-pdf/compare/route.ts": {
+      "maxDuration": 30
+    },
+    "src/app/api/parse-pdf/apply-revision/route.ts": {
+      "maxDuration": 120
+    },
     "src/app/api/sync-smartsheet/route.ts": {
       "maxDuration": 120
     }
