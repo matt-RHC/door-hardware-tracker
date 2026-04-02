@@ -40,44 +40,69 @@ export default function FileViewer({ attachment, onClose }: FileViewerProps) {
   }, []);
 
   // Render a PDF page to a data URL via canvas using pdf.js
+  const pdfDocRef = useRef<unknown>(null);
   const renderPdfPage = useCallback(async (pageNum: number) => {
     setPdfLoading(true);
     setPdfError(null);
+
+    // Timeout after 15s — mobile can hang on worker init
+    const timeout = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("timeout")), 15000)
+    );
+
     try {
-      const pdfjsLib = await import("pdfjs-dist");
-      pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
+      const result = await Promise.race([
+        (async () => {
+          const pdfjsLib = await import("pdfjs-dist");
+          // Use same-origin worker to avoid mobile Safari cross-origin worker issues
+          pdfjsLib.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
 
-      const loadingTask = pdfjsLib.getDocument(attachment.file_url);
-      const pdf = await loadingTask.promise;
-      setPdfTotalPages(pdf.numPages);
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          let pdf = pdfDocRef.current as any;
+          if (!pdf) {
+            // Fetch PDF as ArrayBuffer on main thread to avoid CORS issues in worker
+            const resp = await fetch(attachment.file_url);
+            const data = await resp.arrayBuffer();
+            const loadingTask = pdfjsLib.getDocument({ data });
+            pdf = await loadingTask.promise;
+            pdfDocRef.current = pdf;
+          }
+          setPdfTotalPages(pdf.numPages);
 
-      const page = await pdf.getPage(pageNum);
-      // Render at 2x for retina sharpness on mobile
-      const dpr = typeof window !== "undefined" ? Math.min(window.devicePixelRatio || 1, 3) : 2;
-      const baseViewport = page.getViewport({ scale: 1 });
-      const renderScale = dpr;
-      const viewport = page.getViewport({ scale: renderScale });
+          const page = await pdf.getPage(pageNum);
+          // Render at 2x for retina sharpness, cap at 2 on mobile to save memory
+          const dpr = typeof window !== "undefined" ? Math.min(window.devicePixelRatio || 1, 2) : 2;
+          const baseViewport = page.getViewport({ scale: 1 });
+          const viewport = page.getViewport({ scale: dpr });
 
-      const canvas = document.createElement("canvas");
-      canvas.width = viewport.width;
-      canvas.height = viewport.height;
-      const ctx = canvas.getContext("2d")!;
+          const canvas = document.createElement("canvas");
+          canvas.width = viewport.width;
+          canvas.height = viewport.height;
+          const ctx = canvas.getContext("2d")!;
 
-      await page.render({ canvasContext: ctx, canvas, viewport }).promise;
+          await page.render({ canvasContext: ctx, canvas, viewport }).promise;
 
-      const dataUrl = canvas.toDataURL("image/png");
-      setPdfDataUrl(dataUrl);
-      setPdfNaturalSize({ w: baseViewport.width, h: baseViewport.height });
+          const dataUrl = canvas.toDataURL("image/png");
+          return { dataUrl, w: baseViewport.width, h: baseViewport.height };
+        })(),
+        timeout,
+      ]);
+
+      setPdfDataUrl(result.dataUrl);
+      setPdfNaturalSize({ w: result.w, h: result.h });
 
       // Compute and set fit scale
-      const computed = computeFitScale(baseViewport.width, baseViewport.height);
+      const computed = computeFitScale(result.w, result.h);
       setFitScale(computed);
       setScale(computed);
       setPosition({ x: 0, y: 0 });
       setIsFitted(true);
     } catch (err) {
       console.error("PDF render error:", err);
-      setPdfError("Could not render PDF. Tap Open to view in browser.");
+      const msg = err instanceof Error && err.message === "timeout"
+        ? "PDF took too long to render."
+        : "Could not render PDF.";
+      setPdfError(`${msg} Tap Open to view in browser.`);
     } finally {
       setPdfLoading(false);
     }
