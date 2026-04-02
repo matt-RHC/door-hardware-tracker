@@ -287,7 +287,11 @@ interface ChunkResult {
 /** Max pages per chunk. ~30-40 pages keeps each Claude call well under 200K tokens. */
 const PAGES_PER_CHUNK = 35;
 
-/** Page threshold: PDFs with this many pages or fewer use the original single-request flow. */
+/**
+ * Page threshold for FRESH uploads only. PDFs at or below this count use the
+ * original single-request streaming flow (/api/parse-pdf). Re-uploads always
+ * use chunked processing regardless of page count (see handleSubmit).
+ */
 const CHUNK_THRESHOLD = 45;
 
 // --- Helpers ---
@@ -391,8 +395,9 @@ export default function PDFUploadModal({
       body: formData,
     });
 
-    if (!response.ok && !response.body) {
-      throw new Error(`Upload failed (${response.status})`);
+    if (!response.ok) {
+      const errBody = await response.json().catch(() => null);
+      throw new Error(errBody?.error || `Upload failed (${response.status})`);
     }
 
     const reader = response.body?.getReader();

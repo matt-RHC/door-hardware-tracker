@@ -183,10 +183,15 @@ export default function DoorDetailPage() {
   const handleSaveNotes = async () => {
     setSavingNotes(true);
     try {
-      // TODO: Implement notes save to Supabase
-      setSavingNotes(false);
+      const supabase = createClient();
+      const { error } = await (supabase as any)
+        .from("openings")
+        .update({ notes })
+        .eq("id", doorId);
+      if (error) throw error;
     } catch (err) {
       console.error("Error saving notes:", err);
+    } finally {
       setSavingNotes(false);
     }
   };
