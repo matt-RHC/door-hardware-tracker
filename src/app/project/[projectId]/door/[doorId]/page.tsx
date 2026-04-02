@@ -5,6 +5,7 @@ import { useRouter, useParams } from "next/navigation";
 import { QRCodeSVG } from "qrcode.react";
 import OfflineIndicator from "@/components/OfflineIndicator";
 import ProgressBar from "@/components/ProgressBar";
+import FileViewer from "@/components/FileViewer";
 import { createClient } from "@/lib/supabase/client";
 import { initDB, cacheOpening, getCachedOpening } from "@/lib/offline/db";
 import { Opening, HardwareItem, ChecklistProgress, Attachment } from "@/lib/types/database";
@@ -58,6 +59,8 @@ export default function DoorDetailPage() {
   const [editingOpeningData, setEditingOpeningData] = useState<EditingOpeningState | null>(null);
   const [savingOpening, setSavingOpening] = useState(false);
   const [activeTab, setActiveTab] = useState<'hardware' | 'files' | 'notes' | 'qr'>('hardware');
+  const [viewingAttachment, setViewingAttachment] = useState<Attachment | null>(null);
+  const [activeCategory, setActiveCategory] = useState<string | null>(null);
 
   const supabase = createClient();
 
@@ -810,31 +813,110 @@ export default function DoorDetailPage() {
         {/* Files Tab */}
         {activeTab === 'files' && !editingOpening && (
           <div className="space-y-4 mb-8">
-            <div className="flex flex-wrap gap-2 mb-4">
-              {['Floor Plan', 'Door Drawing', 'Frame Drawing', 'General'].map((category) => (
-                <span key={category} className="text-[12px] font-medium px-3 py-1.5 rounded-full bg-white/[0.04] border border-white/[0.08] text-[#a1a1a6]">
-                  {category}
-                </span>
+            {/* Category filter pills */}
+            <div className="flex flex-wrap gap-2">
+              {[
+                { label: 'All', value: null },
+                { label: 'Floor Plan', value: 'floor_plan' },
+                { label: 'Door Drawing', value: 'door_drawing' },
+                { label: 'Frame Drawing', value: 'frame_drawing' },
+                { label: 'General', value: 'general' },
+              ].map((cat) => (
+                <button
+                  key={cat.label}
+                  onClick={() => setActiveCategory(cat.value)}
+                  className={`text-[12px] font-medium px-3 py-1.5 rounded-full transition-colors ${
+                    activeCategory === cat.value
+                      ? 'bg-[rgba(10,132,255,0.15)] border border-[#0a84ff] text-[#0a84ff]'
+                      : 'bg-white/[0.04] border border-white/[0.08] text-[#a1a1a6] hover:bg-white/[0.07]'
+                  }`}
+                >
+                  {cat.label}
+                </button>
               ))}
             </div>
 
-            {opening.attachments && opening.attachments.length > 0 && (
-              <div className="space-y-2 mb-4">
-                {opening.attachments.map((attachment) => (
-                  <a
-                    key={attachment.id}
-                    href={attachment.file_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="block p-3 bg-white/[0.04] border border-white/[0.08] rounded-lg text-[#0a84ff] hover:bg-white/[0.07] transition-colors text-[13px] break-all"
-                  >
-                    {attachment.file_name}
-                  </a>
-                ))}
+            {/* Attachment cards */}
+            {opening.attachments && opening.attachments.length > 0 ? (
+              <div className="space-y-3">
+                {opening.attachments
+                  .filter((att) => !activeCategory || att.category === activeCategory)
+                  .map((attachment) => {
+                    const isPdf = attachment.file_type?.includes("pdf") || attachment.file_name?.toLowerCase().endsWith(".pdf");
+                    const isImage = attachment.file_type?.startsWith("image/") || /\.(jpg|jpeg|png|gif|webp|bmp|svg)$/i.test(attachment.file_name || "");
+
+                    return (
+                      <button
+                        key={attachment.id}
+                        onClick={() => setViewingAttachment(attachment)}
+                        className="w-full text-left bg-white/[0.04] border border-white/[0.08] rounded-xl overflow-hidden hover:bg-white/[0.07] hover:border-white/[0.14] transition-colors group"
+                      >
+                        {/* Preview area */}
+                        <div className="relative w-full h-40 bg-white/[0.02] overflow-hidden">
+                          {isImage ? (
+                            <img
+                              src={attachment.file_url}
+                              alt={attachment.file_name || ""}
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                            />
+                          ) : isPdf ? (
+                            <div className="w-full h-full flex flex-col items-center justify-center gap-2">
+                              <svg className="w-10 h-10 text-[#ff453a]" fill="currentColor" viewBox="0 0 24 24">
+                                <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6zM6 20V4h7v5h5v11H6z" />
+                                <path d="M8 14h2v2H8v-2zm3 0h2v2h-2v-2zm3 0h2v2h-2v-2z" />
+                              </svg>
+                              <span className="text-[11px] font-medium text-[#ff453a] uppercase tracking-wider">PDF</span>
+                            </div>
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center">
+                              <svg className="w-10 h-10 text-[#6e6e73]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                              </svg>
+                            </div>
+                          )}
+
+                          {/* Tap to view overlay */}
+                          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
+                            <span className="opacity-0 group-hover:opacity-100 text-[13px] font-medium text-white bg-black/50 backdrop-blur-sm px-4 py-2 rounded-full transition-opacity">
+                              Tap to view
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* File info */}
+                        <div className="p-3 flex items-center justify-between gap-2">
+                          <div className="min-w-0 flex-1">
+                            <p className="text-[13px] font-medium text-[#f5f5f7] truncate">
+                              {attachment.file_name}
+                            </p>
+                            <p className="text-[11px] text-[#6e6e73] mt-0.5 capitalize">
+                              {(attachment.category || 'general').replace('_', ' ')}
+                              {attachment.uploaded_at && ` · ${new Date(attachment.uploaded_at).toLocaleDateString()}`}
+                            </p>
+                          </div>
+                          <div className="flex-shrink-0 w-8 h-8 rounded-full bg-white/[0.04] border border-white/[0.08] flex items-center justify-center">
+                            <svg className="w-4 h-4 text-[#0a84ff]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                            </svg>
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
+              </div>
+            ) : (
+              <div className="text-center py-8">
+                <svg className="w-12 h-12 text-[#6e6e73] mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                </svg>
+                <p className="text-[#a1a1a6] text-[15px]">No files yet</p>
+                <p className="text-[#6e6e73] text-[12px] mt-1">Upload drawings, plans, or photos</p>
               </div>
             )}
 
-            <label className="block p-4 bg-white/[0.04] border border-dashed border-white/[0.12] rounded-lg text-center cursor-pointer hover:bg-white/[0.07] transition-colors">
+            {/* Upload button */}
+            <label className="block p-4 bg-white/[0.04] border border-dashed border-white/[0.12] rounded-xl text-center cursor-pointer hover:bg-white/[0.07] active:bg-white/[0.10] transition-colors">
               <input
                 type="file"
                 onChange={(e) => {
@@ -845,11 +927,16 @@ export default function DoorDetailPage() {
                 className="hidden"
                 accept="image/*,application/pdf"
               />
-              <p className="text-[15px] font-medium text-[#f5f5f7]">
-                {attachmentLoading ? "Uploading..." : "Upload File"}
-              </p>
+              <div className="flex items-center justify-center gap-2">
+                <svg className="w-5 h-5 text-[#0a84ff]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+                <p className="text-[15px] font-medium text-[#f5f5f7]">
+                  {attachmentLoading ? "Uploading..." : "Upload File"}
+                </p>
+              </div>
               <p className="text-[12px] text-[#6e6e73] mt-1">
-                Images or PDF
+                Images or PDF · Tap to browse
               </p>
             </label>
           </div>
@@ -933,6 +1020,14 @@ export default function DoorDetailPage() {
           </button>
         ))}
       </nav>
+
+      {/* File Viewer Overlay */}
+      {viewingAttachment && (
+        <FileViewer
+          attachment={viewingAttachment}
+          onClose={() => setViewingAttachment(null)}
+        />
+      )}
     </div>
   );
 }
