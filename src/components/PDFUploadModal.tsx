@@ -726,15 +726,15 @@ export default function PDFUploadModal({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-slate-900 rounded-lg border border-slate-800 p-6 max-w-md w-full relative">
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-lg flex items-center justify-center z-50 p-4">
+      <div className="bg-[#1c1c1e] rounded-2xl border border-white/[0.08] p-6 max-w-md w-full relative">
         {/* Holographic loading overlay */}
         {loading && <HoloLoader progress={progress} status={status} />}
 
-        <h2 className="text-xl font-bold text-white mb-4">Upload PDF</h2>
+        <h2 className="text-xl font-semibold text-[#f5f5f7] mb-4">Upload PDF</h2>
 
         {error && (
-          <div className="mb-4 p-3 bg-red-900/20 border border-red-900 rounded text-red-200 text-sm">
+          <div className="mb-4 p-3 bg-[rgba(255,69,58,0.1)] border border-[rgba(255,69,58,0.2)] rounded-xl text-[#ff6961] text-sm">
             {error}
           </div>
         )}
@@ -742,15 +742,15 @@ export default function PDFUploadModal({
         {loading && (
           <div className="mb-4">
             <div className="flex justify-between text-sm mb-1">
-              <span className="text-slate-300">{status}</span>
-              <span className="text-slate-400">{progress}%</span>
+              <span className="text-[#a1a1a6]">{status}</span>
+              <span className="text-[#6e6e73]">{progress}%</span>
             </div>
-            <div className="w-full bg-slate-800 rounded-full h-3 overflow-hidden">
+            <div className="w-full bg-white/[0.06] rounded-full h-3 overflow-hidden">
               <div
                 className="h-full rounded-full transition-all duration-500 ease-out"
                 style={{
                   width: `${progress}%`,
-                  backgroundColor: progress === 100 ? "#22c55e" : "#3b82f6",
+                  backgroundColor: progress === 100 ? "#30d158" : "#0a84ff",
                 }}
               />
             </div>
@@ -759,7 +759,7 @@ export default function PDFUploadModal({
 
         <form onSubmit={handleSubmit}>
           <div className="mb-4">
-            <label className="block text-sm font-medium text-slate-200 mb-2">
+            <label className="block text-sm font-medium text-[#a1a1a6] mb-2">
               PDF File
             </label>
             <input
@@ -768,10 +768,10 @@ export default function PDFUploadModal({
               accept=".pdf"
               onChange={handleFileChange}
               disabled={loading}
-              className="w-full px-4 py-2 bg-slate-800 border border-slate-700 rounded text-white cursor-pointer file:mr-4 file:py-2 file:px-4 file:rounded file:border-0 file:text-sm file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-700 disabled:opacity-50"
+              className="w-full bg-white/[0.04] border border-white/[0.08] rounded-xl text-[#a1a1a6] cursor-pointer file:bg-[#0a84ff] file:text-white file:border-0 file:rounded-lg file:px-4 file:py-2 file:font-semibold disabled:opacity-50"
             />
             {file && !loading && (
-              <p className="mt-2 text-sm text-slate-400">{file.name}</p>
+              <p className="mt-2 text-sm text-[#6e6e73]">{file.name}</p>
             )}
           </div>
 
@@ -780,14 +780,14 @@ export default function PDFUploadModal({
               type="button"
               onClick={onClose}
               disabled={loading}
-              className="flex-1 px-4 py-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-white rounded transition-colors"
+              className="flex-1 px-4 py-2 bg-white/[0.04] border border-white/[0.08] text-[#a1a1a6] rounded-lg hover:bg-white/[0.07] disabled:opacity-50 transition-colors"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={loading || !file}
-              className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-700 text-white rounded transition-colors"
+              className="flex-1 px-4 py-2 bg-[#0a84ff] text-white rounded-lg hover:opacity-90 disabled:bg-white/[0.06] disabled:text-[#6e6e73] transition-colors"
             >
               {loading ? "Processing..." : "Upload"}
             </button>

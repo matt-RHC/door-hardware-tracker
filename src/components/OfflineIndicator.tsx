@@ -25,7 +25,7 @@ export default function OfflineIndicator() {
   if (isOnline) return null;
 
   return (
-    <div className="fixed top-0 left-0 right-0 bg-yellow-600 text-yellow-50 px-4 py-3 text-center text-sm font-medium z-50">
+    <div className="fixed top-0 left-0 right-0 bg-[rgba(255,159,10,0.15)] border border-[rgba(255,159,10,0.2)] text-[#ff9f0a] px-4 py-3 text-center text-sm font-medium z-50">
       You're offline. Changes will sync when connected.
     </div>
   );

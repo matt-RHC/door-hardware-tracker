@@ -31,9 +31,9 @@ export default function RootLayout({
       className="h-full antialiased"
     >
       <head>
-        <meta name="theme-color" content="#020617" />
+        <meta name="theme-color" content="#000000" />
       </head>
-      <body className="min-h-full flex flex-col bg-slate-950 text-white">{children}</body>
+      <body className="min-h-full flex flex-col bg-black text-[#f5f5f7]">{children}</body>
     </html>
   );
 }

@@ -98,23 +98,23 @@ function StepBar({ current, total }: { current: number; total: number }) {
           <div
             className={`flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold transition-all ${
               i < current
-                ? "bg-green-600 text-white"
+                ? "bg-[#30d158] text-white"
                 : i === current
-                ? "bg-cyan-600 text-white ring-2 ring-cyan-400"
-                : "bg-slate-700 text-slate-400"
+                ? "bg-[#0a84ff] text-white ring-2 ring-[rgba(10,132,255,0.3)]"
+                : "bg-white/[0.06] text-[#6e6e73]"
             }`}
           >
             {i < current ? "✓" : i + 1}
           </div>
           <span
             className={`text-xs hidden sm:inline ${
-              i === current ? "text-cyan-400 font-semibold" : "text-slate-500"
+              i === current ? "text-[#0a84ff] font-semibold" : "text-[#6e6e73]"
             }`}
           >
             {label}
           </span>
           {i < total - 1 && (
-            <div className={`w-4 h-px ${i < current ? "bg-green-600" : "bg-slate-700"}`} />
+            <div className={`w-4 h-px ${i < current ? "bg-[#30d158]" : "bg-white/[0.06]"}`} />
           )}
         </div>
       ))}
@@ -269,17 +269,17 @@ export default function SubmittalWizard({
 
   // ─── Render ───
   return (
-    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-      <div className="bg-slate-900 rounded-lg border border-slate-800 p-6 max-w-2xl w-full max-h-[85vh] flex flex-col">
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-lg flex items-center justify-center z-50 p-4">
+      <div className="bg-[#1c1c1e] rounded-2xl border border-white/[0.08] p-6 max-w-2xl w-full max-h-[85vh] flex flex-col">
         <div className="flex items-center justify-between mb-2">
-          <h2 className="text-lg font-bold text-white">Revised Submittal</h2>
-          <button onClick={onClose} className="text-slate-400 hover:text-white text-xl leading-none">&times;</button>
+          <h2 className="text-lg font-semibold text-[#f5f5f7]">Revised Submittal</h2>
+          <button onClick={onClose} className="text-[#6e6e73] hover:text-[#f5f5f7] text-xl leading-none transition-colors">&times;</button>
         </div>
 
         <StepBar current={step} total={5} />
 
         {error && (
-          <div className="mb-4 p-3 bg-red-900/20 border border-red-900 rounded text-red-200 text-sm">
+          <div className="mb-4 p-3 bg-[rgba(255,69,58,0.1)] border border-[rgba(255,69,58,0.2)] rounded-xl text-[#ff6961] text-sm">
             {error}
           </div>
         )}
@@ -288,17 +288,17 @@ export default function SubmittalWizard({
           {/* ─── Step 0: Summary ─── */}
           {step === 0 && (
             <div>
-              <p className="text-slate-300 mb-4">
-                Your new submittal has <strong className="text-white">{parsedDoors.length} doors</strong> and{" "}
-                <strong className="text-white">{parsedSets.length} hardware sets</strong>.
+              <p className="text-[#a1a1a6] mb-4">
+                Your new submittal has <strong className="text-[#f5f5f7]">{parsedDoors.length} doors</strong> and{" "}
+                <strong className="text-[#f5f5f7]">{parsedSets.length} hardware sets</strong>.
               </p>
-              <p className="text-slate-400 text-sm mb-4">
+              <p className="text-[#6e6e73] text-sm mb-4">
                 Click &quot;Compare&quot; to see what changed compared to the current project data.
                 You&apos;ll be guided through each category of changes before anything is applied.
               </p>
               {loading && (
-                <div className="flex items-center gap-2 text-cyan-400 text-sm">
-                  <div className="w-4 h-4 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
+                <div className="flex items-center gap-2 text-[#0a84ff] text-sm">
+                  <div className="w-4 h-4 border-2 border-[#0a84ff] border-t-transparent rounded-full animate-spin" />
                   {status}
                 </div>
               )}
@@ -310,30 +310,30 @@ export default function SubmittalWizard({
             <div>
               {/* Summary banner */}
               <div className="grid grid-cols-4 gap-2 mb-4">
-                <div className="bg-slate-800 rounded p-2 text-center">
-                  <div className="text-lg font-bold text-green-400">{compareResult.summary.matched}</div>
-                  <div className="text-[10px] text-slate-400 uppercase">Unchanged</div>
+                <div className="bg-white/[0.04] border border-white/[0.06] rounded-xl p-2 text-center">
+                  <div className="text-lg font-bold text-[#30d158]">{compareResult.summary.matched}</div>
+                  <div className="text-[9px] text-[#6e6e73] uppercase">Matched</div>
                 </div>
-                <div className="bg-slate-800 rounded p-2 text-center">
-                  <div className="text-lg font-bold text-yellow-400">{compareResult.summary.changed}</div>
-                  <div className="text-[10px] text-slate-400 uppercase">Changed</div>
+                <div className="bg-white/[0.04] border border-white/[0.06] rounded-xl p-2 text-center">
+                  <div className="text-lg font-bold text-[#ff9500]">{compareResult.summary.changed}</div>
+                  <div className="text-[9px] text-[#6e6e73] uppercase">Changed</div>
                 </div>
-                <div className="bg-slate-800 rounded p-2 text-center">
-                  <div className="text-lg font-bold text-cyan-400">{compareResult.summary.added}</div>
-                  <div className="text-[10px] text-slate-400 uppercase">New</div>
+                <div className="bg-white/[0.04] border border-white/[0.06] rounded-xl p-2 text-center">
+                  <div className="text-lg font-bold text-[#0a84ff]">{compareResult.summary.added}</div>
+                  <div className="text-[9px] text-[#6e6e73] uppercase">Added</div>
                 </div>
-                <div className="bg-slate-800 rounded p-2 text-center">
-                  <div className="text-lg font-bold text-red-400">{compareResult.summary.removed}</div>
-                  <div className="text-[10px] text-slate-400 uppercase">Removed</div>
+                <div className="bg-white/[0.04] border border-white/[0.06] rounded-xl p-2 text-center">
+                  <div className="text-lg font-bold text-[#ff453a]">{compareResult.summary.removed}</div>
+                  <div className="text-[9px] text-[#6e6e73] uppercase">Removed</div>
                 </div>
               </div>
 
               {compareResult.removed.length === 0 ? (
-                <p className="text-slate-400 text-sm">No doors were removed in the revised submittal.</p>
+                <p className="text-[#6e6e73] text-sm">No doors were removed in the revised submittal.</p>
               ) : (
                 <>
-                  <p className="text-slate-300 text-sm mb-3">
-                    These <strong className="text-red-400">{compareResult.removed.length} doors</strong> exist in
+                  <p className="text-[#a1a1a6] text-sm mb-3">
+                    These <strong className="text-[#ff453a]">{compareResult.removed.length} doors</strong> exist in
                     your current project but are <strong>not in the revised submittal</strong>. What would you like to do with each?
                   </p>
 
@@ -345,7 +345,7 @@ export default function SubmittalWizard({
                         compareResult.removed.forEach((r) => (updated[r.door_number] = "keep"));
                         setRemovedActions(updated);
                       }}
-                      className="text-xs px-3 py-1 rounded bg-slate-700 hover:bg-slate-600 text-slate-300 transition-colors"
+                      className="text-xs px-3 py-1 rounded-lg bg-white/[0.04] border border-white/[0.08] text-[#a1a1a6] hover:bg-white/[0.08] transition-colors"
                     >
                       Keep All
                     </button>
@@ -355,7 +355,7 @@ export default function SubmittalWizard({
                         compareResult.removed.forEach((r) => (updated[r.door_number] = "delete"));
                         setRemovedActions(updated);
                       }}
-                      className="text-xs px-3 py-1 rounded bg-red-900/30 hover:bg-red-900/50 text-red-300 transition-colors"
+                      className="text-xs px-3 py-1 rounded-lg bg-[rgba(255,69,58,0.1)] border border-[rgba(255,69,58,0.2)] text-[#ff453a] hover:bg-[rgba(255,69,58,0.15)] transition-colors"
                     >
                       Delete All
                     </button>
@@ -363,12 +363,12 @@ export default function SubmittalWizard({
 
                   <div className="space-y-2">
                     {compareResult.removed.map((r) => (
-                      <div key={r.door_number} className="bg-slate-800 rounded p-3 flex items-center justify-between">
+                      <div key={r.door_number} className="bg-white/[0.04] border border-white/[0.08] rounded-xl p-3 flex items-center justify-between">
                         <div>
-                          <span className="text-white font-mono text-sm">{r.door_number}</span>
-                          <span className="text-slate-500 text-xs ml-2">{r.hw_set || "—"}</span>
+                          <span className="text-[#f5f5f7] font-mono text-sm">{r.door_number}</span>
+                          <span className="text-[#6e6e73] text-xs ml-2">{r.hw_set || "—"}</span>
                           {r.progress_count.checked > 0 && (
-                            <span className="ml-2 text-xs text-yellow-400">
+                            <span className="ml-2 text-xs text-[#ff9500]">
                               {r.progress_count.checked}/{r.progress_count.total} progress
                             </span>
                           )}
@@ -376,20 +376,20 @@ export default function SubmittalWizard({
                         <div className="flex gap-1">
                           <button
                             onClick={() => setRemovedActions((p) => ({ ...p, [r.door_number]: "keep" }))}
-                            className={`text-xs px-3 py-1 rounded transition-colors ${
+                            className={`text-xs px-3 py-1 rounded-lg transition-colors ${
                               removedActions[r.door_number] === "keep"
-                                ? "bg-green-600 text-white"
-                                : "bg-slate-700 text-slate-400 hover:bg-slate-600"
+                                ? "bg-[#30d158] text-white"
+                                : "bg-white/[0.04] border border-white/[0.08] text-[#a1a1a6] hover:bg-white/[0.08]"
                             }`}
                           >
                             Keep
                           </button>
                           <button
                             onClick={() => setRemovedActions((p) => ({ ...p, [r.door_number]: "delete" }))}
-                            className={`text-xs px-3 py-1 rounded transition-colors ${
+                            className={`text-xs px-3 py-1 rounded-lg transition-colors ${
                               removedActions[r.door_number] === "delete"
-                                ? "bg-red-600 text-white"
-                                : "bg-slate-700 text-slate-400 hover:bg-slate-600"
+                                ? "bg-[#ff453a] text-white"
+                                : "bg-white/[0.04] border border-white/[0.08] text-[#a1a1a6] hover:bg-white/[0.08]"
                             }`}
                           >
                             Delete
@@ -407,11 +407,11 @@ export default function SubmittalWizard({
           {step === 2 && compareResult && (
             <div>
               {compareResult.changed.length === 0 ? (
-                <p className="text-slate-400 text-sm">No doors had field changes.</p>
+                <p className="text-[#6e6e73] text-sm">No doors had field changes.</p>
               ) : (
                 <>
-                  <p className="text-slate-300 text-sm mb-3">
-                    These <strong className="text-yellow-400">{compareResult.changed.length} doors</strong> have
+                  <p className="text-[#a1a1a6] text-sm mb-3">
+                    These <strong className="text-[#ff9500]">{compareResult.changed.length} doors</strong> have
                     changed fields. For each, decide whether to <strong>transfer existing progress</strong> or{" "}
                     <strong>reset it</strong>.
                   </p>
@@ -424,7 +424,7 @@ export default function SubmittalWizard({
                         compareResult.changed.forEach((c) => (updated[c.door_number] = true));
                         setChangedTransfer(updated);
                       }}
-                      className="text-xs px-3 py-1 rounded bg-green-900/30 hover:bg-green-900/50 text-green-300 transition-colors"
+                      className="text-xs px-3 py-1 rounded-lg bg-white/[0.04] border border-white/[0.08] text-[#a1a1a6] hover:bg-white/[0.08] transition-colors"
                     >
                       Transfer All Progress
                     </button>
@@ -434,7 +434,7 @@ export default function SubmittalWizard({
                         compareResult.changed.forEach((c) => (updated[c.door_number] = false));
                         setChangedTransfer(updated);
                       }}
-                      className="text-xs px-3 py-1 rounded bg-slate-700 hover:bg-slate-600 text-slate-300 transition-colors"
+                      className="text-xs px-3 py-1 rounded-lg bg-white/[0.04] border border-white/[0.08] text-[#a1a1a6] hover:bg-white/[0.08] transition-colors"
                     >
                       Reset All Progress
                     </button>
@@ -442,17 +442,17 @@ export default function SubmittalWizard({
 
                   <div className="space-y-3">
                     {compareResult.changed.map((c) => (
-                      <div key={c.door_number} className="bg-slate-800 rounded p-3">
+                      <div key={c.door_number} className="bg-white/[0.04] border border-white/[0.08] rounded-xl p-3">
                         <div className="flex items-center justify-between mb-2">
                           <div>
-                            <span className="text-white font-mono text-sm">{c.door_number}</span>
+                            <span className="text-[#f5f5f7] font-mono text-sm">{c.door_number}</span>
                             {c.hw_set_changed && (
-                              <span className="ml-2 text-xs bg-yellow-900/40 text-yellow-300 px-1.5 py-0.5 rounded">
+                              <span className="ml-2 text-xs bg-[rgba(255,149,0,0.1)] text-[#ff9500] px-1.5 py-0.5 rounded-lg">
                                 HW Set Changed
                               </span>
                             )}
                             {c.progress_count.checked > 0 && (
-                              <span className="ml-2 text-xs text-slate-400">
+                              <span className="ml-2 text-xs text-[#6e6e73]">
                                 {c.progress_count.checked}/{c.progress_count.total} progress
                               </span>
                             )}
@@ -460,20 +460,20 @@ export default function SubmittalWizard({
                           <div className="flex gap-1">
                             <button
                               onClick={() => setChangedTransfer((p) => ({ ...p, [c.door_number]: true }))}
-                              className={`text-xs px-3 py-1 rounded transition-colors ${
+                              className={`text-xs px-3 py-1 rounded-lg transition-colors ${
                                 changedTransfer[c.door_number]
-                                  ? "bg-green-600 text-white"
-                                  : "bg-slate-700 text-slate-400 hover:bg-slate-600"
+                                  ? "bg-[#30d158] text-white"
+                                  : "bg-white/[0.04] border border-white/[0.08] text-[#a1a1a6] hover:bg-white/[0.08]"
                               }`}
                             >
                               Transfer
                             </button>
                             <button
                               onClick={() => setChangedTransfer((p) => ({ ...p, [c.door_number]: false }))}
-                              className={`text-xs px-3 py-1 rounded transition-colors ${
+                              className={`text-xs px-3 py-1 rounded-lg transition-colors ${
                                 !changedTransfer[c.door_number]
-                                  ? "bg-orange-600 text-white"
-                                  : "bg-slate-700 text-slate-400 hover:bg-slate-600"
+                                  ? "bg-[#ff9500] text-white"
+                                  : "bg-white/[0.04] border border-white/[0.08] text-[#a1a1a6] hover:bg-white/[0.08]"
                               }`}
                             >
                               Reset
@@ -483,14 +483,14 @@ export default function SubmittalWizard({
 
                         {/* Side-by-side field changes */}
                         <div className="grid grid-cols-3 gap-1 text-xs">
-                          <div className="text-slate-500 font-semibold">Field</div>
-                          <div className="text-red-400/70 font-semibold">Old</div>
-                          <div className="text-green-400/70 font-semibold">New</div>
+                          <div className="text-[#6e6e73] font-semibold">Field</div>
+                          <div className="text-[#ff453a] font-semibold">Old</div>
+                          <div className="text-[#30d158] font-semibold">New</div>
                           {c.changes.map((ch) => (
                             <div key={ch.field} className="contents">
-                              <div className="text-slate-400">{FIELD_LABELS[ch.field] || ch.field}</div>
-                              <div className="text-red-300 font-mono">{ch.old_value || "—"}</div>
-                              <div className="text-green-300 font-mono">{ch.new_value || "—"}</div>
+                              <div className="text-[#6e6e73]">{FIELD_LABELS[ch.field] || ch.field}</div>
+                              <div className="text-[#ff453a] line-through font-mono">{ch.old_value || "—"}</div>
+                              <div className="text-[#30d158] font-mono">{ch.new_value || "—"}</div>
                             </div>
                           ))}
                         </div>
@@ -506,21 +506,21 @@ export default function SubmittalWizard({
           {step === 3 && compareResult && (
             <div>
               {compareResult.added.length === 0 ? (
-                <p className="text-slate-400 text-sm">No new doors in the revised submittal.</p>
+                <p className="text-[#6e6e73] text-sm">No new doors in the revised submittal.</p>
               ) : (
                 <>
-                  <p className="text-slate-300 text-sm mb-3">
-                    These <strong className="text-cyan-400">{compareResult.added.length} new doors</strong> will be
+                  <p className="text-[#a1a1a6] text-sm mb-3">
+                    These <strong className="text-[#0a84ff]">{compareResult.added.length} new doors</strong> will be
                     added to your project.
                   </p>
                   <div className="space-y-2">
                     {compareResult.added.map((a) => (
-                      <div key={a.door_number} className="bg-slate-800 rounded p-3 flex items-center gap-3">
-                        <span className="text-white font-mono text-sm">{a.door_number}</span>
-                        <span className="text-cyan-400 text-xs">{a.hw_set}</span>
-                        <span className="text-slate-500 text-xs">{a.door_type || "—"}</span>
-                        <span className="text-slate-500 text-xs">{a.fire_rating || "—"}</span>
-                        <span className="text-slate-500 text-xs">{a.hand || "—"}</span>
+                      <div key={a.door_number} className="bg-white/[0.04] border border-white/[0.08] rounded-xl p-3 flex items-center gap-3">
+                        <span className="text-[#f5f5f7] font-mono text-sm">{a.door_number}</span>
+                        <span className="text-[#0a84ff] text-xs">{a.hw_set}</span>
+                        <span className="text-[#6e6e73] text-xs">{a.door_type || "—"}</span>
+                        <span className="text-[#6e6e73] text-xs">{a.fire_rating || "—"}</span>
+                        <span className="text-[#6e6e73] text-xs">{a.hand || "—"}</span>
                       </div>
                     ))}
                   </div>
@@ -535,61 +535,61 @@ export default function SubmittalWizard({
               {applyResult ? (
                 <div className="text-center py-8">
                   <div className="text-4xl mb-4">✓</div>
-                  <h3 className="text-xl font-bold text-green-400 mb-4">Revision Applied</h3>
+                  <h3 className="text-xl font-bold text-[#30d158] mb-4">Revision Applied</h3>
                   <div className="grid grid-cols-2 gap-3 max-w-sm mx-auto text-sm">
                     {applyResult.doors_added > 0 && (
-                      <div className="text-slate-300">Doors added: <span className="text-cyan-400">{applyResult.doors_added}</span></div>
+                      <div className="text-[#a1a1a6]">Doors added: <span className="text-[#0a84ff]">{applyResult.doors_added}</span></div>
                     )}
                     {applyResult.doors_updated > 0 && (
-                      <div className="text-slate-300">Doors updated: <span className="text-yellow-400">{applyResult.doors_updated}</span></div>
+                      <div className="text-[#a1a1a6]">Doors updated: <span className="text-[#ff9500]">{applyResult.doors_updated}</span></div>
                     )}
                     {applyResult.doors_deleted > 0 && (
-                      <div className="text-slate-300">Doors removed: <span className="text-red-400">{applyResult.doors_deleted}</span></div>
+                      <div className="text-[#a1a1a6]">Doors removed: <span className="text-[#ff453a]">{applyResult.doors_deleted}</span></div>
                     )}
                     {applyResult.doors_kept > 0 && (
-                      <div className="text-slate-300">Doors kept: <span className="text-green-400">{applyResult.doors_kept}</span></div>
+                      <div className="text-[#a1a1a6]">Doors kept: <span className="text-[#30d158]">{applyResult.doors_kept}</span></div>
                     )}
                     {applyResult.progress_transferred > 0 && (
-                      <div className="text-slate-300">Progress kept: <span className="text-green-400">{applyResult.progress_transferred}</span></div>
+                      <div className="text-[#a1a1a6]">Progress kept: <span className="text-[#30d158]">{applyResult.progress_transferred}</span></div>
                     )}
                     {applyResult.progress_reset > 0 && (
-                      <div className="text-slate-300">Progress reset: <span className="text-orange-400">{applyResult.progress_reset}</span></div>
+                      <div className="text-[#a1a1a6]">Progress reset: <span className="text-[#ff9500]">{applyResult.progress_reset}</span></div>
                     )}
                   </div>
                 </div>
               ) : (
                 <>
-                  <h3 className="text-white font-semibold mb-3">Review Changes</h3>
+                  <h3 className="text-[#f5f5f7] font-semibold mb-3">Review Changes</h3>
                   <div className="space-y-2 text-sm">
-                    <div className="bg-slate-800 rounded p-3 flex justify-between">
-                      <span className="text-slate-300">Unchanged doors</span>
-                      <span className="text-green-400 font-mono">{compareResult.summary.matched}</span>
+                    <div className="bg-white/[0.04] border border-white/[0.06] rounded-xl p-3 flex justify-between">
+                      <span className="text-[#a1a1a6]">Unchanged doors</span>
+                      <span className="text-[#30d158] font-mono">{compareResult.summary.matched}</span>
                     </div>
                     {compareResult.changed.length > 0 && (
-                      <div className="bg-slate-800 rounded p-3">
+                      <div className="bg-white/[0.04] border border-white/[0.06] rounded-xl p-3">
                         <div className="flex justify-between mb-1">
-                          <span className="text-slate-300">Updated doors</span>
-                          <span className="text-yellow-400 font-mono">{compareResult.changed.length}</span>
+                          <span className="text-[#a1a1a6]">Updated doors</span>
+                          <span className="text-[#ff9500] font-mono">{compareResult.changed.length}</span>
                         </div>
-                        <div className="text-xs text-slate-500">
+                        <div className="text-xs text-[#6e6e73]">
                           {Object.values(changedTransfer).filter(Boolean).length} with progress transferred,{" "}
                           {Object.values(changedTransfer).filter((v) => !v).length} reset
                         </div>
                       </div>
                     )}
                     {compareResult.added.length > 0 && (
-                      <div className="bg-slate-800 rounded p-3 flex justify-between">
-                        <span className="text-slate-300">New doors to add</span>
-                        <span className="text-cyan-400 font-mono">{compareResult.added.length}</span>
+                      <div className="bg-white/[0.04] border border-white/[0.06] rounded-xl p-3 flex justify-between">
+                        <span className="text-[#a1a1a6]">New doors to add</span>
+                        <span className="text-[#0a84ff] font-mono">{compareResult.added.length}</span>
                       </div>
                     )}
                     {compareResult.removed.length > 0 && (
-                      <div className="bg-slate-800 rounded p-3">
+                      <div className="bg-white/[0.04] border border-white/[0.06] rounded-xl p-3">
                         <div className="flex justify-between mb-1">
-                          <span className="text-slate-300">Removed doors</span>
-                          <span className="text-red-400 font-mono">{compareResult.removed.length}</span>
+                          <span className="text-[#a1a1a6]">Removed doors</span>
+                          <span className="text-[#ff453a] font-mono">{compareResult.removed.length}</span>
                         </div>
-                        <div className="text-xs text-slate-500">
+                        <div className="text-xs text-[#6e6e73]">
                           {Object.values(removedActions).filter((v) => v === "keep").length} kept,{" "}
                           {Object.values(removedActions).filter((v) => v === "delete").length} deleted
                         </div>
@@ -598,8 +598,8 @@ export default function SubmittalWizard({
                   </div>
 
                   {loading && (
-                    <div className="flex items-center gap-2 text-cyan-400 text-sm mt-4">
-                      <div className="w-4 h-4 border-2 border-cyan-400 border-t-transparent rounded-full animate-spin" />
+                    <div className="flex items-center gap-2 text-[#0a84ff] text-sm mt-4">
+                      <div className="w-4 h-4 border-2 border-[#0a84ff] border-t-transparent rounded-full animate-spin" />
                       {status}
                     </div>
                   )}
@@ -610,12 +610,12 @@ export default function SubmittalWizard({
         </div>
 
         {/* ─── Footer buttons ─── */}
-        <div className="flex justify-between mt-4 pt-4 border-t border-slate-800">
+        <div className="flex justify-between mt-4 pt-4 border-t border-white/[0.08]">
           {applyResult ? (
             <div className="w-full flex justify-end">
               <button
                 onClick={() => { onComplete(); onClose(); }}
-                className="px-6 py-2 bg-green-600 hover:bg-green-700 text-white rounded transition-colors font-semibold"
+                className="px-6 py-2 bg-[#30d158] hover:bg-[#26c14a] text-white rounded-lg transition-colors font-semibold"
               >
                 Done
               </button>
@@ -625,17 +625,17 @@ export default function SubmittalWizard({
               <button
                 onClick={step === 0 ? onClose : handleBack}
                 disabled={loading}
-                className="px-4 py-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-white rounded transition-colors"
+                className="px-4 py-2 bg-white/[0.04] border border-white/[0.08] hover:bg-white/[0.08] disabled:opacity-50 text-[#a1a1a6] rounded-lg transition-colors"
               >
                 {step === 0 ? "Cancel" : "Back"}
               </button>
               <button
                 onClick={step === 4 ? applyRevision : handleNext}
                 disabled={loading || !canGoNext()}
-                className={`px-6 py-2 rounded transition-colors font-semibold disabled:opacity-50 ${
+                className={`px-6 py-2 rounded-lg transition-colors font-semibold disabled:opacity-50 ${
                   step === 4
-                    ? "bg-green-600 hover:bg-green-700 text-white"
-                    : "bg-cyan-600 hover:bg-cyan-700 text-white"
+                    ? "bg-[#30d158] hover:bg-[#26c14a] text-white"
+                    : "bg-[#0a84ff] hover:bg-[#0975de] text-white"
                 }`}
               >
                 {loading

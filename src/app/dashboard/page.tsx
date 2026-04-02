@@ -122,35 +122,35 @@ export default function DashboardPage() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950">
+    <div className="min-h-screen bg-black">
       <OfflineIndicator />
       <Navbar />
 
       <main className="max-w-7xl mx-auto px-4 py-8">
         <div className="flex justify-between items-center mb-8">
-          <h1 className="text-3xl font-bold text-white">Projects</h1>
+          <h1 className="text-3xl font-bold text-[#f5f5f7]">Projects</h1>
           <button
             onClick={openNewProject}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded transition-colors"
+            className="px-4 py-2 bg-[#0a84ff] hover:bg-[#0a84ff]/90 text-[#f5f5f7] font-medium rounded-lg transition-colors"
           >
             New Project
           </button>
         </div>
 
         {loading ? (
-          <div className="text-center py-12 text-slate-400">Loading...</div>
+          <div className="text-center py-12 text-[#a1a1a6]">Loading...</div>
         ) : error ? (
-          <div className="p-4 bg-red-900/20 border border-red-900 rounded text-red-200 mb-4">
+          <div className="p-4 bg-[#ff453a]/20 border border-[#ff453a]/40 rounded-lg text-[#ff453a] mb-4">
             {error}
             <button
               onClick={() => setError(null)}
-              className="ml-4 text-red-400 hover:text-red-300 text-sm"
+              className="ml-4 text-[#ff453a]/80 hover:text-[#ff453a] text-sm"
             >
               Dismiss
             </button>
           </div>
         ) : projects.length === 0 ? (
-          <div className="text-center py-12 text-slate-400">
+          <div className="text-center py-12 text-[#a1a1a6]">
             No projects yet. Create one to get started!
           </div>
         ) : (
@@ -159,7 +159,7 @@ export default function DashboardPage() {
               <div
                 key={project.id}
                 onClick={() => router.push(`/project/${project.id}`)}
-                className="bg-slate-900 rounded-lg border border-slate-800 p-6 hover:border-blue-500 cursor-pointer transition-colors relative"
+                className="bg-white/[0.04] border border-white/[0.08] rounded-xl p-6 hover:border-[#0a84ff]/50 cursor-pointer transition-colors relative"
               >
                 {/* Actions menu - z-10 and stopPropagation prevent card navigation */}
                 <div
@@ -170,7 +170,7 @@ export default function DashboardPage() {
                     onClick={() =>
                       setMenuOpen(menuOpen === project.id ? null : project.id)
                     }
-                    className="p-2 text-slate-500 hover:text-slate-300 hover:bg-slate-800 rounded transition-colors"
+                    className="p-2 text-[#6e6e73] hover:text-[#a1a1a6] hover:bg-white/[0.06] rounded-lg transition-colors"
                   >
                     <svg
                       xmlns="http://www.w3.org/2000/svg"
@@ -183,10 +183,10 @@ export default function DashboardPage() {
                   </button>
 
                   {menuOpen === project.id && (
-                    <div className="absolute right-0 mt-1 w-36 bg-slate-800 border border-slate-700 rounded shadow-lg z-20">
+                    <div className="absolute right-0 mt-1 w-36 bg-white/[0.06] border border-white/[0.08] rounded-lg shadow-lg z-20">
                       <button
                         onClick={() => openEditProject(project)}
-                        className="w-full text-left px-4 py-2 text-sm text-slate-300 hover:bg-slate-700 transition-colors"
+                        className="w-full text-left px-4 py-2 text-sm text-[#a1a1a6] hover:bg-white/[0.1] transition-colors"
                       >
                         Edit
                       </button>
@@ -195,7 +195,7 @@ export default function DashboardPage() {
                           setDeleteConfirm(project.id);
                           setMenuOpen(null);
                         }}
-                        className="w-full text-left px-4 py-2 text-sm text-red-400 hover:bg-slate-700 transition-colors"
+                        className="w-full text-left px-4 py-2 text-sm text-[#ff453a] hover:bg-white/[0.1] transition-colors"
                       >
                         Delete
                       </button>
@@ -203,20 +203,20 @@ export default function DashboardPage() {
                   )}
                 </div>
 
-                <h2 className="text-xl font-bold text-white mb-2 pr-8">
+                <h2 className="text-xl font-bold text-[#f5f5f7] mb-2 pr-8">
                   {project.name}
                 </h2>
                 {project.general_contractor && (
-                  <p className="text-slate-400 text-sm mb-1">
+                  <p className="text-[#a1a1a6] text-sm mb-1">
                     GC: {project.general_contractor}
                   </p>
                 )}
                 {project.job_number && (
-                  <p className="text-slate-500 text-xs mb-4">
+                  <p className="text-[#6e6e73] text-xs mb-4">
                     Job #{project.job_number}
                   </p>
                 )}
-                <div className="text-sm text-slate-400">
+                <div className="text-sm text-[#a1a1a6]">
                   {project.address || ""}
                 </div>
               </div>
@@ -228,14 +228,14 @@ export default function DashboardPage() {
       {/* New / Edit Project Modal */}
       {showModal && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-          <div className="bg-slate-900 border border-slate-700 rounded-lg w-full max-w-md p-6">
-            <h2 className="text-xl font-bold text-white mb-4">
+          <div className="bg-white/[0.04] border border-white/[0.08] rounded-xl w-full max-w-md p-6">
+            <h2 className="text-xl font-bold text-[#f5f5f7] mb-4">
               {editingProject ? "Edit Project" : "New Project"}
             </h2>
 
             <div className="space-y-4">
               <div>
-                <label className="block text-sm text-slate-400 mb-1">
+                <label className="block text-sm text-[#a1a1a6] mb-1">
                   Project Name *
                 </label>
                 <input
@@ -244,12 +244,12 @@ export default function DashboardPage() {
                   onChange={(e) =>
                     setFormData({ ...formData, name: e.target.value })
                   }
-                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 bg-white/[0.04] border border-white/[0.08] rounded-lg text-[#f5f5f7] placeholder-[#6e6e73] focus:outline-none focus:border-[rgba(10,132,255,0.3)]"
                   placeholder="e.g. Radius DC Project"
                 />
               </div>
               <div>
-                <label className="block text-sm text-slate-400 mb-1">
+                <label className="block text-sm text-[#a1a1a6] mb-1">
                   Job Number
                 </label>
                 <input
@@ -258,12 +258,12 @@ export default function DashboardPage() {
                   onChange={(e) =>
                     setFormData({ ...formData, job_number: e.target.value })
                   }
-                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 bg-white/[0.04] border border-white/[0.08] rounded-lg text-[#f5f5f7] placeholder-[#6e6e73] focus:outline-none focus:border-[rgba(10,132,255,0.3)]"
                   placeholder="e.g. 2026-001"
                 />
               </div>
               <div>
-                <label className="block text-sm text-slate-400 mb-1">
+                <label className="block text-sm text-[#a1a1a6] mb-1">
                   General Contractor
                 </label>
                 <input
@@ -275,12 +275,12 @@ export default function DashboardPage() {
                       general_contractor: e.target.value,
                     })
                   }
-                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 bg-white/[0.04] border border-white/[0.08] rounded-lg text-[#f5f5f7] placeholder-[#6e6e73] focus:outline-none focus:border-[rgba(10,132,255,0.3)]"
                   placeholder="e.g. Turner Construction"
                 />
               </div>
               <div>
-                <label className="block text-sm text-slate-400 mb-1">
+                <label className="block text-sm text-[#a1a1a6] mb-1">
                   Architect
                 </label>
                 <input
@@ -289,12 +289,12 @@ export default function DashboardPage() {
                   onChange={(e) =>
                     setFormData({ ...formData, architect: e.target.value })
                   }
-                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 bg-white/[0.04] border border-white/[0.08] rounded-lg text-[#f5f5f7] placeholder-[#6e6e73] focus:outline-none focus:border-[rgba(10,132,255,0.3)]"
                   placeholder="e.g. Gensler"
                 />
               </div>
               <div>
-                <label className="block text-sm text-slate-400 mb-1">
+                <label className="block text-sm text-[#a1a1a6] mb-1">
                   Address
                 </label>
                 <input
@@ -303,7 +303,7 @@ export default function DashboardPage() {
                   onChange={(e) =>
                     setFormData({ ...formData, address: e.target.value })
                   }
-                  className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  className="w-full px-3 py-2 bg-white/[0.04] border border-white/[0.08] rounded-lg text-[#f5f5f7] placeholder-[#6e6e73] focus:outline-none focus:border-[rgba(10,132,255,0.3)]"
                   placeholder="e.g. 1234 Main St, Washington DC"
                 />
               </div>
@@ -312,14 +312,14 @@ export default function DashboardPage() {
             <div className="flex gap-3 mt-6">
               <button
                 onClick={() => setShowModal(false)}
-                className="flex-1 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded transition-colors"
+                className="flex-1 px-4 py-2 bg-white/[0.04] hover:bg-white/[0.1] border border-white/[0.08] text-[#a1a1a6] rounded-lg transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={handleSave}
                 disabled={saving || !formData.name.trim()}
-                className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-800 disabled:text-blue-400 text-white rounded transition-colors"
+                className="flex-1 px-4 py-2 bg-[#0a84ff] hover:bg-[#0a84ff]/90 disabled:bg-white/[0.08] disabled:text-[#6e6e73] text-[#f5f5f7] rounded-lg transition-colors"
               >
                 {saving
                   ? "Saving..."
@@ -335,24 +335,24 @@ export default function DashboardPage() {
       {/* Delete Confirmation Modal */}
       {deleteConfirm && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4">
-          <div className="bg-slate-900 border border-slate-700 rounded-lg w-full max-w-sm p-6">
-            <h2 className="text-xl font-bold text-white mb-2">
+          <div className="bg-white/[0.04] border border-white/[0.08] rounded-xl w-full max-w-sm p-6">
+            <h2 className="text-xl font-bold text-[#f5f5f7] mb-2">
               Delete Project?
             </h2>
-            <p className="text-slate-400 text-sm mb-6">
+            <p className="text-[#a1a1a6] text-sm mb-6">
               This will permanently delete this project and all its openings,
               hardware items, and checklist data. This cannot be undone.
             </p>
             <div className="flex gap-3">
               <button
                 onClick={() => setDeleteConfirm(null)}
-                className="flex-1 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 rounded transition-colors"
+                className="flex-1 px-4 py-2 bg-white/[0.04] hover:bg-white/[0.1] border border-white/[0.08] text-[#a1a1a6] rounded-lg transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={() => handleDelete(deleteConfirm)}
-                className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded transition-colors"
+                className="flex-1 px-4 py-2 bg-[#ff453a] hover:bg-[#ff453a]/90 text-[#f5f5f7] rounded-lg transition-colors"
               >
                 Delete
               </button>

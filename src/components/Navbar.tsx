@@ -33,19 +33,30 @@ export default function Navbar() {
   };
 
   return (
-    <nav className="bg-slate-900 border-b border-slate-800">
+    <nav className="bg-black/90 backdrop-blur-xl border-b border-white/[0.08]">
       <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
-        <div className="text-xl font-bold text-white">
+        <div className="text-xl font-semibold" style={{ color: "#f5f5f7" }}>
           Door Hardware Tracker
         </div>
 
         <div className="flex items-center gap-4">
           {!loading && email && (
             <div className="flex items-center gap-4">
-              <span className="text-slate-400 text-sm">{email}</span>
+              <span className="text-sm" style={{ color: "#6e6e73" }}>
+                {email}
+              </span>
               <button
                 onClick={handleSignOut}
-                className="px-4 py-2 text-sm bg-slate-800 hover:bg-slate-700 text-slate-200 rounded transition-colors"
+                className="px-4 py-2 text-sm rounded transition-colors"
+                style={{
+                  color: "#a1a1a6",
+                }}
+                onMouseEnter={(e) =>
+                  (e.currentTarget.style.color = "#f5f5f7")
+                }
+                onMouseLeave={(e) =>
+                  (e.currentTarget.style.color = "#a1a1a6")
+                }
               >
                 Sign Out
               </button>

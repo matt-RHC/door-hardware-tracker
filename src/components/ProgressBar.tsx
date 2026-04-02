@@ -12,11 +12,15 @@ export default function ProgressBar({
   // Clamp value between 0 and 100
   const percentage = Math.max(0, Math.min(100, value));
 
-  // Determine color based on percentage
-  const getColor = () => {
-    if (percentage < 25) return "bg-red-600";
-    if (percentage < 75) return "bg-yellow-500";
-    return "bg-green-600";
+  // Determine gradient based on percentage
+  const getGradient = () => {
+    if (percentage < 25) {
+      return "bg-gradient-to-r from-[#ff453a] to-[#ff6961]";
+    }
+    if (percentage < 75) {
+      return "bg-gradient-to-r from-[#ff9f0a] to-[#ffcc00]";
+    }
+    return "bg-gradient-to-r from-[#30d158] to-[#5ac8fa]";
   };
 
   // Determine height based on size
@@ -33,14 +37,17 @@ export default function ProgressBar({
 
   return (
     <div>
-      <div className={`w-full bg-slate-800 rounded-full overflow-hidden ${getHeight()}`}>
+      <div
+        className={`w-full rounded-full overflow-hidden ${getHeight()}`}
+        style={{ backgroundColor: "rgba(255, 255, 255, 0.06)" }}
+      >
         <div
-          className={`${getColor()} ${getHeight()} rounded-full transition-all duration-300`}
+          className={`${getGradient()} ${getHeight()} rounded-full transition-all duration-300`}
           style={{ width: `${percentage}%` }}
         />
       </div>
       {showLabel && (
-        <div className="mt-2 text-sm text-slate-400">
+        <div className="mt-2 text-sm" style={{ color: "#a1a1a6" }}>
           {percentage.toFixed(0)}% complete
         </div>
       )}
