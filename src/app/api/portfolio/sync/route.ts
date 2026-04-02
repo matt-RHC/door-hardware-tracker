@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
 
     // Aggregate stats for each project
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://trackdoorhardware.app'
-    const projectRows = []
+    const projectRows: Array<{ localId: string; primaryKey: string; cells: Array<{ columnId: number; value: string | number }> }> = []
 
     for (const project of projects) {
       // Get opening count
