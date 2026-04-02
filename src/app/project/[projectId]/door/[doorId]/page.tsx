@@ -62,7 +62,7 @@ export default function DoorDetailPage() {
   const [activeTab, setActiveTab] = useState<'hardware' | 'files' | 'notes' | 'qr'>('hardware');
   const [viewingAttachment, setViewingAttachment] = useState<Attachment | null>(null);
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
-  const [issueModal, setIssueModal] = useState<{ doorNumber: string; hardwareItem: string } | null>(null);
+  const [issueModal, setIssueModal] = useState<{ doorNumber: string; hardwareItemName: string } | null>(null);
 
   const supabase = createClient();
 
@@ -374,7 +374,7 @@ export default function DoorDetailPage() {
     if (item.manufacturer) parts.push(item.manufacturer);
     if (item.model) parts.push(item.model);
     if (item.finish) parts.push(item.finish);
-    return parts.join(" · ");
+    return parts.join(" Â· ");
   };
 
   return (
@@ -522,7 +522,7 @@ export default function DoorDetailPage() {
               <div className="mb-3 flex items-center gap-2">
                 <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-[rgba(48,209,88,0.15)] border border-[#30d158] text-[12px] font-medium text-[#30d158]">
                   {opening.hw_set}
-                  {opening.hw_heading && ` — ${opening.hw_heading}`}
+                  {opening.hw_heading && ` â ${opening.hw_heading}`}
                 </span>
               </div>
             )}
@@ -812,7 +812,7 @@ export default function DoorDetailPage() {
                         <button
                           onClick={() => setIssueModal({
                             doorNumber: opening.door_number,
-                            hardwareItem: item.name,
+                            hardwareItemName: item.name,
                           })}
                           className="ml-auto text-[11px] text-[#ff453a] hover:text-[#ff6961] transition-colors"
                         >
@@ -908,7 +908,7 @@ export default function DoorDetailPage() {
                             </p>
                             <p className="text-[11px] text-[#6e6e73] mt-0.5 capitalize">
                               {(attachment.category || 'general').replace('_', ' ')}
-                              {attachment.uploaded_at && ` · ${new Date(attachment.uploaded_at).toLocaleDateString()}`}
+                              {attachment.uploaded_at && ` Â· ${new Date(attachment.uploaded_at).toLocaleDateString()}`}
                             </p>
                           </div>
                           <div className="flex-shrink-0 w-8 h-8 rounded-full bg-white/[0.04] border border-white/[0.08] flex items-center justify-center">
@@ -953,7 +953,7 @@ export default function DoorDetailPage() {
                 </p>
               </div>
               <p className="text-[12px] text-[#6e6e73] mt-1">
-                Images or PDF · Tap to browse
+                Images or PDF Â· Tap to browse
               </p>
             </label>
           </div>
@@ -1050,7 +1050,7 @@ export default function DoorDetailPage() {
         <IssueReportModal
           projectId={projectId}
           doorNumber={issueModal.doorNumber}
-          hardwareItem={issueModal.hardwareItem}
+          hardwareItemName={issueModal.hardwareItemName}
           onClose={() => setIssueModal(null)}
           onCreated={() => setIssueModal(null)}
         />
