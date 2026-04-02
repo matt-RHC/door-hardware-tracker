@@ -648,6 +648,13 @@ If there are no more doors after "${lastDoor}", respond with just: DONE`
           hardwareSets: setCount,
           unmatchedSets: unmatchedSets.length > 0 ? unmatchedSets : undefined,
         })
+
+        // Auto-trigger submittal sync (fire-and-forget)
+        const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+        fetch(`${baseUrl}/api/projects/${projectId}/sync-submittal`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+        }).catch(() => {})
       } catch (error) {
         console.error('PDF parsing error:', error)
         const message = error instanceof Error ? error.message : 'Internal server error'
