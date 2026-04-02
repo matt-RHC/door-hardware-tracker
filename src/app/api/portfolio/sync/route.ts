@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server'
+himport { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient, createAdminSupabaseClient } from '@/lib/supabase/server'
 import { createSheetInWorkspace, getSheet } from '@/lib/smartsheet/client'
 import { PORTFOLIO_SHEET_COLUMNS } from '@/lib/smartsheet/columns'
@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
 
     // Aggregate stats for each project
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://trackdoorhardware.app'
-    const projectRows: Array<{ localId: string; primaryKey: string; cells: Array<{ columnId: number; value: string | number }> }> = []
+    const projectRows: Array<{ project: any; openingCount: number; completionPct: number; openIssues: number; pendingDeliveries: number }> = []
 
     for (const project of projects) {
       // Get opening count
