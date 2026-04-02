@@ -10,11 +10,13 @@ interface FileViewerProps {
 
 export default function FileViewer({ attachment, onClose }: FileViewerProps) {
   const [scale, setScale] = useState(1);
+  const [fitScale, setFitScale] = useState(1);
   const [isFitted, setIsFitted] = useState(true);
   const [position, setPosition] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
   const [lastPinchDist, setLastPinchDist] = useState(0);
+  const [pdfKey, setPdfKey] = useState(0);
   const containerRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
 
@@ -23,14 +25,32 @@ export default function FileViewer({ attachment, onClose }: FileViewerProps) {
   const isImage = attachment.file_type?.startsWith("image/") ||
     /\.(jpg|jpeg|png|gif|webp|bmp|svg)$/i.test(attachment.file_name || "");
 
-  // Reset view to fit screen
-  const fitToScreen = useCallback(() => {
-    setScale(1);
-    setPosition({ x: 0, y: 0 });
-    setIsFitted(true);
+  // When an image loads, calculate the scale that fills viewport width
+  const handleImageLoad = useCallback((e: React.SyntheticEvent<HTMLImageElement>) => {
+    const img = e.currentTarget;
+    const containerW = containerRef.current?.clientWidth || window.innerWidth;
+    const containerH = containerRef.current?.clientHeight || window.innerHeight;
+    // Calculate scale to fill width, but don't exceed height
+    const scaleW = containerW / img.naturalWidth;
+    const scaleH = containerH / img.naturalHeight;
+    const computed = Math.min(scaleW, scaleH);
+    setFitScale(computed);
+    setScale(computed);
   }, []);
 
-  // Zoom controls
+  // Reset view to fit screen
+  const fitToScreen = useCallback(() => {
+    if (isPdf) {
+      // Reload iframe with FitH to reset the browser's native PDF zoom
+      setPdfKey((k) => k + 1);
+    } else {
+      setScale(fitScale);
+    }
+    setPosition({ x: 0, y: 0 });
+    setIsFitted(true);
+  }, [isPdf, fitScale]);
+
+  // Zoom controls (only for non-PDF content)
   const zoomIn = useCallback(() => {
     setScale((s) => Math.min(s * 1.3, 5));
     setIsFitted(false);
@@ -38,14 +58,16 @@ export default function FileViewer({ attachment, onClose }: FileViewerProps) {
 
   const zoomOut = useCallback(() => {
     setScale((s) => {
-      const next = Math.max(s / 1.3, 0.5);
-      if (next <= 1) {
+      const minScale = Math.max(fitScale * 0.5, 0.1);
+      const next = Math.max(s / 1.3, minScale);
+      if (next <= fitScale) {
         setPosition({ x: 0, y: 0 });
         setIsFitted(true);
+        return fitScale;
       }
       return next;
     });
-  }, []);
+  }, [fitScale]);
 
   // Touch handlers for pinch-to-zoom and pan
   const handleTouchStart = useCallback(
@@ -78,7 +100,7 @@ export default function FileViewer({ attachment, onClose }: FileViewerProps) {
         );
         if (lastPinchDist > 0) {
           const delta = dist / lastPinchDist;
-          setScale((s) => Math.min(Math.max(s * delta, 0.5), 5));
+          setScale((s) => Math.min(Math.max(s * delta, fitScale * 0.5), 5));
           setIsFitted(false);
         }
         setLastPinchDist(dist);
@@ -97,21 +119,24 @@ export default function FileViewer({ attachment, onClose }: FileViewerProps) {
     setLastPinchDist(0);
   }, []);
 
-  // Mouse wheel zoom for desktop
+  // Mouse wheel zoom for desktop (disabled for PDFs — use native scroll)
   const handleWheel = useCallback((e: React.WheelEvent) => {
+    if (isPdf) return; // Let PDF iframe handle its own scroll/zoom
     e.preventDefault();
     const delta = e.deltaY > 0 ? 0.9 : 1.1;
     setScale((s) => {
-      const next = Math.min(Math.max(s * delta, 0.5), 5);
-      if (next <= 1) {
+      const minScale = Math.max(fitScale * 0.5, 0.1);
+      const next = Math.min(Math.max(s * delta, minScale), 5);
+      if (next <= fitScale) {
         setPosition({ x: 0, y: 0 });
         setIsFitted(true);
+        return fitScale;
       } else {
         setIsFitted(false);
       }
       return next;
     });
-  }, []);
+  }, [isPdf, fitScale]);
 
   // Close on Escape
   useEffect(() => {
@@ -153,12 +178,25 @@ export default function FileViewer({ attachment, onClose }: FileViewerProps) {
       {/* Viewer area */}
       <div
         ref={containerRef}
-        className="flex-1 overflow-hidden relative touch-none"
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
-        onWheel={handleWheel}
+        className="flex-1 overflow-hidden relative"
+        {...(!isPdf ? {
+          onTouchStart: handleTouchStart,
+          onTouchMove: handleTouchMove,
+          onTouchEnd: handleTouchEnd,
+          onWheel: handleWheel,
+          style: { touchAction: "none" },
+        } : {})}
       >
+        {isPdf ? (
+          /* PDF: no CSS transform — let the browser's native PDF viewer handle zoom/scroll */
+          <iframe
+            key={pdfKey}
+            src={`${attachment.file_url}#toolbar=0&navpanes=0&view=FitH`}
+            className="w-full h-full border-0"
+            title={attachment.file_name || "PDF Document"}
+            style={{ background: "#1c1c1e" }}
+          />
+        ) : (
         <div
           ref={contentRef}
           className="w-full h-full flex items-center justify-center"
@@ -168,19 +206,13 @@ export default function FileViewer({ attachment, onClose }: FileViewerProps) {
             transition: isDragging ? "none" : "transform 0.2s ease-out",
           }}
         >
-          {isPdf ? (
-            <iframe
-              src={`${attachment.file_url}#toolbar=0&navpanes=0&view=FitH`}
-              className="w-full h-full border-0"
-              title={attachment.file_name || "PDF Document"}
-              style={{ background: "#1c1c1e" }}
-            />
-          ) : isImage ? (
+          {isImage ? (
             <img
               src={attachment.file_url}
               alt={attachment.file_name || "Attachment"}
               className="max-w-full max-h-full object-contain select-none"
               draggable={false}
+              onLoad={handleImageLoad}
             />
           ) : (
             <div className="text-center p-8">
@@ -202,20 +234,23 @@ export default function FileViewer({ attachment, onClose }: FileViewerProps) {
             </div>
           )}
         </div>
+        )}
       </div>
 
       {/* Bottom control bar */}
       <div className="flex-shrink-0 bg-black/80 border-t border-white/[0.08] px-4 py-3">
         <div className="flex items-center justify-center gap-3 max-w-[430px] mx-auto">
-          <button
-            onClick={zoomOut}
-            className="w-11 h-11 rounded-full bg-white/[0.07] border border-white/[0.12] flex items-center justify-center text-[#f5f5f7] active:bg-white/[0.14] transition-colors"
-            aria-label="Zoom out"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
-            </svg>
-          </button>
+          {!isPdf && (
+            <button
+              onClick={zoomOut}
+              className="w-11 h-11 rounded-full bg-white/[0.07] border border-white/[0.12] flex items-center justify-center text-[#f5f5f7] active:bg-white/[0.14] transition-colors"
+              aria-label="Zoom out"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
+              </svg>
+            </button>
+          )}
 
           <button
             onClick={fitToScreen}
@@ -229,22 +264,26 @@ export default function FileViewer({ attachment, onClose }: FileViewerProps) {
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
             </svg>
-            Fit
+            {isPdf ? "Reset View" : "Fit"}
           </button>
 
-          <button
-            onClick={zoomIn}
-            className="w-11 h-11 rounded-full bg-white/[0.07] border border-white/[0.12] flex items-center justify-center text-[#f5f5f7] active:bg-white/[0.14] transition-colors"
-            aria-label="Zoom in"
-          >
-            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
-            </svg>
-          </button>
+          {!isPdf && (
+            <>
+              <button
+                onClick={zoomIn}
+                className="w-11 h-11 rounded-full bg-white/[0.07] border border-white/[0.12] flex items-center justify-center text-[#f5f5f7] active:bg-white/[0.14] transition-colors"
+                aria-label="Zoom in"
+              >
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                </svg>
+              </button>
 
-          <span className="text-[12px] text-[#6e6e73] min-w-[3rem] text-center tabular-nums">
-            {Math.round(scale * 100)}%
-          </span>
+              <span className="text-[12px] text-[#6e6e73] min-w-[3rem] text-center tabular-nums">
+                {Math.round(scale * 100)}%
+              </span>
+            </>
+          )}
         </div>
       </div>
     </div>
