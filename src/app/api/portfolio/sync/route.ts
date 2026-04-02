@@ -1,4 +1,4 @@
-himport { NextRequest, NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient, createAdminSupabaseClient } from '@/lib/supabase/server'
 import { createSheetInWorkspace, getSheet } from '@/lib/smartsheet/client'
 import { PORTFOLIO_SHEET_COLUMNS } from '@/lib/smartsheet/columns'
