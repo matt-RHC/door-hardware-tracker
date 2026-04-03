@@ -3,8 +3,9 @@
 import { useState, useRef, useEffect, ChangeEvent, FormEvent } from "react";
 import { PDFDocument } from "pdf-lib";
 import SubmittalWizard from "./SubmittalWizard";
+import ImportReviewTable from "./ImportReviewTable";
 
-/* ─── Holographic Loading Overlay ─── */
+/* âââ Holographic Loading Overlay âââ */
 function HoloLoader({ progress, status }: { progress: number; status: string }) {
   const [tick, setTick] = useState(0);
   const [glitch, setGlitch] = useState(false);
@@ -233,7 +234,7 @@ function HoloLoader({ progress, status }: { progress: number; status: string }) 
             <span className="holo-text text-[9px] opacity-50">PROGRESS</span>
             <span className="holo-text text-[9px]"
               style={{ animation: "textFlash 2s ease-in-out infinite" }}>
-              {progress.toFixed(0)}% [{">".repeat(Math.floor(progress / 10))}{"·".repeat(10 - Math.floor(progress / 10))}]
+              {progress.toFixed(0)}% [{">".repeat(Math.floor(progress / 10))}{"Â·".repeat(10 - Math.floor(progress / 10))}]
             </span>
           </div>
           <div className="w-full h-[3px] rounded-full overflow-hidden" style={{ background: "rgba(0, 230, 255, 0.1)" }}>
@@ -287,7 +288,11 @@ interface ChunkResult {
 /** Max pages per chunk. ~30-40 pages keeps each Claude call well under 200K tokens. */
 const PAGES_PER_CHUNK = 35;
 
-/** Page threshold: PDFs with this many pages or fewer use the original single-request flow. */
+/**
+ * Page threshold for FRESH uploads only. PDFs at or below this count use the
+ * original single-request streaming flow (/api/parse-pdf). Re-uploads always
+ * use chunked processing regardless of page count (see handleSubmit).
+ */
 const CHUNK_THRESHOLD = 45;
 
 // --- Helpers ---
@@ -367,6 +372,12 @@ export default function PDFUploadModal({
     sets: HardwareSet[];
   } | null>(null);
 
+  // Review mode: fresh uploads show editable table before saving
+  const [reviewData, setReviewData] = useState<{
+    doors: DoorEntry[];
+    sets: HardwareSet[];
+  } | null>(null);
+
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
     if (selectedFile) {
@@ -391,8 +402,9 @@ export default function PDFUploadModal({
       body: formData,
     });
 
-    if (!response.ok && !response.body) {
-      throw new Error(`Upload failed (${response.status})`);
+    if (!response.ok) {
+      const errBody = await response.json().catch(() => null);
+      throw new Error(errBody?.error || `Upload failed (${response.status})`);
     }
 
     const reader = response.body?.getReader();
@@ -539,7 +551,7 @@ export default function PDFUploadModal({
 
     setStatus(
       warnings.length > 0
-        ? `Done! ${saveResult.openingsCount} doors, ${saveResult.itemsCount} items. ⚠ ${warnings.join("; ")}`
+        ? `Done! ${saveResult.openingsCount} doors, ${saveResult.itemsCount} items. â  ${warnings.join("; ")}`
         : `Done! ${saveResult.openingsCount} doors, ${saveResult.itemsCount} hardware items loaded.`
     );
     setProgress(100);
@@ -586,13 +598,13 @@ export default function PDFUploadModal({
         pageCount = 0;
       }
 
-      // Check if project has existing openings → wizard mode
+      // Check if project has existing openings â wizard mode
       setStatus("Checking existing data...");
       const hasExisting = await checkExistingOpenings();
 
       if (hasExisting) {
-        // ─── WIZARD MODE: parse only (chunked), then show wizard ───
-        // Always use chunked processing for re-uploads — even "small" PDFs
+        // âââ WIZARD MODE: parse only (chunked), then show wizard âââ
+        // Always use chunked processing for re-uploads â even "small" PDFs
         // can be 40+ pages which is too large for a single Claude API call.
         setStatus(`Parsing ${pageCount > 0 ? `${pageCount}-page ` : ""}PDF for comparison...`);
         setProgress(2);
@@ -603,26 +615,24 @@ export default function PDFUploadModal({
           }
           setWizardData({ doors: result.doors, sets: result.sets });
         }
-        // Don't close — wizard will render
+        // Don't close â wizard will render
         setLoading(false);
         return;
       }
 
-      // ─── FRESH UPLOAD: no existing data, save directly ───
-      if (pageCount > CHUNK_THRESHOLD) {
-        setStatus(`${pageCount}-page PDF detected. Using chunked processing...`);
-        setProgress(2);
-        await processLargePDF(buffer, pageCount);
-      } else {
-        const formData = new FormData();
-        formData.append("file", file);
-        formData.append("projectId", projectId);
-        await processSmallPDF(formData);
+      // --- FRESH UPLOAD: parse only, then show review table ---
+      setStatus(`Parsing ${pageCount > 0 ? `${pageCount}-page ` : ""}PDF...`);
+      setProgress(2);
+      const freshResult = await processLargePDF(buffer, pageCount || 50, true);
+      if (freshResult) {
+        if (freshResult.doors.length === 0) {
+          throw new Error("No doors found in the document.");
+        }
+        setReviewData({ doors: freshResult.doors, sets: freshResult.sets });
       }
-
-      await new Promise((resolve) => setTimeout(resolve, 1500));
-      onSuccess();
-      onClose();
+      // Don't close - review table will render
+      setLoading(false);
+      return;
     } catch (err) {
       setError(err instanceof Error ? err.message : "Upload failed");
       setProgress(0);
@@ -632,7 +642,20 @@ export default function PDFUploadModal({
     }
   };
 
-  // If wizard data is ready, show the wizard instead of the upload modal
+  // If review data is ready (fresh upload), show the editable review table
+  if (reviewData) {
+    return (
+      <ImportReviewTable
+        projectId={projectId}
+        doors={reviewData.doors}
+        sets={reviewData.sets}
+        onClose={onClose}
+        onComplete={onSuccess}
+      />
+    );
+  }
+
+    // If wizard data is ready, show the wizard instead of the upload modal
   if (wizardData) {
     return (
       <SubmittalWizard

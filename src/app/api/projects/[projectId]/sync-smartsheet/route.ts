@@ -139,7 +139,7 @@ export async function POST(
     const { projectId } = await params
 
     // Verify admin access
-    const { data: membership } = await supabase
+    const { data: membership } = await (supabase as any)
       .from('project_members')
       .select('role')
       .eq('project_id', projectId)

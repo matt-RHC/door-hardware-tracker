@@ -18,6 +18,10 @@
     },
     "src/app/api/sync-smartsheet/route.ts": {
       "maxDuration": 120
+    },
+    "api/extract-tables.py": {
+      "maxDuration": 60,
+      "memory": 1024
     }
   }
 }

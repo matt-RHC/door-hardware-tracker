@@ -6,7 +6,7 @@ import { getSheet } from '@/lib/smartsheet/client'
 import { PROJECT_SHEET_COLUMNS, ISSUES_SHEET_COLUMNS, DELIVERY_SHEET_COLUMNS, SUBMITTAL_SHEET_COLUMNS } from '@/lib/smartsheet/columns'
 import { WebhookCallbackPayload } from '@/lib/smartsheet/types'
 
-// HEAD — Smartsheet verification handshake
+// HEAD â Smartsheet verification handshake
 export async function HEAD(request: NextRequest) {
   const challenge = request.headers.get('smartsheet-hook-challenge')
   return new NextResponse(null, {
@@ -17,7 +17,7 @@ export async function HEAD(request: NextRequest) {
   })
 }
 
-// GET — also handle verification (some Smartsheet versions use GET)
+// GET â also handle verification (some Smartsheet versions use GET)
 export async function GET(request: NextRequest) {
   const challenge = request.headers.get('smartsheet-hook-challenge')
   return new NextResponse(null, {
@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
   })
 }
 
-// POST — webhook callback with events
+// POST â webhook callback with events
 export async function POST(request: NextRequest) {
   try {
     // Handle verification challenge on POST too
@@ -144,8 +144,8 @@ async function applyChangesForType(
 
     case 'issues':
       if (localRecordId) {
-        // Update existing issue — Smartsheet wins for all fields
-        await adminSupabase
+        // Update existing issue â Smartsheet wins for all fields
+        await (adminSupabase as any)
           .from('issues')
           .update({
             description: values['Description'] || undefined,
@@ -158,13 +158,13 @@ async function applyChangesForType(
           })
           .eq('id', localRecordId)
       } else {
-        // New issue from Smartsheet — create locally
-        const issueCount = await adminSupabase
+        // New issue from Smartsheet â create locally
+        const issueCount = await (adminSupabase as any)
           .from('issues')
           .select('id', { count: 'exact', head: true })
           .eq('project_id', projectId)
         const seq = ((issueCount as any).count || 0) + 1
-        await adminSupabase
+        await (adminSupabase as any)
           .from('issues')
           .insert({
             project_id: projectId,
@@ -183,8 +183,8 @@ async function applyChangesForType(
 
     case 'delivery':
       if (localRecordId) {
-        // Update existing delivery — Smartsheet wins
-        await adminSupabase
+        // Update existing delivery â Smartsheet wins
+        await (adminSupabase as any)
           .from('deliveries')
           .update({
             vendor: values['Vendor'] || undefined,
@@ -201,7 +201,7 @@ async function applyChangesForType(
           .eq('id', localRecordId)
       } else {
         // New delivery from Smartsheet
-        await adminSupabase
+        await (adminSupabase as any)
           .from('deliveries')
           .insert({
             project_id: projectId,
@@ -220,7 +220,7 @@ async function applyChangesForType(
       break
 
     case 'submittal':
-      // Submittal tracker — pull status updates only
+      // Submittal tracker â pull status updates only
       if (localRecordId) {
         // Could update submittal status on openings if we track it
       }
