@@ -1,41 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import Anthropic from '@anthropic-ai/sdk'
-import { z } from 'zod'
-import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod'
-
-// --- Zod Schemas for Structured Outputs ---
-
-const HardwareItemSchema = z.object({
-  qty: z.number().describe('Quantity per individual door/opening, NOT total across all doors'),
-  name: z.string().describe('Item name (e.g. Hinges, Closer, Lockset, Exit Device)'),
-  manufacturer_code: z.string().describe('Manufacturer abbreviation code (e.g. IV, SC, LCN)'),
-  model: z.string().describe('Full model number/description'),
-  finish_code: z.string().describe('Finish code (e.g. 626, US32D, 689)'),
-  options: z.string().describe('Option codes or notes, empty string if none'),
-  hand: z.string().describe('LH or RH if specified for this item, empty string if not'),
-})
-
-const HardwareSetSchema = z.object({
-  hardware_sets: z.array(z.object({
-    set_id: z.string().describe('Hardware set identifier (e.g. DH1, DH4A, EX3-NR, I1NS-2A)'),
-    heading: z.string().describe('Descriptive heading for this set'),
-    items: z.array(HardwareItemSchema),
-  })),
-})
-
-const DoorScheduleSchema = z.object({
-  openings: z.array(z.object({
-    door_number: z.string().describe('Door/opening tag number exactly as shown in document'),
-    hw_set: z.string().describe('Hardware set ID assigned to this opening'),
-    hw_heading: z.string().describe('Hardware heading if different from set_id, empty string otherwise'),
-    location: z.string().describe('Location description or Opening Label, empty string if not shown'),
-    door_type: z.string().describe('Door type code exactly as shown (e.g. A, B, HM-N1, WD-F)'),
-    frame_type: z.string().describe('Frame type code exactly as shown (e.g. F1, F2, HM-F1)'),
-    fire_rating: z.string().describe('Fire rating (e.g. 45Min, 90Min, 20Min, NR), empty string if not shown'),
-    hand: z.string().describe('Hand (e.g. LH, RH, LHR, RHR, A, B), empty string if not shown'),
-  })),
-})
+import { getTaxonomyPromptText } from '@/lib/hardware-taxonomy'
 
 // --- Types ---
 
@@ -63,42 +29,254 @@ interface DoorEntry {
   hand: string
 }
 
+interface PdfplumberResult {
+  success: boolean
+  openings: DoorEntry[]
+  hardware_sets: Array<{
+    set_id: string
+    heading: string
+    items: Array<{
+      qty: number
+      name: string
+      manufacturer: string
+      model: string
+      finish: string
+    }>
+  }>
+  reference_codes: Array<{
+    code_type: string
+    code: string
+    full_name: string
+  }>
+  expected_door_count: number
+  tables_found: number
+  hw_sets_found: number
+  method: string
+  error: string
+}
+
+interface LLMCorrections {
+  hardware_sets_corrections?: Array<{
+    set_id: string
+    heading?: string
+    items_to_add?: HardwareItem[]
+    items_to_remove?: string[]  // item names to remove
+    items_to_fix?: Array<{ name: string; field: string; old_value: string; new_value: string }>
+  }>
+  doors_corrections?: Array<{
+    door_number: string
+    field: string
+    old_value: string
+    new_value: string
+  }>
+  missing_doors?: DoorEntry[]
+  missing_sets?: Array<{
+    set_id: string
+    heading: string
+    items: HardwareItem[]
+  }>
+  notes?: string
+}
+
 // --- Helpers ---
 
-async function callClaudeStructured<T>(
-  client: Anthropic,
-  base64: string,
-  systemPrompt: string,
-  userPrompt: string,
-  schema: Parameters<typeof client.messages.create>[0]['output_config'] extends undefined ? never : unknown,
-  maxTokens = 16384
-): Promise<{ data: T; truncated: boolean }> {
-  const response = await client.messages.create({
-    model: 'claude-sonnet-4-20250514',
-    max_tokens: maxTokens,
-    system: systemPrompt,
-    messages: [
-      {
-        role: 'user',
-        content: [
-          {
-            type: 'document',
-            source: { type: 'base64', media_type: 'application/pdf', data: base64 },
-          },
-          { type: 'text', text: userPrompt },
-        ],
-      },
-    ],
-    output_config: { format: schema as any },
+async function callPdfplumber(base64: string): Promise<PdfplumberResult> {
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.VERCEL_URL
+    ? `https://${process.env.VERCEL_URL}`
+    : 'http://localhost:3000'
+
+  const response = await fetch(`${baseUrl}/api/extract-tables`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ pdf_base64: base64 }),
   })
 
-  const truncated = response.stop_reason === 'max_tokens'
-  const textBlock = response.content.find((b) => b.type === 'text')
-  if (!textBlock || textBlock.type !== 'text') {
-    throw new Error('No text in Claude response')
+  if (!response.ok) {
+    throw new Error(`Pdfplumber extraction failed: ${response.status} ${response.statusText}`)
   }
-  const data = JSON.parse(textBlock.text) as T
-  return { data, truncated }
+
+  return response.json()
+}
+
+async function callLLMReview(
+  client: Anthropic,
+  base64: string,
+  pdfplumberResult: PdfplumberResult,
+  knownSetIds?: string[]
+): Promise<LLMCorrections> {
+  const systemPrompt = `You are a quality reviewer for door hardware submittal PDF extraction.
+
+You will receive:
+1. A PDF document (door hardware submittal)
+2. Structured data extracted from that PDF by an automated tool (pdfplumber)
+
+Your job is to REVIEW the extracted data against the actual PDF and return ONLY corrections needed. Do NOT re-extract everything — just identify errors and missing data.
+
+Return valid JSON with this structure:
+{
+  "hardware_sets_corrections": [
+    {
+      "set_id": "DH1",
+      "heading": "corrected heading if wrong",
+      "items_to_add": [{"qty": 1, "name": "Missing Item", "manufacturer": "MFR", "model": "MDL", "finish": "FIN"}],
+      "items_to_remove": ["Item Name That Shouldnt Be There"],
+      "items_to_fix": [{"name": "Item Name", "field": "qty", "old_value": "2", "new_value": "3"}]
+    }
+  ],
+  "doors_corrections": [
+    {"door_number": "110-01A", "field": "hw_set", "old_value": "DH1", "new_value": "DH2"}
+  ],
+  "missing_doors": [
+    {"door_number": "110-05A", "hw_set": "DH1", "location": "Office", "door_type": "WD", "frame_type": "HM", "fire_rating": "20Min", "hand": "LHR"}
+  ],
+  "missing_sets": [
+    {"set_id": "DH5", "heading": "Storage Room", "items": [{"qty": 3, "name": "Hinges", "manufacturer": "IV", "model": "5BB1", "finish": "626"}]}
+  ],
+  "notes": "Optional notes about extraction quality"
+}
+
+If the extraction is accurate and complete, return: {"notes": "Extraction looks correct"}
+
+CRITICAL RULES:
+- Only report REAL errors you can see in the PDF. Do not hallucinate corrections.
+- qty must be PER INDIVIDUAL DOOR/OPENING (not totals). Typical: hinges=3-4, closers=1, locksets=1.
+- Focus on: missing items/doors, wrong set assignments, incorrect quantities, misread text.
+- Do NOT correct formatting differences (e.g. "HM" vs "Hollow Metal" are both fine).
+
+${getTaxonomyPromptText()}`
+
+  const extractedSummary = JSON.stringify({
+    hardware_sets: pdfplumberResult.hardware_sets.map(s => ({
+      set_id: s.set_id,
+      heading: s.heading,
+      item_count: s.items.length,
+      items: s.items,
+    })),
+    doors_count: pdfplumberResult.openings.length,
+    doors_sample: pdfplumberResult.openings.slice(0, 10),
+    total_doors: pdfplumberResult.openings.length,
+    known_set_ids: knownSetIds || [],
+  }, null, 2)
+
+  try {
+    const response = await client.messages.create({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 8192,
+      system: systemPrompt,
+      messages: [
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'document',
+              source: { type: 'base64', media_type: 'application/pdf', data: base64 },
+            },
+            {
+              type: 'text',
+              text: `Here is the automated extraction result. Review it against the PDF and return corrections as JSON:\n\n${extractedSummary}`,
+            },
+          ],
+        },
+      ],
+    })
+
+    const textBlock = response.content.find((b) => b.type === 'text')
+    if (!textBlock || textBlock.type !== 'text') {
+      return { notes: 'LLM review returned no text' }
+    }
+
+    let text = textBlock.text.trim()
+    if (text.startsWith('```')) {
+      text = text.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '')
+    }
+
+    return JSON.parse(text) as LLMCorrections
+  } catch (err) {
+    console.error('LLM review failed:', err instanceof Error ? err.message : String(err))
+    return { notes: `LLM review failed: ${err instanceof Error ? err.message : String(err)}` }
+  }
+}
+
+function applyCorrections(
+  hardwareSets: HardwareSet[],
+  doors: DoorEntry[],
+  corrections: LLMCorrections
+): { hardwareSets: HardwareSet[]; doors: DoorEntry[] } {
+  // Apply hardware set corrections
+  if (corrections.hardware_sets_corrections) {
+    for (const corr of corrections.hardware_sets_corrections) {
+      const set = hardwareSets.find(s => s.set_id === corr.set_id)
+      if (!set) continue
+
+      if (corr.heading) set.heading = corr.heading
+
+      // Remove items
+      if (corr.items_to_remove) {
+        set.items = set.items.filter(
+          item => !corr.items_to_remove!.includes(item.name)
+        )
+      }
+
+      // Fix items
+      if (corr.items_to_fix) {
+        for (const fix of corr.items_to_fix) {
+          const item = set.items.find(i => i.name === fix.name)
+          if (item && fix.field in item) {
+            const val = fix.new_value
+            if (fix.field === 'qty') {
+              (item as any)[fix.field] = parseInt(val, 10) || 1
+            } else {
+              (item as any)[fix.field] = val
+            }
+          }
+        }
+      }
+
+      // Add missing items
+      if (corr.items_to_add) {
+        for (const newItem of corr.items_to_add) {
+          // Only add if not already present
+          if (!set.items.some(i => i.name === newItem.name)) {
+            set.items.push(newItem)
+          }
+        }
+      }
+    }
+  }
+
+  // Add missing sets
+  if (corrections.missing_sets) {
+    for (const newSet of corrections.missing_sets) {
+      if (!hardwareSets.some(s => s.set_id === newSet.set_id)) {
+        hardwareSets.push({
+          set_id: newSet.set_id,
+          heading: newSet.heading,
+          items: newSet.items,
+        })
+      }
+    }
+  }
+
+  // Apply door corrections
+  if (corrections.doors_corrections) {
+    for (const corr of corrections.doors_corrections) {
+      const door = doors.find(d => d.door_number === corr.door_number)
+      if (door && corr.field in door) {
+        (door as any)[corr.field] = corr.new_value
+      }
+    }
+  }
+
+  // Add missing doors
+  if (corrections.missing_doors) {
+    for (const newDoor of corrections.missing_doors) {
+      if (!doors.some(d => d.door_number === newDoor.door_number)) {
+        doors.push(newDoor)
+      }
+    }
+  }
+
+  return { hardwareSets, doors }
 }
 
 // --- Chunk handler: processes one PDF chunk, returns JSON (no DB writes) ---
@@ -117,132 +295,77 @@ export async function POST(request: NextRequest) {
       chunkBase64: string
       chunkIndex: number
       totalChunks: number
-      knownSetIds?: string[] // optional: set IDs already discovered from prior chunks
+      knownSetIds?: string[]
     }
 
     if (!chunkBase64) {
       return NextResponse.json({ error: 'Missing chunkBase64' }, { status: 400 })
     }
 
+    // ==========================================
+    // Step 1: Pdfplumber deterministic extraction
+    // ==========================================
+    let pdfplumberResult: PdfplumberResult | null = null
+    try {
+      pdfplumberResult = await callPdfplumber(chunkBase64)
+      console.log(
+        `Chunk ${chunkIndex + 1}/${totalChunks}: pdfplumber extracted ` +
+        `${pdfplumberResult.hw_sets_found} sets, ${pdfplumberResult.openings.length} doors`
+      )
+    } catch (err) {
+      console.error(
+        `Chunk ${chunkIndex + 1}/${totalChunks}: pdfplumber failed:`,
+        err instanceof Error ? err.message : String(err)
+      )
+    }
+
+    // Convert pdfplumber result to our types
+    let hardwareSets: HardwareSet[] = (pdfplumberResult?.hardware_sets || []).map(s => ({
+      set_id: s.set_id,
+      heading: s.heading,
+      items: s.items.map(i => ({
+        qty: i.qty,
+        name: i.name,
+        manufacturer: i.manufacturer,
+        model: i.model,
+        finish: i.finish,
+      })),
+    }))
+
+    let doors: DoorEntry[] = pdfplumberResult?.openings || []
+
+    // ==========================================
+    // Step 2: LLM review pass (always)
+    // ==========================================
     const client = new Anthropic()
+    const corrections = await callLLMReview(client, chunkBase64, pdfplumberResult || {
+      success: false,
+      openings: [],
+      hardware_sets: [],
+      reference_codes: [],
+      expected_door_count: 0,
+      tables_found: 0,
+      hw_sets_found: 0,
+      method: 'none',
+      error: 'pdfplumber failed',
+    }, knownSetIds)
 
-    // ==========================================
-    // PASS 1: Extract hardware set definitions
-    // Uses Structured Outputs with Zod schema
-    // ==========================================
-    const pass1System = `You extract hardware set definitions from door hardware submittals.
+    // Apply corrections
+    const corrected = applyCorrections(hardwareSets, doors, corrections)
+    hardwareSets = corrected.hardwareSets
+    doors = corrected.doors
 
-A hardware set (e.g. DH1, DH2, EX1, EX3-NR, I1NS-2A) defines a list of hardware items installed on doors assigned to that set.
-
-Extract EVERY hardware set definition from this document.
-
-CRITICAL RULES FOR QTY:
-- The "qty" field must be the quantity PER INDIVIDUAL DOOR/OPENING, NOT the total across all doors.
-- For example, a typical single door has 3 hinges, 1 lockset, 1 closer, 1 kick plate, etc.
-- If the document shows a total quantity column and a per-opening quantity column, use the PER-OPENING quantity.
-- If only a total is shown, divide by the number of openings in that set to get per-opening qty.
-- Common per-opening quantities: hinges = 3 or 4, closers = 1, locksets = 1, stops = 1, kick plates = 1, seals = 1 set, silencers = 1 set.
-
-Extract ALL hardware sets with ALL items in each.`
-
-    let hardwareSets: HardwareSet[] = []
-    try {
-      const { data: pass1Result, truncated } = await callClaudeStructured<z.infer<typeof HardwareSetSchema>>(
-        client, chunkBase64, pass1System,
-        'Extract ALL hardware set definitions from this section.',
-        zodOutputFormat(HardwareSetSchema), 32768)
-
-      if (truncated) {
-        console.warn(`Chunk ${chunkIndex + 1}/${totalChunks}: Pass 1 truncated at 32K tokens`)
-      }
-
-      hardwareSets = pass1Result.hardware_sets.map(set => ({
-        set_id: set.set_id,
-        heading: set.heading,
-        items: set.items.map(item => ({
-          qty: item.qty,
-          name: item.name,
-          manufacturer: item.manufacturer_code,
-          model: item.model,
-          finish: item.finish_code,
-        })),
-      }))
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
-      console.error(`Chunk ${chunkIndex + 1}/${totalChunks}: Pass 1 failed:`, msg)
-      // Don't fail the whole chunk — continue with empty sets, doors may still be extractable
-    }
-
-    // ==========================================
-    // PASS 2: Extract door schedule
-    // Uses Structured Outputs with Zod schema
-    // ==========================================
-    // Combine any set IDs from this chunk with ones from prior chunks
-    const localSetIds = hardwareSets.map(s => s.set_id)
-    const allSetIds = [...new Set([...localSetIds, ...(knownSetIds || [])])]
-    const setIdsStr = allSetIds.length > 0 ? allSetIds.join(', ') : 'unknown'
-
-    const pass2System = `You extract door schedules from door hardware submittals.
-
-Extract EVERY door/opening from the Opening List / Door Schedule in this document section.
-
-For each opening, extract the fields exactly as they appear in the document. Use empty string for any field not present.
-
-Known hardware set IDs in this document: ${setIdsStr}
-
-IMPORTANT: Extract EVERY door from ALL pages in this section. Do NOT stop early.`
-
-    let doors: DoorEntry[] = []
-    try {
-      const { data: pass2Result, truncated } = await callClaudeStructured<z.infer<typeof DoorScheduleSchema>>(
-        client, chunkBase64, pass2System,
-        'Extract ALL doors/openings from the door schedule in this section.',
-        zodOutputFormat(DoorScheduleSchema), 16384)
-
-      doors = pass2Result.openings.map(d => ({
-        door_number: d.door_number,
-        hw_set: d.hw_set,
-        location: d.location,
-        door_type: d.door_type,
-        frame_type: d.frame_type,
-        fire_rating: d.fire_rating,
-        hand: d.hand,
-      }))
-
-      // Handle truncation with continuation
-      if (truncated && doors.length > 0) {
-        const lastDoor = doors[doors.length - 1].door_number
-        const contPrompt = `Continue the door list from after "${lastDoor}". Only doors AFTER that one.`
-
-        const { data: contData } = await callClaudeStructured<z.infer<typeof DoorScheduleSchema>>(
-          client, chunkBase64, pass2System, contPrompt,
-          zodOutputFormat(DoorScheduleSchema), 16384)
-
-        const moreDoors = contData.openings.map(d => ({
-          door_number: d.door_number,
-          hw_set: d.hw_set,
-          location: d.location,
-          door_type: d.door_type,
-          frame_type: d.frame_type,
-          fire_rating: d.fire_rating,
-          hand: d.hand,
-        }))
-
-        if (moreDoors.length > 0) {
-          doors = doors.concat(moreDoors)
-        }
-      }
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err)
-      console.error(`Chunk ${chunkIndex + 1}/${totalChunks}: Pass 2 failed:`, msg)
-    }
-
-    console.log(`Chunk ${chunkIndex + 1}/${totalChunks}: ${hardwareSets.length} sets, ${doors.length} doors`)
+    console.log(
+      `Chunk ${chunkIndex + 1}/${totalChunks}: after LLM review: ` +
+      `${hardwareSets.length} sets, ${doors.length} doors. ` +
+      `Notes: ${corrections.notes || 'none'}`
+    )
 
     return NextResponse.json({
       chunkIndex,
       hardwareSets,
       doors,
+      reviewNotes: corrections.notes,
     })
   } catch (error) {
     console.error('Chunk processing error:', error)

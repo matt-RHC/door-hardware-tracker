@@ -1,42 +1,7 @@
 import { NextRequest } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import Anthropic from '@anthropic-ai/sdk'
-import { z } from 'zod'
-import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod'
-// pdf-parse removed — requires DOMMatrix (browser-only) which crashes in serverless
-
-// --- Zod Schemas for Structured Outputs ---
-
-const HardwareItemSchema = z.object({
-  qty: z.number().describe('Quantity per individual door/opening, NOT total across all doors'),
-  name: z.string().describe('Item name (e.g. Hinges, Closer, Lockset, Exit Device)'),
-  manufacturer_code: z.string().describe('Manufacturer abbreviation code (e.g. IV, SC, LCN)'),
-  model: z.string().describe('Full model number/description'),
-  finish_code: z.string().describe('Finish code (e.g. 626, US32D, 689)'),
-  options: z.string().describe('Option codes or notes, empty string if none'),
-  hand: z.string().describe('LH or RH if specified for this item, empty string if not'),
-})
-
-const HardwareSetSchema = z.object({
-  hardware_sets: z.array(z.object({
-    set_id: z.string().describe('Hardware set identifier (e.g. DH1, DH4A, EX3-NR, I1NS-2A)'),
-    heading: z.string().describe('Descriptive heading for this set'),
-    items: z.array(HardwareItemSchema),
-  })),
-})
-
-const DoorScheduleSchema = z.object({
-  openings: z.array(z.object({
-    door_number: z.string().describe('Door/opening tag number exactly as shown in document'),
-    hw_set: z.string().describe('Hardware set ID assigned to this opening'),
-    hw_heading: z.string().describe('Hardware heading if different from set_id, empty string otherwise'),
-    location: z.string().describe('Location description or Opening Label, empty string if not shown'),
-    door_type: z.string().describe('Door type code exactly as shown (e.g. A, B, HM-N1, WD-F)'),
-    frame_type: z.string().describe('Frame type code exactly as shown (e.g. F1, F2, HM-F1)'),
-    fire_rating: z.string().describe('Fire rating (e.g. 45Min, 90Min, 20Min, NR), empty string if not shown'),
-    hand: z.string().describe('Hand (e.g. LH, RH, LHR, RHR, A, B), empty string if not shown'),
-  })),
-})
+import { getTaxonomyPromptText } from '@/lib/hardware-taxonomy'
 
 // --- Types ---
 
@@ -67,38 +32,133 @@ interface DoorEntry {
 interface PdfplumberResult {
   success: boolean
   openings: DoorEntry[]
-  reference_codes: Array<{ code_type: string; code: string; full_name: string }>
+  hardware_sets: Array<{
+    set_id: string
+    heading: string
+    items: Array<{
+      qty: number
+      name: string
+      manufacturer: string
+      model: string
+      finish: string
+    }>
+  }>
+  reference_codes: Array<{
+    code_type: string
+    code: string
+    full_name: string
+  }>
   expected_door_count: number
   tables_found: number
+  hw_sets_found: number
   method: string
   error: string
 }
 
-// --- Helpers ---
-
-function parseContextLimitError(err: unknown): number | null {
-  const msg = err instanceof Error ? err.message : String(err)
-  const match = msg.match(/input length.*?(\d+)\s*\+\s*(\d+)\s*>\s*(\d+)/)
-  if (match) {
-    return parseInt(match[1], 10)
-  }
-  if (msg.includes('context_length') || msg.includes('exceed context limit')) {
-    return -1
-  }
-  return null
+interface LLMCorrections {
+  hardware_sets_corrections?: Array<{
+    set_id: string
+    heading?: string
+    items_to_add?: HardwareItem[]
+    items_to_remove?: string[]
+    items_to_fix?: Array<{ name: string; field: string; old_value: string; new_value: string }>
+  }>
+  doors_corrections?: Array<{
+    door_number: string
+    field: string
+    old_value: string
+    new_value: string
+  }>
+  missing_doors?: DoorEntry[]
+  missing_sets?: Array<{
+    set_id: string
+    heading: string
+    items: HardwareItem[]
+  }>
+  notes?: string
 }
 
-async function callClaudeText(
+// --- Helpers ---
+
+async function callPdfplumber(base64: string): Promise<PdfplumberResult> {
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || (process.env.VERCEL_URL
+    ? `https://${process.env.VERCEL_URL}`
+    : 'http://localhost:3000')
+
+  const response = await fetch(`${baseUrl}/api/extract-tables`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ pdf_base64: base64 }),
+  })
+
+  if (!response.ok) {
+    throw new Error(`Pdfplumber extraction failed: ${response.status} ${response.statusText}`)
+  }
+
+  return response.json()
+}
+
+async function callLLMReview(
   client: Anthropic,
   base64: string,
-  systemPrompt: string,
-  userPrompt: string,
-  maxTokens = 16384
-): Promise<{ text: string; truncated: boolean }> {
+  pdfplumberResult: PdfplumberResult
+): Promise<LLMCorrections> {
+  const systemPrompt = `You are a quality reviewer for door hardware submittal PDF extraction.
+
+You will receive:
+1. A PDF document (door hardware submittal)
+2. Structured data extracted from that PDF by an automated tool (pdfplumber)
+
+Your job is to REVIEW the extracted data against the actual PDF and return ONLY corrections needed. Do NOT re-extract everything — just identify errors and missing data.
+
+Return valid JSON with this structure:
+{
+  "hardware_sets_corrections": [
+    {
+      "set_id": "DH1",
+      "heading": "corrected heading if wrong",
+      "items_to_add": [{"qty": 1, "name": "Missing Item", "manufacturer": "MFR", "model": "MDL", "finish": "FIN"}],
+      "items_to_remove": ["Item Name That Shouldnt Be There"],
+      "items_to_fix": [{"name": "Item Name", "field": "qty", "old_value": "2", "new_value": "3"}]
+    }
+  ],
+  "doors_corrections": [
+    {"door_number": "110-01A", "field": "hw_set", "old_value": "DH1", "new_value": "DH2"}
+  ],
+  "missing_doors": [
+    {"door_number": "110-05A", "hw_set": "DH1", "location": "Office", "door_type": "WD", "frame_type": "HM", "fire_rating": "20Min", "hand": "LHR"}
+  ],
+  "missing_sets": [
+    {"set_id": "DH5", "heading": "Storage Room", "items": [{"qty": 3, "name": "Hinges", "manufacturer": "IV", "model": "5BB1", "finish": "626"}]}
+  ],
+  "notes": "Optional notes about extraction quality"
+}
+
+If the extraction is accurate and complete, return: {"notes": "Extraction looks correct"}
+
+CRITICAL RULES:
+- Only report REAL errors you can see in the PDF. Do not hallucinate corrections.
+- qty must be PER INDIVIDUAL DOOR/OPENING (not totals). Typical: hinges=3-4, closers=1, locksets=1.
+- Focus on: missing items/doors, wrong set assignments, incorrect quantities, misread text.
+- Do NOT correct formatting differences (e.g. "HM" vs "Hollow Metal" are both fine).
+
+${getTaxonomyPromptText()}`
+
+  const extractedSummary = JSON.stringify({
+    hardware_sets: pdfplumberResult.hardware_sets.map(s => ({
+      set_id: s.set_id,
+      heading: s.heading,
+      item_count: s.items.length,
+      items: s.items,
+    })),
+    doors_count: pdfplumberResult.openings.length,
+    doors: pdfplumberResult.openings,
+  }, null, 2)
+
   try {
-    const stream = client.messages.stream({
+    const response = await client.messages.create({
       model: 'claude-sonnet-4-20250514',
-      max_tokens: maxTokens,
+      max_tokens: 16384,
       system: systemPrompt,
       messages: [
         {
@@ -108,176 +168,104 @@ async function callClaudeText(
               type: 'document',
               source: { type: 'base64', media_type: 'application/pdf', data: base64 },
             },
-            { type: 'text', text: userPrompt },
+            {
+              type: 'text',
+              text: `Here is the automated extraction result. Review it against the PDF and return corrections as JSON:\n\n${extractedSummary}`,
+            },
           ],
         },
       ],
     })
 
-    const response = await stream.finalMessage()
-    const truncated = response.stop_reason === 'max_tokens'
-
     const textBlock = response.content.find((b) => b.type === 'text')
     if (!textBlock || textBlock.type !== 'text') {
-      throw new Error('No text in Claude response')
+      return { notes: 'LLM review returned no text' }
     }
 
     let text = textBlock.text.trim()
     if (text.startsWith('```')) {
       text = text.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '')
     }
-    return { text, truncated }
+
+    return JSON.parse(text) as LLMCorrections
   } catch (err) {
-    const inputTokens = parseContextLimitError(err)
-    if (inputTokens !== null && inputTokens > 0) {
-      const reducedMaxTokens = Math.floor(199000 - inputTokens)
-      if (reducedMaxTokens >= 4096) {
-        console.log(`Context limit hit (${inputTokens} input tokens). Retrying with max_tokens=${reducedMaxTokens}`)
-        const stream = client.messages.stream({
-          model: 'claude-sonnet-4-20250514',
-          max_tokens: reducedMaxTokens,
-          system: systemPrompt,
-          messages: [
-            {
-              role: 'user',
-              content: [
-                {
-                  type: 'document',
-                  source: { type: 'base64', media_type: 'application/pdf', data: base64 },
-                },
-                { type: 'text', text: userPrompt },
-              ],
-            },
-          ],
-        })
-
-        const response = await stream.finalMessage()
-        const truncated = response.stop_reason === 'max_tokens'
-
-        const textBlock = response.content.find((b) => b.type === 'text')
-        if (!textBlock || textBlock.type !== 'text') {
-          throw new Error('No text in Claude response')
-        }
-
-        let text = textBlock.text.trim()
-        if (text.startsWith('```')) {
-          text = text.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '')
-        }
-        return { text, truncated }
-      } else {
-        throw new Error(`PDF is too large to process (${inputTokens} tokens). Maximum supported is ~195,000 tokens.`)
-      }
-    }
-    throw err
+    console.error('LLM review failed:', err instanceof Error ? err.message : String(err))
+    return { notes: `LLM review failed: ${err instanceof Error ? err.message : String(err)}` }
   }
 }
 
-async function callClaudeStructured<T>(
-  client: Anthropic,
-  base64: string,
-  systemPrompt: string,
-  userPrompt: string,
-  schema: Parameters<typeof client.messages.create>[0]['output_config'] extends undefined ? never : unknown,
-  maxTokens = 16384
-): Promise<{ data: T; truncated: boolean }> {
-  try {
-    const response = await client.messages.create({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: maxTokens,
-      system: systemPrompt,
-      messages: [
-        {
-          role: 'user',
-          content: [
-            {
-              type: 'document',
-              source: { type: 'base64', media_type: 'application/pdf', data: base64 },
-            },
-            { type: 'text', text: userPrompt },
-          ],
-        },
-      ],
-      output_config: { format: schema as any },
-    })
+function applyCorrections(
+  hardwareSets: HardwareSet[],
+  doors: DoorEntry[],
+  corrections: LLMCorrections
+): { hardwareSets: HardwareSet[]; doors: DoorEntry[] } {
+  if (corrections.hardware_sets_corrections) {
+    for (const corr of corrections.hardware_sets_corrections) {
+      const set = hardwareSets.find(s => s.set_id === corr.set_id)
+      if (!set) continue
 
-    const truncated = response.stop_reason === 'max_tokens'
-    const textBlock = response.content.find((b) => b.type === 'text')
-    if (!textBlock || textBlock.type !== 'text') {
-      throw new Error('No text in Claude response')
-    }
-    const data = JSON.parse(textBlock.text) as T
-    return { data, truncated }
-  } catch (err) {
-    const inputTokens = parseContextLimitError(err)
-    if (inputTokens !== null && inputTokens > 0) {
-      const reducedMaxTokens = Math.floor(199000 - inputTokens)
-      if (reducedMaxTokens >= 4096) {
-        console.log(`Context limit hit (${inputTokens} input tokens). Retrying with max_tokens=${reducedMaxTokens}`)
-        const response = await client.messages.create({
-          model: 'claude-sonnet-4-20250514',
-          max_tokens: reducedMaxTokens,
-          system: systemPrompt,
-          messages: [
-            {
-              role: 'user',
-              content: [
-                {
-                  type: 'document',
-                  source: { type: 'base64', media_type: 'application/pdf', data: base64 },
-                },
-                { type: 'text', text: userPrompt },
-              ],
-            },
-          ],
-          output_config: { format: schema as any },
-        })
+      if (corr.heading) set.heading = corr.heading
 
-        const truncated = response.stop_reason === 'max_tokens'
-        const textBlock = response.content.find((b) => b.type === 'text')
-        if (!textBlock || textBlock.type !== 'text') {
-          throw new Error('No text in Claude response')
+      if (corr.items_to_remove) {
+        set.items = set.items.filter(
+          item => !corr.items_to_remove!.includes(item.name)
+        )
+      }
+
+      if (corr.items_to_fix) {
+        for (const fix of corr.items_to_fix) {
+          const item = set.items.find(i => i.name === fix.name)
+          if (item && fix.field in item) {
+            const val = fix.new_value
+            if (fix.field === 'qty') {
+              (item as any)[fix.field] = parseInt(val, 10) || 1
+            } else {
+              (item as any)[fix.field] = val
+            }
+          }
         }
-        const data = JSON.parse(textBlock.text) as T
-        return { data, truncated }
-      } else {
-        throw new Error(`PDF is too large to process (${inputTokens} tokens). Maximum supported is ~195,000 tokens.`)
+      }
+
+      if (corr.items_to_add) {
+        for (const newItem of corr.items_to_add) {
+          if (!set.items.some(i => i.name === newItem.name)) {
+            set.items.push(newItem)
+          }
+        }
       }
     }
-    throw err
   }
-}
 
-// --- Phase 2: pdfplumber integration ---
-
-async function callPdfplumber(base64: string): Promise<PdfplumberResult | null> {
-  try {
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.VERCEL_URL
-      ? `https://${process.env.VERCEL_URL}`
-      : 'http://localhost:3000'
-
-    const response = await fetch(`${baseUrl}/api/extract-tables`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ pdf_base64: base64 }),
-    })
-
-    if (!response.ok) {
-      console.warn(`pdfplumber returned ${response.status}: ${await response.text()}`)
-      return null
+  if (corrections.missing_sets) {
+    for (const newSet of corrections.missing_sets) {
+      if (!hardwareSets.some(s => s.set_id === newSet.set_id)) {
+        hardwareSets.push({
+          set_id: newSet.set_id,
+          heading: newSet.heading,
+          items: newSet.items,
+        })
+      }
     }
-
-    const result: PdfplumberResult = await response.json()
-
-    if (!result.success || result.openings.length === 0) {
-      console.log(`pdfplumber extraction returned no openings: ${result.error || 'empty result'}`)
-      return null
-    }
-
-    return result
-  } catch (err) {
-    console.warn('pdfplumber call failed, falling back to LLM:', err instanceof Error ? err.message : err)
-    return null
   }
+
+  if (corrections.doors_corrections) {
+    for (const corr of corrections.doors_corrections) {
+      const door = doors.find(d => d.door_number === corr.door_number)
+      if (door && corr.field in door) {
+        (door as any)[corr.field] = corr.new_value
+      }
+    }
+  }
+
+  if (corrections.missing_doors) {
+    for (const newDoor of corrections.missing_doors) {
+      if (!doors.some(d => d.door_number === newDoor.door_number)) {
+        doors.push(newDoor)
+      }
+    }
+  }
+
+  return { hardwareSets, doors }
 }
 
 // --- Main handler (streaming progress) ---
@@ -321,249 +309,79 @@ export async function POST(request: NextRequest) {
         send(5, 'Reading PDF...')
         const buffer = await file.arrayBuffer()
         const base64 = Buffer.from(buffer).toString('base64')
-        const client = new Anthropic()
 
         // ==========================================
-        // PHASE 2: Try pdfplumber for Opening List first
-        // Deterministic table extraction — no LLM variance
+        // STEP 1: Pdfplumber deterministic extraction
+        // Primary extraction — no LLM, pure table detection
         // ==========================================
-        send(6, 'Extracting tables with pdfplumber...')
+        send(8, 'Extracting tables (deterministic)...')
+
         let pdfplumberResult: PdfplumberResult | null = null
-        let pdfplumberDoors: DoorEntry[] = []
-        let expectedDoorCount = 0
-
         try {
           pdfplumberResult = await callPdfplumber(base64)
-          if (pdfplumberResult) {
-            pdfplumberDoors = pdfplumberResult.openings
-            expectedDoorCount = pdfplumberResult.expected_door_count
-            console.log(`pdfplumber extracted ${pdfplumberDoors.length} doors via ${pdfplumberResult.method} (${pdfplumberResult.tables_found} tables)`)
-            send(8, `pdfplumber found ${pdfplumberDoors.length} doors deterministically. Extracting hardware sets...`)
-          } else {
-            console.log('pdfplumber returned no results, will use LLM for door schedule')
-            send(8, 'Table extraction inconclusive. Using AI for full extraction...')
-          }
-        } catch (err) {
-          console.warn('pdfplumber error:', err)
-          send(8, 'Table extraction failed. Using AI for full extraction...')
-        }
-
-        // ==========================================
-        // PASS 1: Extract hardware set definitions
-        // Uses Structured Outputs with Zod schema
-        // (Always LLM-based — hardware sets aren't in tabular format)
-        // ==========================================
-        send(10, 'Analyzing hardware sets...')
-
-        const pass1System = `You extract hardware set definitions from door hardware submittals.
-
-A hardware set (e.g. DH1, DH2, EX1, EX3-NR, I1NS-2A) defines a list of hardware items installed on doors assigned to that set.
-
-Extract EVERY hardware set definition from this document.
-
-CRITICAL RULES FOR QTY:
-- The "qty" field must be the quantity PER INDIVIDUAL DOOR/OPENING, NOT the total across all doors.
-- For example, a typical single door has 3 hinges, 1 lockset, 1 closer, 1 kick plate, etc.
-- If the document shows a total quantity column and a per-opening quantity column, use the PER-OPENING quantity.
-- If only a total is shown, divide by the number of openings in that set to get per-opening qty.
-- Common per-opening quantities: hinges = 3 or 4, closers = 1, locksets = 1, stops = 1, kick plates = 1, seals = 1 set, silencers = 1 set.
-
-Extract ALL hardware sets with ALL items in each.`
-
-        let pass1Data: { hardware_sets: HardwareSet[] } = { hardware_sets: [] }
-        try {
-          const { data: pass1Result, truncated } = await callClaudeStructured<z.infer<typeof HardwareSetSchema>>(
-            client, base64, pass1System,
-            'Extract ALL hardware set definitions from this submittal.',
-            zodOutputFormat(HardwareSetSchema), 32768)
-
-          const parsedSets: HardwareSet[] = pass1Result.hardware_sets.map(set => ({
-            set_id: set.set_id,
-            heading: set.heading,
-            items: set.items.map(item => ({
-              qty: item.qty,
-              name: item.name,
-              manufacturer: item.manufacturer_code,
-              model: item.model,
-              finish: item.finish_code,
-            })),
-          }))
-
-          console.log(`Pass 1: parsed ${parsedSets.length} hardware sets (truncated: ${truncated})`)
-
-          if (parsedSets.length === 0) {
-            send(0, 'Error', 'No hardware sets found in the document. The PDF may not be a hardware submittal.')
-            controller.close()
-            return
-          }
-
-          pass1Data.hardware_sets = parsedSets
-
-          // If truncated, continuation loop
-          if (truncated) {
-            const MAX_CONTINUATIONS = 5
-            let continuations = 0
-
-            while (continuations < MAX_CONTINUATIONS) {
-              continuations++
-              const lastSetId = pass1Data.hardware_sets[pass1Data.hardware_sets.length - 1].set_id
-              const knownSetIds = pass1Data.hardware_sets.map(s => s.set_id).join(', ')
-
-              send(10 + continuations * 5, `Found ${pass1Data.hardware_sets.length} sets so far (last: ${lastSetId}). Fetching more...`)
-
-              const contPrompt = `Continue extracting hardware set definitions. You already extracted these sets: ${knownSetIds}
-
-Extract ONLY the hardware sets that come AFTER "${lastSetId}" in the document. Do NOT re-extract any of the sets listed above.
-
-If there are no more hardware sets after "${lastSetId}", return an empty array.`
-
-              const { data: contData, truncated: contTruncated } = await callClaudeStructured<z.infer<typeof HardwareSetSchema>>(
-                client, base64, pass1System, contPrompt,
-                zodOutputFormat(HardwareSetSchema), 32768
-              )
-
-              const moreSets: HardwareSet[] = contData.hardware_sets.map(set => ({
-                set_id: set.set_id,
-                heading: set.heading,
-                items: set.items.map(item => ({
-                  qty: item.qty,
-                  name: item.name,
-                  manufacturer: item.manufacturer_code,
-                  model: item.model,
-                  finish: item.finish_code,
-                })),
-              }))
-
-              if (moreSets.length === 0) {
-                console.log(`Pass 1 continuation ${continuations}: no more sets found`)
-                break
-              }
-
-              const existingIds = new Set(pass1Data.hardware_sets.map(s => s.set_id))
-              const newSets = moreSets.filter(s => !existingIds.has(s.set_id))
-
-              if (newSets.length === 0) {
-                console.log(`Pass 1 continuation ${continuations}: all returned sets already known`)
-                break
-              }
-
-              pass1Data.hardware_sets.push(...newSets)
-              console.log(`Pass 1 continuation ${continuations}: added ${newSets.length} new sets (total: ${pass1Data.hardware_sets.length})`)
-
-              if (!contTruncated) break
-            }
-          }
+          console.log(
+            `Pdfplumber: ${pdfplumberResult.hw_sets_found} hardware sets, ` +
+            `${pdfplumberResult.openings.length} doors, ` +
+            `${pdfplumberResult.reference_codes.length} reference codes`
+          )
+          send(30, `Found ${pdfplumberResult.hw_sets_found} hardware sets, ${pdfplumberResult.openings.length} doors. Running quality review...`)
         } catch (err) {
           const msg = err instanceof Error ? err.message : String(err)
-          console.error('Pass 1 failed:', msg)
-          send(0, 'Error', `Failed to extract hardware sets: ${msg}`)
+          console.error('Pdfplumber extraction failed:', msg)
+          send(15, `Table extraction had issues (${msg}). Running LLM review for recovery...`)
+        }
+
+        // Convert to our types
+        let hardwareSets: HardwareSet[] = (pdfplumberResult?.hardware_sets || []).map(s => ({
+          set_id: s.set_id,
+          heading: s.heading,
+          items: s.items.map(i => ({
+            qty: i.qty,
+            name: i.name,
+            manufacturer: i.manufacturer,
+            model: i.model,
+            finish: i.finish,
+          })),
+        }))
+
+        let allDoors: DoorEntry[] = pdfplumberResult?.openings || []
+
+        // ==========================================
+        // STEP 2: LLM review pass
+        // Reviews pdfplumber output, returns corrections only
+        // ==========================================
+        send(35, 'Running AI quality review...')
+
+        const client = new Anthropic()
+        const corrections = await callLLMReview(client, base64, pdfplumberResult || {
+          success: false,
+          openings: [],
+          hardware_sets: [],
+          reference_codes: [],
+          expected_door_count: 0,
+          tables_found: 0,
+          hw_sets_found: 0,
+          method: 'none',
+          error: 'pdfplumber failed',
+        })
+
+        // Apply corrections
+        const corrected = applyCorrections(hardwareSets, allDoors, corrections)
+        hardwareSets = corrected.hardwareSets
+        allDoors = corrected.doors
+
+        const setCount = hardwareSets.length
+        const totalItems = hardwareSets.reduce((sum, s) => sum + (s.items?.length || 0), 0)
+
+        console.log(
+          `After LLM review: ${setCount} sets (${totalItems} items), ${allDoors.length} doors. ` +
+          `Notes: ${corrections.notes || 'none'}`
+        )
+
+        if (setCount === 0) {
+          send(0, 'Error', 'No hardware sets found in the document. The PDF may not be a hardware submittal.')
           controller.close()
           return
-        }
-
-        const setCount = pass1Data.hardware_sets.length
-        const totalItems = pass1Data.hardware_sets.reduce((sum, s) => sum + (s.items?.length || 0), 0)
-        send(35, `Found ${setCount} hardware sets (${totalItems} items). Reading door schedule...`)
-
-        const setMap = new Map<string, HardwareSet>()
-        for (const set of pass1Data.hardware_sets) {
-          setMap.set(set.set_id, set)
-        }
-
-        // ==========================================
-        // PASS 2: Extract door schedule
-        // Phase 2: Use pdfplumber result if available, else LLM fallback
-        // ==========================================
-        let allDoors: DoorEntry[] = []
-        let doorSource: 'pdfplumber' | 'llm' = 'llm'
-
-        if (pdfplumberDoors.length > 0) {
-          // Use pdfplumber's deterministic extraction
-          allDoors = pdfplumberDoors
-          doorSource = 'pdfplumber'
-          send(55, `Using ${allDoors.length} doors from deterministic extraction (pdfplumber).`)
-        } else {
-          // LLM fallback — same as Phase 1
-          const setIds = pass1Data.hardware_sets.map((s) => s.set_id).join(', ')
-
-          const pass2System = `You extract door schedules from door hardware submittals.
-
-Extract EVERY door/opening from the Opening List / Door Schedule in this document.
-
-For each opening, extract the fields exactly as they appear in the document. Use empty string for any field not present.
-
-Known hardware set IDs in this document: ${setIds}
-
-IMPORTANT: Extract EVERY door from ALL pages. Do NOT stop early.`
-
-          try {
-            send(40, 'Extracting door schedule via AI...')
-            const { data: pass2Result, truncated } = await callClaudeStructured<z.infer<typeof DoorScheduleSchema>>(
-              client, base64, pass2System,
-              'Extract ALL doors/openings from the door schedule. Include every door in the document.',
-              zodOutputFormat(DoorScheduleSchema), 16384)
-
-            allDoors = pass2Result.openings.map(d => ({
-              door_number: d.door_number,
-              hw_set: d.hw_set,
-              location: d.location,
-              door_type: d.door_type,
-              frame_type: d.frame_type,
-              fire_rating: d.fire_rating,
-              hand: d.hand,
-            }))
-            send(55, `Found ${allDoors.length} doors${truncated ? ' (partial — fetching more)...' : '.'}`)
-
-            // Continuation loop for truncated responses
-            if (truncated && allDoors.length > 0) {
-              const MAX_DOOR_CONTINUATIONS = 8
-              let doorCont = 0
-
-              while (doorCont < MAX_DOOR_CONTINUATIONS) {
-                doorCont++
-                const lastDoor = allDoors[allDoors.length - 1].door_number
-
-                send(55 + doorCont * 2, `Fetching doors after ${lastDoor}... (${allDoors.length} so far)`)
-
-                const contPrompt = `Continue the door list from after "${lastDoor}". Only doors AFTER that one.`
-
-                const { data: contData, truncated: contTruncated } = await callClaudeStructured<z.infer<typeof DoorScheduleSchema>>(
-                  client, base64, pass2System, contPrompt,
-                  zodOutputFormat(DoorScheduleSchema), 16384
-                )
-
-                const moreDoors = contData.openings.map(d => ({
-                  door_number: d.door_number,
-                  hw_set: d.hw_set,
-                  location: d.location,
-                  door_type: d.door_type,
-                  frame_type: d.frame_type,
-                  fire_rating: d.fire_rating,
-                  hand: d.hand,
-                }))
-
-                if (moreDoors.length === 0) break
-
-                const existingDoors = new Set(allDoors.map(d => d.door_number))
-                const newDoors = moreDoors.filter(d => !existingDoors.has(d.door_number))
-
-                if (newDoors.length === 0) break
-
-                allDoors = allDoors.concat(newDoors)
-                console.log(`Pass 2 continuation ${doorCont}: added ${newDoors.length} doors (total: ${allDoors.length})`)
-
-                if (!contTruncated) break
-              }
-
-              send(68, `Door schedule complete: ${allDoors.length} doors total.`)
-            }
-          } catch (err) {
-            const msg = err instanceof Error ? err.message : String(err)
-            console.error('Pass 2 failed:', msg)
-            send(0, 'Error', `Failed to extract door schedule: ${msg}`)
-            controller.close()
-            return
-          }
         }
 
         if (allDoors.length === 0) {
@@ -572,23 +390,18 @@ IMPORTANT: Extract EVERY door from ALL pages. Do NOT stop early.`
           return
         }
 
-        // ==========================================
-        // COUNT VALIDATION (Phase 2, Deliverable 3)
-        // If pdfplumber gave us an expected count, validate
-        // ==========================================
-        const warnings: string[] = []
+        send(55, `Verified: ${setCount} hardware sets (${totalItems} items), ${allDoors.length} doors. Saving to database...`)
 
-        if (expectedDoorCount > 0 && allDoors.length < expectedDoorCount) {
-          const diff = expectedDoorCount - allDoors.length
-          warnings.push(`Expected ${expectedDoorCount} doors but extracted ${allDoors.length} (${diff} missing)`)
-          console.warn(`Count validation: expected ${expectedDoorCount}, got ${allDoors.length}`)
+        const setMap = new Map<string, HardwareSet>()
+        for (const set of hardwareSets) {
+          setMap.set(set.set_id, set)
         }
 
-        send(70, `Saving ${allDoors.length} doors to database...`)
+        // ==========================================
+        // STEP 3: COMBINE & BATCH INSERT
+        // ==========================================
 
-        // ==========================================
-        // COMBINE & BATCH INSERT
-        // ==========================================
+        send(60, `Saving ${allDoors.length} doors to database...`)
 
         // Delete existing openings (cascade deletes children)
         const { error: deleteError } = await (supabase as any)
@@ -618,7 +431,7 @@ IMPORTANT: Extract EVERY door from ALL pages. Do NOT stop early.`
 
         for (let i = 0; i < openingRows.length; i += CHUNK_SIZE) {
           const chunk = openingRows.slice(i, i + CHUNK_SIZE)
-          const progress = 70 + Math.round((i / openingRows.length) * 15)
+          const progress = 60 + Math.round((i / openingRows.length) * 15)
           send(progress, `Saving doors ${i + 1}–${Math.min(i + CHUNK_SIZE, openingRows.length)} of ${openingRows.length}...`)
 
           const { data, error } = await (supabase as any)
@@ -633,7 +446,7 @@ IMPORTANT: Extract EVERY door from ALL pages. Do NOT stop early.`
           }
         }
 
-        send(87, `Saved ${insertedOpenings.length} doors. Loading hardware items...`)
+        send(77, `Saved ${insertedOpenings.length} doors. Loading hardware items...`)
 
         // Build all hardware item rows
         const allHardwareRows: Array<Record<string, unknown>> = []
@@ -646,20 +459,17 @@ IMPORTANT: Extract EVERY door from ALL pages. Do NOT stop early.`
           })
         }
 
-        // Track doors with zero hardware items for retry logic
-        const doorsWithNoItems: string[] = []
-
         for (const opening of insertedOpenings) {
           let sortOrder = 0
           const doorInfo = doorInfoMap.get(opening.door_number)
 
+          // Determine if pair (two doors) based on door_type or hw_heading
           const hwSet = setMap.get(opening.hw_set)
           const heading = (hwSet?.heading || '').toLowerCase()
           const doorType = (doorInfo?.door_type || '').toLowerCase()
           const isPair = heading.includes('pair') || heading.includes('double') ||
                          doorType.includes('pr') || doorType.includes('pair')
 
-          // Add door(s) as checkable items
           if (isPair) {
             allHardwareRows.push({
               opening_id: opening.id,
@@ -691,7 +501,6 @@ IMPORTANT: Extract EVERY door from ALL pages. Do NOT stop early.`
             })
           }
 
-          // Add frame
           allHardwareRows.push({
             opening_id: opening.id,
             name: `Frame`,
@@ -702,7 +511,6 @@ IMPORTANT: Extract EVERY door from ALL pages. Do NOT stop early.`
             sort_order: sortOrder++,
           })
 
-          // Add hardware set items
           if (hwSet?.items?.length) {
             for (const item of hwSet.items) {
               allHardwareRows.push({
@@ -715,29 +523,13 @@ IMPORTANT: Extract EVERY door from ALL pages. Do NOT stop early.`
                 sort_order: sortOrder++,
               })
             }
-          } else {
-            // Track doors with no hardware items (suspected misread)
-            doorsWithNoItems.push(opening.door_number)
           }
-        }
-
-        // ==========================================
-        // ZERO-ITEM VALIDATION (Phase 2 enhancement)
-        // Flag doors with no hardware items
-        // ==========================================
-        if (doorsWithNoItems.length > 0) {
-          const pct = Math.round((doorsWithNoItems.length / insertedOpenings.length) * 100)
-          warnings.push(
-            `${doorsWithNoItems.length} door(s) (${pct}%) have no hardware items — possible extraction gap. ` +
-            `Affected: ${doorsWithNoItems.slice(0, 10).join(', ')}${doorsWithNoItems.length > 10 ? ` +${doorsWithNoItems.length - 10} more` : ''}`
-          )
-          console.warn(`Zero-item doors: ${doorsWithNoItems.length} of ${insertedOpenings.length} (${pct}%)`)
         }
 
         let itemsInserted = 0
         for (let i = 0; i < allHardwareRows.length; i += CHUNK_SIZE) {
           const chunk = allHardwareRows.slice(i, i + CHUNK_SIZE)
-          const progress = 87 + Math.round((i / allHardwareRows.length) * 10)
+          const progress = 77 + Math.round((i / allHardwareRows.length) * 18)
           if (i % 400 === 0) {
             send(progress, `Loading hardware items ${i + 1}–${Math.min(i + CHUNK_SIZE, allHardwareRows.length)} of ${allHardwareRows.length}...`)
           }
@@ -754,43 +546,6 @@ IMPORTANT: Extract EVERY door from ALL pages. Do NOT stop early.`
           }
         }
 
-        // ==========================================
-        // SAVE REFERENCE CODES (Phase 2, Deliverable 2)
-        // ==========================================
-        if (pdfplumberResult?.reference_codes?.length) {
-          send(97, `Saving ${pdfplumberResult.reference_codes.length} reference codes...`)
-
-          // Upsert reference codes — ON CONFLICT update full_name if source is pdf_extracted
-          const refRows = pdfplumberResult.reference_codes.map(rc => ({
-            project_id: projectId,
-            code_type: rc.code_type,
-            code: rc.code,
-            full_name: rc.full_name,
-            source: 'pdf_extracted',
-          }))
-
-          // Delete existing pdf_extracted codes for this project (user_corrected survive)
-          await (supabase as any)
-            .from('reference_codes')
-            .delete()
-            .eq('project_id', projectId)
-            .eq('source', 'pdf_extracted')
-
-          // Insert new codes
-          for (let i = 0; i < refRows.length; i += CHUNK_SIZE) {
-            const chunk = refRows.slice(i, i + CHUNK_SIZE)
-            const { error } = await (supabase as any)
-              .from('reference_codes')
-              .upsert(chunk as any, { onConflict: 'project_id,code_type,code' })
-
-            if (error) {
-              console.error('Error inserting reference codes:', error)
-            }
-          }
-
-          console.log(`Saved ${pdfplumberResult.reference_codes.length} reference codes`)
-        }
-
         // Check for unmatched sets
         const unmatchedSets: string[] = []
         for (const door of allDoors) {
@@ -801,10 +556,14 @@ IMPORTANT: Extract EVERY door from ALL pages. Do NOT stop early.`
 
         if (unmatchedSets.length > 0) {
           console.warn(`Unmatched hardware sets: ${unmatchedSets.join(', ')}`)
-          warnings.push(`${unmatchedSets.length} hardware set(s) not found: ${unmatchedSets.join(', ')}`)
         }
 
-        console.log(`PDF parse complete: ${insertedOpenings.length} openings, ${itemsInserted} hardware items (source: ${doorSource})`)
+        console.log(`PDF parse complete: ${insertedOpenings.length} openings, ${itemsInserted} hardware items`)
+
+        const warnings: string[] = []
+        if (unmatchedSets.length > 0) {
+          warnings.push(`${unmatchedSets.length} hardware set(s) not found: ${unmatchedSets.join(', ')}`)
+        }
 
         const summary = warnings.length > 0
           ? `Done! ${insertedOpenings.length} doors, ${itemsInserted} items. ⚠ ${warnings.join('; ')}`
@@ -815,15 +574,13 @@ IMPORTANT: Extract EVERY door from ALL pages. Do NOT stop early.`
           openingsCount: insertedOpenings.length,
           itemsCount: itemsInserted,
           hardwareSets: setCount,
-          doorSource,
-          expectedDoorCount: expectedDoorCount > 0 ? expectedDoorCount : undefined,
           unmatchedSets: unmatchedSets.length > 0 ? unmatchedSets : undefined,
-          doorsWithNoItems: doorsWithNoItems.length > 0 ? doorsWithNoItems.length : undefined,
+          reviewNotes: corrections.notes,
         })
 
         // Auto-trigger submittal sync (fire-and-forget)
-        const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
-        fetch(`${baseUrl}/api/projects/${projectId}/sync-submittal`, {
+        const syncBaseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
+        fetch(`${syncBaseUrl}/api/projects/${projectId}/sync-submittal`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
         }).catch(() => {})
