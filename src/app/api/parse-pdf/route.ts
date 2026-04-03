@@ -1,7 +1,42 @@
 import { NextRequest } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import Anthropic from '@anthropic-ai/sdk'
+import { z } from 'zod'
+import { zodOutputFormat } from '@anthropic-ai/sdk/helpers/zod'
 // pdf-parse removed — requires DOMMatrix (browser-only) which crashes in serverless
+
+// --- Zod Schemas for Structured Outputs ---
+
+const HardwareItemSchema = z.object({
+  qty: z.number().describe('Quantity per individual door/opening, NOT total across all doors'),
+  name: z.string().describe('Item name (e.g. Hinges, Closer, Lockset, Exit Device)'),
+  manufacturer_code: z.string().describe('Manufacturer abbreviation code (e.g. IV, SC, LCN)'),
+  model: z.string().describe('Full model number/description'),
+  finish_code: z.string().describe('Finish code (e.g. 626, US32D, 689)'),
+  options: z.string().describe('Option codes or notes, empty string if none'),
+  hand: z.string().describe('LH or RH if specified for this item, empty string if not'),
+})
+
+const HardwareSetSchema = z.object({
+  hardware_sets: z.array(z.object({
+    set_id: z.string().describe('Hardware set identifier (e.g. DH1, DH4A, EX3-NR, I1NS-2A)'),
+    heading: z.string().describe('Descriptive heading for this set'),
+    items: z.array(HardwareItemSchema),
+  })),
+})
+
+const DoorScheduleSchema = z.object({
+  openings: z.array(z.object({
+    door_number: z.string().describe('Door/opening tag number exactly as shown in document'),
+    hw_set: z.string().describe('Hardware set ID assigned to this opening'),
+    hw_heading: z.string().describe('Hardware heading if different from set_id, empty string otherwise'),
+    location: z.string().describe('Location description or Opening Label, empty string if not shown'),
+    door_type: z.string().describe('Door type code exactly as shown (e.g. A, B, HM-N1, WD-F)'),
+    frame_type: z.string().describe('Frame type code exactly as shown (e.g. F1, F2, HM-F1)'),
+    fire_rating: z.string().describe('Fire rating (e.g. 45Min, 90Min, 20Min, NR), empty string if not shown'),
+    hand: z.string().describe('Hand (e.g. LH, RH, LHR, RHR, A, B), empty string if not shown'),
+  })),
+})
 
 // --- Types ---
 
@@ -45,7 +80,7 @@ function parseContextLimitError(err: unknown): number | null {
   return null
 }
 
-async function callClaude(
+async function callClaudeText(
   client: Anthropic,
   base64: string,
   systemPrompt: string,
@@ -130,71 +165,79 @@ async function callClaude(
   }
 }
 
-// Parse compact pipe-delimited hardware set lines into structured data
-// Format: SET:ID|Heading
-//         qty|name|manufacturer|model|finish
-function parseHardwareSetLines(raw: string): HardwareSet[] {
-  const sets: HardwareSet[] = []
-  let currentSet: HardwareSet | null = null
+async function callClaudeStructured<T>(
+  client: Anthropic,
+  base64: string,
+  systemPrompt: string,
+  userPrompt: string,
+  schema: Parameters<typeof client.messages.create>[0]['output_config'] extends undefined ? never : unknown,
+  maxTokens = 16384
+): Promise<{ data: T; truncated: boolean }> {
+  try {
+    const response = await client.messages.create({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: maxTokens,
+      system: systemPrompt,
+      messages: [
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'document',
+              source: { type: 'base64', media_type: 'application/pdf', data: base64 },
+            },
+            { type: 'text', text: userPrompt },
+          ],
+        },
+      ],
+      output_config: { format: schema as any },
+    })
 
-  for (const line of raw.split('\n')) {
-    const trimmed = line.trim()
-    if (!trimmed || trimmed.startsWith('#') || trimmed.startsWith('---')) continue
-
-    // Check for set header: SET:DH1|Interior Single Door
-    if (trimmed.startsWith('SET:')) {
-      const headerParts = trimmed.substring(4).split('|').map(p => p.trim())
-      if (headerParts[0]) {
-        currentSet = {
-          set_id: headerParts[0],
-          heading: headerParts[1] || '',
-          items: [],
-        }
-        sets.push(currentSet)
-      }
-      continue
+    const truncated = response.stop_reason === 'max_tokens'
+    const textBlock = response.content.find((b) => b.type === 'text')
+    if (!textBlock || textBlock.type !== 'text') {
+      throw new Error('No text in Claude response')
     }
-
-    // Otherwise it's an item line: qty|name|manufacturer|model|finish
-    if (currentSet) {
-      const parts = trimmed.split('|').map(p => p.trim())
-      if (parts.length >= 2) {
-        const qty = parseInt(parts[0], 10)
-        currentSet.items.push({
-          qty: isNaN(qty) ? 1 : qty,
-          name: parts[1] || '',
-          manufacturer: parts[2] || '',
-          model: parts[3] || '',
-          finish: parts[4] || '',
+    const data = JSON.parse(textBlock.text) as T
+    return { data, truncated }
+  } catch (err) {
+    const inputTokens = parseContextLimitError(err)
+    if (inputTokens !== null && inputTokens > 0) {
+      const reducedMaxTokens = Math.floor(199000 - inputTokens)
+      if (reducedMaxTokens >= 4096) {
+        console.log(`Context limit hit (${inputTokens} input tokens). Retrying with max_tokens=${reducedMaxTokens}`)
+        const response = await client.messages.create({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: reducedMaxTokens,
+          system: systemPrompt,
+          messages: [
+            {
+              role: 'user',
+              content: [
+                {
+                  type: 'document',
+                  source: { type: 'base64', media_type: 'application/pdf', data: base64 },
+                },
+                { type: 'text', text: userPrompt },
+              ],
+            },
+          ],
+          output_config: { format: schema as any },
         })
+
+        const truncated = response.stop_reason === 'max_tokens'
+        const textBlock = response.content.find((b) => b.type === 'text')
+        if (!textBlock || textBlock.type !== 'text') {
+          throw new Error('No text in Claude response')
+        }
+        const data = JSON.parse(textBlock.text) as T
+        return { data, truncated }
+      } else {
+        throw new Error(`PDF is too large to process (${inputTokens} tokens). Maximum supported is ~195,000 tokens.`)
       }
     }
+    throw err
   }
-
-  return sets
-}
-
-function parseDoorLines(raw: string): DoorEntry[] {
-  const doors: DoorEntry[] = []
-  for (const line of raw.split('\n')) {
-    const trimmed = line.trim()
-    if (!trimmed || trimmed.startsWith('door_number') || trimmed.startsWith('---') || trimmed.startsWith('#')) {
-      continue // skip headers and blanks
-    }
-    const parts = trimmed.split('|').map((p) => p.trim())
-    if (parts.length >= 2) {
-      doors.push({
-        door_number: parts[0] || '',
-        hw_set: parts[1] || '',
-        location: parts[2] || '',
-        door_type: parts[3] || '',
-        frame_type: parts[4] || '',
-        fire_rating: parts[5] || '',
-        hand: parts[6] || '',
-      })
-    }
-  }
-  return doors
 }
 
 // --- Main handler (streaming progress) ---
@@ -242,31 +285,15 @@ export async function POST(request: NextRequest) {
 
         // ==========================================
         // PASS 1: Extract hardware set definitions
-        // Uses compact pipe-delimited format for token efficiency.
-        // JSON is ~3-4x more tokens for the same data — with large PDFs
-        // that leave <15K output tokens, JSON truncates too badly to parse.
+        // Uses Structured Outputs with Zod schema
         // ==========================================
         send(8, 'Analyzing hardware sets...')
 
         const pass1System = `You extract hardware set definitions from door hardware submittals.
 
-A hardware set (e.g. DH1, DH2, EX1, EX3-NR) defines a list of hardware items installed on doors assigned to that set.
+A hardware set (e.g. DH1, DH2, EX1, EX3-NR, I1NS-2A) defines a list of hardware items installed on doors assigned to that set.
 
-Extract EVERY hardware set definition from this document. Return in COMPACT PIPE-DELIMITED format:
-
-SET:DH1|Interior Single Door - Office
-3|Hinges|IV|5BB1 HW 4 1/2 x 4 1/2 NRP|626
-1|Lockset|SC|ND50PD RHO|626
-1|Closer|LCN|4041 DEL|689
-SET:DH2|Interior Single Door - Storage
-3|Hinges|IV|5BB1 HW 4 1/2 x 4 1/2 NRP|626
-1|Passage Set|SC|ND10S RHO|626
-
-Format rules:
-- Each set starts with SET:ID|Heading
-- Each item line: qty|name|manufacturer|model|finish
-- One item per line, no blank lines between items within a set
-- No JSON, no markdown, no explanation — just the data lines
+Extract EVERY hardware set definition from this document.
 
 CRITICAL RULES FOR QTY:
 - The "qty" field must be the quantity PER INDIVIDUAL DOOR/OPENING, NOT the total across all doors.
@@ -275,14 +302,27 @@ CRITICAL RULES FOR QTY:
 - If only a total is shown, divide by the number of openings in that set to get per-opening qty.
 - Common per-opening quantities: hinges = 3 or 4, closers = 1, locksets = 1, stops = 1, kick plates = 1, seals = 1 set, silencers = 1 set.
 
-IMPORTANT: Extract ALL hardware sets with ALL items in each.`
+Extract ALL hardware sets with ALL items in each.`
 
         let pass1Data: { hardware_sets: HardwareSet[] } = { hardware_sets: [] }
         try {
-          const { text, truncated } = await callClaude(client, base64, pass1System,
-            'Extract ALL hardware set definitions from this submittal. Use the compact pipe-delimited format (SET:ID|Heading then qty|name|mfr|model|finish). No JSON.', 32768)
+          const { data: pass1Result, truncated } = await callClaudeStructured<z.infer<typeof HardwareSetSchema>>(
+            client, base64, pass1System,
+            'Extract ALL hardware set definitions from this submittal.',
+            zodOutputFormat(HardwareSetSchema), 32768)
 
-          const parsedSets = parseHardwareSetLines(text)
+          const parsedSets: HardwareSet[] = pass1Result.hardware_sets.map(set => ({
+            set_id: set.set_id,
+            heading: set.heading,
+            items: set.items.map(item => ({
+              qty: item.qty,
+              name: item.name,
+              manufacturer: item.manufacturer_code,
+              model: item.model,
+              finish: item.finish_code,
+            })),
+          }))
+
           console.log(`Pass 1: parsed ${parsedSets.length} hardware sets (truncated: ${truncated})`)
 
           if (parsedSets.length === 0) {
@@ -309,22 +349,24 @@ IMPORTANT: Extract ALL hardware sets with ALL items in each.`
 
 Extract ONLY the hardware sets that come AFTER "${lastSetId}" in the document. Do NOT re-extract any of the sets listed above.
 
-Use the same compact format:
-SET:ID|Heading
-qty|name|manufacturer|model|finish
+If there are no more hardware sets after "${lastSetId}", return an empty array.`
 
-If there are no more hardware sets after "${lastSetId}", respond with just: DONE`
-
-              const { text: contText, truncated: contTruncated } = await callClaude(
-                client, base64, pass1System, contPrompt, 32768
+              const { data: contData, truncated: contTruncated } = await callClaudeStructured<z.infer<typeof HardwareSetSchema>>(
+                client, base64, pass1System, contPrompt,
+                zodOutputFormat(HardwareSetSchema), 32768
               )
 
-              if (contText.trim() === 'DONE') {
-                console.log(`Pass 1 continuation ${continuations}: DONE signal received`)
-                break
-              }
-
-              const moreSets = parseHardwareSetLines(contText)
+              const moreSets: HardwareSet[] = contData.hardware_sets.map(set => ({
+                set_id: set.set_id,
+                heading: set.heading,
+                items: set.items.map(item => ({
+                  qty: item.qty,
+                  name: item.name,
+                  manufacturer: item.manufacturer_code,
+                  model: item.model,
+                  finish: item.finish_code,
+                })),
+              }))
 
               if (moreSets.length === 0) {
                 console.log(`Pass 1 continuation ${continuations}: no more sets found`)
@@ -364,36 +406,39 @@ If there are no more hardware sets after "${lastSetId}", respond with just: DONE
         }
 
         // ==========================================
-        // PASS 2: Extract door schedule (compact)
-        // Also uses pipe-delimited format with continuation loop
+        // PASS 2: Extract door schedule
+        // Uses Structured Outputs with Zod schema
         // ==========================================
         const setIds = pass1Data.hardware_sets.map((s) => s.set_id).join(', ')
 
         const pass2System = `You extract door schedules from door hardware submittals.
 
-Extract EVERY door/opening. Return a PIPE-DELIMITED list (one door per line):
-door_number|hw_set|location|door_type|frame_type|fire_rating|hand
+Extract EVERY door/opening from the Opening List / Door Schedule in this document.
 
-Example output:
-110-01A|DH1|Office 110 from Corridor|WD|HM|20Min|LHR
-110-02A|DH4A|Storage from Corridor|HM|HM|45Min|A
-1201A|EX3-NR|Exterior Equipment Yard|HM|HM|NR|RHR
+For each opening, extract the fields exactly as they appear in the document. Use empty string for any field not present.
 
-Rules:
-- One door per line, no blank lines between doors
-- hw_set MUST be one of: ${setIds}
-- Use empty string if a field is unknown (e.g. 110-01A|DH1|||HM|20Min|)
-- Extract EVERY door from ALL pages. Do NOT stop early.
-- No headers, no markdown, no explanation — just the data lines.`
+Known hardware set IDs in this document: ${setIds}
+
+IMPORTANT: Extract EVERY door from ALL pages. Do NOT stop early.`
 
         let allDoors: DoorEntry[] = []
 
         try {
           send(40, 'Extracting door schedule...')
-          const { text, truncated } = await callClaude(client, base64, pass2System,
-            'List EVERY door from the door schedule. Pipe-delimited, one per line. No headers. Do NOT stop early.', 16384)
+          const { data: pass2Result, truncated } = await callClaudeStructured<z.infer<typeof DoorScheduleSchema>>(
+            client, base64, pass2System,
+            'Extract ALL doors/openings from the door schedule. Include every door in the document.',
+            zodOutputFormat(DoorScheduleSchema), 16384)
 
-          allDoors = parseDoorLines(text)
+          allDoors = pass2Result.openings.map(d => ({
+            door_number: d.door_number,
+            hw_set: d.hw_set,
+            location: d.location,
+            door_type: d.door_type,
+            frame_type: d.frame_type,
+            fire_rating: d.fire_rating,
+            hand: d.hand,
+          }))
           send(55, `Found ${allDoors.length} doors${truncated ? ' (partial — fetching more)...' : '.'}`)
 
           // If truncated, continuation loop (not single-shot)
@@ -407,26 +452,23 @@ Rules:
 
               send(55 + doorCont * 2, `Fetching doors after ${lastDoor}... (${allDoors.length} so far)`)
 
-              const contSystem = `You extract door schedules from door hardware submittals.
+              const contPrompt = `Continue the door list from after "${lastDoor}". Only doors AFTER that one.`
 
-Continue extracting doors. The previous extraction stopped at door "${lastDoor}".
+              const { data: contData, truncated: contTruncated } = await callClaudeStructured<z.infer<typeof DoorScheduleSchema>>(
+                client, base64, pass2System, contPrompt,
+                zodOutputFormat(DoorScheduleSchema), 16384
+              )
 
-Return ONLY doors that come AFTER "${lastDoor}" in the document. Use pipe-delimited format:
-door_number|hw_set|location|door_type|frame_type|fire_rating|hand
+              const moreDoors = contData.openings.map(d => ({
+                door_number: d.door_number,
+                hw_set: d.hw_set,
+                location: d.location,
+                door_type: d.door_type,
+                frame_type: d.frame_type,
+                fire_rating: d.fire_rating,
+                hand: d.hand,
+              }))
 
-hw_set must be one of: ${setIds}
-No headers, no markdown, just data lines.
-If there are no more doors after "${lastDoor}", respond with just: DONE`
-
-              const { text: contText, truncated: contTruncated } = await callClaude(client, base64, contSystem,
-                `Continue the door list from after "${lastDoor}". Only doors AFTER that one. Pipe-delimited, one per line.`, 16384)
-
-              if (contText.trim() === 'DONE') {
-                console.log(`Pass 2 continuation ${doorCont}: DONE signal received`)
-                break
-              }
-
-              const moreDoors = parseDoorLines(contText)
               if (moreDoors.length === 0) {
                 console.log(`Pass 2 continuation ${doorCont}: no more doors found`)
                 break

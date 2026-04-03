@@ -45,6 +45,18 @@ interface FieldChange {
   new_value: string | null
 }
 
+// --- Helpers ---
+
+function normalizeDoorNumber(dn: string): string {
+  return dn
+    .trim()
+    .toUpperCase()
+    .replace(/^0+/, '')         // strip leading zeros
+    .replace(/\s+/g, '')        // strip whitespace
+    .replace(/O(?=\d)/g, '0')   // common OCR: letter O before digit → zero
+    .replace(/(?<=\d)O/g, '0')  // common OCR: letter O after digit → zero
+}
+
 // --- Compare: diff new parse results against existing project data ---
 
 export async function POST(request: NextRequest) {
@@ -91,15 +103,15 @@ export async function POST(request: NextRequest) {
 
     const existingOpenings = (existing || []) as ExistingOpening[]
 
-    // Build lookup maps
+    // Build lookup maps with normalized door numbers
     const existingMap = new Map<string, ExistingOpening>()
     for (const op of existingOpenings) {
-      existingMap.set(op.door_number, op)
+      existingMap.set(normalizeDoorNumber(op.door_number), op)
     }
 
     const newMap = new Map<string, ParsedDoor>()
     for (const door of doors) {
-      newMap.set(door.door_number, door)
+      newMap.set(normalizeDoorNumber(door.door_number), door)
     }
 
     const setMap = new Map<string, ParsedHardwareSet>()
@@ -133,7 +145,8 @@ export async function POST(request: NextRequest) {
 
     // Compare fields for each door in the new parse
     for (const door of doors) {
-      const ex = existingMap.get(door.door_number)
+      const normalizedKey = normalizeDoorNumber(door.door_number)
+      const ex = existingMap.get(normalizedKey)
       if (!ex) {
         added.push(door)
         continue
@@ -153,9 +166,20 @@ export async function POST(request: NextRequest) {
       for (const { field, oldVal, newVal } of compareFields) {
         const o = (oldVal || '').trim().toLowerCase()
         const n = (newVal || '').trim().toLowerCase()
-        if (o !== n) {
-          fieldChanges.push({ field, old_value: oldVal, new_value: newVal })
+
+        // Skip if both empty or same
+        if (o === n) continue
+
+        // Empty-field protection: if old has value but new is empty/dash,
+        // this is likely an extraction failure, not a real change
+        const newIsEmpty = !n || n === '-' || n === 'n/a' || n === 'null' || n === 'undefined'
+        if (o && newIsEmpty) {
+          // Don't flag as changed — keep existing value
+          console.log(`Empty-field protection: ${door.door_number}.${field} keeping "${oldVal}" (new was empty)`)
+          continue
         }
+
+        fieldChanges.push({ field, old_value: oldVal, new_value: newVal })
       }
 
       const progressCount = {
@@ -183,7 +207,7 @@ export async function POST(request: NextRequest) {
 
     // Find removed doors (in existing but not in new parse)
     for (const ex of existingOpenings) {
-      if (!newMap.has(ex.door_number)) {
+      if (!newMap.has(normalizeDoorNumber(ex.door_number))) {
         removed.push({
           door_number: ex.door_number,
           existing: ex,
