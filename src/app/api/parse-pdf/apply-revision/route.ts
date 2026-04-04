@@ -83,6 +83,29 @@ export async function POST(request: NextRequest) {
       setMap.set(set.set_id, set)
     }
 
+    // --- Quantity correction (same logic as save/route.ts) ---
+    const openingCountPerSet = new Map<string, number>()
+    for (const door of allDoors) {
+      if (door.hw_set) {
+        openingCountPerSet.set(door.hw_set, (openingCountPerSet.get(door.hw_set) || 0) + 1)
+      }
+    }
+    for (const [setId, set] of setMap) {
+      const numOpenings = openingCountPerSet.get(setId) || 1
+      if (numOpenings <= 1) continue
+      const allDivisible = set.items.every(
+        (item) => item.qty === 1 || item.qty % numOpenings === 0
+      )
+      const anyInflated = set.items.some((item) => item.qty > numOpenings)
+      if (allDivisible && anyInflated) {
+        for (const item of set.items) {
+          if (item.qty > 1) {
+            item.qty = Math.round(item.qty / numOpenings)
+          }
+        }
+      }
+    }
+
     const doorMap = new Map<string, DoorEntry>()
     for (const door of allDoors) {
       doorMap.set(door.door_number, door)

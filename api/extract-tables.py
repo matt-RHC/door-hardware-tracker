@@ -532,6 +532,7 @@ def extract_hardware_sets_from_page(page, page_text: str) -> list[HardwareSetDef
 
         # Detect hardware items table by looking for qty + item/description columns
         qty_col = None
+        total_qty_col = None  # "Total Qty" / "Ext Qty" — aggregate, skip this
         name_col = None
         mfr_col = None
         model_col = None
@@ -539,7 +540,10 @@ def extract_hardware_sets_from_page(page, page_text: str) -> list[HardwareSetDef
 
         for i, h in enumerate(header_row):
             hl = h.lower()
-            if re.match(r"(?i)^(qty\.?|quantity|#)$", hl):
+            # Detect "total qty", "ext qty", "extended qty" — these are aggregate columns
+            if re.search(r"(?i)(total|ext|extended)\s*(qty|quantity)", hl):
+                total_qty_col = i
+            elif re.match(r"(?i)^(qty\.?|quantity|#|qty\s*/?\s*ea|ea\.?\s*qty)$", hl):
                 qty_col = i
             elif re.search(r"(?i)(item|description|hardware|product)", hl):
                 name_col = i
@@ -550,13 +554,19 @@ def extract_hardware_sets_from_page(page, page_text: str) -> list[HardwareSetDef
             elif re.search(r"(?i)(finish|fin\.?|color)", hl):
                 finish_col = i
 
+        # If we found a total_qty_col but no per-set qty_col, the table may
+        # only show totals. We'll still use total_qty_col for extraction but
+        # flag it so the caller can divide by opening count.
+        if qty_col is None and total_qty_col is not None:
+            qty_col = total_qty_col
+
         # If we didn't find explicit headers, try positional inference
         # Many submittals have: Qty | Description | Manufacturer | Catalog No. | Finish
         if qty_col is None and name_col is None and len(header_row) >= 3:
             # Check if first column values look like quantities (small integers)
             data_rows = table[1:6]  # sample first 5 data rows
             first_col_is_qty = all(
-                re.match(r"^\d{1,3}$", clean_cell(row[0]))
+                re.match(r"^\d{1,2}$", clean_cell(row[0]))
                 for row in data_rows
                 if row and clean_cell(row[0])
             )
@@ -641,8 +651,9 @@ def extract_hw_items_from_text(text: str) -> list[HardwareItem]:
     lines = text.split("\n")
 
     # Pattern: starts with a small integer (qty), followed by item description
+    # Max 2 digits — per-set quantities are almost always 1-20
     item_line_pattern = re.compile(
-        r"^\s*(\d{1,3})\s+(.+)"
+        r"^\s*(\d{1,2})\s+(.+)"
     )
 
     for line in lines:
