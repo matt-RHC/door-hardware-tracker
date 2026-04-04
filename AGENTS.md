@@ -26,7 +26,7 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 ## Git Operations
 
-All git commands must run in a fresh clone in `/tmp/` — NOT on the Cowork mount. The bindfs FUSE mount does not support file deletion, which corrupts the git index. See CLAUDE.md for the full workflow.
+Git operations run directly in the working directory. See CLAUDE.md for git identity config and branch conventions.
 
 ## Session Discipline
 
