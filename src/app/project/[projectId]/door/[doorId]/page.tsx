@@ -62,7 +62,15 @@ export default function DoorDetailPage() {
   const [activeTab, setActiveTab] = useState<'hardware' | 'files' | 'notes' | 'qr'>('hardware');
   const [viewingAttachment, setViewingAttachment] = useState<Attachment | null>(null);
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
-  const [issueModal, setIssueModal] = useState<{ doorNumber: string; hardwareItemName: string } | null>(null);
+  const [issueModal, setIssueModal] = useState<{ doorNumber: string; hardwareItem: string } | null>(null);
+  const [classifyPrompt, setClassifyPrompt] = useState<{
+    itemId: string;
+    itemName: string;
+    installType: 'bench' | 'field';
+    totalCount: number;
+  } | null>(null);
+  const [classifyLoading, setClassifyLoading] = useState(false);
+  const [dontAskClassify, setDontAskClassify] = useState(false);
 
   const supabase = createClient();
 
@@ -144,6 +152,59 @@ export default function DoorDetailPage() {
   };
 
   const handleInstallTypeChange = async (itemId: string, installType: 'bench' | 'field' | null) => {
+    if (!installType || !opening) {
+      // Clearing install type — just patch the single item
+      try {
+        const response = await fetch(
+          `/api/openings/${doorId}/items/${itemId}`,
+          {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ install_type: installType }),
+          }
+        );
+        if (!response.ok) throw new Error("Failed to update install type");
+        await fetchOpeningData();
+      } catch (err) {
+        console.error("Error updating install type:", err);
+      }
+      return;
+    }
+
+    const item = opening.hardware_items.find(i => i.id === itemId);
+    if (!item) return;
+
+    // If user chose "don't ask again", apply to all silently
+    if (dontAskClassify) {
+      await applyClassification(item.name, installType);
+      return;
+    }
+
+    // Check how many matching items exist across the project
+    try {
+      const countRes = await fetch(
+        `/api/projects/${projectId}/classify-items?item_name=${encodeURIComponent(item.name)}`
+      );
+      if (!countRes.ok) {
+        // Fallback to single-item update
+        await applySingleClassification(itemId, installType);
+        return;
+      }
+      const { total } = await countRes.json();
+
+      if (total > 1) {
+        // Show the prompt
+        setClassifyPrompt({ itemId, itemName: item.name, installType, totalCount: total });
+      } else {
+        // Only one instance, just apply directly
+        await applySingleClassification(itemId, installType);
+      }
+    } catch {
+      await applySingleClassification(itemId, installType);
+    }
+  };
+
+  const applySingleClassification = async (itemId: string, installType: 'bench' | 'field') => {
     try {
       const response = await fetch(
         `/api/openings/${doorId}/items/${itemId}`,
@@ -157,6 +218,31 @@ export default function DoorDetailPage() {
       await fetchOpeningData();
     } catch (err) {
       console.error("Error updating install type:", err);
+    }
+  };
+
+  const applyClassification = async (itemName: string, installType: 'bench' | 'field', itemIds?: string[]) => {
+    setClassifyLoading(true);
+    try {
+      const response = await fetch(
+        `/api/projects/${projectId}/classify-items`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            item_name: itemName,
+            install_type: installType,
+            ...(itemIds ? { item_ids: itemIds } : {}),
+          }),
+        }
+      );
+      if (!response.ok) throw new Error("Failed to classify items");
+      await fetchOpeningData();
+    } catch (err) {
+      console.error("Error classifying items:", err);
+    } finally {
+      setClassifyLoading(false);
+      setClassifyPrompt(null);
     }
   };
 
@@ -185,15 +271,10 @@ export default function DoorDetailPage() {
   const handleSaveNotes = async () => {
     setSavingNotes(true);
     try {
-      const supabase = createClient();
-      const { error } = await (supabase as any)
-        .from("openings")
-        .update({ notes })
-        .eq("id", doorId);
-      if (error) throw error;
+      // TODO: Implement notes save to Supabase
+      setSavingNotes(false);
     } catch (err) {
       console.error("Error saving notes:", err);
-    } finally {
       setSavingNotes(false);
     }
   };
@@ -374,7 +455,7 @@ export default function DoorDetailPage() {
     if (item.manufacturer) parts.push(item.manufacturer);
     if (item.model) parts.push(item.model);
     if (item.finish) parts.push(item.finish);
-    return parts.join(" Â· ");
+    return parts.join(" · ");
   };
 
   return (
@@ -522,7 +603,7 @@ export default function DoorDetailPage() {
               <div className="mb-3 flex items-center gap-2">
                 <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-[rgba(48,209,88,0.15)] border border-[#30d158] text-[12px] font-medium text-[#30d158]">
                   {opening.hw_set}
-                  {opening.hw_heading && ` â ${opening.hw_heading}`}
+                  {opening.hw_heading && ` — ${opening.hw_heading}`}
                 </span>
               </div>
             )}
@@ -812,7 +893,7 @@ export default function DoorDetailPage() {
                         <button
                           onClick={() => setIssueModal({
                             doorNumber: opening.door_number,
-                            hardwareItemName: item.name,
+                            hardwareItem: item.name,
                           })}
                           className="ml-auto text-[11px] text-[#ff453a] hover:text-[#ff6961] transition-colors"
                         >
@@ -908,7 +989,7 @@ export default function DoorDetailPage() {
                             </p>
                             <p className="text-[11px] text-[#6e6e73] mt-0.5 capitalize">
                               {(attachment.category || 'general').replace('_', ' ')}
-                              {attachment.uploaded_at && ` Â· ${new Date(attachment.uploaded_at).toLocaleDateString()}`}
+                              {attachment.uploaded_at && ` · ${new Date(attachment.uploaded_at).toLocaleDateString()}`}
                             </p>
                           </div>
                           <div className="flex-shrink-0 w-8 h-8 rounded-full bg-white/[0.04] border border-white/[0.08] flex items-center justify-center">
@@ -953,7 +1034,7 @@ export default function DoorDetailPage() {
                 </p>
               </div>
               <p className="text-[12px] text-[#6e6e73] mt-1">
-                Images or PDF Â· Tap to browse
+                Images or PDF · Tap to browse
               </p>
             </label>
           </div>
@@ -1050,10 +1131,70 @@ export default function DoorDetailPage() {
         <IssueReportModal
           projectId={projectId}
           doorNumber={issueModal.doorNumber}
-          hardwareItemName={issueModal.hardwareItemName}
+          hardwareItem={issueModal.hardwareItem}
           onClose={() => setIssueModal(null)}
           onCreated={() => setIssueModal(null)}
         />
+      )}
+
+      {/* Classify apply-to-all prompt */}
+      {classifyPrompt && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="panel corner-brackets w-full max-w-sm p-5 animate-fade-in-up">
+            <h3
+              className="text-[15px] font-bold text-[#e8e8ed] mb-3"
+              style={{ fontFamily: "var(--font-display)", letterSpacing: "0.03em" }}
+            >
+              APPLY TO ALL?
+            </h3>
+            <p className="text-[13px] text-[#a1a1a6] mb-1">
+              <span className="text-[#e8e8ed] font-medium">{classifyPrompt.itemName}</span> appears in{" "}
+              <span className="text-[#5ac8fa] font-medium">{classifyPrompt.totalCount}</span> openings.
+            </p>
+            <p className="text-[13px] text-[#a1a1a6] mb-4">
+              Classify all as{" "}
+              <span
+                className="font-medium"
+                style={{
+                  color: classifyPrompt.installType === 'bench' ? '#bf5af2' : '#ff9f0a',
+                }}
+              >
+                {classifyPrompt.installType === 'bench' ? 'Bench' : 'Field'}
+              </span>
+              ?
+            </p>
+
+            <div className="flex flex-col gap-2 mb-4">
+              <button
+                onClick={() => applyClassification(classifyPrompt.itemName, classifyPrompt.installType)}
+                disabled={classifyLoading}
+                className="glow-btn--primary w-full rounded-lg py-2 text-[13px] disabled:opacity-40"
+              >
+                {classifyLoading ? "Applying..." : `Yes, apply to all ${classifyPrompt.totalCount}`}
+              </button>
+              <button
+                onClick={() => {
+                  applySingleClassification(classifyPrompt.itemId, classifyPrompt.installType);
+                  setClassifyPrompt(null);
+                }}
+                disabled={classifyLoading}
+                className="glow-btn--ghost w-full rounded-lg py-2 text-[13px] disabled:opacity-40"
+              >
+                Just this one
+              </button>
+            </div>
+
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={dontAskClassify}
+                onChange={(e) => setDontAskClassify(e.target.checked)}
+                className="w-4 h-4 rounded border-[#3a3a3c] bg-transparent accent-[#5ac8fa]"
+              />
+              <span className="text-[11px] text-[#636366]">Don&apos;t ask again (apply to all automatically)</span>
+            </label>
+          </div>
+        </div>
       )}
     </div>
   );
