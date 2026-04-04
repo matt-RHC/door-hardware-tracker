@@ -40,7 +40,10 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# python
+# test fixtures (real PDFs, not for git)
+tests/fixtures/*.pdf
+
+# python cache
 __pycache__/
 *.pyc
 .pytest_cache/
