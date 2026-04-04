@@ -951,19 +951,29 @@ export default function PDFUploadModal({
               flaggedDoors: result.flaggedDoors || [],
             };
           }
-          // If pdfplumber returned zero results, fall through to chunked path
-          console.warn("Full pipeline returned zero results, falling back to chunked extraction");
+          // If pdfplumber returned zero results, report clearly instead of
+          // silently falling back to a chunk path that loses data
+          console.warn("Full pipeline returned zero results");
+          setError("PDF extraction found no doors or hardware sets. The PDF format may not be supported. Try re-uploading or contact support.");
+          return;
         } else {
           const errBody = await resp.json().catch(() => ({}));
-          console.warn("Full pipeline failed, falling back to chunked:", errBody.error);
+          console.error("Full pipeline failed:", errBody.error);
+          setError(`PDF extraction failed: ${errBody.error || resp.statusText}. Try re-uploading.`);
+          return;
         }
       } catch (err) {
-        console.warn("Full pipeline error, falling back to chunked:", err);
+        console.error("Full pipeline error:", err);
+        setError(`PDF extraction error: ${err instanceof Error ? err.message : "Unknown error"}. Try re-uploading.`);
+        return;
       }
     }
 
     // ── Fallback: Smart chunked multi-request flow ──
-    // Only reached if the full pipeline above fails or returns zero results.
+    // DEPRECATED: Kept only as emergency fallback. Should not be reached
+    // since the full pipeline above handles all PDFs regardless of size.
+    // If we get here, something unexpected happened.
+    console.warn("Reached chunked fallback — this should not happen with the full pipeline");
     // Phase 1: Classify pages and find smart boundaries
     setStatus(`Analyzing ${pageCount}-page PDF structure...`);
     setProgress(2);

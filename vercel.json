@@ -29,8 +29,8 @@
       "maxDuration": 300
     },
     "api/extract-tables.py": {
-      "maxDuration": 60,
-      "memory": 1024
+      "maxDuration": 300,
+      "memory": 3008
     },
     "api/classify-pages.py": {
       "maxDuration": 60,
