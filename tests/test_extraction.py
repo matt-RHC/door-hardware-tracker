@@ -4,11 +4,9 @@ Extraction model and validation tests.
 Structural tests for Pydantic models, door number validation, and quantity ranges.
 These tests do not require golden PDF files.
 
-# TODO: Golden file accuracy tests need:
-#   1. tests/golden_files/ directory with anonymized PDFs
-#   2. tests/expected/ directory with verified JSON baselines
-#   3. conftest.py fixtures: extract, load_expected, compare, assert_accuracy, classify
-#   See tests/create_expected.py for the baseline generator tool.
+# Golden file regression tests are in test_baselines.py.
+# Baselines live in tests/baselines/, PDFs in tests/fixtures/.
+# To regenerate baselines: python tests/create_expected.py <pdf-filename>
 """
 
 import pytest
