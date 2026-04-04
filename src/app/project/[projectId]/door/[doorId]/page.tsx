@@ -71,6 +71,13 @@ export default function DoorDetailPage() {
   } | null>(null);
   const [classifyLoading, setClassifyLoading] = useState(false);
   const [dontAskClassify, setDontAskClassify] = useState(false);
+  const [editApplyAllPrompt, setEditApplyAllPrompt] = useState<{
+    originalName: string;
+    updates: Record<string, string | null>;
+    totalCount: number;
+  } | null>(null);
+  const [editApplyAllLoading, setEditApplyAllLoading] = useState(false);
+  const [dontAskEditApplyAll, setDontAskEditApplyAll] = useState(false);
 
   const supabase = createClient();
 
@@ -279,8 +286,11 @@ export default function DoorDetailPage() {
     }
   };
 
+  const [originalItemName, setOriginalItemName] = useState<string | null>(null);
+
   const startEditItem = (item: HardwareItemWithProgress) => {
     setEditingItemId(item.id);
+    setOriginalItemName(item.name);
     setEditingItem({
       itemId: item.id,
       name: item.name,
@@ -299,6 +309,53 @@ export default function DoorDetailPage() {
   };
 
   const saveEditItem = async () => {
+    if (!editingItem || !originalItemName) return;
+
+    // Build the updates object for text fields that changed
+    const textUpdates: Record<string, string | null> = {};
+    const origItem = opening?.hardware_items.find(i => i.id === editingItem.itemId);
+    if (origItem) {
+      if (editingItem.name !== origItem.name) textUpdates.name = editingItem.name;
+      if (editingItem.manufacturer !== origItem.manufacturer) textUpdates.manufacturer = editingItem.manufacturer;
+      if (editingItem.model !== origItem.model) textUpdates.model = editingItem.model;
+      if (editingItem.finish !== origItem.finish) textUpdates.finish = editingItem.finish;
+      if (editingItem.options !== origItem.options) textUpdates.options = editingItem.options;
+    }
+
+    const hasTextChanges = Object.keys(textUpdates).length > 0;
+
+    // If text fields changed, check for apply-to-all (unless "don't ask" is set)
+    if (hasTextChanges && !dontAskEditApplyAll) {
+      try {
+        const countRes = await fetch(
+          `/api/projects/${projectId}/classify-items?item_name=${encodeURIComponent(originalItemName)}`
+        );
+        if (countRes.ok) {
+          const { total } = await countRes.json();
+          if (total > 1) {
+            setEditApplyAllPrompt({
+              originalName: originalItemName,
+              updates: textUpdates,
+              totalCount: total,
+            });
+            return; // Wait for user decision
+          }
+        }
+      } catch {
+        // Fall through to single save
+      }
+    }
+
+    // If "don't ask" is set and there are text changes, apply to all silently
+    if (hasTextChanges && dontAskEditApplyAll) {
+      await applyBulkItemUpdate(originalItemName, textUpdates);
+    }
+
+    // Always save the full single item (includes qty, install_type, etc.)
+    await saveSingleItem();
+  };
+
+  const saveSingleItem = async () => {
     if (!editingItem) return;
     setSavingItem(true);
     try {
@@ -323,10 +380,31 @@ export default function DoorDetailPage() {
       await fetchOpeningData();
       setEditingItemId(null);
       setEditingItem(null);
+      setOriginalItemName(null);
     } catch (err) {
       console.error("Error saving item:", err);
     } finally {
       setSavingItem(false);
+    }
+  };
+
+  const applyBulkItemUpdate = async (originalName: string, updates: Record<string, string | null>) => {
+    setEditApplyAllLoading(true);
+    try {
+      const response = await fetch(
+        `/api/projects/${projectId}/bulk-update-items`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ original_name: originalName, updates }),
+        }
+      );
+      if (!response.ok) throw new Error("Failed to bulk update items");
+    } catch (err) {
+      console.error("Error bulk updating items:", err);
+    } finally {
+      setEditApplyAllLoading(false);
+      setEditApplyAllPrompt(null);
     }
   };
 
@@ -1189,6 +1267,66 @@ export default function DoorDetailPage() {
                 type="checkbox"
                 checked={dontAskClassify}
                 onChange={(e) => setDontAskClassify(e.target.checked)}
+                className="w-4 h-4 rounded border-[#3a3a3c] bg-transparent accent-[#5ac8fa]"
+              />
+              <span className="text-[11px] text-[#636366]">Don&apos;t ask again (apply to all automatically)</span>
+            </label>
+          </div>
+        </div>
+      )}
+
+      {/* Edit apply-to-all prompt */}
+      {editApplyAllPrompt && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="panel corner-brackets w-full max-w-sm p-5 animate-fade-in-up">
+            <h3
+              className="text-[15px] font-bold text-[#e8e8ed] mb-3"
+              style={{ fontFamily: "var(--font-display)", letterSpacing: "0.03em" }}
+            >
+              APPLY EDIT TO ALL?
+            </h3>
+            <p className="text-[13px] text-[#a1a1a6] mb-1">
+              <span className="text-[#e8e8ed] font-medium">{editApplyAllPrompt.originalName}</span> appears in{" "}
+              <span className="text-[#5ac8fa] font-medium">{editApplyAllPrompt.totalCount}</span> openings.
+            </p>
+            <p className="text-[13px] text-[#a1a1a6] mb-1">
+              Changed fields:{" "}
+              <span className="text-[#e8e8ed]">
+                {Object.keys(editApplyAllPrompt.updates).join(", ")}
+              </span>
+            </p>
+            <p className="text-[13px] text-[#a1a1a6] mb-4">
+              Apply these changes to all matching items?
+            </p>
+
+            <div className="flex flex-col gap-2 mb-4">
+              <button
+                onClick={async () => {
+                  await applyBulkItemUpdate(editApplyAllPrompt.originalName, editApplyAllPrompt.updates);
+                  await saveSingleItem();
+                }}
+                disabled={editApplyAllLoading}
+                className="glow-btn--primary w-full rounded-lg py-2 text-[13px] disabled:opacity-40"
+              >
+                {editApplyAllLoading ? "Applying..." : `Yes, update all ${editApplyAllPrompt.totalCount}`}
+              </button>
+              <button
+                onClick={async () => {
+                  setEditApplyAllPrompt(null);
+                  await saveSingleItem();
+                }}
+                disabled={editApplyAllLoading}
+                className="glow-btn--ghost w-full rounded-lg py-2 text-[13px] disabled:opacity-40"
+              >
+                Just this one
+              </button>
+            </div>
+
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={dontAskEditApplyAll}
+                onChange={(e) => setDontAskEditApplyAll(e.target.checked)}
                 className="w-4 h-4 rounded border-[#3a3a3c] bg-transparent accent-[#5ac8fa]"
               />
               <span className="text-[11px] text-[#636366]">Don&apos;t ask again (apply to all automatically)</span>
