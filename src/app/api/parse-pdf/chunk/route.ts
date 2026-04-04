@@ -165,7 +165,9 @@ CRITICAL RULES:
 ${getTaxonomyPromptText()}`
 
   try {
-    const response = await client.messages.create({
+    // Use streaming to avoid "Streaming is required for operations >10min" error
+    // Large PDF chunks sent as documents can take a long time to process
+    const stream = await client.messages.stream({
       model: 'claude-sonnet-4-20250514',
       max_tokens: 32768,
       system: systemPrompt,
@@ -185,6 +187,8 @@ ${getTaxonomyPromptText()}`
         },
       ],
     })
+
+    const response = await stream.finalMessage()
 
     const textBlock = response.content.find((b) => b.type === 'text')
     if (!textBlock || textBlock.type !== 'text') {
@@ -263,7 +267,8 @@ ${getTaxonomyPromptText()}`
   }, null, 2)
 
   try {
-    const response = await client.messages.create({
+    // Use streaming to avoid timeout on large PDF document processing
+    const stream = await client.messages.stream({
       model: 'claude-sonnet-4-20250514',
       max_tokens: 16384,
       system: systemPrompt,
@@ -283,6 +288,8 @@ ${getTaxonomyPromptText()}`
         },
       ],
     })
+
+    const response = await stream.finalMessage()
 
     const textBlock = response.content.find((b) => b.type === 'text')
     if (!textBlock || textBlock.type !== 'text') {
@@ -407,7 +414,9 @@ export async function POST(request: NextRequest) {
 
     try {
       pdfplumberResult = await callPdfplumber(chunkBase64)
-      pdfplumberWorked = (pdfplumberResult.openings.length > 0 || pdfplumberResult.hw_sets_found > 0)
+      // Require DOORS found, not just sets. If pdfplumber finds sets but no doors,
+      // the door schedule table format is likely different — fall through to LLM full extraction.
+      pdfplumberWorked = pdfplumberResult.openings.length > 0
       console.log(
         `Chunk ${chunkIndex + 1}/${totalChunks}: pdfplumber: ` +
         `${pdfplumberResult.hw_sets_found} sets, ${pdfplumberResult.openings.length} doors, ` +
@@ -448,27 +457,47 @@ export async function POST(request: NextRequest) {
       reviewNotes = corrections.notes || ''
     } else {
       // ==========================================
-      // PATH B: Pdfplumber failed → LLM full extraction (cloud OCR via vision)
+      // PATH B: Pdfplumber found no doors → LLM full extraction (cloud OCR via vision)
+      // If pdfplumber found hardware sets but not doors, preserve the sets
       // ==========================================
+      const pdfplumberSets = pdfplumberResult?.hardware_sets || []
       console.log(
-        `Chunk ${chunkIndex + 1}/${totalChunks}: switching to LLM full extraction`
+        `Chunk ${chunkIndex + 1}/${totalChunks}: switching to LLM full extraction` +
+        (pdfplumberSets.length > 0 ? ` (preserving ${pdfplumberSets.length} pdfplumber sets)` : '')
       )
 
       const fullResult = await callLLMFullExtraction(client, chunkBase64, knownSetIds)
 
-      hardwareSets = (fullResult.hardware_sets || []).map(s => ({
-        set_id: s.set_id,
-        heading: s.heading,
-        items: (s.items || []).map(i => ({
-          qty: i.qty || 1,
-          name: i.name || '',
-          manufacturer: i.manufacturer || '',
-          model: i.model || '',
-          finish: i.finish || '',
+      // Merge: prefer pdfplumber sets (deterministic), supplement with LLM sets
+      const pdfplumberSetIds = new Set(pdfplumberSets.map(s => s.set_id))
+      const llmOnlySets = (fullResult.hardware_sets || []).filter(s => !pdfplumberSetIds.has(s.set_id))
+
+      hardwareSets = [
+        ...pdfplumberSets.map(s => ({
+          set_id: s.set_id,
+          heading: s.heading,
+          items: (s.items || []).map(i => ({
+            qty: i.qty || 1,
+            name: i.name || '',
+            manufacturer: i.manufacturer || '',
+            model: i.model || '',
+            finish: i.finish || '',
+          })),
         })),
-      }))
+        ...llmOnlySets.map(s => ({
+          set_id: s.set_id,
+          heading: s.heading,
+          items: (s.items || []).map(i => ({
+            qty: i.qty || 1,
+            name: i.name || '',
+            manufacturer: i.manufacturer || '',
+            model: i.model || '',
+            finish: i.finish || '',
+          })),
+        })),
+      ]
       doors = fullResult.doors || []
-      reviewNotes = fullResult.notes || 'Extracted via AI vision (pdfplumber found no data)'
+      reviewNotes = fullResult.notes || 'Doors extracted via AI vision (pdfplumber found sets only)'
     }
 
     console.log(

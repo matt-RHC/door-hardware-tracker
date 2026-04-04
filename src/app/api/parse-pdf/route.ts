@@ -174,7 +174,8 @@ CRITICAL RULES:
 ${getTaxonomyPromptText()}`
 
   try {
-    const response = await client.messages.create({
+    // Use streaming to avoid timeout on large PDF document processing
+    const stream = await client.messages.stream({
       model: 'claude-sonnet-4-20250514',
       max_tokens: 32768,
       system: systemPrompt,
@@ -194,6 +195,8 @@ ${getTaxonomyPromptText()}`
         },
       ],
     })
+
+    const response = await stream.finalMessage()
 
     const textBlock = response.content.find((b) => b.type === 'text')
     if (!textBlock || textBlock.type !== 'text') {
@@ -270,7 +273,8 @@ ${getTaxonomyPromptText()}`
   }, null, 2)
 
   try {
-    const response = await client.messages.create({
+    // Use streaming to avoid timeout on large PDF document processing
+    const stream = await client.messages.stream({
       model: 'claude-sonnet-4-20250514',
       max_tokens: 16384,
       system: systemPrompt,
@@ -290,6 +294,8 @@ ${getTaxonomyPromptText()}`
         },
       ],
     })
+
+    const response = await stream.finalMessage()
 
     const textBlock = response.content.find((b) => b.type === 'text')
     if (!textBlock || textBlock.type !== 'text') {
@@ -436,7 +442,8 @@ export async function POST(request: NextRequest) {
 
         try {
           pdfplumberResult = await callPdfplumber(base64)
-          pdfplumberWorked = (pdfplumberResult.openings.length > 0 || pdfplumberResult.hw_sets_found > 0)
+          // Require DOORS found, not just sets. Sets-only means door schedule wasn't parsed.
+          pdfplumberWorked = pdfplumberResult.openings.length > 0
           console.log(
             `Pdfplumber: ${pdfplumberResult.hw_sets_found} sets, ` +
             `${pdfplumberResult.openings.length} doors, ` +
