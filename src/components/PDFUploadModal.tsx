@@ -67,20 +67,24 @@ function HoloLoader({ progress, status }: { progress: number; status: string }) 
     for (const m of milestones) {
       if (prevProgress < m && progress >= m) {
         setMilestone(m);
-        // Spawn burst particles
+        // Spawn burst particles — bigger burst for 100%
+        const burstCount = m === 100 ? 60 : 20;
+        const burstSpeed = m === 100 ? 5 : 3;
         setParticles(prev => {
-          const burst = Array.from({ length: 20 }, (_, i) => {
-            const angle = (i / 20) * Math.PI * 2;
-            const speed = 2 + Math.random() * 3;
+          const burst = Array.from({ length: burstCount }, (_, i) => {
+            const angle = (i / burstCount) * Math.PI * 2 + Math.random() * 0.3;
+            const speed = (m === 100 ? 1.5 : 2) + Math.random() * burstSpeed;
             return {
               id: particleId.current++,
               x: 160,
               y: 120,
               vx: Math.cos(angle) * speed,
               vy: Math.sin(angle) * speed,
-              life: 30 + Math.floor(Math.random() * 20),
-              size: 2 + Math.random() * 3,
-              hue: m === 100 ? 130 : 280 + Math.random() * 60,
+              life: m === 100 ? 60 + Math.floor(Math.random() * 40) : 30 + Math.floor(Math.random() * 20),
+              size: m === 100 ? 2 + Math.random() * 4 : 2 + Math.random() * 3,
+              hue: m === 100
+                ? [130, 50, 280, 200, 340][Math.floor(Math.random() * 5)] // confetti colors
+                : 280 + Math.random() * 60,
             };
           });
           return [...prev, ...burst];
@@ -160,6 +164,10 @@ function HoloLoader({ progress, status }: { progress: number; status: string }) 
         @keyframes milestoneRing {
           0% { transform: scale(0.3); opacity: 1; }
           100% { transform: scale(2.5); opacity: 0; }
+        }
+        @keyframes milestoneFlash {
+          0% { opacity: 0.6; }
+          100% { opacity: 0; }
         }
         @keyframes shimmer {
           0% { background-position: -200% 0; }
@@ -246,22 +254,43 @@ function HoloLoader({ progress, status }: { progress: number; status: string }) 
 
         {/* Milestone celebration ring */}
         {milestone && (
-          <div className="absolute inset-0 flex items-center justify-center pointer-events-none" style={{ zIndex: 15, marginTop: '-10px' }}>
-            <div style={{
-              width: 80, height: 80,
-              borderRadius: '50%',
-              border: `3px solid ${accentColor}`,
-              animation: 'milestoneRing 1s ease-out forwards',
+          <>
+            {/* Flash overlay */}
+            <div className="absolute inset-0 pointer-events-none" style={{
+              zIndex: 20,
+              background: milestone === 100
+                ? 'radial-gradient(circle at center, rgba(48,209,88,0.5), transparent 70%)'
+                : `radial-gradient(circle at center, ${accentGlow}, transparent 70%)`,
+              animation: 'milestoneFlash 0.6s ease-out forwards',
             }} />
-            <div style={{
-              position: 'absolute',
-              width: 60, height: 60,
-              borderRadius: '50%',
-              border: `2px solid ${accentColor}`,
-              animation: 'milestoneRing 1s ease-out 0.15s forwards',
-              opacity: 0.7,
-            }} />
-          </div>
+            {/* Expanding rings */}
+            <div className="absolute inset-0 flex items-center justify-center pointer-events-none" style={{ zIndex: 15, marginTop: '-10px' }}>
+              <div style={{
+                width: 80, height: 80,
+                borderRadius: '50%',
+                border: `3px solid ${milestone === 100 ? '#30d158' : accentColor}`,
+                animation: 'milestoneRing 1s ease-out forwards',
+              }} />
+              <div style={{
+                position: 'absolute',
+                width: 60, height: 60,
+                borderRadius: '50%',
+                border: `2px solid ${milestone === 100 ? '#30d158' : accentColor}`,
+                animation: 'milestoneRing 1s ease-out 0.15s forwards',
+                opacity: 0.7,
+              }} />
+              {milestone === 100 && (
+                <div style={{
+                  position: 'absolute',
+                  width: 100, height: 100,
+                  borderRadius: '50%',
+                  border: `4px solid #30d158`,
+                  animation: 'milestoneRing 1.2s ease-out 0.3s forwards',
+                  opacity: 0.5,
+                }} />
+              )}
+            </div>
+          </>
         )}
 
         <div className="holo-scanlines" style={{
@@ -319,20 +348,71 @@ function HoloLoader({ progress, status }: { progress: number; status: string }) 
             })}
           </svg>
 
-          {/* Big center percentage */}
-          <div className="relative z-10 text-center" style={{
+          {/* Orbiting energy dots */}
+          <svg width="160" height="160" viewBox="0 0 160 160" className="absolute"
+            style={{ animation: "ringRotate 4s linear infinite" }}>
+            {Array.from({ length: Math.max(1, Math.floor(progress / 12)) }).map((_, i) => {
+              const angle = (i * (360 / Math.max(1, Math.floor(progress / 12)))) * Math.PI / 180;
+              const r = 68;
+              return (
+                <circle key={`orb-${i}`}
+                  cx={80 + r * Math.cos(angle)}
+                  cy={80 + r * Math.sin(angle)}
+                  r={2.5}
+                  fill={accentColor}
+                  style={{ filter: `drop-shadow(0 0 6px ${accentColor})` }}
+                />
+              );
+            })}
+          </svg>
+
+          {/* Door icon that opens with progress */}
+          <svg width="44" height="52" viewBox="0 0 44 52" fill="none" className="absolute z-10"
+            style={{ filter: `drop-shadow(0 0 8px ${accentGlow})`, opacity: progress >= 100 ? 0 : 0.5 }}>
+            {/* Frame */}
+            <rect x="4" y="2" width="36" height="48" rx="1" stroke={accentColor}
+              strokeWidth="1.2" fill="none" opacity={0.4} />
+            {/* Door panel - rotates open as progress increases */}
+            <g transform={`translate(10, 4)`}>
+              <g style={{
+                transformOrigin: '0px 22px',
+                transform: `perspective(100px) rotateY(${Math.min(60, progress * 0.6)}deg)`,
+                transition: 'transform 1s ease-out',
+              }}>
+                <rect x="0" y="0" width="24" height="44" rx="1" stroke={accentColor}
+                  strokeWidth="0.8" fill={`hsla(${progressHue}, 80%, 50%, 0.06)`} />
+                {/* Door handle */}
+                <circle cx="20" cy="24" r="1.5" fill={accentColor} opacity={0.8} />
+              </g>
+            </g>
+          </svg>
+
+          {/* Big center percentage (overlays door at higher %) */}
+          <div className="relative z-20 text-center" style={{
             animation: milestone ? "milestonePop 0.6s ease-out" : "percentPulse 2s ease-in-out infinite",
           }}>
-            <span className="holo-text text-3xl font-black" style={{
-              color: accentColor,
-              textShadow: `0 0 20px ${accentGlow}, 0 0 40px ${accentDim}`,
-            }}>
-              {progress.toFixed(0)}
-            </span>
-            <span className="holo-text text-lg font-bold" style={{
-              color: accentColor,
-              opacity: 0.7,
-            }}>%</span>
+            {progress >= 100 ? (
+              <span className="holo-text text-lg font-black uppercase tracking-widest" style={{
+                color: '#30d158',
+                textShadow: '0 0 20px rgba(48,209,88,0.7), 0 0 40px rgba(48,209,88,0.3)',
+                animation: 'milestonePop 0.8s ease-out',
+              }}>
+                COMPLETE
+              </span>
+            ) : (
+              <>
+                <span className="holo-text text-3xl font-black" style={{
+                  color: accentColor,
+                  textShadow: `0 0 20px ${accentGlow}, 0 0 40px ${accentDim}`,
+                }}>
+                  {progress.toFixed(0)}
+                </span>
+                <span className="holo-text text-lg font-bold" style={{
+                  color: accentColor,
+                  opacity: 0.7,
+                }}>%</span>
+              </>
+            )}
           </div>
         </div>
 
