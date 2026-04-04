@@ -1,26 +1,27 @@
 #!/usr/bin/env python3
 """
-Generate an expected JSON file from a golden PDF.
+Generate a baseline JSON file from a golden PDF.
 
 Usage:
     python tests/create_expected.py <pdf-filename>
 
 Example:
-    python tests/create_expected.py sample-comsense.pdf
+    python tests/create_expected.py SMALL_081113.pdf
 
-This runs extraction on the PDF and writes the result to tests/expected/<name>.json.
+The PDF must exist in tests/fixtures/.
+Output goes to tests/baselines/<stem>.json.
 You MUST manually verify and correct the JSON before using it as ground truth.
 """
 
-import base64
-import io
 import json
 import sys
 from pathlib import Path
 
-# Import hyphenated Vercel Python module
 import importlib.util
+
 API_DIR = Path(__file__).resolve().parent.parent / "api"
+FIXTURES_DIR = Path(__file__).parent / "fixtures"
+BASELINES_DIR = Path(__file__).parent / "baselines"
 
 
 def _import_hyphenated(filename: str, module_name: str):
@@ -30,18 +31,15 @@ def _import_hyphenated(filename: str, module_name: str):
     spec.loader.exec_module(mod)
     return mod
 
-GOLDEN_DIR = Path(__file__).parent / "golden_files"
-EXPECTED_DIR = Path(__file__).parent / "expected"
-
 
 def main():
     if len(sys.argv) < 2:
         print(f"Usage: {sys.argv[0]} <pdf-filename>")
-        print(f"  PDF must be in {GOLDEN_DIR}/")
+        print(f"  PDF must be in {FIXTURES_DIR}/")
         sys.exit(1)
 
     pdf_name = sys.argv[1]
-    pdf_path = GOLDEN_DIR / pdf_name
+    pdf_path = FIXTURES_DIR / pdf_name
 
     if not pdf_path.exists():
         print(f"Error: {pdf_path} not found")
@@ -50,82 +48,32 @@ def main():
     import pdfplumber
     mod = _import_hyphenated("extract-tables.py", "extract_tables")
 
-    pdf_bytes = pdf_path.read_bytes()
-    pdf_b64 = base64.b64encode(pdf_bytes).decode()
+    print(f"Processing {pdf_name} ({pdf_path.stat().st_size} bytes)...")
 
-    print(f"Processing {pdf_name} ({len(pdf_bytes)} bytes)...")
-
-    with pdfplumber.open(io.BytesIO(pdf_bytes), unicode_norm="NFC") as pdf:
+    with pdfplumber.open(str(pdf_path), unicode_norm="NFKC") as pdf:
         # Phase 1: Hardware sets
-        hardware_sets = []
-        tables_found = 0
-        for page in pdf.pages:
-            sets, tf = mod.extract_hardware_sets_from_page(page)
-            hardware_sets.extend(sets)
-            tables_found += tf
-
-        # Dedup sets
-        seen = set()
-        deduped = []
-        for hs in hardware_sets:
-            if hs.set_id not in seen:
-                seen.add(hs.set_id)
-                deduped.append(hs)
-            else:
-                for existing in deduped:
-                    if existing.set_id == hs.set_id:
-                        existing.items.extend(hs.items)
-                        break
-        hardware_sets = deduped
+        hardware_sets = mod.extract_all_hardware_sets(pdf)
 
         # Phase 2: Opening list
-        openings = []
-        for page in pdf.pages:
-            doors = mod.extract_opening_list_from_page(page)
-            openings.extend(doors)
+        openings, tables_found = mod.extract_opening_list(pdf, None)
 
         # Phase 3: Reference tables
-        reference_codes = []
-        for page in pdf.pages:
-            codes = mod.extract_reference_tables_from_page(page)
-            reference_codes.extend(codes)
+        reference_codes = mod.extract_reference_tables(pdf)
 
-        # Phase 4: Qty normalization
-        set_door_counts = {}
-        for door in openings:
-            if door.hw_set:
-                set_door_counts[door.hw_set] = set_door_counts.get(door.hw_set, 0) + 1
+        # Phase 3.5: Qty normalization (BUG-7)
+        mod.normalize_quantities(hardware_sets, openings)
 
-        for hs in hardware_sets:
-            count = set_door_counts.get(hs.set_id, 0)
-            if count > 1:
-                for item in hs.items:
-                    if item.qty > 1 and item.qty >= count:
-                        if item.qty % count == 0:
-                            item.qty_total = item.qty
-                            item.qty_door_count = count
-                            item.qty = item.qty // count
-                            item.qty_source = "divided"
-
-        # Phase 5: Consensus
+        # Phase 4: Consensus validation
         confirmed, flagged = mod.validate_door_number_consistency(openings)
 
-    # Build expected output (simplified for golden file comparison)
-    expected = {
-        "_comment": f"Generated from {pdf_name}. VERIFY AND CORRECT before using as ground truth.",
-        "expected_door_count": len(confirmed) + len(flagged),
-        "openings": [
-            {
-                "door_number": d.door_number,
-                "hw_set": d.hw_set,
-                "location": d.location,
-                "door_type": d.door_type,
-                "frame_type": d.frame_type,
-                "fire_rating": d.fire_rating,
-                "hand": d.hand,
-            }
-            for d in confirmed
-        ],
+    baseline = {
+        "pdf_name": pdf_name,
+        "door_count": len(confirmed) + len(flagged),
+        "confirmed_count": len(confirmed),
+        "flagged_count": len(flagged),
+        "hw_set_count": len(hardware_sets),
+        "tables_found": tables_found,
+        "reference_code_count": len(reference_codes),
         "hardware_sets": [
             {
                 "set_id": hs.set_id,
@@ -135,9 +83,12 @@ def main():
                     {
                         "name": item.name,
                         "qty": item.qty,
-                        "manufacturer": item.manufacturer,
-                        "model": item.model,
-                        "finish": item.finish,
+                        "qty_source": item.qty_source,
+                        "qty_total": item.qty_total,
+                        "qty_door_count": item.qty_door_count,
+                        "manufacturer": item.manufacturer or "",
+                        "model": item.model or "",
+                        "finish": item.finish or "",
                     }
                     for item in hs.items
                 ],
@@ -151,19 +102,11 @@ def main():
             }
             for f in flagged
         ],
-        "reference_codes": [
-            {
-                "code_type": rc.code_type,
-                "code": rc.code,
-                "full_name": rc.full_name,
-            }
-            for rc in reference_codes
-        ],
     }
 
-    EXPECTED_DIR.mkdir(exist_ok=True)
-    out_path = EXPECTED_DIR / (Path(pdf_name).stem + ".json")
-    out_path.write_text(json.dumps(expected, indent=2))
+    BASELINES_DIR.mkdir(exist_ok=True)
+    out_path = BASELINES_DIR / (Path(pdf_name).stem + ".json")
+    out_path.write_text(json.dumps(baseline, indent=2, ensure_ascii=True), encoding="utf-8")
 
     print(f"\nWrote {out_path}")
     print(f"  Doors: {len(confirmed)} confirmed, {len(flagged)} flagged")

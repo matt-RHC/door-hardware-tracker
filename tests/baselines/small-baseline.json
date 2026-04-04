@@ -1,0 +1,597 @@
+{
+  "pdf_name": "SMALL_081113.pdf",
+  "door_count": 4,
+  "confirmed_count": 4,
+  "flagged_count": 0,
+  "hw_set_count": 5,
+  "tables_found": 9,
+  "reference_code_count": 0,
+  "hardware_sets": [
+    {
+      "set_id": "04.PR4",
+      "heading": "Heading #04.PR4",
+      "item_count": 23,
+      "items": [
+        {
+          "name": "Single Door #10-1",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": 1,
+          "qty_door_count": 2,
+          "manufacturer": "2B",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Opening D",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": 1,
+          "qty_door_count": 2,
+          "manufacturer": "escription:",
+          "model": "3' 0\" x 7' 0\"",
+          "finish": "x 1 3/"
+        },
+        {
+          "name": "Continuous Hinge",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": 1,
+          "qty_door_count": 2,
+          "manufacturer": "",
+          "model": "A515 83-1/8",
+          "finish": "\" CUT"
+        },
+        {
+          "name": "Properties: Cut to",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": 1,
+          "qty_door_count": 2,
+          "manufacturer": "Length=S4",
+          "model": "Finish, Spec",
+          "finish": "ify Ele"
+        },
+        {
+          "name": "Electrified Mortis",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": 1,
+          "qty_door_count": 2,
+          "manufacturer": "e Lockset",
+          "model": "L9092 EU H",
+          "finish": "01A 5"
+        },
+        {
+          "name": "Interchangeable C",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": 1,
+          "qty_door_count": 2,
+          "manufacturer": "ore",
+          "model": "80-037 50-0",
+          "finish": "02-VK"
+        },
+        {
+          "name": "Cylinder",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": 1,
+          "qty_door_count": 2,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Closer",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": 1,
+          "qty_door_count": 2,
+          "manufacturer": "",
+          "model": "4040XP REG",
+          "finish": "ARM"
+        },
+        {
+          "name": "Overhead Holder",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": 1,
+          "qty_door_count": 2,
+          "manufacturer": "",
+          "model": "1013",
+          "finish": ""
+        },
+        {
+          "name": "Floor Stop",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": 1,
+          "qty_door_count": 2,
+          "manufacturer": "",
+          "model": "RM446",
+          "finish": ""
+        },
+        {
+          "name": "Card Reader(By O",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": 1,
+          "qty_door_count": 2,
+          "manufacturer": "thers)",
+          "model": "CARD READ",
+          "finish": "ER BY"
+        },
+        {
+          "name": "Mag Door Contac",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": 1,
+          "qty_door_count": 2,
+          "manufacturer": "ts - By",
+          "model": "MAG DOOR",
+          "finish": "CONT"
+        },
+        {
+          "name": "Others(By Others",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": 1,
+          "qty_door_count": 2,
+          "manufacturer": ")",
+          "model": "OTHERS",
+          "finish": ""
+        },
+        {
+          "name": "Power Transfer",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": 1,
+          "qty_door_count": 2,
+          "manufacturer": "",
+          "model": "PT1000EZ",
+          "finish": ""
+        },
+        {
+          "name": "Wire Harness",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": 1,
+          "qty_door_count": 2,
+          "manufacturer": "",
+          "model": "EZAL-192",
+          "finish": ""
+        },
+        {
+          "name": "Wire Harness",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": 1,
+          "qty_door_count": 2,
+          "manufacturer": "",
+          "model": "EZAL-38-1",
+          "finish": ""
+        },
+        {
+          "name": "Door Silencer",
+          "qty": 3,
+          "qty_source": "flagged",
+          "qty_total": 3,
+          "qty_door_count": 2,
+          "manufacturer": "",
+          "model": "SR64",
+          "finish": ""
+        },
+        {
+          "name": "AUTHORI",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": 1,
+          "qty_door_count": 2,
+          "manufacturer": "ZED EGRES",
+          "model": "S",
+          "finish": ""
+        },
+        {
+          "name": "WIRING,",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": 1,
+          "qty_door_count": 2,
+          "manufacturer": "CONDUIT, A",
+          "model": "CCESS CON",
+          "finish": "TROL"
+        },
+        {
+          "name": "g #06 (Set #0",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": 1,
+          "qty_door_count": 2,
+          "manufacturer": "6)",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Single Door #10-0",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": 1,
+          "qty_door_count": 2,
+          "manufacturer": "3AB",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Protection Plate",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": 1,
+          "qty_door_count": 2,
+          "manufacturer": "",
+          "model": "8400 34\" x 3",
+          "finish": "5\" B"
+        },
+        {
+          "name": "Wire Harness",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": 1,
+          "qty_door_count": 2,
+          "manufacturer": "",
+          "model": "EZAL-32",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "26.1",
+      "heading": "Heading #26.1",
+      "item_count": 6,
+      "items": [
+        {
+          "name": "Single Door #10-83A OPEN OFFICE 10-13 from 105\u00b0 RHR",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Back to Back Pull Set ABH 5240 60\" CTC/OVERALL BTB SET S4 S4 HIMM",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Mortise Cylinder 80-131 50-002-VKC GMK GRN Core L583- 622 SC",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Interchangeable Core 80-037 50-002-VKC GMK 622 SC",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Card Reader(By Others) CARD READER BY SECURITY VENDOR MISC",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Key Switch 653-04 L2 SF-613 LO",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "12.R1",
+      "heading": "Heading #12.R1",
+      "item_count": 6,
+      "items": [
+        {
+          "name": "Single Door #10-82A.R1M OPEN OFFICE 10-80 to 10TH RH",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": 1,
+          "qty_door_count": 2,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ABH Pull ABH 5240 12\" CTC/OVERALL S4 S4 HIMM",
+          "qty": 1,
+          "qty_source": "divided",
+          "qty_total": 2,
+          "qty_door_count": 2,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "RocYork Closer by EZ ROCYORK CONCEALED SLIDE ARM CLOSER BK MISC",
+          "qty": 1,
+          "qty_source": "divided",
+          "qty_total": 2,
+          "qty_door_count": 2,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Card Reader(By Others) CARD READER BY SECURITY VENDOR MISC",
+          "qty": 1,
+          "qty_source": "divided",
+          "qty_total": 2,
+          "qty_door_count": 2,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Motion Sensor(By Others) MOTION SENSOR BY OTHERS MISC",
+          "qty": 1,
+          "qty_source": "divided",
+          "qty_total": 2,
+          "qty_door_count": 2,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Push Button 621GR EX DA NS SF-613 LO",
+          "qty": 1,
+          "qty_source": "divided",
+          "qty_total": 2,
+          "qty_door_count": 2,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "12.1.R1",
+      "heading": "Heading #12.1.R1",
+      "item_count": 9,
+      "items": [
+        {
+          "name": "Single Door #10.82A.R1A OPEN OFFICE 10-80 to 10TH RH",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": 1,
+          "qty_door_count": 2,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Mortise Cylinder 80-131 50-002-VKC GMK GRN Core L583- 622 SC",
+          "qty": 1,
+          "qty_source": "divided",
+          "qty_total": 2,
+          "qty_door_count": 2,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Interchangeable Core 80-037 50-002-VKC GMK 622 SC",
+          "qty": 1,
+          "qty_source": "divided",
+          "qty_total": 2,
+          "qty_door_count": 2,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ABH Pull ABH 5240 12\" CTC/OVERALL S4 S4 HIMM",
+          "qty": 1,
+          "qty_source": "divided",
+          "qty_total": 2,
+          "qty_door_count": 2,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Card Reader(By Others) CARD READER BY SECURITY VENDOR MISC",
+          "qty": 1,
+          "qty_source": "divided",
+          "qty_total": 2,
+          "qty_door_count": 2,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Motion Sensor(By Others) MOTION SENSOR BY OTHERS MISC",
+          "qty": 1,
+          "qty_source": "divided",
+          "qty_total": 2,
+          "qty_door_count": 2,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Key Switch 653-04 L2 SF-613 LO",
+          "qty": 1,
+          "qty_source": "divided",
+          "qty_total": 2,
+          "qty_door_count": 2,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Push Button 621GR EX DA NS SF-613 LO",
+          "qty": 1,
+          "qty_source": "divided",
+          "qty_total": 2,
+          "qty_door_count": 2,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Spindle Plate 2810-11B 710 LC",
+          "qty": 1,
+          "qty_source": "divided",
+          "qty_total": 2,
+          "qty_door_count": 2,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "21",
+      "heading": "Heading #21",
+      "item_count": 11,
+      "items": [
+        {
+          "name": "Automatic Flush Bolt 1860S EXT-36 S4 AB",
+          "qty": 1,
+          "qty_source": "flagged",
+          "qty_total": 1,
+          "qty_door_count": 2,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Electrified Mortise Lockset L9092 EU H 01A 50-231 CON RX RHR 622 SC",
+          "qty": 1,
+          "qty_source": "flagged",
+          "qty_total": 1,
+          "qty_door_count": 2,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Interchangeable Core 80-037 50-002-VKC GMK 622 SC",
+          "qty": 1,
+          "qty_source": "flagged",
+          "qty_total": 1,
+          "qty_door_count": 2,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Closer ITS 9625 HO INV 613 DM",
+          "qty": 1,
+          "qty_source": "divided",
+          "qty_total": 2,
+          "qty_door_count": 2,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Floor Stop RM446 S4 AB",
+          "qty": 1,
+          "qty_source": "divided",
+          "qty_total": 2,
+          "qty_door_count": 2,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Card Reader(By Others) CARD READER BY SECURITY VENDOR MISC",
+          "qty": 1,
+          "qty_source": "flagged",
+          "qty_total": 1,
+          "qty_door_count": 2,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Electric Power Transfer EPT 10 CON 622 VO",
+          "qty": 1,
+          "qty_source": "flagged",
+          "qty_total": 1,
+          "qty_door_count": 2,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Wire Harness CON-192P SC",
+          "qty": 1,
+          "qty_source": "flagged",
+          "qty_total": 1,
+          "qty_door_count": 2,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Wire Harness CON-38P SC",
+          "qty": 1,
+          "qty_source": "flagged",
+          "qty_total": 1,
+          "qty_door_count": 2,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Auto Door Bottom 364AA 36\" Z49 ZE",
+          "qty": 1,
+          "qty_source": "divided",
+          "qty_total": 2,
+          "qty_door_count": 2,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Threshold 655BK 72\" 223-MSLA-10 V3 ZE",
+          "qty": 1,
+          "qty_source": "flagged",
+          "qty_total": 1,
+          "qty_door_count": 2,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    }
+  ],
+  "flagged_doors": []
+}
