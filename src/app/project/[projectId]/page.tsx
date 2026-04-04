@@ -180,7 +180,7 @@ export default function ProjectDetailPage() {
             Projects
           </button>
           <h1
-            className="text-2xl sm:text-3xl font-bold text-[#e8e8ed] mb-4"
+            className="text-2xl sm:text-3xl font-bold text-[var(--text-primary)] mb-4"
             style={{ fontFamily: "var(--font-display)", letterSpacing: "0.02em" }}
           >
             PROJECT DETAILS
@@ -189,10 +189,10 @@ export default function ProjectDetailPage() {
           {/* Overall Progress */}
           <div className="panel p-4 rounded-lg">
             <div className="flex justify-between items-center mb-2">
-              <span className="text-[13px] text-[#8e8e93] uppercase tracking-wider">
+              <span className="text-[13px] text-[var(--text-secondary)] uppercase tracking-wider">
                 Overall Progress
               </span>
-              <span className="text-[13px] text-[#636366] tabular-nums">
+              <span className="text-[13px] text-[var(--text-tertiary)] tabular-nums">
                 {totalChecked} / {totalItems} items
               </span>
             </div>
@@ -317,7 +317,7 @@ export default function ProjectDetailPage() {
         {showFilters && (
           <div className="panel p-4 rounded-lg mb-5 animate-fade-in-up">
             <div className="flex justify-between items-center mb-3">
-              <span className="text-[12px] text-[#8e8e93] font-medium uppercase tracking-wider">
+              <span className="text-[12px] text-[var(--text-secondary)] font-medium uppercase tracking-wider">
                 Filter Openings
               </span>
               {activeFilterCount > 0 && (
@@ -338,7 +338,7 @@ export default function ProjectDetailPage() {
                 { label: "Hand", key: "hand", options: [["", "All"], ...filterOptions.hands.map(h => [h, h])] },
               ].map((f) => (
                 <div key={f.key}>
-                  <label className="block text-[11px] text-[#636366] mb-1.5 uppercase tracking-wider">
+                  <label className="block text-[11px] text-[var(--text-tertiary)] mb-1.5 uppercase tracking-wider">
                     {f.label}
                   </label>
                   <select
@@ -353,7 +353,7 @@ export default function ProjectDetailPage() {
                 </div>
               ))}
             </div>
-            <p className="mt-3 text-[11px] text-[#636366]">
+            <p className="mt-3 text-[11px] text-[var(--text-tertiary)]">
               Showing {filteredOpenings.length} of {openings.length} openings
             </p>
           </div>
@@ -363,7 +363,7 @@ export default function ProjectDetailPage() {
         {loading ? (
           <div className="flex items-center justify-center py-20 gap-3">
             <div className="w-5 h-5 border-2 border-[#5ac8fa] border-t-transparent rounded-full animate-spin" />
-            <span className="text-[13px] text-[#636366]">Loading openings...</span>
+            <span className="text-[13px] text-[var(--text-tertiary)]">Loading openings...</span>
           </div>
         ) : error ? (
           <div className="p-4 bg-[rgba(255,69,58,0.08)] border border-[rgba(255,69,58,0.15)] rounded-lg text-[#ff453a] text-[14px]">
@@ -371,11 +371,11 @@ export default function ProjectDetailPage() {
           </div>
         ) : filteredOpenings.length === 0 ? (
           <div className="text-center py-16">
-            <p className="text-[15px] text-[#8e8e93] mb-1">
+            <p className="text-[15px] text-[var(--text-secondary)] mb-1">
               {openings.length === 0 ? "No openings found" : "No openings match your filters"}
             </p>
             {openings.length === 0 && (
-              <p className="text-[13px] text-[#636366]">Upload a PDF submittal to get started</p>
+              <p className="text-[13px] text-[var(--text-tertiary)]">Upload a PDF submittal to get started</p>
             )}
           </div>
         ) : (
@@ -395,10 +395,10 @@ export default function ProjectDetailPage() {
                 >
                   {/* Door number + badges row */}
                   <div className="flex items-start justify-between mb-2">
-                    <h2 className="text-[17px] font-bold text-[#e8e8ed] leading-tight">
+                    <h2 className="text-[17px] font-bold text-[var(--text-primary)] leading-tight">
                       {opening.door_number}
                     </h2>
-                    <span className="text-[11px] text-[#636366] tabular-nums shrink-0 ml-2">
+                    <span className="text-[11px] text-[var(--text-tertiary)] tabular-nums shrink-0 ml-2">
                       {progressPercent.toFixed(0)}%
                     </span>
                   </div>
@@ -416,19 +416,19 @@ export default function ProjectDetailPage() {
                       </span>
                     )}
                     {opening.door_type && (
-                      <span className="text-[10px] text-[#636366] bg-white/[0.03] border border-white/[0.06] px-2 py-0.5 rounded-full">
+                      <span className="text-[10px] text-[var(--text-tertiary)] bg-[var(--surface)] border border-[var(--border)] px-2 py-0.5 rounded-full">
                         {opening.door_type}
                       </span>
                     )}
                     {opening.hand && (
-                      <span className="text-[10px] text-[#636366] bg-white/[0.03] border border-white/[0.06] px-2 py-0.5 rounded-full">
+                      <span className="text-[10px] text-[var(--text-tertiary)] bg-[var(--surface)] border border-[var(--border)] px-2 py-0.5 rounded-full">
                         {opening.hand}
                       </span>
                     )}
                   </div>
 
                   {opening.location && (
-                    <p className="text-[12px] text-[#636366] mb-3 truncate">
+                    <p className="text-[12px] text-[var(--text-tertiary)] mb-3 truncate">
                       {opening.location}
                     </p>
                   )}
@@ -437,7 +437,7 @@ export default function ProjectDetailPage() {
                   <ProgressBar value={progressPercent} size="sm" showLabel={false} />
 
                   {/* Item count */}
-                  <p className="text-[11px] text-[#636366] mt-2 tabular-nums">
+                  <p className="text-[11px] text-[var(--text-tertiary)] mt-2 tabular-nums">
                     {opening.checked_items} / {opening.total_items} items
                   </p>
 

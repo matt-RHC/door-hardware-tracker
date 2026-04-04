@@ -42,7 +42,7 @@ export default function Navbar() {
   };
 
   return (
-    <nav className="relative bg-[#0a0a0f]/95 backdrop-blur-xl border-b border-white/[0.06]">
+    <nav className="relative bg-[var(--background)]/95 backdrop-blur-xl border-b border-[var(--border)]">
       {/* Subtle bottom glow line */}
       <div
         className="absolute bottom-0 left-0 right-0 h-[1px]"
@@ -76,12 +76,12 @@ export default function Navbar() {
           </div>
           <div className="flex flex-col">
             <span
-              className="font-display text-[13px] font-semibold tracking-wider text-[#e8e8ed] group-hover:text-[#5ac8fa] transition-colors"
+              className="font-display text-[13px] font-semibold tracking-wider text-[var(--text-primary)] group-hover:text-[#5ac8fa] transition-colors"
               style={{ fontFamily: "var(--font-display)" }}
             >
               RABBIT HOLE
             </span>
-            <span className="text-[10px] text-[#636366] tracking-widest uppercase">
+            <span className="text-[10px] text-[var(--text-tertiary)] tracking-widest uppercase">
               Door Hardware
             </span>
           </div>
@@ -93,12 +93,12 @@ export default function Navbar() {
           <ThemeToggle />
           {!loading && email && (
             <>
-              <span className="hidden sm:inline text-[12px] text-[#636366] tabular-nums">
+              <span className="hidden sm:inline text-[12px] text-[var(--text-tertiary)] tabular-nums">
                 {email}
               </span>
               <button
                 onClick={handleSignOut}
-                className="glow-btn--ghost px-3 py-1.5 text-[12px] rounded-md border border-white/[0.06] hover:border-white/[0.12] transition-all"
+                className="glow-btn--ghost px-3 py-1.5 text-[12px] rounded-md border border-[var(--border)] hover:border-[var(--border-hover)] transition-all"
               >
                 Sign Out
               </button>

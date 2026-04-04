@@ -493,15 +493,15 @@ export default function DoorDetailPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
-        <div className="text-[#a1a1a6]">Loading...</div>
+      <div className="min-h-screen bg-[var(--background)] flex items-center justify-center">
+        <div className="text-[var(--text-secondary)]">Loading...</div>
       </div>
     );
   }
 
   if (error && !opening) {
     return (
-      <div className="min-h-screen bg-black p-4">
+      <div className="min-h-screen bg-[var(--background)] p-4">
         <div className="p-4 bg-[rgba(255,69,58,0.15)] border border-[#ff453a] rounded-lg text-[#ff453a]">
           {error}
         </div>
@@ -558,7 +558,7 @@ export default function DoorDetailPage() {
       <OfflineIndicator />
 
       {/* Sticky Header */}
-      <header className="sticky top-0 z-50 bg-black/85 backdrop-blur-xl border-b border-white/[0.08]">
+      <header className="sticky top-0 z-50 bg-[var(--background)]/85 backdrop-blur-xl border-b border-[var(--border)]">
         <div className="max-w-[430px] md:max-w-[900px] mx-auto px-4 py-4 flex items-center justify-between">
           <button
             onClick={() => router.push(`/project/${projectId}`)}
@@ -568,13 +568,13 @@ export default function DoorDetailPage() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
           </button>
-          <h1 className="text-[17px] font-semibold text-[#f5f5f7]">
+          <h1 className="text-[17px] font-semibold text-[var(--text-primary)]">
             Door {opening.door_number}
           </h1>
           {!editingOpening && (
             <button
               onClick={startEditOpening}
-              className="text-[#a1a1a6] hover:text-[#f5f5f7] p-2.5 -m-1.5"
+              className="text-[var(--text-tertiary)] hover:text-[var(--text-primary)] p-2.5 -m-1.5"
               title="Edit door details"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -588,82 +588,82 @@ export default function DoorDetailPage() {
       <main className="max-w-[430px] md:max-w-[900px] mx-auto px-4 py-6">
         {/* Edit Opening Form (full width, above hero) */}
         {editingOpening && editingOpeningData && (
-          <div className="mb-6 bg-white/[0.04] border border-white/[0.08] rounded-xl p-4 space-y-4">
+          <div className="mb-6 bg-[var(--surface)] border border-[var(--border)] rounded-xl p-4 space-y-4">
             <div>
-              <label className="block text-[13px] text-[#a1a1a6] mb-2">Door Number</label>
+              <label className="block text-[13px] text-[var(--text-secondary)] mb-2">Door Number</label>
               <input
                 type="text"
                 value={editingOpeningData.door_number}
                 onChange={(e) => setEditingOpeningData(prev => prev ? { ...prev, door_number: e.target.value } : null)}
-                className="w-full px-3 py-2.5 bg-white/[0.04] border border-white/[0.08] rounded-lg text-[#f5f5f7] placeholder-[#6e6e73] focus:border-[rgba(10,132,255,0.3)] focus:outline-none text-[15px]"
+                className="w-full px-3 py-2.5 bg-[var(--surface)] border border-[var(--border)] rounded-lg text-[var(--text-primary)] placeholder-[var(--text-tertiary)] focus:border-[rgba(10,132,255,0.3)] focus:outline-none text-[15px]"
               />
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-[13px] text-[#a1a1a6] mb-2">HW Set</label>
+                <label className="block text-[13px] text-[var(--text-secondary)] mb-2">HW Set</label>
                 <input
                   type="text"
                   value={editingOpeningData.hw_set || ""}
                   onChange={(e) => setEditingOpeningData(prev => prev ? { ...prev, hw_set: e.target.value || null } : null)}
                   placeholder="Optional"
-                  className="w-full px-3 py-2.5 bg-white/[0.04] border border-white/[0.08] rounded-lg text-[#f5f5f7] placeholder-[#6e6e73] focus:border-[rgba(10,132,255,0.3)] focus:outline-none text-[15px]"
+                  className="w-full px-3 py-2.5 bg-[var(--surface)] border border-[var(--border)] rounded-lg text-[var(--text-primary)] placeholder-[var(--text-tertiary)] focus:border-[rgba(10,132,255,0.3)] focus:outline-none text-[15px]"
                 />
               </div>
               <div>
-                <label className="block text-[13px] text-[#a1a1a6] mb-2">Location</label>
+                <label className="block text-[13px] text-[var(--text-secondary)] mb-2">Location</label>
                 <input
                   type="text"
                   value={editingOpeningData.location || ""}
                   onChange={(e) => setEditingOpeningData(prev => prev ? { ...prev, location: e.target.value || null } : null)}
                   placeholder="Optional"
-                  className="w-full px-3 py-2.5 bg-white/[0.04] border border-white/[0.08] rounded-lg text-[#f5f5f7] placeholder-[#6e6e73] focus:border-[rgba(10,132,255,0.3)] focus:outline-none text-[15px]"
+                  className="w-full px-3 py-2.5 bg-[var(--surface)] border border-[var(--border)] rounded-lg text-[var(--text-primary)] placeholder-[var(--text-tertiary)] focus:border-[rgba(10,132,255,0.3)] focus:outline-none text-[15px]"
                 />
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-[13px] text-[#a1a1a6] mb-2">Door Type</label>
+                <label className="block text-[13px] text-[var(--text-secondary)] mb-2">Door Type</label>
                 <input
                   type="text"
                   value={editingOpeningData.door_type || ""}
                   onChange={(e) => setEditingOpeningData(prev => prev ? { ...prev, door_type: e.target.value || null } : null)}
                   placeholder="Optional"
-                  className="w-full px-3 py-2.5 bg-white/[0.04] border border-white/[0.08] rounded-lg text-[#f5f5f7] placeholder-[#6e6e73] focus:border-[rgba(10,132,255,0.3)] focus:outline-none text-[15px]"
+                  className="w-full px-3 py-2.5 bg-[var(--surface)] border border-[var(--border)] rounded-lg text-[var(--text-primary)] placeholder-[var(--text-tertiary)] focus:border-[rgba(10,132,255,0.3)] focus:outline-none text-[15px]"
                 />
               </div>
               <div>
-                <label className="block text-[13px] text-[#a1a1a6] mb-2">Frame Type</label>
+                <label className="block text-[13px] text-[var(--text-secondary)] mb-2">Frame Type</label>
                 <input
                   type="text"
                   value={editingOpeningData.frame_type || ""}
                   onChange={(e) => setEditingOpeningData(prev => prev ? { ...prev, frame_type: e.target.value || null } : null)}
                   placeholder="Optional"
-                  className="w-full px-3 py-2.5 bg-white/[0.04] border border-white/[0.08] rounded-lg text-[#f5f5f7] placeholder-[#6e6e73] focus:border-[rgba(10,132,255,0.3)] focus:outline-none text-[15px]"
+                  className="w-full px-3 py-2.5 bg-[var(--surface)] border border-[var(--border)] rounded-lg text-[var(--text-primary)] placeholder-[var(--text-tertiary)] focus:border-[rgba(10,132,255,0.3)] focus:outline-none text-[15px]"
                 />
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-[13px] text-[#a1a1a6] mb-2">Fire Rating</label>
+                <label className="block text-[13px] text-[var(--text-secondary)] mb-2">Fire Rating</label>
                 <input
                   type="text"
                   value={editingOpeningData.fire_rating || ""}
                   onChange={(e) => setEditingOpeningData(prev => prev ? { ...prev, fire_rating: e.target.value || null } : null)}
                   placeholder="Optional"
-                  className="w-full px-3 py-2.5 bg-white/[0.04] border border-white/[0.08] rounded-lg text-[#f5f5f7] placeholder-[#6e6e73] focus:border-[rgba(10,132,255,0.3)] focus:outline-none text-[15px]"
+                  className="w-full px-3 py-2.5 bg-[var(--surface)] border border-[var(--border)] rounded-lg text-[var(--text-primary)] placeholder-[var(--text-tertiary)] focus:border-[rgba(10,132,255,0.3)] focus:outline-none text-[15px]"
                 />
               </div>
               <div>
-                <label className="block text-[13px] text-[#a1a1a6] mb-2">Hand</label>
+                <label className="block text-[13px] text-[var(--text-secondary)] mb-2">Hand</label>
                 <input
                   type="text"
                   value={editingOpeningData.hand || ""}
                   onChange={(e) => setEditingOpeningData(prev => prev ? { ...prev, hand: e.target.value || null } : null)}
                   placeholder="Optional"
-                  className="w-full px-3 py-2.5 bg-white/[0.04] border border-white/[0.08] rounded-lg text-[#f5f5f7] placeholder-[#6e6e73] focus:border-[rgba(10,132,255,0.3)] focus:outline-none text-[15px]"
+                  className="w-full px-3 py-2.5 bg-[var(--surface)] border border-[var(--border)] rounded-lg text-[var(--text-primary)] placeholder-[var(--text-tertiary)] focus:border-[rgba(10,132,255,0.3)] focus:outline-none text-[15px]"
                 />
               </div>
             </div>
@@ -672,14 +672,14 @@ export default function DoorDetailPage() {
               <button
                 onClick={saveEditOpening}
                 disabled={savingOpening}
-                className="flex-1 px-4 py-2.5 bg-[#0a84ff] hover:bg-[#0a84ff]/80 disabled:bg-white/[0.04] text-white disabled:text-[#6e6e73] rounded-lg transition-colors text-[15px] font-medium"
+                className="flex-1 px-4 py-2.5 bg-[#0a84ff] hover:bg-[#0a84ff]/80 disabled:bg-[var(--surface)] text-white disabled:text-[var(--text-tertiary)] rounded-lg transition-colors text-[15px] font-medium"
               >
                 {savingOpening ? "Saving..." : "Save"}
               </button>
               <button
                 onClick={cancelEditOpening}
                 disabled={savingOpening}
-                className="flex-1 px-4 py-2.5 bg-white/[0.04] border border-white/[0.08] hover:bg-white/[0.07] disabled:opacity-50 text-[#a1a1a6] rounded-lg transition-colors text-[15px] font-medium"
+                className="flex-1 px-4 py-2.5 bg-[var(--surface)] border border-[var(--border)] hover:bg-[var(--surface-hover)] disabled:opacity-50 text-[var(--text-secondary)] rounded-lg transition-colors text-[15px] font-medium"
               >
                 Cancel
               </button>
@@ -689,7 +689,7 @@ export default function DoorDetailPage() {
 
         {/* Hero Card */}
         {!editingOpening && (
-          <div className="mb-6 bg-white/[0.04] border border-white/[0.08] rounded-xl p-4">
+          <div className="mb-6 bg-[var(--surface)] border border-[var(--border)] rounded-xl p-4">
             <h1 className="text-[34px] md:text-[42px] font-bold tracking-tight text-[var(--text-primary)] mb-2">
               {opening.door_number}
             </h1>
@@ -711,7 +711,7 @@ export default function DoorDetailPage() {
 
             <div className="flex flex-wrap gap-2">
               {opening.door_type && (
-                <span className="text-[11px] font-medium uppercase text-[#6e6e73] bg-white/[0.04] border border-white/[0.08] px-2 py-1 rounded-full">
+                <span className="text-[11px] font-medium uppercase text-[var(--text-tertiary)] bg-[var(--surface)] border border-[var(--border)] px-2 py-1 rounded-full">
                   {opening.door_type}
                 </span>
               )}
@@ -721,7 +721,7 @@ export default function DoorDetailPage() {
                 </span>
               )}
               {opening.hand && (
-                <span className="text-[11px] font-medium uppercase text-[#6e6e73] bg-white/[0.04] border border-white/[0.08] px-2 py-1 rounded-full">
+                <span className="text-[11px] font-medium uppercase text-[var(--text-tertiary)] bg-[var(--surface)] border border-[var(--border)] px-2 py-1 rounded-full">
                   {opening.hand}
                 </span>
               )}
@@ -733,8 +733,8 @@ export default function DoorDetailPage() {
         {!editingOpening && (
           <div className="mb-6">
             <div className="flex justify-between items-center mb-2">
-              <span className="text-[11px] uppercase font-medium text-[#6e6e73]">Progress</span>
-              <span className="text-[13px] text-[#a1a1a6]">
+              <span className="text-[11px] uppercase font-medium text-[var(--text-tertiary)]">Progress</span>
+              <span className="text-[13px] text-[var(--text-secondary)]">
                 {checkedItems} / {totalItems}
               </span>
             </div>
@@ -748,15 +748,15 @@ export default function DoorDetailPage() {
 
         {/* Tab Navigation */}
         {!editingOpening && (
-          <div className="flex gap-0.5 mb-6 bg-white/[0.04] rounded-lg p-1">
+          <div className="flex gap-0.5 mb-6 bg-[var(--surface)] rounded-lg p-1">
             {(['hardware', 'files', 'notes', 'qr'] as const).map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
                 className={`flex-1 px-3 py-3 rounded-lg text-[13px] font-medium uppercase transition-colors ${
                   activeTab === tab
-                    ? 'bg-white/[0.07] text-[#f5f5f7] border border-white/[0.15]'
-                    : 'text-[#6e6e73] hover:text-[#a1a1a6]'
+                    ? 'bg-[var(--surface-hover)] text-[var(--text-primary)] border border-[var(--border-hover)]'
+                    : 'text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]'
                 }`}
               >
                 {tab === 'qr' ? 'QR' : tab.charAt(0).toUpperCase() + tab.slice(1)}
@@ -769,17 +769,17 @@ export default function DoorDetailPage() {
         {activeTab === 'hardware' && !editingOpening && (
           <div className="space-y-3 mb-8">
             {opening.hardware_items.length === 0 ? (
-              <p className="text-[#a1a1a6] text-center py-8">No hardware items yet</p>
+              <p className="text-[var(--text-secondary)] text-center py-8">No hardware items yet</p>
             ) : (
               opening.hardware_items.map((item) => (
                 <div
                   key={item.id}
-                  className={`bg-white/[0.04] border rounded-xl p-3.5 transition-colors hover:bg-white/[0.07] hover:border-white/[0.14] ${
+                  className={`bg-[var(--surface)] border rounded-xl p-3.5 transition-colors hover:bg-[var(--surface-hover)] hover:border-[var(--border-hover)] ${
                     item.install_type === 'bench'
                       ? 'border-l-[3px] border-l-[#bf5af2] border-white/[0.08]'
                       : item.install_type === 'field'
                       ? 'border-l-[3px] border-l-[#ff9f0a] border-white/[0.08]'
-                      : 'border-white/[0.08]'
+                      : 'border-[var(--border)]'
                   }`}
                 >
                   {editingItemId === item.id && editingItem ? (
@@ -787,75 +787,75 @@ export default function DoorDetailPage() {
                     <div className="space-y-3">
                       <div className="grid grid-cols-2 gap-3">
                         <div>
-                          <label className="block text-[12px] text-[#a1a1a6] mb-1">Name</label>
+                          <label className="block text-[12px] text-[var(--text-secondary)] mb-1">Name</label>
                           <input
                             type="text"
                             value={editingItem.name}
                             onChange={(e) => setEditingItem({ ...editingItem, name: e.target.value })}
-                            className="w-full px-3 py-2 bg-white/[0.04] border border-white/[0.08] rounded-lg text-[#f5f5f7] placeholder-[#6e6e73] focus:border-[rgba(10,132,255,0.3)] focus:outline-none text-[13px]"
+                            className="w-full px-3 py-2 bg-[var(--surface)] border border-[var(--border)] rounded-lg text-[var(--text-primary)] placeholder-[var(--text-tertiary)] focus:border-[rgba(10,132,255,0.3)] focus:outline-none text-[13px]"
                           />
                         </div>
                         <div>
-                          <label className="block text-[12px] text-[#a1a1a6] mb-1">Qty</label>
+                          <label className="block text-[12px] text-[var(--text-secondary)] mb-1">Qty</label>
                           <input
                             type="number"
                             value={editingItem.qty}
                             onChange={(e) => setEditingItem({ ...editingItem, qty: parseInt(e.target.value) || 0 })}
-                            className="w-full px-3 py-2 bg-white/[0.04] border border-white/[0.08] rounded-lg text-[#f5f5f7] placeholder-[#6e6e73] focus:border-[rgba(10,132,255,0.3)] focus:outline-none text-[13px]"
+                            className="w-full px-3 py-2 bg-[var(--surface)] border border-[var(--border)] rounded-lg text-[var(--text-primary)] placeholder-[var(--text-tertiary)] focus:border-[rgba(10,132,255,0.3)] focus:outline-none text-[13px]"
                           />
                         </div>
                       </div>
 
                       <div className="grid grid-cols-3 gap-3">
                         <div>
-                          <label className="block text-[12px] text-[#a1a1a6] mb-1">Manufacturer</label>
+                          <label className="block text-[12px] text-[var(--text-secondary)] mb-1">Manufacturer</label>
                           <input
                             type="text"
                             value={editingItem.manufacturer || ""}
                             onChange={(e) => setEditingItem({ ...editingItem, manufacturer: e.target.value || null })}
                             placeholder="Optional"
-                            className="w-full px-3 py-2 bg-white/[0.04] border border-white/[0.08] rounded-lg text-[#f5f5f7] placeholder-[#6e6e73] focus:border-[rgba(10,132,255,0.3)] focus:outline-none text-[13px]"
+                            className="w-full px-3 py-2 bg-[var(--surface)] border border-[var(--border)] rounded-lg text-[var(--text-primary)] placeholder-[var(--text-tertiary)] focus:border-[rgba(10,132,255,0.3)] focus:outline-none text-[13px]"
                           />
                         </div>
                         <div>
-                          <label className="block text-[12px] text-[#a1a1a6] mb-1">Model</label>
+                          <label className="block text-[12px] text-[var(--text-secondary)] mb-1">Model</label>
                           <input
                             type="text"
                             value={editingItem.model || ""}
                             onChange={(e) => setEditingItem({ ...editingItem, model: e.target.value || null })}
                             placeholder="Optional"
-                            className="w-full px-3 py-2 bg-white/[0.04] border border-white/[0.08] rounded-lg text-[#f5f5f7] placeholder-[#6e6e73] focus:border-[rgba(10,132,255,0.3)] focus:outline-none text-[13px]"
+                            className="w-full px-3 py-2 bg-[var(--surface)] border border-[var(--border)] rounded-lg text-[var(--text-primary)] placeholder-[var(--text-tertiary)] focus:border-[rgba(10,132,255,0.3)] focus:outline-none text-[13px]"
                           />
                         </div>
                         <div>
-                          <label className="block text-[12px] text-[#a1a1a6] mb-1">Finish</label>
+                          <label className="block text-[12px] text-[var(--text-secondary)] mb-1">Finish</label>
                           <input
                             type="text"
                             value={editingItem.finish || ""}
                             onChange={(e) => setEditingItem({ ...editingItem, finish: e.target.value || null })}
                             placeholder="Optional"
-                            className="w-full px-3 py-2 bg-white/[0.04] border border-white/[0.08] rounded-lg text-[#f5f5f7] placeholder-[#6e6e73] focus:border-[rgba(10,132,255,0.3)] focus:outline-none text-[13px]"
+                            className="w-full px-3 py-2 bg-[var(--surface)] border border-[var(--border)] rounded-lg text-[var(--text-primary)] placeholder-[var(--text-tertiary)] focus:border-[rgba(10,132,255,0.3)] focus:outline-none text-[13px]"
                           />
                         </div>
                       </div>
 
                       <div className="grid grid-cols-2 gap-3">
                         <div>
-                          <label className="block text-[12px] text-[#a1a1a6] mb-1">Options</label>
+                          <label className="block text-[12px] text-[var(--text-secondary)] mb-1">Options</label>
                           <input
                             type="text"
                             value={editingItem.options || ""}
                             onChange={(e) => setEditingItem({ ...editingItem, options: e.target.value || null })}
                             placeholder="Optional"
-                            className="w-full px-3 py-2 bg-white/[0.04] border border-white/[0.08] rounded-lg text-[#f5f5f7] placeholder-[#6e6e73] focus:border-[rgba(10,132,255,0.3)] focus:outline-none text-[13px]"
+                            className="w-full px-3 py-2 bg-[var(--surface)] border border-[var(--border)] rounded-lg text-[var(--text-primary)] placeholder-[var(--text-tertiary)] focus:border-[rgba(10,132,255,0.3)] focus:outline-none text-[13px]"
                           />
                         </div>
                         <div>
-                          <label className="block text-[12px] text-[#a1a1a6] mb-1">Install Type</label>
+                          <label className="block text-[12px] text-[var(--text-secondary)] mb-1">Install Type</label>
                           <select
                             value={editingItem.install_type || ""}
                             onChange={(e) => setEditingItem({ ...editingItem, install_type: (e.target.value as 'bench' | 'field') || null })}
-                            className="w-full px-3 py-2 bg-white/[0.04] border border-white/[0.08] rounded-lg text-[#f5f5f7] focus:border-[rgba(10,132,255,0.3)] focus:outline-none text-[13px]"
+                            className="w-full px-3 py-2 bg-[var(--surface)] border border-[var(--border)] rounded-lg text-[var(--text-primary)] focus:border-[rgba(10,132,255,0.3)] focus:outline-none text-[13px]"
                           >
                             <option value="">Not set</option>
                             <option value="bench">Bench</option>
@@ -868,14 +868,14 @@ export default function DoorDetailPage() {
                         <button
                           onClick={saveEditItem}
                           disabled={savingItem}
-                          className="flex-1 px-3 py-2 bg-[#0a84ff] hover:bg-[#0a84ff]/80 disabled:bg-white/[0.04] text-white disabled:text-[#6e6e73] rounded-lg transition-colors text-[13px] font-medium"
+                          className="flex-1 px-3 py-2 bg-[#0a84ff] hover:bg-[#0a84ff]/80 disabled:bg-[var(--surface)] text-white disabled:text-[var(--text-tertiary)] rounded-lg transition-colors text-[13px] font-medium"
                         >
                           {savingItem ? "Saving..." : "Save"}
                         </button>
                         <button
                           onClick={cancelEditItem}
                           disabled={savingItem}
-                          className="flex-1 px-3 py-2 bg-white/[0.04] border border-white/[0.08] hover:bg-white/[0.07] disabled:opacity-50 text-[#a1a1a6] rounded-lg transition-colors text-[13px] font-medium"
+                          className="flex-1 px-3 py-2 bg-[var(--surface)] border border-[var(--border)] hover:bg-[var(--surface-hover)] disabled:opacity-50 text-[var(--text-secondary)] rounded-lg transition-colors text-[13px] font-medium"
                         >
                           Cancel
                         </button>
@@ -899,13 +899,13 @@ export default function DoorDetailPage() {
                         </div>
                         <div className="flex items-center gap-2">
                           {item.qty > 0 && (
-                            <span className="text-[12px] font-medium text-[#a1a1a6] bg-white/[0.04] px-2 py-1 rounded-lg border border-white/[0.08]">
+                            <span className="text-[12px] font-medium text-[var(--text-secondary)] bg-[var(--surface)] px-2 py-1 rounded-lg border border-[var(--border)]">
                               Qty {item.qty}
                             </span>
                           )}
                           <button
                             onClick={() => startEditItem(item)}
-                            className="text-[#6e6e73] hover:text-[#a1a1a6] p-2.5 -m-1.5"
+                            className="text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] p-2.5 -m-1.5"
                             title="Edit item"
                           >
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -916,13 +916,13 @@ export default function DoorDetailPage() {
                       </div>
 
                       {formatSpec(item) && (
-                        <p className="text-[13px] text-[#6e6e73] mb-2">
+                        <p className="text-[13px] text-[var(--text-tertiary)] mb-2">
                           {formatSpec(item)}
                         </p>
                       )}
 
                       {item.options && (
-                        <p className="text-[12px] text-[#6e6e73] mb-2">
+                        <p className="text-[12px] text-[var(--text-tertiary)] mb-2">
                           {item.options}
                         </p>
                       )}
@@ -930,7 +930,7 @@ export default function DoorDetailPage() {
                       {/* Install type selector (if not set) */}
                       {!item.install_type && (
                         <div className="flex flex-col gap-2 w-full mb-3">
-                          <span className="text-[12px] text-[#6e6e73]">Classify:</span>
+                          <span className="text-[12px] text-[var(--text-tertiary)]">Classify:</span>
                           <div className="flex flex-col gap-2 w-full">
                             <button
                               onClick={() => handleInstallTypeChange(item.id, 'bench')}
@@ -963,7 +963,7 @@ export default function DoorDetailPage() {
                                 className="flex items-center justify-center w-12 h-12 rounded-full transition-colors"
                                 style={{
                                   background: isActive ? '#30d158' : 'transparent',
-                                  border: isActive ? '2px solid #30d158' : '2px solid rgba(110,110,115,0.4)',
+                                  border: isActive ? '2px solid #30d158' : `2px solid var(--border)`,
                                 }}
                               >
                                 {isActive && (
@@ -972,14 +972,14 @@ export default function DoorDetailPage() {
                                   </svg>
                                 )}
                               </button>
-                              <span className="text-[10px] uppercase font-medium text-[#6e6e73]" style={{ color: isActive ? '#30d158' : '#6e6e73' }}>
+                              <span className="text-[10px] uppercase font-medium" style={{ color: isActive ? '#30d158' : 'var(--text-tertiary)' }}>
                                 {label}
                               </span>
                               {idx < getWorkflowSteps(item).length - 1 && (
                                 <div
                                   className="w-6 h-0.5"
                                   style={{
-                                    background: isActive ? '#30d158' : 'rgba(110,110,115,0.3)',
+                                    background: isActive ? '#30d158' : 'var(--border)',
                                   }}
                                 />
                               )}
@@ -994,7 +994,7 @@ export default function DoorDetailPage() {
                               item.id,
                               item.install_type === 'bench' ? 'field' : 'bench'
                             )}
-                            className="ml-2 text-[11px] text-[#6e6e73] hover:text-[#a1a1a6] underline"
+                            className="ml-2 text-[11px] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] underline"
                             title={`Switch to ${item.install_type === 'bench' ? 'field' : 'bench'}`}
                           >
                             Switch to {item.install_type === 'bench' ? 'Field' : 'Bench'}
@@ -1037,7 +1037,7 @@ export default function DoorDetailPage() {
                   className={`text-[12px] font-medium px-3 py-1.5 rounded-full transition-colors ${
                     activeCategory === cat.value
                       ? 'bg-[rgba(10,132,255,0.15)] border border-[#0a84ff] text-[#0a84ff]'
-                      : 'bg-white/[0.04] border border-white/[0.08] text-[#a1a1a6] hover:bg-white/[0.07]'
+                      : 'bg-[var(--surface)] border border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--surface-hover)]'
                   }`}
                 >
                   {cat.label}
@@ -1058,10 +1058,10 @@ export default function DoorDetailPage() {
                       <button
                         key={attachment.id}
                         onClick={() => setViewingAttachment(attachment)}
-                        className="w-full text-left bg-white/[0.04] border border-white/[0.08] rounded-xl overflow-hidden hover:bg-white/[0.07] hover:border-white/[0.14] transition-colors group"
+                        className="w-full text-left bg-[var(--surface)] border border-[var(--border)] rounded-xl overflow-hidden hover:bg-[var(--surface-hover)] hover:border-[var(--border-hover)] transition-colors group"
                       >
                         {/* Preview area */}
-                        <div className="relative w-full h-40 bg-white/[0.02] overflow-hidden">
+                        <div className="relative w-full h-40 bg-[var(--surface)] overflow-hidden">
                           {isImage ? (
                             <img
                               src={attachment.file_url}
@@ -1095,15 +1095,15 @@ export default function DoorDetailPage() {
                         {/* File info */}
                         <div className="p-3 flex items-center justify-between gap-2">
                           <div className="min-w-0 flex-1">
-                            <p className="text-[13px] font-medium text-[#f5f5f7] truncate">
+                            <p className="text-[13px] font-medium text-[var(--text-primary)] truncate">
                               {attachment.file_name}
                             </p>
-                            <p className="text-[11px] text-[#6e6e73] mt-0.5 capitalize">
+                            <p className="text-[11px] text-[var(--text-tertiary)] mt-0.5 capitalize">
                               {(attachment.category || 'general').replace('_', ' ')}
                               {attachment.uploaded_at && ` · ${new Date(attachment.uploaded_at).toLocaleDateString()}`}
                             </p>
                           </div>
-                          <div className="flex-shrink-0 w-8 h-8 rounded-full bg-white/[0.04] border border-white/[0.08] flex items-center justify-center">
+                          <div className="flex-shrink-0 w-8 h-8 rounded-full bg-[var(--surface)] border border-[var(--border)] flex items-center justify-center">
                             <svg className="w-4 h-4 text-[#0a84ff]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
@@ -1116,16 +1116,16 @@ export default function DoorDetailPage() {
               </div>
             ) : (
               <div className="text-center py-8">
-                <svg className="w-12 h-12 text-[#6e6e73] mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-12 h-12 text-[var(--text-tertiary)] mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
                 </svg>
-                <p className="text-[#a1a1a6] text-[15px]">No files yet</p>
-                <p className="text-[#6e6e73] text-[12px] mt-1">Upload drawings, plans, or photos</p>
+                <p className="text-[var(--text-secondary)] text-[15px]">No files yet</p>
+                <p className="text-[var(--text-tertiary)] text-[12px] mt-1">Upload drawings, plans, or photos</p>
               </div>
             )}
 
             {/* Upload button */}
-            <label className="block p-4 bg-white/[0.04] border border-dashed border-white/[0.12] rounded-xl text-center cursor-pointer hover:bg-white/[0.07] active:bg-white/[0.10] transition-colors">
+            <label className="block p-4 bg-[var(--surface)] border border-dashed border-[var(--border)] rounded-xl text-center cursor-pointer hover:bg-[var(--surface-hover)] active:bg-[var(--surface-hover)] transition-colors">
               <input
                 type="file"
                 onChange={(e) => {
@@ -1140,11 +1140,11 @@ export default function DoorDetailPage() {
                 <svg className="w-5 h-5 text-[#0a84ff]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                 </svg>
-                <p className="text-[15px] font-medium text-[#f5f5f7]">
+                <p className="text-[15px] font-medium text-[var(--text-primary)]">
                   {attachmentLoading ? "Uploading..." : "Upload File"}
                 </p>
               </div>
-              <p className="text-[12px] text-[#6e6e73] mt-1">
+              <p className="text-[12px] text-[var(--text-tertiary)] mt-1">
                 Images or PDF · Tap to browse
               </p>
             </label>
@@ -1158,12 +1158,12 @@ export default function DoorDetailPage() {
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder="Add notes about this opening..."
-              className="w-full px-4 py-3 bg-white/[0.04] border border-white/[0.08] rounded-xl text-[#f5f5f7] placeholder-[#6e6e73] focus:border-[rgba(10,132,255,0.3)] focus:outline-none min-h-32 resize-none text-[15px]"
+              className="w-full px-4 py-3 bg-[var(--surface)] border border-[var(--border)] rounded-xl text-[var(--text-primary)] placeholder-[var(--text-tertiary)] focus:border-[rgba(10,132,255,0.3)] focus:outline-none min-h-32 resize-none text-[15px]"
             />
             <button
               onClick={handleSaveNotes}
               disabled={savingNotes}
-              className="mt-4 px-4 py-2.5 bg-[#0a84ff] hover:bg-[#0a84ff]/80 disabled:bg-white/[0.04] text-white disabled:text-[#6e6e73] rounded-lg transition-colors text-[15px] font-medium"
+              className="mt-4 px-4 py-2.5 bg-[#0a84ff] hover:bg-[#0a84ff]/80 disabled:bg-[var(--surface)] text-white disabled:text-[var(--text-tertiary)] rounded-lg transition-colors text-[15px] font-medium"
             >
               {savingNotes ? "Saving..." : "Save Notes"}
             </button>
@@ -1173,7 +1173,7 @@ export default function DoorDetailPage() {
         {/* QR Tab */}
         {activeTab === 'qr' && !editingOpening && (
           <div className="flex flex-col items-center justify-center py-8 mb-8">
-            <div className="bg-white/[0.04] border border-white/[0.08] rounded-xl p-4 mb-4">
+            <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-4 mb-4">
               <QRCodeSVG
                 value={qrUrl}
                 size={200}
@@ -1181,7 +1181,7 @@ export default function DoorDetailPage() {
                 includeMargin={true}
               />
             </div>
-            <p className="text-[15px] text-[#a1a1a6] text-center mb-4">
+            <p className="text-[15px] text-[var(--text-secondary)] text-center mb-4">
               Scan to open this door on mobile
             </p>
             <button className="px-4 py-2.5 bg-[#0a84ff] hover:bg-[#0a84ff]/80 text-white rounded-lg transition-colors text-[15px] font-medium">
@@ -1200,7 +1200,7 @@ export default function DoorDetailPage() {
             className={`flex flex-col items-center gap-1 px-3 py-2 transition-colors ${
               activeTab === tab
                 ? 'text-[#0a84ff]'
-                : 'text-[#6e6e73] hover:text-[#a1a1a6]'
+                : 'text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]'
             }`}
           >
             {tab === 'hardware' && (
@@ -1253,16 +1253,16 @@ export default function DoorDetailPage() {
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="panel corner-brackets w-full max-w-sm p-5 animate-fade-in-up">
             <h3
-              className="text-[15px] font-bold text-[#e8e8ed] mb-3"
+              className="text-[15px] font-bold text-[var(--text-primary)] mb-3"
               style={{ fontFamily: "var(--font-display)", letterSpacing: "0.03em" }}
             >
               APPLY TO ALL?
             </h3>
-            <p className="text-[13px] text-[#a1a1a6] mb-1">
-              <span className="text-[#e8e8ed] font-medium">{classifyPrompt.itemName}</span> appears in{" "}
+            <p className="text-[13px] text-[var(--text-secondary)] mb-1">
+              <span className="text-[var(--text-primary)] font-medium">{classifyPrompt.itemName}</span> appears in{" "}
               <span className="text-[#5ac8fa] font-medium">{classifyPrompt.totalCount}</span> openings.
             </p>
-            <p className="text-[13px] text-[#a1a1a6] mb-4">
+            <p className="text-[13px] text-[var(--text-secondary)] mb-4">
               Classify all as{" "}
               <span
                 className="font-medium"
@@ -1300,9 +1300,9 @@ export default function DoorDetailPage() {
                 type="checkbox"
                 checked={dontAskClassify}
                 onChange={(e) => setDontAskClassify(e.target.checked)}
-                className="w-4 h-4 rounded border-[#3a3a3c] bg-transparent accent-[#5ac8fa]"
+                className="w-4 h-4 rounded border-[var(--border)] bg-transparent accent-[#5ac8fa]"
               />
-              <span className="text-[11px] text-[#636366]">Don&apos;t ask again (apply to all automatically)</span>
+              <span className="text-[11px] text-[var(--text-tertiary)]">Don&apos;t ask again (apply to all automatically)</span>
             </label>
           </div>
         </div>
@@ -1313,22 +1313,22 @@ export default function DoorDetailPage() {
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="panel corner-brackets w-full max-w-sm p-5 animate-fade-in-up">
             <h3
-              className="text-[15px] font-bold text-[#e8e8ed] mb-3"
+              className="text-[15px] font-bold text-[var(--text-primary)] mb-3"
               style={{ fontFamily: "var(--font-display)", letterSpacing: "0.03em" }}
             >
               APPLY EDIT TO ALL?
             </h3>
-            <p className="text-[13px] text-[#a1a1a6] mb-1">
-              <span className="text-[#e8e8ed] font-medium">{editApplyAllPrompt.originalName}</span> appears in{" "}
+            <p className="text-[13px] text-[var(--text-secondary)] mb-1">
+              <span className="text-[var(--text-primary)] font-medium">{editApplyAllPrompt.originalName}</span> appears in{" "}
               <span className="text-[#5ac8fa] font-medium">{editApplyAllPrompt.totalCount}</span> openings.
             </p>
-            <p className="text-[13px] text-[#a1a1a6] mb-1">
+            <p className="text-[13px] text-[var(--text-secondary)] mb-1">
               Changed fields:{" "}
-              <span className="text-[#e8e8ed]">
+              <span className="text-[var(--text-primary)]">
                 {Object.keys(editApplyAllPrompt.updates).join(", ")}
               </span>
             </p>
-            <p className="text-[13px] text-[#a1a1a6] mb-4">
+            <p className="text-[13px] text-[var(--text-secondary)] mb-4">
               Apply these changes to all matching items?
             </p>
 
@@ -1360,9 +1360,9 @@ export default function DoorDetailPage() {
                 type="checkbox"
                 checked={dontAskEditApplyAll}
                 onChange={(e) => setDontAskEditApplyAll(e.target.checked)}
-                className="w-4 h-4 rounded border-[#3a3a3c] bg-transparent accent-[#5ac8fa]"
+                className="w-4 h-4 rounded border-[var(--border)] bg-transparent accent-[#5ac8fa]"
               />
-              <span className="text-[11px] text-[#636366]">Don&apos;t ask again (apply to all automatically)</span>
+              <span className="text-[11px] text-[var(--text-tertiary)]">Don&apos;t ask again (apply to all automatically)</span>
             </label>
           </div>
         </div>
