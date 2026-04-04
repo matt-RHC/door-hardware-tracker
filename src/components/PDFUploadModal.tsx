@@ -657,15 +657,81 @@ async function splitPDFFixed(buffer: ArrayBuffer, pagesPerChunk: number): Promis
   return chunks;
 }
 
-/** Deduplicate hardware sets by set_id (later chunks win for items, but we merge) */
+// --- Hardware item dedup helpers (Level 2: cross-chunk, Level 3: pre-save) ---
+
+const NAME_ABBREVIATIONS: Record<string, string> = {
+  'cont.': 'continuous', 'cont': 'continuous',
+  'flr': 'floor', 'flr.': 'floor',
+  'w/': 'with ', 'w/o': 'without',
+  'mtd': 'mounted', 'mtd.': 'mounted',
+  'hd': 'heavy duty', 'hd.': 'heavy duty',
+  'adj': 'adjustable', 'adj.': 'adjustable',
+  'auto': 'automatic', 'auto.': 'automatic',
+  'elec': 'electric', 'elec.': 'electric',
+  'mag': 'magnetic', 'mag.': 'magnetic',
+  'mech': 'mechanical', 'mech.': 'mechanical',
+  'ss': 'stainless steel',
+  'alum': 'aluminum', 'alum.': 'aluminum',
+  'brz': 'bronze', 'brz.': 'bronze',
+  'sfc': 'surface', 'sfc.': 'surface',
+  'conc': 'concealed', 'conc.': 'concealed',
+  'ovhd': 'overhead', 'ovhd.': 'overhead',
+  'thresh': 'threshold', 'thresh.': 'threshold',
+};
+
+function normalizeItemName(name: string): string {
+  let n = name.toLowerCase().trim();
+  for (const [abbr, full] of Object.entries(NAME_ABBREVIATIONS)) {
+    const escaped = abbr.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    n = n.replace(new RegExp(`\\b${escaped}\\b`, 'g'), full);
+    if (abbr === 'w/') n = n.replace(/\bw\//g, 'with ');
+  }
+  return n.replace(/[()]/g, '').replace(/\s+/g, ' ').replace(/[,;.]+$/, '').trim();
+}
+
+function hardwareItemDedupKey(item: HardwareItem): string {
+  const model = (item.model || '').trim().toLowerCase();
+  if (model) return `model:${model}`;
+  return `name:${normalizeItemName(item.name)}`;
+}
+
+/** Deduplicate hardware items, keeping the version with more complete data */
+function deduplicateHardwareItems(items: HardwareItem[]): HardwareItem[] {
+  const seen = new Map<string, HardwareItem>();
+  for (const item of items) {
+    const key = hardwareItemDedupKey(item);
+    const existing = seen.get(key);
+    if (!existing) {
+      seen.set(key, item);
+    } else {
+      // Keep the version with more populated fields
+      const existingScore = [existing.name, existing.model, existing.manufacturer, existing.finish].filter(Boolean).length;
+      const newScore = [item.name, item.model, item.manufacturer, item.finish].filter(Boolean).length;
+      if (newScore > existingScore) seen.set(key, item);
+    }
+  }
+  return Array.from(seen.values());
+}
+
+/** Deduplicate hardware sets by set_id, merge items across chunks, then dedup items */
 function mergeHardwareSets(allSets: HardwareSet[]): HardwareSet[] {
   const map = new Map<string, HardwareSet>();
   for (const set of allSets) {
     const existing = map.get(set.set_id);
-    if (!existing || set.items.length > existing.items.length) {
-      // Keep the version with more items (more complete extraction)
-      map.set(set.set_id, set);
+    if (!existing) {
+      map.set(set.set_id, { ...set, items: [...set.items] });
+    } else {
+      // Merge items from both versions, then dedup below
+      existing.items.push(...set.items);
+      // Keep the longer heading if available
+      if (set.heading && (!existing.heading || set.heading.length > existing.heading.length)) {
+        existing.heading = set.heading;
+      }
     }
+  }
+  // Dedup items within each merged set
+  for (const set of map.values()) {
+    set.items = deduplicateHardwareItems(set.items);
   }
   return Array.from(map.values());
 }

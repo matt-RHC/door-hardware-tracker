@@ -81,6 +81,56 @@ class ExtractionResult(BaseModel):
     error: str = ""
 
 
+# --- Hardware Item Dedup (Level 1: within-chunk/within-page) ---
+
+def _normalize_item_name(name: str) -> str:
+    """Normalize hardware item name for dedup comparison."""
+    _ABBREVIATIONS = {
+        'cont.': 'continuous', 'cont': 'continuous',
+        'flr': 'floor', 'flr.': 'floor',
+        'w/': 'with ', 'w/o': 'without',
+        'mtd': 'mounted', 'mtd.': 'mounted',
+        'hd': 'heavy duty', 'hd.': 'heavy duty',
+        'adj': 'adjustable', 'adj.': 'adjustable',
+        'ss': 'stainless steel',
+        'alum': 'aluminum', 'alum.': 'aluminum',
+        'sfc': 'surface', 'sfc.': 'surface',
+        'conc': 'concealed', 'conc.': 'concealed',
+        'thresh': 'threshold', 'thresh.': 'threshold',
+    }
+    n = name.lower().strip()
+    for abbr, full in _ABBREVIATIONS.items():
+        escaped = re.escape(abbr)
+        n = re.sub(rf"\b{escaped}\b", full, n)
+    return re.sub(r"\s+", " ", n).strip(" ,;.")
+
+
+def _item_dedup_key(item: HardwareItem) -> str:
+    """Generate a dedup key: prefer model number, fall back to normalized name."""
+    model = item.model.strip().lower()
+    if model:
+        return f"model:{model}"
+    return f"name:{_normalize_item_name(item.name)}"
+
+
+def _item_completeness(item: HardwareItem) -> int:
+    """Score how many fields are populated (more = more complete)."""
+    return sum(1 for v in [item.name, item.model, item.manufacturer, item.finish] if v.strip())
+
+
+def deduplicate_hardware_items(items: list[HardwareItem]) -> list[HardwareItem]:
+    """Deduplicate hardware items, keeping the version with more complete data."""
+    seen: dict[str, HardwareItem] = {}
+    for item in items:
+        key = _item_dedup_key(item)
+        existing = seen.get(key)
+        if existing is None:
+            seen[key] = item
+        elif _item_completeness(item) > _item_completeness(existing):
+            seen[key] = item
+    return list(seen.values())
+
+
 # --- Column Detection for Opening List ---
 
 # --- Intelligent Column Detection ---
@@ -986,6 +1036,8 @@ def extract_hardware_sets_from_page(page, page_text: str) -> list[HardwareSetDef
         items = extract_hw_items_from_text(page_text)
 
     if items:
+        # Level 1 dedup: remove duplicates from within this page's extraction
+        items = deduplicate_hardware_items(items)
         sets.append(HardwareSetDef(
             set_id=set_id,
             heading=heading,
@@ -1060,6 +1112,8 @@ def extract_all_hardware_sets(pdf: pdfplumber.PDF) -> list[HardwareSetDef]:
                 for existing in all_sets:
                     if existing.set_id == hw_set.set_id:
                         existing.items.extend(hw_set.items)
+                        # Dedup after merge to catch cross-page duplicates
+                        existing.items = deduplicate_hardware_items(existing.items)
                         break
             else:
                 seen_set_ids.add(hw_set.set_id)
