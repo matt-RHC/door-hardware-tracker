@@ -77,6 +77,107 @@ COVER_PATTERNS = re.compile(
 )
 
 
+# --- Scanned / CIDFont Detection ---
+
+# Minimum characters on a page to consider it "native text" (not scanned)
+SCANNED_TEXT_THRESHOLD = 50
+
+# CID placeholder patterns — garbage text from CIDFont/Identity-H encoding
+CID_GARBAGE_PATTERNS = re.compile(
+    r"[\x00-\x08\x0e-\x1f]|"           # control characters
+    r"\(cid:\d+\)|"                      # literal CID references
+    r"[^\x00-\x7F]{10,}|"               # long runs of non-ASCII
+    r"(?:[A-Z]{1,2}\d{1,3}){5,}"         # repeated short code sequences (font glyph IDs)
+)
+
+
+def detect_page_scan_status(page) -> dict:
+    """
+    Detect whether a page is scanned (image-only), has CIDFont encoding issues,
+    or is native text.
+
+    Returns:
+        {
+            "is_scanned": bool,     # True if page is image-only (no meaningful text)
+            "has_cid_issues": bool,  # True if text looks like CIDFont garbage
+            "text_char_count": int,  # Number of extractable characters
+            "image_count": int,      # Number of images on the page
+            "garbage_ratio": float,  # Ratio of garbage characters to total (0.0 - 1.0)
+        }
+    """
+    text = page.extract_text() or ""
+    char_count = len(text.strip())
+    images = page.images if hasattr(page, "images") else []
+    image_count = len(images)
+
+    result = {
+        "is_scanned": False,
+        "has_cid_issues": False,
+        "text_char_count": char_count,
+        "image_count": image_count,
+        "garbage_ratio": 0.0,
+    }
+
+    # Scanned detection: very little text + images present
+    if char_count < SCANNED_TEXT_THRESHOLD and image_count > 0:
+        result["is_scanned"] = True
+        return result
+
+    # CIDFont garbage detection: text exists but is mostly unreadable
+    if char_count > 0:
+        garbage_matches = CID_GARBAGE_PATTERNS.findall(text)
+        garbage_chars = sum(len(m) for m in garbage_matches)
+        result["garbage_ratio"] = garbage_chars / char_count if char_count > 0 else 0.0
+        if result["garbage_ratio"] > 0.3:
+            result["has_cid_issues"] = True
+
+    return result
+
+
+def detect_pdf_source(metadata: dict) -> str:
+    """
+    Detect the PDF source/generator from metadata.
+
+    Returns one of: 'comsense', 's4h', 'word_excel', 'allegion',
+    'assa_abloy', 'bluebeam', 'unknown'
+    """
+    creator = (metadata.get("Creator") or metadata.get("creator") or "").lower()
+    producer = (metadata.get("Producer") or metadata.get("producer") or "").lower()
+    combined = f"{creator} {producer}"
+
+    # Bluebeam is very distinctive
+    if "bluebeam" in combined:
+        return "bluebeam"
+
+    # Allegion Overtur
+    if "overtur" in combined or "allegion" in combined:
+        return "allegion"
+
+    # ASSA ABLOY Openings Studio
+    if "assa" in combined or "abloy" in combined or "openings studio" in combined:
+        return "assa_abloy"
+
+    # Specification 4 Hardware (S4H)
+    if "s4h" in combined or "specification 4" in combined or "spec4" in combined:
+        return "s4h"
+
+    # Comsense typically exports via Microsoft Word
+    # Check for Word/Excel indicators (may also be manual submittals)
+    if "comsense" in combined:
+        return "comsense"
+
+    # Word/Excel PDF exports
+    if any(kw in combined for kw in ["microsoft word", "microsoft excel", "libreoffice", "openoffice"]):
+        return "word_excel"
+
+    # Comsense often uses Word as the engine but doesn't label it
+    # Additional heuristic: if Producer is a generic PDF library and no other match
+    if "word" in producer and "microsoft" not in producer:
+        return "unknown"
+
+    return "unknown"
+
+
 def classify_page(page, page_index: int) -> dict:
     """
     Classify a single page by extracting its text and matching patterns.
@@ -86,6 +187,9 @@ def classify_page(page, page_index: int) -> dict:
     text_lower = text.lower()
     word_count = len(text.split())
 
+    # Detect scanned / CIDFont issues
+    scan_status = detect_page_scan_status(page)
+
     result = {
         "index": page_index,
         "type": PAGE_TYPE_OTHER,
@@ -94,6 +198,9 @@ def classify_page(page, page_index: int) -> dict:
         "hw_set_ids": [],
         "has_door_numbers": False,
         "word_count": word_count,
+        "is_scanned": scan_status["is_scanned"],
+        "has_cid_issues": scan_status["has_cid_issues"],
+        "garbage_ratio": scan_status["garbage_ratio"],
     }
 
     # Check for cover page (usually first few pages, low content)
@@ -318,6 +425,9 @@ class handler(BaseHTTPRequestHandler):
             with pdfplumber.open(pdf_file, unicode_norm="NFC") as pdf:
                 total_pages = len(pdf.pages)
 
+                # Phase 0: Detect PDF source from metadata
+                pdf_source = detect_pdf_source(pdf.metadata or {})
+
                 # Phase 1: Classify every page (fast — text extraction only)
                 page_classifications = []
                 for i, page in enumerate(pdf.pages):
@@ -330,10 +440,24 @@ class handler(BaseHTTPRequestHandler):
                     max_chunk_pages=max_chunk_pages,
                 )
 
+            # Document-level scan/quality summary
+            scanned_pages = sum(1 for p in page_classifications if p.get("is_scanned"))
+            cid_issue_pages = sum(1 for p in page_classifications if p.get("has_cid_issues"))
+
+            # Determine recommended extraction strategy
+            if scanned_pages > total_pages * 0.5:
+                extraction_strategy = "claude_vision"
+            elif cid_issue_pages > total_pages * 0.3:
+                extraction_strategy = "pymupdf"
+            else:
+                extraction_strategy = "pdfplumber"
+
             # Build response
             response = {
                 "success": True,
                 "total_pages": total_pages,
+                "pdf_source": pdf_source,
+                "extraction_strategy": extraction_strategy,
                 "page_classifications": page_classifications,
                 "chunks": chunks,
                 "reference_pages": reference_pages,
@@ -358,6 +482,8 @@ class handler(BaseHTTPRequestHandler):
                         1 for p in page_classifications
                         if p["type"] == PAGE_TYPE_OTHER
                     ),
+                    "scanned_pages": scanned_pages,
+                    "cid_issue_pages": cid_issue_pages,
                     "chunk_count": len(chunks),
                 },
             }
