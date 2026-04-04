@@ -28,6 +28,7 @@ interface HardwareSet {
 interface DoorEntry {
   door_number: string
   hw_set: string
+  hw_heading: string
   location: string
   door_type: string
   frame_type: string
