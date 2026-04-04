@@ -817,7 +817,7 @@ export default function PDFUploadModal({
     buffer: ArrayBuffer,
     pageCount: number,
     parseOnly = false
-  ): Promise<{ doors: DoorEntry[]; sets: HardwareSet[] } | void> => {
+  ): Promise<{ doors: DoorEntry[]; sets: HardwareSet[]; flaggedDoors?: FlaggedDoor[] } | void> => {
     // Phase 1: Classify pages and find smart boundaries
     setStatus(`Analyzing ${pageCount}-page PDF structure...`);
     setProgress(2);

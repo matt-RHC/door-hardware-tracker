@@ -164,12 +164,40 @@ def get_confidence_scores(headers: list[str], mapping: dict[str, int]) -> dict[s
     return scores
 
 
+def looks_like_door_number(val: str) -> bool:
+    """Quick check if a cell value looks like a real door number (not an address or name)."""
+    s = val.strip()
+    if not s:
+        return False
+    # Must contain at least one digit
+    if not re.search(r"\d", s):
+        return False
+    # Must NOT contain spaces (door numbers are single tokens)
+    if " " in s:
+        return False
+    # Must be reasonably short (door numbers are <20 chars)
+    if len(s) > 20:
+        return False
+    # Reject phone numbers
+    if re.match(r"^\d{3}-\d{3}-\d{4}$", s):
+        return False
+    # Reject bare numbers (quantities, page refs)
+    if re.match(r"^\d{1,3}$", s):
+        return False
+    return True
+
+
 def find_door_schedule_table(page) -> tuple[list[str], list[list[str]], str]:
     """
     Find the Opening List / Door Schedule table on a page.
     Returns (headers, sample_rows, method).
+
+    Requires BOTH a door_number column AND at least one other recognized field
+    to avoid false positives on cover/title page tables.
     """
-    # Try line-based detection first (most PDFs have visible grid lines)
+    best_candidate = None
+    best_score = 0.0
+
     for strategy in ["lines", "text"]:
         settings = {
             "vertical_strategy": strategy,
@@ -190,21 +218,68 @@ def find_door_schedule_table(page) -> tuple[list[str], list[list[str]], str]:
         for table in tables:
             if not table or len(table) < 2:
                 continue
+
             headers = [clean_cell(c) for c in table[0]]
-            # Check if this looks like a door schedule
-            header_lower = " ".join(headers).lower()
-            has_door_col = any(
-                score_header_for_field(h, "door_number") >= 0.3
-                for h in headers if h
-            )
-            if not has_door_col:
+
+            # Must have at least 3 columns — real door schedules have many fields
+            if len([h for h in headers if h and h.strip()]) < 3:
                 continue
-            # Extract sample data rows (first 5)
+
+            # Score all fields against all headers
+            field_scores: dict[str, float] = {}
+            for field in COLUMN_KEYWORDS:
+                best_field_score = 0.0
+                for h in headers:
+                    if h and h.strip():
+                        s = score_header_for_field(h, field)
+                        best_field_score = max(best_field_score, s)
+                if best_field_score >= 0.3:
+                    field_scores[field] = best_field_score
+
+            # MUST have door_number
+            if "door_number" not in field_scores:
+                continue
+
+            # MUST have at least one other recognized field (hw_set, location,
+            # door_type, etc.) — a cover page won't have these
+            other_fields = {k for k in field_scores if k != "door_number"}
+            if len(other_fields) < 1:
+                continue
+
+            # Extract sample rows
             sample_rows = []
             for row in table[1:6]:
                 sample_rows.append([clean_cell(c) for c in row])
-            return headers, sample_rows, strategy
 
+            # Content validation: check if sample data actually looks like
+            # door numbers in the mapped door_number column
+            mapping = detect_column_mapping(headers)
+            door_col = mapping.get("door_number")
+            if door_col is not None:
+                door_values = [
+                    row[door_col] for row in sample_rows
+                    if door_col < len(row) and row[door_col].strip()
+                ]
+                if door_values:
+                    valid_count = sum(
+                        1 for v in door_values if looks_like_door_number(v)
+                    )
+                    # If less than 30% of sample values look like door numbers,
+                    # this is probably not a door schedule
+                    if valid_count / len(door_values) < 0.3:
+                        continue
+
+            # Compute overall quality score (average confidence of matched fields)
+            avg_confidence = sum(field_scores.values()) / len(field_scores)
+            # Bonus for more matched fields
+            quality = avg_confidence * (1 + 0.1 * len(field_scores))
+
+            if quality > best_score:
+                best_score = quality
+                best_candidate = (headers, sample_rows, strategy)
+
+    if best_candidate:
+        return best_candidate
     return [], [], ""
 
 
@@ -243,6 +318,14 @@ class handler(BaseHTTPRequestHandler):
                         mapping = detect_column_mapping(headers)
                         scores = get_confidence_scores(headers, mapping)
 
+                        # Compute overall confidence — if too low, mark as
+                        # low_confidence so frontend can warn the user
+                        avg_confidence = (
+                            sum(scores.values()) / len(scores)
+                            if scores else 0.0
+                        )
+                        low_confidence = avg_confidence < 0.4 or len(mapping) < 2
+
                         self._send_json(200, {
                             "success": True,
                             "page_index": pi,
@@ -250,6 +333,8 @@ class handler(BaseHTTPRequestHandler):
                             "headers": headers,
                             "auto_mapping": mapping,
                             "confidence_scores": scores,
+                            "avg_confidence": round(avg_confidence, 2),
+                            "low_confidence": low_confidence,
                             "sample_rows": sample_rows,
                             "field_labels": FIELD_LABELS,
                             "detection_method": method,

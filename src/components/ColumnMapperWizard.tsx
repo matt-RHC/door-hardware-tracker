@@ -15,6 +15,8 @@ export interface DetectMappingResponse {
   headers: string[];
   auto_mapping: ColumnMapping;
   confidence_scores: Record<string, number>;
+  avg_confidence?: number;
+  low_confidence?: boolean;
   sample_rows: string[][];
   field_labels: Record<string, string>;
   detection_method: string;
@@ -144,6 +146,20 @@ export default function ColumnMapperWizard({
           )}
         </p>
       </div>
+
+      {/* Low confidence warning */}
+      {data.low_confidence && (
+        <div className="px-4 py-3 bg-[rgba(255,159,10,0.08)] border border-[rgba(255,159,10,0.3)] rounded-lg">
+          <p className="text-[13px] text-[#ff9f0a] font-medium">
+            Low confidence detection
+          </p>
+          <p className="text-[12px] text-[#a1a1a6] mt-1">
+            The auto-detected mapping may be incorrect. Please verify each column
+            assignment carefully, or click &quot;Skip&quot; to let the system auto-detect
+            per chunk.
+          </p>
+        </div>
+      )}
 
       {/* Field assignment panel */}
       <div className="flex flex-wrap gap-2">
