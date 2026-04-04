@@ -83,15 +83,45 @@ interface LLMCorrections {
 
 // --- Helpers ---
 
-async function callPdfplumber(base64: string): Promise<PdfplumberResult> {
+// Category-aware qty cap: prevents aggregate totals from reaching UI
+const QTY_MAX_MAP: Record<string, number> = {
+  hinge: 5, continuous: 2, pivot: 2,
+  lockset: 1, latch: 1, passage: 1, privacy: 1, storeroom: 1,
+  classroom: 1, entrance: 1, mortise: 1, cylindrical: 1, deadbolt: 2,
+  exit: 2, panic: 2, 'flush bolt': 2, 'surface bolt': 2,
+  closer: 2, coordinator: 1, stop: 2, holder: 2,
+  silencer: 4, bumper: 4, threshold: 1, 'kick plate': 2,
+  seal: 3, gasket: 3, sweep: 1, 'door bottom': 1,
+  astragal: 1, cylinder: 2, core: 2, strike: 2,
+  pull: 2, push: 2, lever: 1, knob: 1,
+}
+
+function capItemQty(qty: number, name: string): number {
+  if (qty <= 0) return 1
+  const lower = name.toLowerCase()
+  for (const [keyword, max] of Object.entries(QTY_MAX_MAP)) {
+    if (lower.includes(keyword)) return Math.min(qty, max)
+  }
+  return Math.min(qty, 4)
+}
+
+async function callPdfplumber(
+  base64: string,
+  userColumnMapping?: Record<string, number> | null,
+): Promise<PdfplumberResult> {
   const baseUrl = process.env.NEXT_PUBLIC_APP_URL || (process.env.VERCEL_URL
     ? `https://${process.env.VERCEL_URL}`
     : 'http://localhost:3000')
 
+  const payload: Record<string, unknown> = { pdf_base64: base64 }
+  if (userColumnMapping) {
+    payload.user_column_mapping = userColumnMapping
+  }
+
   const response = await fetch(`${baseUrl}/api/extract-tables`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ pdf_base64: base64 }),
+    body: JSON.stringify(payload),
   })
 
   if (!response.ok) {
@@ -296,7 +326,7 @@ async function extractFromPDF(base64: string): Promise<{
     set_id: s.set_id,
     heading: s.heading,
     items: s.items.map(i => ({
-      qty: i.qty,
+      qty: capItemQty(i.qty, i.name),
       name: i.name,
       manufacturer: i.manufacturer,
       model: i.model,
@@ -322,6 +352,34 @@ async function extractFromPDF(base64: string): Promise<{
   const corrected = applyCorrections(hardwareSets, allDoors, corrections)
   hardwareSets = corrected.hardwareSets
   allDoors = corrected.doors
+
+  // --- Final programmatic qty cap (safety net after all corrections) ---
+  for (const set of hardwareSets) {
+    for (const item of set.items) {
+      const capped = capItemQty(item.qty, item.name)
+      if (capped !== item.qty) {
+        console.log(`[final-qty-cap] ${set.set_id}: "${item.name}" qty ${item.qty} → ${capped}`)
+        item.qty = capped
+      }
+    }
+  }
+
+  // --- Extract fire ratings from hw_heading if misplaced ---
+  const fireRatingPattern = /\b(\d{1,3}\s*[Mm]in|[123]\s*[Hh]r)\b/
+  for (const door of allDoors) {
+    if (!door.fire_rating) {
+      const match = fireRatingPattern.exec(door.hw_heading || '')
+      if (match) {
+        door.fire_rating = match[1]
+        door.hw_heading = (door.hw_heading || '').replace(match[0], '').trim()
+      }
+      const locMatch = fireRatingPattern.exec(door.location || '')
+      if (!door.fire_rating && locMatch) {
+        door.fire_rating = locMatch[1]
+        door.location = (door.location || '').replace(locMatch[0], '').trim()
+      }
+    }
+  }
 
   return {
     hardwareSets,

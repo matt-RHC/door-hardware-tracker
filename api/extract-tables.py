@@ -18,10 +18,14 @@ Location: /api/extract-tables.py (project root, Vercel Python runtime)
 import base64
 import io
 import json
+import logging
 import re
 import traceback
 import unicodedata
 from http.server import BaseHTTPRequestHandler
+
+logger = logging.getLogger("extract-tables")
+logging.basicConfig(level=logging.INFO)
 
 import pdfplumber
 from pydantic import BaseModel
@@ -79,6 +83,72 @@ class ExtractionResult(BaseModel):
     hw_sets_found: int = 0
     method: str = "pdfplumber"
     error: str = ""
+    confidence: str = "high"  # high | medium | low — shown to user
+    extraction_notes: list[str] = []  # human-readable notes about extraction quality
+
+
+# --- Category-Aware Quantity Validation ---
+# Expected per-opening quantity ranges by hardware category.
+# Values outside these ranges are likely aggregate/total quantities.
+EXPECTED_QTY_RANGES: dict[str, tuple[int, int]] = {
+    "hinge":              (2, 5),   # 3 standard, 4-5 for tall/heavy doors
+    "continuous_hinge":   (1, 2),
+    "pivot":              (1, 2),
+    "lockset":            (1, 1),
+    "exit_device":        (1, 2),
+    "flush_bolt":         (1, 2),
+    "closer":             (1, 2),
+    "coordinator":        (0, 1),
+    "stop":               (1, 2),
+    "holder":             (1, 2),
+    "silencer":           (2, 4),   # Typically 3 per frame
+    "threshold":          (1, 1),
+    "kick_plate":         (1, 2),
+    "seal":               (1, 3),   # Perimeter seals can be 1-3 pieces
+    "sweep":              (1, 1),
+    "astragal":           (1, 1),
+    "cylinder":           (1, 2),
+    "strike":             (1, 2),
+    "pull":               (1, 2),
+}
+
+# Map item names to categories using keyword matching
+_CATEGORY_PATTERNS: list[tuple[str, re.Pattern]] = [
+    ("continuous_hinge", re.compile(r"(?i)continuous\s*hinge|cont\.?\s*hinge")),
+    ("hinge",     re.compile(r"(?i)\bhinge|pivot|spring\s*hinge")),
+    ("pivot",     re.compile(r"(?i)\bpivot\b")),
+    ("lockset",   re.compile(r"(?i)lockset|latchset|latch\s*set|lock\s*set|passage|privacy|storeroom|classroom|entrance|mortise|cylindrical|deadbolt")),
+    ("exit_device", re.compile(r"(?i)exit\s*device|panic|rim\s*device|concealed\s*vertical|surface\s*vertical|push\s*bar|touch\s*bar")),
+    ("flush_bolt", re.compile(r"(?i)flush\s*bolt|surface\s*bolt")),
+    ("closer",    re.compile(r"(?i)\bcloser\b|door\s*check|floor\s*closer")),
+    ("coordinator", re.compile(r"(?i)\bcoordinator\b")),
+    ("stop",      re.compile(r"(?i)\bstop\b|wall\s*stop|floor\s*stop|overhead\s*stop|door\s*stop")),
+    ("holder",    re.compile(r"(?i)\bholder\b|hold\s*open")),
+    ("silencer",  re.compile(r"(?i)\bsilencer|bumper|mute")),
+    ("threshold", re.compile(r"(?i)\bthreshold|saddle")),
+    ("kick_plate", re.compile(r"(?i)kick\s*plate|protection\s*plate|mop\s*plate|armor\s*plate")),
+    ("seal",      re.compile(r"(?i)\bgasket|smoke\s*seal|acoustic\s*seal|weatherstrip|perimeter\s*seal|sound\s*seal")),
+    ("sweep",     re.compile(r"(?i)\bsweep|door\s*bottom|drop\s*seal|auto.*door\s*bottom")),
+    ("astragal",  re.compile(r"(?i)\bastragal|meeting\s*stile")),
+    ("cylinder",  re.compile(r"(?i)\bcylinder|core|interchangeable")),
+    ("strike",    re.compile(r"(?i)\bstrike\b|electric\s*strike|power\s*strike")),
+    ("pull",      re.compile(r"(?i)\bpull\b|push\s*plate|lever|knob")),
+]
+
+
+def _classify_hardware_item(name: str) -> str | None:
+    """Classify a hardware item name into a category for qty validation."""
+    for category, pattern in _CATEGORY_PATTERNS:
+        if pattern.search(name):
+            return category
+    return None
+
+
+def _max_qty_for_category(category: str | None) -> int:
+    """Return the maximum expected per-opening qty for a hardware category."""
+    if category and category in EXPECTED_QTY_RANGES:
+        return EXPECTED_QTY_RANGES[category][1]
+    return 4  # Conservative default for unknown categories
 
 
 # --- Hardware Item Dedup (Level 1: within-chunk/within-page) ---
@@ -128,7 +198,10 @@ def deduplicate_hardware_items(items: list[HardwareItem]) -> list[HardwareItem]:
             seen[key] = item
         elif _item_completeness(item) > _item_completeness(existing):
             seen[key] = item
-    return list(seen.values())
+    deduped = list(seen.values())
+    if len(deduped) < len(items):
+        logger.info(f"Dedup: {len(items)} → {len(deduped)} items (removed {len(items) - len(deduped)} duplicates)")
+    return deduped
 
 
 # --- Column Detection for Opening List ---
@@ -571,8 +644,9 @@ def clean_cell(val) -> str:
         if bad in s:
             s = s.replace(bad, MOJIBAKE_MAP[bad])
 
-    # Normalize Unicode to NFC form
-    s = unicodedata.normalize("NFC", s)
+    # Normalize Unicode to NFKC form (compatibility decomposition + canonical composition)
+    # Catches ligatures (fi→fi), width variants, superscripts, fractions at source
+    s = unicodedata.normalize("NFKC", s)
     # Strip non-printable control characters (keep newline/tab)
     s = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]", "", s)
     # Remove (cid:XX) artifacts from CIDFont failures
@@ -702,6 +776,11 @@ def is_valid_door_number(val: str, log_rejections: bool = False) -> bool:
     # Fallback: if it has 3+ consecutive digits and isn't a set ID, cautiously accept
     # This catches unconventional numbering we haven't seen yet.
     # Require 3+ digits to avoid matching bare quantities (20, 94, etc.)
+    # Reject pure-digit strings > 4 chars (project/document numbers like 303872)
+    if re.match(r'^\d{5,}$', clean):
+        if log_rejections:
+            print(f"[DOOR_VALIDATION] Rejected '{val}': pure numeric > 4 digits (project/doc number)")
+        return False
     if re.search(r'\d{3,}', clean) and len(clean) >= 3 and len(clean) <= 12:
         return True
 
@@ -944,8 +1023,8 @@ def extract_hardware_sets_from_page(page, page_text: str) -> list[HardwareSetDef
             qty_col = total_qty_col
             is_aggregate_qty = True  # Flag for normalization below
         elif qty_col is not None:
-            # Even when we found a "per-item" qty col, validate with heuristics:
-            # if all values are > 10, it's probably an aggregate column mislabeled
+            # Validate with heuristics: if >60% of values are >6,
+            # it's likely an aggregate column (total qty, not per-opening)
             data_rows = table[1:6]
             qty_values = []
             for row in data_rows:
@@ -954,8 +1033,11 @@ def extract_hardware_sets_from_page(page, page_text: str) -> list[HardwareSetDef
                     m = re.match(r"(\d+)", cells[qty_col])
                     if m:
                         qty_values.append(int(m.group(1)))
-            if qty_values and min(qty_values) > 6:
-                is_aggregate_qty = True
+            if qty_values:
+                over_threshold = sum(1 for v in qty_values if v > 6)
+                if over_threshold / len(qty_values) > 0.6:
+                    is_aggregate_qty = True
+                    logger.info(f"Qty column detected as aggregate ({over_threshold}/{len(qty_values)} values > 6)")
 
         # If we didn't find explicit headers, try positional inference
         # Many submittals have: Qty | Description | Manufacturer | Catalog No. | Finish
@@ -1002,17 +1084,32 @@ def extract_hardware_sets_from_page(page, page_text: str) -> list[HardwareSetDef
             if not HARDWARE_ITEM_NAMES.search(name_val) and len(name_val) < 3:
                 continue
 
-            # Get qty — door hardware per-opening quantities are always 1-6
-            # (hinges max ~4, panic devices ~2, flush bolts ~2).
-            # Any value > 6 is an aggregate/total column value; cap it.
+            # Classify item for category-aware qty validation
+            item_category = _classify_hardware_item(name_val)
+            max_qty = _max_qty_for_category(item_category)
+
+            # Get qty — use category-aware expected ranges instead of blind cap.
+            # Hinges: 2-5, locksets: 1, closers: 1-2, silencers: 2-4, etc.
             qty_val = 1
             if qty_col is not None and qty_col < len(cells):
-                raw_qty = cells[qty_col]
-                qty_match = re.match(r"(\d+)", raw_qty)
-                if qty_match:
-                    qty_val = int(qty_match.group(1))
-                    if qty_val > 6:
-                        qty_val = min(qty_val, 4)
+                raw_qty = cells[qty_col].strip()
+                # Handle text-only units: "EA", "PR", "SET" → default qty 1
+                if re.match(r"^(EA|PR|SET|PAIR|EACH)\.?$", raw_qty, re.IGNORECASE):
+                    qty_val = 1
+                else:
+                    qty_match = re.match(r"-?(\d+)", raw_qty)
+                    if qty_match:
+                        qty_val = int(qty_match.group(1))  # abs via group(1)
+                        # Zero qty → default to 1
+                        if qty_val == 0:
+                            qty_val = 1
+                        # Cap using category-aware max
+                        if is_aggregate_qty and qty_val > max_qty:
+                            logger.warning(f"Qty {qty_val} appears aggregate for '{name_val}' ({item_category or 'unknown'}), capped to {max_qty}")
+                            qty_val = max_qty
+                        elif qty_val > max_qty:
+                            logger.warning(f"Qty {qty_val} exceeds expected max {max_qty} for '{name_val}' ({item_category or 'unknown'}), capped")
+                            qty_val = max_qty
 
             # Handle text wrapping — if name is very long and contains what looks
             # like a split model/finish, try to separate
@@ -1295,51 +1392,214 @@ def extract_opening_list_text_align(
     return all_doors, tables_found
 
 
+def _detect_header_row_words(
+    row_words: list[dict],
+) -> dict[str, float] | None:
+    """
+    Check if a row of words (with x-positions) represents an Opening List header.
+    Returns {field_name: x_start_position} if it is, None otherwise.
+    """
+    header_kw = {
+        "door_number": re.compile(r"(?i)^(opening|door|mark|tag)$"),
+        "hw_set": re.compile(r"(?i)^(set|hdw|hw|hardware)$"),
+        "hw_heading": re.compile(r"(?i)^(heading)$"),
+        "location": re.compile(r"(?i)^(label|location|room|description|from)$"),
+        "door_type": re.compile(r"(?i)^(door)$"),
+        "frame_type": re.compile(r"(?i)^(frame)$"),
+        "fire_rating": re.compile(r"(?i)^(fire|rating|rated)$"),
+        "hand": re.compile(r"(?i)^(hand|handing|swing)$"),
+    }
+
+    # Combine multi-word headers: join adjacent words
+    text_combined = " ".join(w["text"] for w in row_words).lower()
+
+    found: dict[str, float] = {}
+    if re.search(r"\b(opening|door|mark)\b", text_combined):
+        # Find the x position of the "opening"/"door" word
+        for w in row_words:
+            if re.match(r"(?i)^(opening|door|mark|tag)$", w["text"]):
+                found["door_number"] = w["x0"]
+                break
+    if re.search(r"\b(hdw|hw|hardware)\s*(set|group)\b", text_combined):
+        for w in row_words:
+            if re.match(r"(?i)^(hdw|hw|hardware)$", w["text"]):
+                # Check if next word is "set"/"group"
+                found["hw_set"] = w["x0"]
+                break
+    if re.search(r"\b(hdw|hw|hardware)\s*heading\b", text_combined):
+        # Heading column — find the "heading" keyword and use its x
+        for w in row_words:
+            if re.match(r"(?i)^heading$", w["text"]):
+                # Use the x of the Hdw/HW before "Heading"
+                for w2 in row_words:
+                    if w2["x0"] < w["x0"] and re.match(r"(?i)^(hdw|hw)$", w2["text"]):
+                        if abs(w2["x0"] - found.get("hw_set", -999)) > 30:
+                            found["hw_heading"] = w2["x0"]
+                            break
+                if "hw_heading" not in found:
+                    found["hw_heading"] = w["x0"]
+                break
+    if re.search(r"\b(label|location|room|description)\b", text_combined):
+        for w in row_words:
+            if re.match(r"(?i)^(label|location|room|description)$", w["text"]):
+                found["location"] = w["x0"]
+                break
+        # "Opening Label" — use "Opening" word's x if near label
+        if "location" not in found:
+            for w in row_words:
+                if re.match(r"(?i)^opening$", w["text"]) and w["x0"] != found.get("door_number"):
+                    found["location"] = w["x0"]
+                    break
+    if re.search(r"\bdoor\s*type\b", text_combined):
+        for i, w in enumerate(row_words):
+            if re.match(r"(?i)^door$", w["text"]) and w["x0"] != found.get("door_number", -1):
+                found["door_type"] = w["x0"]
+                break
+    if re.search(r"\bframe\s*type\b", text_combined):
+        for w in row_words:
+            if re.match(r"(?i)^frame$", w["text"]):
+                found["frame_type"] = w["x0"]
+                break
+    if re.search(r"\b(fire|rating)\b", text_combined):
+        for w in row_words:
+            if re.match(r"(?i)^(fire|rating)$", w["text"]):
+                found["fire_rating"] = w["x0"]
+                break
+    if re.search(r"\b(hand|handing|swing)\b", text_combined):
+        for w in row_words:
+            if re.match(r"(?i)^(hand|handing|swing)$", w["text"]):
+                found["hand"] = w["x0"]
+                break
+
+    if len(found) >= 2 and "door_number" in found:
+        return found
+    return None
+
+
+def _assign_words_to_columns(
+    row_words: list[dict],
+    col_positions: list[float],
+    field_order: list[str],
+) -> dict[str, str]:
+    """
+    Assign words in a row to columns based on their x-position.
+    Each word goes to the column whose start position it's closest to (but not before).
+    """
+    col_values: dict[str, list[str]] = {f: [] for f in field_order}
+
+    for w in row_words:
+        x = w["x0"]
+        # Find which column this word belongs to
+        best_col = field_order[0]
+        for j, pos in enumerate(col_positions):
+            if x >= pos - 10:  # 10pt tolerance
+                best_col = field_order[j]
+        col_values[best_col].append(w["text"])
+
+    return {f: " ".join(words).strip() for f, words in col_values.items()}
+
+
 def extract_opening_list_text(pdf: pdfplumber.PDF) -> tuple[list[DoorEntry], int]:
     """
-    Fallback extraction using text parsing when table grid detection fails.
-    Looks for structured text patterns typical of Opening List pages.
+    Fallback extraction using word-level x-position alignment.
+    Uses pdfplumber's word extraction to get exact x-coordinates, then
+    clusters words into columns based on the header row's positions.
+    Works for PDFs with transparent/invisible grid lines.
     """
     all_doors: list[DoorEntry] = []
     seen_door_numbers: set[str] = set()
     tables_found = 0
+    col_positions: list[float] = []
+    field_order: list[str] = []
+    header_y: float | None = None
 
-    door_line_pattern = re.compile(
-        r"^(\S+)\s+"           # door number
-        r"([A-Z][A-Z0-9\-]+)"  # hw_set (starts with letter, alphanumeric with hyphens)
-    )
+    pages_since_header = 0  # Track how many pages since last header seen
 
     for page in pdf.pages:
-        text = page.extract_text() or ""
-        lines = text.split("\n")
+        words = page.extract_words(
+            keep_blank_chars=False,
+            x_tolerance=3,
+            y_tolerance=3,
+        )
+        if not words:
+            continue
 
-        for line in lines:
-            line = line.strip()
-            if not line:
+        # Group words by y-position (rows), with 4pt tolerance
+        rows: dict[float, list[dict]] = {}
+        for w in words:
+            y = round(w["top"] / 4) * 4  # snap to 4pt grid
+            if y not in rows:
+                rows[y] = []
+            rows[y].append(w)
+
+        # Sort each row by x position
+        for y in rows:
+            rows[y].sort(key=lambda w: w["x0"])
+
+        # Check if this page has the header
+        page_has_header = False
+        for y in sorted(rows.keys()):
+            result = _detect_header_row_words(rows[y])
+            if result:
+                page_has_header = True
+                if not col_positions:
+                    sorted_fields = sorted(result.items(), key=lambda x: x[1])
+                    col_positions = [pos for _, pos in sorted_fields]
+                    field_order = [field for field, _ in sorted_fields]
+                    logger.info(
+                        f"Opening list header: {field_order} at x={col_positions}"
+                    )
+                break
+
+        if page_has_header:
+            pages_since_header = 0
+        else:
+            pages_since_header += 1
+
+        # Only process pages with header or immediately after header pages
+        # Stop if we've gone 2+ pages without seeing a header (left the opening list)
+        if not col_positions:
+            continue
+        if not page_has_header and pages_since_header > 0 and all_doors:
+            # We've left the opening list section
+            continue
+
+        # Parse data rows on this page
+        for y in sorted(rows.keys()):
+            # Skip header rows
+            if _detect_header_row_words(rows[y]) is not None:
                 continue
 
-            m = door_line_pattern.match(line)
-            if m:
-                door_num = m.group(1)
-                if not is_valid_door_number(door_num):
-                    continue
-                if door_num in seen_door_numbers:
-                    continue
+            row_words = rows[y]
+            if not row_words:
+                continue
 
-                seen_door_numbers.add(door_num)
-                tables_found = max(tables_found, 1)
+            # Assign words to columns
+            vals = _assign_words_to_columns(row_words, col_positions, field_order)
 
-                parts = re.split(r"\s{2,}|\t", line)
-                entry = DoorEntry(
-                    door_number=door_num,
-                    hw_set=parts[1] if len(parts) > 1 else "",
-                    location=parts[2] if len(parts) > 2 else "",
-                    door_type=parts[3] if len(parts) > 3 else "",
-                    frame_type=parts[4] if len(parts) > 4 else "",
-                    fire_rating=parts[5] if len(parts) > 5 else "",
-                    hand=parts[6] if len(parts) > 6 else "",
-                )
-                all_doors.append(entry)
+            door_num = clean_cell(vals.get("door_number", ""))
+            if not door_num or not is_valid_door_number(door_num):
+                continue
+            if door_num in seen_door_numbers:
+                continue
+
+            seen_door_numbers.add(door_num)
+            tables_found = max(tables_found, 1)
+
+            entry = DoorEntry(
+                door_number=door_num,
+                hw_set=clean_cell(vals.get("hw_set", "")),
+                hw_heading=clean_cell(vals.get("hw_heading", "")),
+                location=clean_cell(vals.get("location", "")),
+                door_type=clean_cell(vals.get("door_type", "")),
+                frame_type=clean_cell(vals.get("frame_type", "")),
+                fire_rating=clean_cell(vals.get("fire_rating", "")),
+                hand=clean_cell(vals.get("hand", "")),
+            )
+            all_doors.append(entry)
+
+    if all_doors:
+        logger.info(f"Word-position fallback: {len(all_doors)} doors extracted")
 
     return all_doors, tables_found
 
@@ -1431,7 +1691,7 @@ class handler(BaseHTTPRequestHandler):
             pdf_bytes = base64.b64decode(pdf_base64)
             pdf_file = io.BytesIO(pdf_bytes)
 
-            with pdfplumber.open(pdf_file, unicode_norm="NFC") as pdf:
+            with pdfplumber.open(pdf_file, unicode_norm="NFKC") as pdf:
                 # Phase 1: Extract Hardware Sets (text-alignment detection)
                 hardware_sets = extract_all_hardware_sets(pdf)
 
@@ -1448,6 +1708,23 @@ class handler(BaseHTTPRequestHandler):
                 # silently removed.
                 confirmed_doors, flagged_doors = validate_door_number_consistency(openings)
 
+                # Determine confidence level based on extraction results
+                notes: list[str] = []
+                confidence = "high"
+
+                if len(confirmed_doors) == 0 and len(hardware_sets) > 0:
+                    confidence = "low"
+                    notes.append("No door openings found — hardware sets extracted but opening list could not be parsed. Manual review recommended.")
+                elif len(confirmed_doors) == 0 and len(hardware_sets) == 0:
+                    confidence = "low"
+                    notes.append("No doors or hardware sets found. The PDF format may not be supported by auto-extraction.")
+                elif len(flagged_doors) > len(confirmed_doors) * 0.3:
+                    confidence = "medium"
+                    notes.append(f"{len(flagged_doors)} door numbers flagged as potentially incorrect — review recommended.")
+                elif tables_found == 0:
+                    confidence = "medium"
+                    notes.append("No structured tables detected — data extracted via text position analysis.")
+
                 result = ExtractionResult(
                     success=len(confirmed_doors) > 0 or len(hardware_sets) > 0,
                     openings=confirmed_doors,
@@ -1458,6 +1735,8 @@ class handler(BaseHTTPRequestHandler):
                     tables_found=tables_found,
                     hw_sets_found=len(hardware_sets),
                     method="pdfplumber",
+                    confidence=confidence,
+                    extraction_notes=notes,
                 )
 
             self._send_json(200, result)
