@@ -356,7 +356,12 @@ async function extractFromPDF(base64: string): Promise<{
     const doorCount = doorsPerSet.get(set.set_id) || 0
     if (doorCount <= 1) continue
     for (const item of set.items) {
-      // If qty >= doorCount AND divides evenly, it's likely a total that needs normalizing
+      // Skip items already normalized by Python — re-dividing would corrupt them
+      // e.g., 21 hinges ÷ 7 doors = 3 (Python) → 3 ÷ 3 doors = 1 (wrong!)
+      if (item.qty_source === 'divided' || item.qty_source === 'flagged' || item.qty_source === 'capped') {
+        continue
+      }
+      // Only re-normalize items the LLM may have reverted to PDF totals
       if (item.qty >= doorCount) {
         const perOpening = item.qty / doorCount
         if (Number.isInteger(perOpening)) {
