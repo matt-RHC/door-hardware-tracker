@@ -408,10 +408,19 @@ export async function POST(request: NextRequest) {
     const fireRatingPattern = /\b(\d{1,3}\s*[Mm]in|[123]\s*[Hh]r)\b/
     for (const door of doors) {
       if (!door.fire_rating) {
+        // Check hw_heading first
         const match = fireRatingPattern.exec(door.hw_heading || '')
         if (match) {
           door.fire_rating = match[1]
           door.hw_heading = (door.hw_heading || '').replace(match[0], '').trim()
+        }
+        // Then check location (MCA/Comsense PDFs put fire ratings here)
+        if (!door.fire_rating) {
+          const locMatch = fireRatingPattern.exec(door.location || '')
+          if (locMatch) {
+            door.fire_rating = locMatch[1]
+            door.location = (door.location || '').replace(locMatch[0], '').trim()
+          }
         }
       }
     }
