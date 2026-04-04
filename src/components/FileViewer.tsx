@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { Attachment } from "@/lib/types/database";
 
 interface FileViewerProps {
@@ -8,114 +8,168 @@ interface FileViewerProps {
   onClose: () => void;
 }
 
+interface RenderedPage {
+  dataUrl: string;
+  naturalWidth: number;
+  naturalHeight: number;
+}
+
 export default function FileViewer({ attachment, onClose }: FileViewerProps) {
+  // ── Core state ──
   const [scale, setScale] = useState(1);
   const [fitScale, setFitScale] = useState(1);
   const [isFitted, setIsFitted] = useState(true);
   const [position, setPosition] = useState({ x: 0, y: 0 });
+
+  // ── Touch tracking ──
   const [isDragging, setIsDragging] = useState(false);
-  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
-  const [lastPinchDist, setLastPinchDist] = useState(0);
-  const [pdfDataUrl, setPdfDataUrl] = useState<string | null>(null);
-  const [pdfNaturalSize, setPdfNaturalSize] = useState({ w: 0, h: 0 });
-  const [pdfLoading, setPdfLoading] = useState(false);
-  const [pdfError, setPdfError] = useState<string | null>(null);
+  const dragStartRef = useRef({ x: 0, y: 0 });
+  const lastPinchDistRef = useRef(0);
+  const lastTapRef = useRef<{ time: number; x: number; y: number }>({ time: 0, x: 0, y: 0 });
+  const swipeStartRef = useRef<{ x: number; y: number; time: number } | null>(null);
+
+  // ── PDF state ──
   const [pdfPageNum, setPdfPageNum] = useState(1);
   const [pdfTotalPages, setPdfTotalPages] = useState(1);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const contentRef = useRef<HTMLDivElement>(null);
+  const [pdfLoading, setPdfLoading] = useState(false);
+  const [pdfError, setPdfError] = useState<string | null>(null);
+  const [pageCache, setPageCache] = useState<Map<number, RenderedPage>>(new Map());
+  const [showPageJump, setShowPageJump] = useState(false);
+  const [pageJumpValue, setPageJumpValue] = useState("");
+  const [swipeOffset, setSwipeOffset] = useState(0);
 
+  // ── Refs ──
+  const containerRef = useRef<HTMLDivElement>(null);
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const pdfDocRef = useRef<any>(null);
+  const pageJumpInputRef = useRef<HTMLInputElement>(null);
+  const isSwipingRef = useRef(false);
+
+  // ── File type detection ──
   const isPdf = attachment.file_type?.includes("pdf") ||
     attachment.file_name?.toLowerCase().endsWith(".pdf");
   const isImage = attachment.file_type?.startsWith("image/") ||
     /\.(jpg|jpeg|png|gif|webp|bmp|svg)$/i.test(attachment.file_name || "");
 
-  // Compute fit scale from content dimensions and container
+  // ── Fit scale computation ──
   const computeFitScale = useCallback((contentW: number, contentH: number) => {
     const containerW = containerRef.current?.clientWidth || window.innerWidth;
     const containerH = containerRef.current?.clientHeight || window.innerHeight;
-    const scaleW = containerW / contentW;
-    const scaleH = containerH / contentH;
-    return Math.min(scaleW, scaleH);
+    return Math.min(containerW / contentW, containerH / contentH);
   }, []);
 
-  // Render a PDF page to a data URL via canvas using pdf.js
-  const pdfDocRef = useRef<unknown>(null);
-  const renderPdfPage = useCallback(async (pageNum: number) => {
-    setPdfLoading(true);
-    setPdfError(null);
-
-    // Timeout after 15s — mobile can hang on worker init
-    const timeout = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error("timeout")), 15000)
-    );
-
+  // ── PDF page rendering ──
+  const renderPage = useCallback(async (pageNum: number): Promise<RenderedPage | null> => {
     try {
-      const result = await Promise.race([
-        (async () => {
-          const pdfjsLib = await import("pdfjs-dist");
-          // Use same-origin worker to avoid mobile Safari cross-origin worker issues
-          pdfjsLib.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
+      const pdfjsLib = await import("pdfjs-dist");
+      pdfjsLib.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
 
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          let pdf = pdfDocRef.current as any;
-          if (!pdf) {
-            // Fetch PDF as ArrayBuffer on main thread to avoid CORS issues in worker
-            const resp = await fetch(attachment.file_url);
-            const data = await resp.arrayBuffer();
-            const loadingTask = pdfjsLib.getDocument({ data });
-            pdf = await loadingTask.promise;
-            pdfDocRef.current = pdf;
-          }
-          setPdfTotalPages(pdf.numPages);
+      if (!pdfDocRef.current) {
+        const resp = await fetch(attachment.file_url);
+        const data = await resp.arrayBuffer();
+        const loadingTask = pdfjsLib.getDocument({ data });
+        pdfDocRef.current = await loadingTask.promise;
+        setPdfTotalPages(pdfDocRef.current.numPages);
+      }
 
-          const page = await pdf.getPage(pageNum);
-          // Render at 2x for retina sharpness, cap at 2 on mobile to save memory
-          const dpr = typeof window !== "undefined" ? Math.min(window.devicePixelRatio || 1, 2) : 2;
-          const baseViewport = page.getViewport({ scale: 1 });
-          const viewport = page.getViewport({ scale: dpr });
+      const pdf = pdfDocRef.current;
+      const page = await pdf.getPage(pageNum);
+      const dpr = Math.min(window.devicePixelRatio || 1, 2);
+      const baseViewport = page.getViewport({ scale: 1 });
+      const viewport = page.getViewport({ scale: dpr });
 
-          const canvas = document.createElement("canvas");
-          canvas.width = viewport.width;
-          canvas.height = viewport.height;
-          const ctx = canvas.getContext("2d")!;
+      const canvas = document.createElement("canvas");
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+      const ctx = canvas.getContext("2d")!;
+      await page.render({ canvasContext: ctx, canvas, viewport }).promise;
 
-          await page.render({ canvasContext: ctx, canvas, viewport }).promise;
+      const dataUrl = canvas.toDataURL("image/png");
+      canvas.width = 0;
+      canvas.height = 0;
 
-          const dataUrl = canvas.toDataURL("image/png");
-          return { dataUrl, w: baseViewport.width, h: baseViewport.height };
-        })(),
-        timeout,
-      ]);
+      return {
+        dataUrl,
+        naturalWidth: baseViewport.width,
+        naturalHeight: baseViewport.height,
+      };
+    } catch (err) {
+      console.error(`PDF render error (page ${pageNum}):`, err);
+      return null;
+    }
+  }, [attachment.file_url]);
 
-      setPdfDataUrl(result.dataUrl);
-      setPdfNaturalSize({ w: result.w, h: result.h });
-
-      // Compute and set fit scale
-      const computed = computeFitScale(result.w, result.h);
+  // ── Load current page + preload neighbors ──
+  const loadPage = useCallback(async (pageNum: number) => {
+    // If already cached, just update fit scale
+    const cached = pageCache.get(pageNum);
+    if (cached) {
+      const computed = computeFitScale(cached.naturalWidth, cached.naturalHeight);
       setFitScale(computed);
       setScale(computed);
       setPosition({ x: 0, y: 0 });
       setIsFitted(true);
-    } catch (err) {
-      console.error("PDF render error:", err);
-      const msg = err instanceof Error && err.message === "timeout"
-        ? "PDF took too long to render."
-        : "Could not render PDF.";
-      setPdfError(`${msg} Tap Open to view in browser.`);
-    } finally {
       setPdfLoading(false);
+      return;
     }
-  }, [attachment.file_url, computeFitScale]);
 
-  // Load PDF on mount or page change
+    setPdfLoading(true);
+    setPdfError(null);
+
+    const timeout = new Promise<null>((resolve) =>
+      setTimeout(() => resolve(null), 20000)
+    );
+
+    const result = await Promise.race([renderPage(pageNum), timeout]);
+
+    if (result) {
+      setPageCache((prev) => {
+        const next = new Map(prev);
+        next.set(pageNum, result);
+        // Keep cache bounded — evict pages far from current
+        for (const key of next.keys()) {
+          if (Math.abs(key - pageNum) > 3) next.delete(key);
+        }
+        return next;
+      });
+
+      const computed = computeFitScale(result.naturalWidth, result.naturalHeight);
+      setFitScale(computed);
+      setScale(computed);
+      setPosition({ x: 0, y: 0 });
+      setIsFitted(true);
+    } else {
+      setPdfError("PDF took too long to render. Tap Open to view in browser.");
+    }
+
+    setPdfLoading(false);
+
+    // Preload adjacent pages
+    const total = pdfDocRef.current?.numPages || pdfTotalPages;
+    const preloadTargets = [pageNum - 1, pageNum + 1].filter(
+      (p) => p >= 1 && p <= total && !pageCache.has(p)
+    );
+    for (const target of preloadTargets) {
+      renderPage(target).then((res) => {
+        if (res) {
+          setPageCache((prev) => {
+            const next = new Map(prev);
+            next.set(target, res);
+            return next;
+          });
+        }
+      });
+    }
+  }, [pageCache, computeFitScale, renderPage, pdfTotalPages]);
+
+  // ── Load PDF on mount/page change ──
   useEffect(() => {
     if (isPdf) {
-      renderPdfPage(pdfPageNum);
+      loadPage(pdfPageNum);
     }
-  }, [isPdf, pdfPageNum, renderPdfPage]);
+  }, [isPdf, pdfPageNum]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // When an image loads, calculate the scale that fills viewport width
+  // ── Image load handler ──
   const handleImageLoad = useCallback((e: React.SyntheticEvent<HTMLImageElement>) => {
     const img = e.currentTarget;
     const computed = computeFitScale(img.naturalWidth, img.naturalHeight);
@@ -123,14 +177,13 @@ export default function FileViewer({ attachment, onClose }: FileViewerProps) {
     setScale(computed);
   }, [computeFitScale]);
 
-  // Reset view to fit screen
+  // ── Zoom controls ──
   const fitToScreen = useCallback(() => {
     setScale(fitScale);
     setPosition({ x: 0, y: 0 });
     setIsFitted(true);
   }, [fitScale]);
 
-  // Zoom controls
   const zoomIn = useCallback(() => {
     setScale((s) => Math.min(s * 1.3, 5));
     setIsFitted(false);
@@ -149,57 +202,160 @@ export default function FileViewer({ attachment, onClose }: FileViewerProps) {
     });
   }, [fitScale]);
 
-  // Touch handlers for pinch-to-zoom and pan
-  const handleTouchStart = useCallback(
-    (e: React.TouchEvent) => {
-      if (e.touches.length === 2) {
-        e.preventDefault();
-        const dist = Math.hypot(
-          e.touches[0].clientX - e.touches[1].clientX,
-          e.touches[0].clientY - e.touches[1].clientY
-        );
-        setLastPinchDist(dist);
-      } else if (e.touches.length === 1 && scale > fitScale) {
-        setIsDragging(true);
-        setDragStart({
-          x: e.touches[0].clientX - position.x,
-          y: e.touches[0].clientY - position.y,
-        });
-      }
-    },
-    [scale, position, fitScale]
-  );
+  // ── Double-tap zoom ──
+  const handleDoubleTap = useCallback((x: number, y: number) => {
+    if (isFitted) {
+      // Zoom to 2.5x centered on tap point
+      const targetScale = fitScale * 2.5;
+      const containerW = containerRef.current?.clientWidth || window.innerWidth;
+      const containerH = containerRef.current?.clientHeight || window.innerHeight;
+      const centerX = containerW / 2;
+      const centerY = containerH / 2;
+      setScale(targetScale);
+      setPosition({
+        x: (centerX - x) * (targetScale / fitScale - 1) * 0.5,
+        y: (centerY - y) * (targetScale / fitScale - 1) * 0.5,
+      });
+      setIsFitted(false);
+    } else {
+      fitToScreen();
+    }
+  }, [isFitted, fitScale, fitToScreen]);
 
-  const handleTouchMove = useCallback(
-    (e: React.TouchEvent) => {
-      if (e.touches.length === 2) {
+  // ── Page navigation ──
+  const goToPage = useCallback((page: number) => {
+    const clamped = Math.max(1, Math.min(page, pdfTotalPages));
+    if (clamped !== pdfPageNum) {
+      setPdfPageNum(clamped);
+    }
+  }, [pdfTotalPages, pdfPageNum]);
+
+  const prevPage = useCallback(() => goToPage(pdfPageNum - 1), [goToPage, pdfPageNum]);
+  const nextPage = useCallback(() => goToPage(pdfPageNum + 1), [goToPage, pdfPageNum]);
+
+  // ── Page jump submit ──
+  const handlePageJumpSubmit = useCallback(() => {
+    const num = parseInt(pageJumpValue, 10);
+    if (!isNaN(num)) {
+      goToPage(num);
+    }
+    setShowPageJump(false);
+    setPageJumpValue("");
+  }, [pageJumpValue, goToPage]);
+
+  // Focus page jump input when shown
+  useEffect(() => {
+    if (showPageJump) {
+      pageJumpInputRef.current?.focus();
+      pageJumpInputRef.current?.select();
+    }
+  }, [showPageJump]);
+
+  // ── Touch handlers ──
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    if (e.touches.length === 2) {
+      // Pinch start
+      e.preventDefault();
+      isSwipingRef.current = false;
+      const dist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      lastPinchDistRef.current = dist;
+    } else if (e.touches.length === 1) {
+      const touch = e.touches[0];
+      const now = Date.now();
+
+      // Check for double-tap (within 300ms and 40px)
+      const lastTap = lastTapRef.current;
+      if (
+        now - lastTap.time < 300 &&
+        Math.abs(touch.clientX - lastTap.x) < 40 &&
+        Math.abs(touch.clientY - lastTap.y) < 40
+      ) {
         e.preventDefault();
-        const dist = Math.hypot(
-          e.touches[0].clientX - e.touches[1].clientX,
-          e.touches[0].clientY - e.touches[1].clientY
-        );
-        if (lastPinchDist > 0) {
-          const delta = dist / lastPinchDist;
-          setScale((s) => Math.min(Math.max(s * delta, fitScale * 0.5), 5));
-          setIsFitted(false);
-        }
-        setLastPinchDist(dist);
-      } else if (e.touches.length === 1 && isDragging && scale > fitScale) {
-        setPosition({
-          x: e.touches[0].clientX - dragStart.x,
-          y: e.touches[0].clientY - dragStart.y,
-        });
+        handleDoubleTap(touch.clientX, touch.clientY);
+        lastTapRef.current = { time: 0, x: 0, y: 0 };
+        return;
       }
-    },
-    [lastPinchDist, isDragging, dragStart, scale, fitScale]
-  );
+      lastTapRef.current = { time: now, x: touch.clientX, y: touch.clientY };
+
+      if (scale > fitScale * 1.05) {
+        // Zoomed in — pan mode
+        setIsDragging(true);
+        isSwipingRef.current = false;
+        dragStartRef.current = {
+          x: touch.clientX - position.x,
+          y: touch.clientY - position.y,
+        };
+      } else if (isPdf && pdfTotalPages > 1) {
+        // At fit scale — swipe mode for page navigation
+        isSwipingRef.current = true;
+        swipeStartRef.current = { x: touch.clientX, y: touch.clientY, time: now };
+        setSwipeOffset(0);
+      }
+    }
+  }, [scale, fitScale, position, isPdf, pdfTotalPages, handleDoubleTap]);
+
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    if (e.touches.length === 2) {
+      // Pinch zoom
+      e.preventDefault();
+      const dist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      if (lastPinchDistRef.current > 0) {
+        const delta = dist / lastPinchDistRef.current;
+        setScale((s) => Math.min(Math.max(s * delta, fitScale * 0.5), 5));
+        setIsFitted(false);
+      }
+      lastPinchDistRef.current = dist;
+    } else if (e.touches.length === 1) {
+      if (isDragging && scale > fitScale * 1.05) {
+        // Pan
+        setPosition({
+          x: e.touches[0].clientX - dragStartRef.current.x,
+          y: e.touches[0].clientY - dragStartRef.current.y,
+        });
+      } else if (isSwipingRef.current && swipeStartRef.current) {
+        // Horizontal swipe tracking
+        const dx = e.touches[0].clientX - swipeStartRef.current.x;
+        const dy = e.touches[0].clientY - swipeStartRef.current.y;
+        // Only track horizontal swipes (prevent vertical scroll hijack)
+        if (Math.abs(dx) > Math.abs(dy) * 1.2 || Math.abs(dx) > 20) {
+          e.preventDefault();
+          setSwipeOffset(dx);
+        }
+      }
+    }
+  }, [isDragging, scale, fitScale]);
 
   const handleTouchEnd = useCallback(() => {
     setIsDragging(false);
-    setLastPinchDist(0);
-  }, []);
+    lastPinchDistRef.current = 0;
 
-  // Mouse wheel zoom for desktop
+    // Process swipe
+    if (isSwipingRef.current && swipeStartRef.current) {
+      const elapsed = Date.now() - swipeStartRef.current.time;
+      const velocity = Math.abs(swipeOffset) / Math.max(elapsed, 1);
+
+      // Swipe threshold: 60px displacement OR fast flick (velocity > 0.3px/ms)
+      if (Math.abs(swipeOffset) > 60 || velocity > 0.3) {
+        if (swipeOffset > 0 && pdfPageNum > 1) {
+          prevPage();
+        } else if (swipeOffset < 0 && pdfPageNum < pdfTotalPages) {
+          nextPage();
+        }
+      }
+    }
+
+    isSwipingRef.current = false;
+    swipeStartRef.current = null;
+    setSwipeOffset(0);
+  }, [swipeOffset, pdfPageNum, pdfTotalPages, prevPage, nextPage]);
+
+  // ── Mouse wheel zoom (desktop) ──
   const handleWheel = useCallback((e: React.WheelEvent) => {
     e.preventDefault();
     const delta = e.deltaY > 0 ? 0.9 : 1.1;
@@ -210,42 +366,43 @@ export default function FileViewer({ attachment, onClose }: FileViewerProps) {
         setPosition({ x: 0, y: 0 });
         setIsFitted(true);
         return fitScale;
-      } else {
-        setIsFitted(false);
       }
+      setIsFitted(false);
       return next;
     });
   }, [fitScale]);
 
-  // Close on Escape
+  // ── Keyboard: Escape to close, arrow keys for pages ──
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      if (showPageJump) return; // Don't capture keys when page jump is open
       if (e.key === "Escape") onClose();
+      if (isPdf) {
+        if (e.key === "ArrowLeft" || e.key === "ArrowUp") prevPage();
+        if (e.key === "ArrowRight" || e.key === "ArrowDown") nextPage();
+      }
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [onClose]);
+  }, [onClose, isPdf, prevPage, nextPage, showPageJump]);
 
-  // PDF page navigation
-  const prevPage = useCallback(() => {
-    setPdfPageNum((p) => Math.max(1, p - 1));
-  }, []);
-  const nextPage = useCallback(() => {
-    setPdfPageNum((p) => Math.min(pdfTotalPages, p + 1));
-  }, [pdfTotalPages]);
+  // ── Current page data ──
+  const currentPage = useMemo(() => pageCache.get(pdfPageNum), [pageCache, pdfPageNum]);
 
-  // Determine what content to show
+  // ── Content rendering ──
   const renderContent = () => {
     if (isPdf) {
-      if (pdfLoading) {
+      if (pdfLoading && !currentPage) {
         return (
           <div className="flex flex-col items-center justify-center gap-3">
             <div className="w-8 h-8 border-2 border-[#0a84ff] border-t-transparent rounded-full animate-spin" />
-            <p className="text-[13px] text-[#a1a1a6]">Rendering PDF...</p>
+            <p className="text-[13px] text-[#a1a1a6]">
+              Loading page {pdfPageNum}...
+            </p>
           </div>
         );
       }
-      if (pdfError) {
+      if (pdfError && !currentPage) {
         return (
           <div className="text-center p-8">
             <p className="text-[15px] text-[#f5f5f7] mb-2">PDF Preview Error</p>
@@ -261,18 +418,20 @@ export default function FileViewer({ attachment, onClose }: FileViewerProps) {
           </div>
         );
       }
-      if (pdfDataUrl) {
+      if (currentPage) {
         return (
           <img
-            src={pdfDataUrl}
-            alt={`${attachment.file_name || "PDF"} - Page ${pdfPageNum}`}
+            src={currentPage.dataUrl}
+            alt={`${attachment.file_name || "PDF"} — Page ${pdfPageNum}`}
             className="select-none"
             draggable={false}
             style={{
-              width: pdfNaturalSize.w,
-              height: pdfNaturalSize.h,
+              width: currentPage.naturalWidth,
+              height: currentPage.naturalHeight,
               maxWidth: "none",
               maxHeight: "none",
+              opacity: pdfLoading ? 0.5 : 1,
+              transition: "opacity 0.15s ease",
             }}
           />
         );
@@ -316,11 +475,11 @@ export default function FileViewer({ attachment, onClose }: FileViewerProps) {
 
   return (
     <div className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-xl flex flex-col">
-      {/* Top bar */}
+      {/* ── Top bar ── */}
       <div className="flex-shrink-0 flex items-center justify-between px-4 py-3 bg-black/80 border-b border-white/[0.08]">
         <button
           onClick={onClose}
-          className="text-[#0a84ff] text-[15px] font-medium flex items-center gap-1"
+          className="text-[#0a84ff] text-[15px] font-medium flex items-center gap-1 min-w-[60px]"
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -336,13 +495,13 @@ export default function FileViewer({ attachment, onClose }: FileViewerProps) {
           href={attachment.file_url}
           target="_blank"
           rel="noopener noreferrer"
-          className="text-[#0a84ff] text-[13px] font-medium"
+          className="text-[#0a84ff] text-[13px] font-medium min-w-[60px] text-right"
         >
           Open
         </a>
       </div>
 
-      {/* Viewer area */}
+      {/* ── Viewer area ── */}
       <div
         ref={containerRef}
         className="flex-1 overflow-hidden relative"
@@ -353,21 +512,41 @@ export default function FileViewer({ attachment, onClose }: FileViewerProps) {
         style={{ touchAction: "none" }}
       >
         <div
-          ref={contentRef}
           className="w-full h-full flex items-center justify-center"
           style={{
-            transform: `translate(${position.x}px, ${position.y}px) scale(${scale})`,
+            transform: `translate(${position.x + swipeOffset}px, ${position.y}px) scale(${scale})`,
             transformOrigin: "center center",
-            transition: isDragging ? "none" : "transform 0.2s ease-out",
+            transition: isDragging || isSwipingRef.current ? "none" : "transform 0.2s ease-out",
           }}
         >
           {renderContent()}
         </div>
+
+        {/* Swipe edge indicators */}
+        {isPdf && pdfTotalPages > 1 && isFitted && (
+          <>
+            {swipeOffset > 30 && pdfPageNum > 1 && (
+              <div className="absolute left-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/10 flex items-center justify-center pointer-events-none transition-opacity">
+                <svg className="w-5 h-5 text-white/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+                </svg>
+              </div>
+            )}
+            {swipeOffset < -30 && pdfPageNum < pdfTotalPages && (
+              <div className="absolute right-3 top-1/2 -translate-y-1/2 w-10 h-10 rounded-full bg-white/10 flex items-center justify-center pointer-events-none transition-opacity">
+                <svg className="w-5 h-5 text-white/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </div>
+            )}
+          </>
+        )}
       </div>
 
-      {/* Bottom control bar */}
+      {/* ── Bottom control bar ── */}
       <div className="flex-shrink-0 bg-black/80 border-t border-white/[0.08] px-4 py-3">
-        <div className="flex items-center justify-center gap-3 max-w-[430px] mx-auto">
+        <div className="flex items-center justify-center gap-2 sm:gap-3 max-w-[480px] mx-auto">
+          {/* Zoom out */}
           <button
             onClick={zoomOut}
             className="w-11 h-11 rounded-full bg-white/[0.07] border border-white/[0.12] flex items-center justify-center text-[#f5f5f7] active:bg-white/[0.14] transition-colors"
@@ -384,32 +563,45 @@ export default function FileViewer({ attachment, onClose }: FileViewerProps) {
               <button
                 onClick={prevPage}
                 disabled={pdfPageNum <= 1}
-                className="w-9 h-9 rounded-full bg-white/[0.07] border border-white/[0.12] flex items-center justify-center text-[#f5f5f7] active:bg-white/[0.14] transition-colors disabled:opacity-30"
+                className="w-11 h-11 rounded-full bg-white/[0.07] border border-white/[0.12] flex items-center justify-center text-[#f5f5f7] active:bg-white/[0.14] transition-colors disabled:opacity-30"
                 aria-label="Previous page"
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
                 </svg>
               </button>
-              <span className="text-[12px] text-[#a1a1a6] tabular-nums min-w-[3rem] text-center">
-                {pdfPageNum}/{pdfTotalPages}
-              </span>
+
+              {/* Page indicator — tap to jump */}
+              <button
+                onClick={() => {
+                  setPageJumpValue(String(pdfPageNum));
+                  setShowPageJump(true);
+                }}
+                className="h-11 px-3 rounded-full bg-white/[0.07] border border-white/[0.12] flex items-center justify-center active:bg-white/[0.14] transition-colors min-w-[4.5rem]"
+                aria-label="Jump to page"
+              >
+                <span className="text-[13px] text-[#a1a1a6] tabular-nums">
+                  {pdfPageNum} / {pdfTotalPages}
+                </span>
+              </button>
+
               <button
                 onClick={nextPage}
                 disabled={pdfPageNum >= pdfTotalPages}
-                className="w-9 h-9 rounded-full bg-white/[0.07] border border-white/[0.12] flex items-center justify-center text-[#f5f5f7] active:bg-white/[0.14] transition-colors disabled:opacity-30"
+                className="w-11 h-11 rounded-full bg-white/[0.07] border border-white/[0.12] flex items-center justify-center text-[#f5f5f7] active:bg-white/[0.14] transition-colors disabled:opacity-30"
                 aria-label="Next page"
               >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                 </svg>
               </button>
             </>
           )}
 
+          {/* Fit to screen */}
           <button
             onClick={fitToScreen}
-            className={`h-11 px-5 rounded-full flex items-center justify-center gap-2 text-[13px] font-medium transition-colors active:bg-white/[0.14] ${
+            className={`h-11 px-4 rounded-full flex items-center justify-center gap-1.5 text-[13px] font-medium transition-colors active:bg-white/[0.14] ${
               isFitted
                 ? "bg-[rgba(48,209,88,0.15)] border border-[#30d158] text-[#30d158]"
                 : "bg-white/[0.07] border border-white/[0.12] text-[#f5f5f7]"
@@ -422,6 +614,7 @@ export default function FileViewer({ attachment, onClose }: FileViewerProps) {
             Fit
           </button>
 
+          {/* Zoom in */}
           <button
             onClick={zoomIn}
             className="w-11 h-11 rounded-full bg-white/[0.07] border border-white/[0.12] flex items-center justify-center text-[#f5f5f7] active:bg-white/[0.14] transition-colors"
@@ -431,12 +624,64 @@ export default function FileViewer({ attachment, onClose }: FileViewerProps) {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
             </svg>
           </button>
-
-          <span className="text-[12px] text-[#6e6e73] min-w-[3rem] text-center tabular-nums">
-            {Math.round(scale * 100)}%
-          </span>
         </div>
+
+        {/* Swipe hint — shown once for first PDF view */}
+        {isPdf && pdfTotalPages > 1 && isFitted && (
+          <p className="text-[11px] text-[#6e6e73] text-center mt-2">
+            Swipe left/right or double-tap to zoom
+          </p>
+        )}
       </div>
+
+      {/* ── Page jump overlay ── */}
+      {showPageJump && (
+        <div
+          className="fixed inset-0 z-[110] bg-black/60 flex items-center justify-center"
+          onClick={() => setShowPageJump(false)}
+        >
+          <div
+            className="bg-[#1c1c1e] rounded-2xl p-6 w-[280px] border border-white/[0.12]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <p className="text-[15px] text-[#f5f5f7] font-medium mb-1 text-center">
+              Go to Page
+            </p>
+            <p className="text-[13px] text-[#6e6e73] mb-4 text-center">
+              1 – {pdfTotalPages}
+            </p>
+            <input
+              ref={pageJumpInputRef}
+              type="number"
+              min={1}
+              max={pdfTotalPages}
+              value={pageJumpValue}
+              onChange={(e) => setPageJumpValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handlePageJumpSubmit();
+                if (e.key === "Escape") setShowPageJump(false);
+              }}
+              className="w-full h-12 bg-white/[0.07] border border-white/[0.12] rounded-xl text-center text-[20px] text-[#f5f5f7] tabular-nums outline-none focus:border-[#0a84ff] transition-colors"
+              inputMode="numeric"
+              pattern="[0-9]*"
+            />
+            <div className="flex gap-3 mt-4">
+              <button
+                onClick={() => setShowPageJump(false)}
+                className="flex-1 h-11 rounded-xl bg-white/[0.07] text-[#f5f5f7] text-[15px] font-medium active:bg-white/[0.14] transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handlePageJumpSubmit}
+                className="flex-1 h-11 rounded-xl bg-[#0a84ff] text-white text-[15px] font-medium active:bg-[#0a84ff]/80 transition-colors"
+              >
+                Go
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

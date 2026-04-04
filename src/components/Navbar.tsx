@@ -33,34 +33,65 @@ export default function Navbar() {
   };
 
   return (
-    <nav className="bg-black/90 backdrop-blur-xl border-b border-white/[0.08]">
-      <div className="max-w-7xl mx-auto px-4 py-4 flex justify-between items-center">
-        <div className="text-xl font-semibold" style={{ color: "#f5f5f7" }}>
-          Door Hardware Tracker
-        </div>
+    <nav className="relative bg-[#0a0a0f]/95 backdrop-blur-xl border-b border-white/[0.06]">
+      {/* Subtle bottom glow line */}
+      <div
+        className="absolute bottom-0 left-0 right-0 h-[1px]"
+        style={{
+          background:
+            "linear-gradient(90deg, transparent, rgba(90,200,250,0.2) 30%, rgba(90,200,250,0.3) 50%, rgba(90,200,250,0.2) 70%, transparent)",
+        }}
+      />
 
-        <div className="flex items-center gap-4">
+      <div className="max-w-7xl mx-auto px-4 py-3.5 flex justify-between items-center">
+        {/* Brand */}
+        <button
+          onClick={() => router.push("/dashboard")}
+          className="flex items-center gap-2.5 group"
+        >
+          {/* Logo mark */}
+          <div className="relative w-8 h-8 rounded-md bg-[rgba(90,200,250,0.08)] border border-[rgba(90,200,250,0.2)] flex items-center justify-center group-hover:border-[rgba(90,200,250,0.4)] transition-all">
+            <svg
+              className="w-4 h-4 text-[#5ac8fa]"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+              strokeWidth={2}
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"
+              />
+            </svg>
+          </div>
+          <div className="flex flex-col">
+            <span
+              className="font-display text-[13px] font-semibold tracking-wider text-[#e8e8ed] group-hover:text-[#5ac8fa] transition-colors"
+              style={{ fontFamily: "var(--font-display)" }}
+            >
+              RABBIT HOLE
+            </span>
+            <span className="text-[10px] text-[#636366] tracking-widest uppercase">
+              Door Hardware
+            </span>
+          </div>
+        </button>
+
+        {/* User section */}
+        <div className="flex items-center gap-3">
           {!loading && email && (
-            <div className="flex items-center gap-4">
-              <span className="text-sm" style={{ color: "#6e6e73" }}>
+            <>
+              <span className="hidden sm:inline text-[12px] text-[#636366] tabular-nums">
                 {email}
               </span>
               <button
                 onClick={handleSignOut}
-                className="px-4 py-2 text-sm rounded transition-colors"
-                style={{
-                  color: "#a1a1a6",
-                }}
-                onMouseEnter={(e) =>
-                  (e.currentTarget.style.color = "#f5f5f7")
-                }
-                onMouseLeave={(e) =>
-                  (e.currentTarget.style.color = "#a1a1a6")
-                }
+                className="glow-btn--ghost px-3 py-1.5 text-[12px] rounded-md border border-white/[0.06] hover:border-white/[0.12] transition-all"
               >
                 Sign Out
               </button>
-            </div>
+            </>
           )}
         </div>
       </div>
