@@ -516,9 +516,45 @@ export const HARDWARE_TAXONOMY: HardwareCategory[] = [
 ]
 
 /**
- * Classify an item name into a category. Returns the category ID or 'unknown'.
+ * Manufacturer-to-category fallback map.
+ * When an item name doesn't match any taxonomy pattern but we know the
+ * manufacturer, use this to infer the category. Only includes manufacturers
+ * predominantly associated with ONE category.
  */
-export function classifyItem(itemName: string): string {
+export const MANUFACTURER_CATEGORY_MAP: Record<string, string> = {
+  'von duprin': 'exit_device',
+  'precision': 'exit_device',
+  'sargent 80': 'exit_device',
+  'sargent 90': 'exit_device',
+  'lcn': 'closer',
+  'norton': 'closer',
+  'dormakaba': 'closer',
+  'schlage nd': 'lockset',
+  'schlage l': 'mortise_lock',
+  'sargent 10': 'lockset',
+  'sargent 28': 'lockset',
+  'corbin russwin': 'lockset',
+  'yale au': 'lockset',
+  'hager': 'hinge',
+  'mckinney': 'hinge',
+  'ives 5bb': 'hinge',
+  'markar': 'continuous_hinge',
+  'hes': 'electric_strike',
+  'rixson': 'pivot',
+  'glynn-johnson': 'overhead_stop',
+  'rockwood': 'pull',
+  'trimco': 'kick_plate',
+  'pemko': 'threshold',
+  'securitron': 'electromagnetic_lock',
+  'zero': 'weatherstripping',
+}
+
+/**
+ * Classify an item name into a category. Returns the category ID or 'unknown'.
+ * Optionally accepts a manufacturer for fallback classification when the
+ * item name is a model number only (e.g., "Von Duprin 99").
+ */
+export function classifyItem(itemName: string, manufacturer?: string): string {
   const lower = itemName.toLowerCase().trim()
   for (const cat of HARDWARE_TAXONOMY) {
     for (const pattern of cat.name_patterns) {
@@ -527,6 +563,24 @@ export function classifyItem(itemName: string): string {
       }
     }
   }
+
+  // Fallback: check manufacturer prefix against known mappings
+  if (manufacturer) {
+    const mfrLower = manufacturer.toLowerCase().trim()
+    for (const [prefix, category] of Object.entries(MANUFACTURER_CATEGORY_MAP)) {
+      if (mfrLower.startsWith(prefix)) {
+        return category
+      }
+    }
+  }
+
+  // Also check if the item name itself starts with a known manufacturer
+  for (const [prefix, category] of Object.entries(MANUFACTURER_CATEGORY_MAP)) {
+    if (lower.startsWith(prefix)) {
+      return category
+    }
+  }
+
   return 'unknown'
 }
 
