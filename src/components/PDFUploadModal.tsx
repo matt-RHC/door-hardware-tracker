@@ -889,10 +889,13 @@ export default function PDFUploadModal({
       new Uint8Array(buffer).reduce((data, byte) => data + String.fromCharCode(byte), "")
     );
 
-    // ── Small PDF fast-path: use full pdfplumber + LLM review pipeline ──
-    // Avoids chunking boundary issues where tables span chunk edges
-    if (pageCount <= CHUNK_THRESHOLD) {
-      setStatus(`Analyzing ${pageCount}-page PDF with full pipeline...`);
+    // ── Primary path: full pdfplumber + LLM review pipeline ──
+    // Sends entire PDF to the server-side Python pipeline (pdfplumber extracts
+    // tables deterministically across all pages, then Claude reviews).
+    // This avoids chunking boundary issues where tables span chunk edges.
+    // Falls back to chunked path only if this fails (e.g., timeout on huge PDFs).
+    {
+      setStatus(`Analyzing ${pageCount > 0 ? `${pageCount}-page ` : ""}PDF with full pipeline...`);
       setProgress(5);
 
       // Show column mapper first if needed
@@ -921,34 +924,42 @@ export default function PDFUploadModal({
       setStatus("Extracting tables and running AI review...");
       setProgress(15);
 
-      const resp = await fetch("/api/parse-pdf?parseOnly=true", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          pdfBase64: fullBase64,
-          userColumnMapping: confirmedMapping || null,
-        }),
-      });
+      try {
+        const resp = await fetch("/api/parse-pdf?parseOnly=true", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            pdfBase64: fullBase64,
+            userColumnMapping: confirmedMapping || null,
+          }),
+        });
 
-      if (!resp.ok) {
-        const errBody = await resp.json().catch(() => ({}));
-        throw new Error(errBody.error || `PDF analysis failed (${resp.status})`);
+        if (resp.ok) {
+          const result = await resp.json();
+          if (result.doors?.length > 0 || result.sets?.length > 0) {
+            setProgress(100);
+            setStatus(
+              `Parsed ${result.sets?.length || 0} hardware sets, ${result.doors?.length || 0} doors. Ready for review.`
+            );
+            return {
+              doors: result.doors || [],
+              sets: result.sets || [],
+              flaggedDoors: result.flaggedDoors || [],
+            };
+          }
+          // If pdfplumber returned zero results, fall through to chunked path
+          console.warn("Full pipeline returned zero results, falling back to chunked extraction");
+        } else {
+          const errBody = await resp.json().catch(() => ({}));
+          console.warn("Full pipeline failed, falling back to chunked:", errBody.error);
+        }
+      } catch (err) {
+        console.warn("Full pipeline error, falling back to chunked:", err);
       }
-
-      const result = await resp.json();
-      setProgress(100);
-      setStatus(
-        `Parsed ${result.sets?.length || 0} hardware sets, ${result.doors?.length || 0} doors. Ready for review.`
-      );
-
-      return {
-        doors: result.doors || [],
-        sets: result.sets || [],
-        flaggedDoors: result.flaggedDoors || [],
-      };
     }
 
-    // ── Large PDF: Smart chunked multi-request flow ──
+    // ── Fallback: Smart chunked multi-request flow ──
+    // Only reached if the full pipeline above fails or returns zero results.
     // Phase 1: Classify pages and find smart boundaries
     setStatus(`Analyzing ${pageCount}-page PDF structure...`);
     setProgress(2);
