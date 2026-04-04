@@ -191,3 +191,56 @@ class TestBug5DoorValidation:
 
     def test_rejects_pure_long_number(self, extract_tables):
         assert not extract_tables.is_valid_door_number("303872")
+
+
+# ── MEDIUM PDF verification (44 pages) ──
+
+class TestMediumPDFVerification:
+    """Verify the MEDIUM PDF (44-page Radius DC submittal) extracts correctly."""
+
+    def test_medium_pdf_extracts_hardware_sets(self, extract_tables, medium_pdf_path):
+        """44-page PDF should find multiple hardware set definitions."""
+        import pdfplumber
+        with pdfplumber.open(str(medium_pdf_path)) as pdf:
+            sets = extract_tables.extract_all_hardware_sets(pdf)
+        assert len(sets) >= 5, f"Expected ≥5 hardware sets from 44-page PDF, got {len(sets)}"
+
+    def test_medium_pdf_no_mojibake(self, extract_tables, medium_pdf_path):
+        """No mojibake control characters in hardware set data."""
+        import pdfplumber
+        import unicodedata
+        with pdfplumber.open(str(medium_pdf_path)) as pdf:
+            sets = extract_tables.extract_all_hardware_sets(pdf)
+        for s in sets:
+            for item in s.items:
+                for field in [item.name, item.manufacturer, item.model, item.finish]:
+                    if field:
+                        bad = [c for c in field if ord(c) > 127 and unicodedata.category(c).startswith('C')]
+                        assert not bad, f"Mojibake in set {s.set_id}: {field!r}"
+
+    def test_medium_pdf_no_duplicate_items_per_set(self, extract_tables, medium_pdf_path):
+        """No duplicate items within any hardware set."""
+        import pdfplumber
+        with pdfplumber.open(str(medium_pdf_path)) as pdf:
+            sets = extract_tables.extract_all_hardware_sets(pdf)
+        for s in sets:
+            models = [i.model for i in s.items if i.model]
+            unique = set(models)
+            assert len(models) == len(unique), (
+                f"Set {s.set_id} has duplicate models: {[m for m in models if models.count(m) > 1]}"
+            )
+
+    def test_medium_pdf_quantities_not_extreme(self, extract_tables, medium_pdf_path):
+        """Quantities should not be absurdly high (>50 per item).
+
+        NOTE: Some items may still show project totals rather than per-opening
+        quantities (BUG-7, not yet fixed). This test only catches extreme outliers.
+        """
+        import pdfplumber
+        with pdfplumber.open(str(medium_pdf_path)) as pdf:
+            sets = extract_tables.extract_all_hardware_sets(pdf)
+        for s in sets:
+            for item in s.items:
+                assert item.qty <= 50, (
+                    f"Set {s.set_id}: '{item.name}' qty {item.qty} is unreasonably high"
+                )

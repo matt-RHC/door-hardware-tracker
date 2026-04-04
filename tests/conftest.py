@@ -17,18 +17,25 @@ API_DIR = PROJECT_ROOT / "api"
 FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"
 
 
-@pytest.fixture(scope="session")
-def extract_tables():
-    """Import api/extract-tables.py as a module named 'extract_tables'."""
-    module_path = API_DIR / "extract-tables.py"
-    if not module_path.exists():
-        pytest.skip(f"extract-tables.py not found at {module_path}")
-
-    spec = importlib.util.spec_from_file_location("extract_tables", str(module_path))
+def _import_hyphenated(filename: str, module_name: str):
+    """Import a Python file with a hyphenated name."""
+    spec = importlib.util.spec_from_file_location(module_name, API_DIR / filename)
     mod = importlib.util.module_from_spec(spec)
-    sys.modules["extract_tables"] = mod
+    sys.modules[module_name] = mod
     spec.loader.exec_module(mod)
     return mod
+
+
+# Pre-import all API modules so tests can use standard import syntax
+_import_hyphenated("extract-tables.py", "extract_tables")
+_import_hyphenated("classify-pages.py", "classify_pages")
+_import_hyphenated("detect-mapping.py", "detect_mapping")
+
+
+@pytest.fixture(scope="session")
+def extract_tables():
+    """Return the pre-imported extract_tables module."""
+    return sys.modules["extract_tables"]
 
 
 @pytest.fixture(scope="session")
