@@ -983,7 +983,7 @@ export default function PDFUploadModal({
     let chunks: string[];
     let chunkLabels: string[] = []; // human-readable labels for each chunk
 
-    if (classification && classification.chunks.length > 0) {
+    if (classification !== null && classification.chunks.length > 0) {
       // Smart chunking: use semantic boundaries
       const { chunks: smartChunks, reference_pages: refPages, summary } = classification;
 
