@@ -169,7 +169,7 @@ class TestBug5DoorValidation:
     # These should be ACCEPTED (valid door numbers)
     @pytest.mark.parametrize("val", [
         "101", "A101", "1-101", "B1-101", "101A", "1.01.A.01A",
-        "110-01C", "ST-100",
+        "110-01C", "ST-100", "110-01A", "110A-04A", "120-02A",
     ])
     def test_accepts_valid_doors(self, extract_tables, val):
         assert extract_tables.is_valid_door_number(val), (
@@ -197,6 +197,15 @@ class TestBug5DoorValidation:
 
 class TestMediumPDFVerification:
     """Verify the MEDIUM PDF (44-page Radius DC submittal) extracts correctly."""
+
+    def test_medium_pdf_extracts_openings(self, extract_tables, medium_pdf_path):
+        """44-page PDF should find >=100 door openings (pages 6-8)."""
+        import pdfplumber
+        with pdfplumber.open(str(medium_pdf_path)) as pdf:
+            openings, tables_found = extract_tables.extract_opening_list(pdf, None)
+        assert len(openings) >= 100, (
+            f"Expected >=100 openings from MEDIUM PDF, got {len(openings)}"
+        )
 
     def test_medium_pdf_extracts_hardware_sets(self, extract_tables, medium_pdf_path):
         """44-page PDF should find multiple hardware set definitions."""
