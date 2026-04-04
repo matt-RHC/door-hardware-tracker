@@ -1113,7 +1113,7 @@ export default function PDFUploadModal({
         const result: ChunkResult = await resp.json();
         allHardwareSets.push(...result.hardwareSets);
         allDoors.push(...result.doors);
-        if (result.flaggedDoors) allFlaggedDoors.push(...result.flaggedDoors);
+        if (result.flaggedDoors) allFlaggedDoors.push(...(result.flaggedDoors ?? []));
 
         for (const set of result.hardwareSets) {
           if (!knownSetIds.includes(set.set_id)) knownSetIds.push(set.set_id);
