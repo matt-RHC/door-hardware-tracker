@@ -40,6 +40,11 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# python
+__pycache__/
+*.pyc
+.pytest_cache/
+
 # local workspace
 /archive/
 /.claude/
