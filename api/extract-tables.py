@@ -681,6 +681,8 @@ DOOR_NUMBER_PATTERNS = [
     r'^[A-Z]{1,2}\d?[-.]?[A-Z]?\d{2,4}[A-Z]?(?:\.\d{1,2})?$',
     # Floor-area-room: 1-101, 2A-201, B1-101
     r'^[A-Z]?\d[A-Z]?[-]\d{2,4}[A-Z]?$',
+    # Multi-digit-dash-multi-digit: 110-01, 110-01A, 120-02A, 110A-04A
+    r'^\d{2,4}[A-Z]?[-]\d{2,4}[A-Z]?$',
     # Simple numeric: 101, 1001 (3-4 digits, optionally with letter suffix)
     # Bare 2-digit numbers (20, 94) are quantities/page numbers, not doors
     r'^\d{3,4}[A-Z]?$',
@@ -1244,7 +1246,8 @@ def extract_opening_list(
 
             header_row_idx = None
             mapping = {}
-            for row_idx, row in enumerate(table[:5]):
+            # Search first 8 rows for header (page may have title/project rows before columns)
+            for row_idx, row in enumerate(table[:8]):
                 headers = [clean_cell(c) for c in row]
                 if is_opening_list_table(headers):
                     header_row_idx = row_idx
@@ -1292,13 +1295,22 @@ def extract_opening_list(
                 )
                 all_doors.append(entry)
 
-    # If line-based found nothing, try text-alignment strategy
-    if not all_doors:
-        all_doors, tables_found = extract_opening_list_text_align(pdf, user_column_mapping)
+    # Merge results from text-alignment strategy (may find doors on pages without grid lines)
+    text_align_doors, ta_tables = extract_opening_list_text_align(pdf, user_column_mapping)
+    existing_nums = {d.door_number for d in all_doors}
+    for d in text_align_doors:
+        if d.door_number not in existing_nums:
+            all_doors.append(d)
+            existing_nums.add(d.door_number)
+    tables_found += ta_tables
 
-    # Final fallback: pure text parsing
-    if not all_doors:
-        all_doors, tables_found = extract_opening_list_text(pdf)
+    # Merge results from word-position fallback (catches remaining stragglers)
+    word_doors, w_tables = extract_opening_list_text(pdf)
+    for d in word_doors:
+        if d.door_number not in existing_nums:
+            all_doors.append(d)
+            existing_nums.add(d.door_number)
+    tables_found += w_tables
 
     return all_doors, tables_found
 
@@ -1335,7 +1347,8 @@ def extract_opening_list_text_align(
 
             header_row_idx = None
             mapping = {}
-            for row_idx, row in enumerate(table[:5]):
+            # Search first 8 rows for header (page may have title/project rows before columns)
+            for row_idx, row in enumerate(table[:8]):
                 headers = [clean_cell(c) for c in row]
                 if is_opening_list_table(headers):
                     header_row_idx = row_idx
@@ -1548,11 +1561,11 @@ def extract_opening_list_text(pdf: pdfplumber.PDF) -> tuple[list[DoorEntry], int
         else:
             pages_since_header += 1
 
-        # Only process pages with header or immediately after header pages
-        # Stop if we've gone 2+ pages without seeing a header (left the opening list)
+        # Only process pages with header or continuation pages nearby
+        # Stop if we've gone 3+ pages without seeing a header (left the opening list)
         if not col_positions:
             continue
-        if not page_has_header and pages_since_header > 0 and all_doors:
+        if not page_has_header and pages_since_header > 2 and all_doors:
             # We've left the opening list section
             continue
 
