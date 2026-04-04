@@ -507,10 +507,18 @@ interface DoorEntry {
   hand: string;
 }
 
+interface FlaggedDoor {
+  door: DoorEntry;
+  reason: string;
+  pattern: string;
+  dominant_pattern: string;
+}
+
 interface ChunkResult {
   chunkIndex: number;
   hardwareSets: HardwareSet[];
   doors: DoorEntry[];
+  flaggedDoors?: FlaggedDoor[];
 }
 
 // --- Constants ---
@@ -705,6 +713,7 @@ export default function PDFUploadModal({
   const [reviewData, setReviewData] = useState<{
     doors: DoorEntry[];
     sets: HardwareSet[];
+    flaggedDoors?: FlaggedDoor[];
   } | null>(null);
 
   // Column mapper: shown between classification and extraction
@@ -895,6 +904,7 @@ export default function PDFUploadModal({
 
     const allHardwareSets: HardwareSet[] = [];
     const allDoors: DoorEntry[] = [];
+    const allFlaggedDoors: FlaggedDoor[] = [];
     const knownSetIds: string[] = [];
 
     for (let i = 0; i < totalChunks; i++) {
@@ -951,6 +961,7 @@ export default function PDFUploadModal({
         const result: ChunkResult = await resp.json();
         allHardwareSets.push(...result.hardwareSets);
         allDoors.push(...result.doors);
+        if (result.flaggedDoors) allFlaggedDoors.push(...result.flaggedDoors);
 
         for (const set of result.hardwareSets) {
           if (!knownSetIds.includes(set.set_id)) knownSetIds.push(set.set_id);
@@ -974,15 +985,24 @@ export default function PDFUploadModal({
     const mergedSets = mergeHardwareSets(allHardwareSets);
     const mergedDoors = mergeDoors(allDoors);
 
-    if (mergedDoors.length === 0) {
+    if (mergedDoors.length === 0 && allFlaggedDoors.length === 0) {
       throw new Error("No doors found across all chunks. The PDF may not contain a door schedule.");
+    }
+
+    if (mergedDoors.length === 0 && allFlaggedDoors.length > 0) {
+      // All doors were flagged as pattern outliers — still surface them for review
+      // rather than failing with "no doors found"
+      setStatus(`All ${allFlaggedDoors.length} doors flagged for pattern review.`);
     }
 
     // Parse-only mode: return data for wizard
     if (parseOnly) {
       setProgress(100);
-      setStatus(`Parsed ${mergedSets.length} hardware sets, ${mergedDoors.length} doors. Ready for review.`);
-      return { doors: mergedDoors, sets: mergedSets };
+      const flagNote = allFlaggedDoors.length > 0
+        ? ` (${allFlaggedDoors.length} flagged for review)`
+        : "";
+      setStatus(`Parsed ${mergedSets.length} hardware sets, ${mergedDoors.length} doors${flagNote}. Ready for review.`);
+      return { doors: mergedDoors, sets: mergedSets, flaggedDoors: allFlaggedDoors };
     }
 
     // Save mode: write to DB
@@ -1090,7 +1110,11 @@ export default function PDFUploadModal({
         if (freshResult.doors.length === 0) {
           throw new Error("No doors found in the document.");
         }
-        setReviewData({ doors: freshResult.doors, sets: freshResult.sets });
+        setReviewData({
+          doors: freshResult.doors,
+          sets: freshResult.sets,
+          flaggedDoors: freshResult.flaggedDoors,
+        });
       }
       // Don't close - review table will render
       setLoading(false);
@@ -1154,6 +1178,7 @@ export default function PDFUploadModal({
         projectId={projectId}
         doors={reviewData.doors}
         sets={reviewData.sets}
+        flaggedDoors={reviewData.flaggedDoors}
         onClose={onClose}
         onComplete={onSuccess}
       />

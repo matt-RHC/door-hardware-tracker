@@ -27,6 +27,13 @@ interface DoorEntry {
   hand: string;
 }
 
+interface FlaggedDoor {
+  door: DoorEntry;
+  reason: string;
+  pattern: string;
+  dominant_pattern: string;
+}
+
 /* ─── Editable Cell ─── */
 function EditableCell({
   value,
@@ -92,6 +99,7 @@ interface ImportReviewTableProps {
   projectId: string;
   doors: DoorEntry[];
   sets: HardwareSet[];
+  flaggedDoors?: FlaggedDoor[];
   onClose: () => void;
   onComplete: () => void;
 }
@@ -100,6 +108,7 @@ export default function ImportReviewTable({
   projectId,
   doors: initialDoors,
   sets,
+  flaggedDoors = [],
   onClose,
   onComplete,
 }: ImportReviewTableProps) {
@@ -109,6 +118,10 @@ export default function ImportReviewTable({
   const [showSets, setShowSets] = useState(false);
   const [deletedRows, setDeletedRows] = useState<Set<number>>(new Set());
   const [byOthersRows, setByOthersRows] = useState<Set<number>>(new Set());
+
+  // Flagged doors: user decides which to include
+  const [approvedFlagged, setApprovedFlagged] = useState<Set<number>>(new Set());
+  const hasFlaggedDoors = flaggedDoors.length > 0;
 
   // Auto-detect likely "By Others" candidates: N/A hw_set, OH/Gate door types
   const isByOthersCandidate = useCallback((door: DoorEntry): boolean => {
@@ -232,9 +245,26 @@ export default function ImportReviewTable({
     return count + Object.keys(getWarnings(d, i)).length;
   }, 0);
 
+  const toggleFlaggedApproval = (idx: number) => {
+    setApprovedFlagged((prev) => {
+      const next = new Set(prev);
+      if (next.has(idx)) next.delete(idx);
+      else next.add(idx);
+      return next;
+    });
+  };
+
+  const approveAllFlagged = () => {
+    setApprovedFlagged(new Set(flaggedDoors.map((_, i) => i)));
+  };
+
   const handleConfirmAndSave = async () => {
-    // Filter out deleted and "by others" rows
-    const finalDoors = doors.filter((_, i) => !deletedRows.has(i) && !byOthersRows.has(i));
+    // Filter out deleted and "by others" rows, then add approved flagged doors
+    const mainDoors = doors.filter((_, i) => !deletedRows.has(i) && !byOthersRows.has(i));
+    const restoredDoors = flaggedDoors
+      .filter((_, i) => approvedFlagged.has(i))
+      .map((f) => f.door);
+    const finalDoors = [...mainDoors, ...restoredDoors];
     if (finalDoors.length === 0) {
       setError("Cannot save with zero openings. Add at least one door.");
       return;
@@ -482,6 +512,81 @@ export default function ImportReviewTable({
         </table>
       </div>
 
+      {/* ── Flagged Doors Review ── */}
+      {hasFlaggedDoors && (
+        <div className="mx-6 mb-4 border border-[rgba(255,159,10,0.3)] rounded-lg overflow-hidden">
+          <div className="px-4 py-3 bg-[rgba(255,159,10,0.06)] flex items-center justify-between">
+            <div>
+              <h4 className="text-[13px] font-bold text-[#ff9f0a]">
+                {flaggedDoors.length} DOOR{flaggedDoors.length !== 1 ? "S" : ""} FLAGGED FOR REVIEW
+              </h4>
+              <p className="text-[11px] text-[#a1a1a6] mt-0.5">
+                These don&apos;t match the dominant door number pattern. Include the ones that are valid openings.
+              </p>
+            </div>
+            <button
+              onClick={approveAllFlagged}
+              className="text-[11px] px-3 py-1 bg-[rgba(255,159,10,0.15)] text-[#ff9f0a] rounded-lg hover:bg-[rgba(255,159,10,0.25)] transition-colors"
+            >
+              Include All
+            </button>
+          </div>
+          <div className="divide-y divide-white/[0.04]">
+            {flaggedDoors.map((flagged, idx) => {
+              const isApproved = approvedFlagged.has(idx);
+              return (
+                <div
+                  key={idx}
+                  className={`px-4 py-2 flex items-center gap-3 transition-colors ${
+                    isApproved
+                      ? "bg-[rgba(48,209,88,0.04)]"
+                      : "bg-transparent hover:bg-white/[0.02]"
+                  }`}
+                >
+                  <button
+                    onClick={() => toggleFlaggedApproval(idx)}
+                    className={`shrink-0 w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold transition-colors ${
+                      isApproved
+                        ? "bg-[rgba(48,209,88,0.2)] text-[#30d158] border-2 border-[#30d158]"
+                        : "bg-white/[0.04] text-[#6e6e73] border-2 border-[rgba(110,110,115,0.3)] hover:border-[#ff9f0a] hover:text-[#ff9f0a]"
+                    }`}
+                  >
+                    {isApproved ? "✓" : "+"}
+                  </button>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className={`text-[13px] font-medium ${isApproved ? "text-[#30d158]" : "text-[#e8e8ed]"}`}>
+                        {flagged.door.door_number}
+                      </span>
+                      {flagged.door.hw_set && (
+                        <span className="text-[11px] text-[#6e6e73]">
+                          Set: {flagged.door.hw_set}
+                        </span>
+                      )}
+                      {flagged.door.location && (
+                        <span className="text-[11px] text-[#6e6e73] truncate">
+                          {flagged.door.location}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[10px] text-[#636366] mt-0.5 truncate">
+                      {flagged.reason}
+                    </p>
+                  </div>
+                  <span className={`shrink-0 text-[10px] font-mono px-2 py-0.5 rounded ${
+                    isApproved
+                      ? "bg-[rgba(48,209,88,0.1)] text-[#30d158]"
+                      : "bg-white/[0.04] text-[#6e6e73]"
+                  }`}>
+                    {isApproved ? "INCLUDED" : "EXCLUDED"}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* ── Footer: Add Row ── */}
       <div className="px-6 pb-4 flex justify-between items-center">
         <button
@@ -492,8 +597,18 @@ export default function ImportReviewTable({
           + Add Row
         </button>
         <div className="text-xs text-[#6e6e73]">
-          {activeDoors.length} opening{activeDoors.length !== 1 ? "s" : ""} will
+          {activeDoors.length + approvedFlagged.size} opening{(activeDoors.length + approvedFlagged.size) !== 1 ? "s" : ""} will
           be saved
+          {approvedFlagged.size > 0 && (
+            <span className="text-[#30d158]">
+              {" "}&middot; {approvedFlagged.size} restored from flagged
+            </span>
+          )}
+          {hasFlaggedDoors && flaggedDoors.length - approvedFlagged.size > 0 && (
+            <span className="text-[#ff9f0a]">
+              {" "}&middot; {flaggedDoors.length - approvedFlagged.size} flagged (excluded)
+            </span>
+          )}
           {byOthersCount > 0 && (
             <span className="text-[#a78bfa]">
               {" "}&middot; {byOthersCount} by others (excluded)

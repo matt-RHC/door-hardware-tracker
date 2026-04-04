@@ -60,11 +60,20 @@ class ReferenceCode(BaseModel):
     full_name: str  # decoded value
 
 
+class FlaggedDoor(BaseModel):
+    """A door number that was rejected or flagged for user review."""
+    door: DoorEntry
+    reason: str          # human-readable reason it was flagged
+    pattern: str = ""    # the structural pattern of this door number
+    dominant_pattern: str = ""  # the dominant pattern in the document
+
+
 class ExtractionResult(BaseModel):
     success: bool
     openings: list[DoorEntry] = []
     hardware_sets: list[HardwareSetDef] = []
     reference_codes: list[ReferenceCode] = []
+    flagged_doors: list[FlaggedDoor] = []  # outliers for user review
     expected_door_count: int = 0
     tables_found: int = 0
     hw_sets_found: int = 0
@@ -449,6 +458,102 @@ def is_valid_door_number(val: str) -> bool:
         return False
 
     return True
+
+
+def door_number_shape(door_num: str) -> str:
+    """
+    Convert a door number into a structural shape string for pattern comparison.
+    Replaces runs of digits with 'D', runs of letters with 'L', keeps separators.
+
+    Examples:
+        '1.01.A.01A' → 'D.D.L.DL'
+        '110-01C'    → 'D-DL'
+        'A-201B'     → 'L-DL'
+        'ST-100'     → 'L-D'
+        'DCB2'       → 'LD'
+    """
+    shape = ""
+    prev_type = ""
+    for ch in door_num:
+        if ch.isdigit():
+            if prev_type != "D":
+                shape += "D"
+                prev_type = "D"
+        elif ch.isalpha():
+            if prev_type != "L":
+                shape += "L"
+                prev_type = "L"
+        else:
+            # Separator character (dot, dash, etc.) — keep as-is
+            shape += ch
+            prev_type = ch
+    return shape
+
+
+def validate_door_number_consistency(
+    doors: list["DoorEntry"],
+    min_doors_for_consensus: int = 5,
+    outlier_threshold: float = 0.15,
+) -> tuple[list["DoorEntry"], list["FlaggedDoor"]]:
+    """
+    Post-extraction consensus check. Analyzes structural patterns of all extracted
+    door numbers and flags outliers that don't match the dominant pattern(s).
+
+    Returns (confirmed_doors, flagged_doors) where flagged_doors are candidates
+    for user review — they are NOT silently removed.
+
+    Args:
+        doors: Extracted door entries.
+        min_doors_for_consensus: Minimum doors needed to establish a pattern consensus.
+            Below this threshold, all doors pass through without flagging.
+        outlier_threshold: A pattern must appear in at least this fraction of doors
+            to be considered "dominant". Patterns below this are outlier candidates.
+    """
+    if len(doors) < min_doors_for_consensus:
+        return doors, []
+
+    # Classify each door number into a shape
+    shape_map: dict[str, list[int]] = {}  # shape → list of indices
+    for idx, door in enumerate(doors):
+        shape = door_number_shape(door.door_number)
+        shape_map.setdefault(shape, []).append(idx)
+
+    # Find dominant pattern(s) — those that appear in a significant portion of doors.
+    # A pattern is dominant if it has ≥ outlier_threshold fraction AND at least 3
+    # instances (to prevent tiny groups of garbage from masquerading as patterns).
+    total = len(doors)
+    dominant_shapes: set[str] = set()
+    for shape, indices in shape_map.items():
+        count = len(indices)
+        fraction = count / total
+        if fraction >= outlier_threshold and count >= 3:
+            dominant_shapes.add(shape)
+
+    # If no clear dominant pattern (very mixed document), don't flag anything
+    if not dominant_shapes:
+        return doors, []
+
+    # Find the single most common pattern for display purposes
+    most_common_shape = max(shape_map.keys(), key=lambda s: len(shape_map[s]))
+
+    confirmed: list[DoorEntry] = []
+    flagged: list[FlaggedDoor] = []
+
+    for idx, door in enumerate(doors):
+        shape = door_number_shape(door.door_number)
+        if shape in dominant_shapes:
+            confirmed.append(door)
+        else:
+            flagged.append(FlaggedDoor(
+                door=door,
+                reason=f"Pattern '{shape}' doesn't match dominant pattern(s) "
+                       f"({', '.join(sorted(dominant_shapes))}). "
+                       f"May be a hardware set ID, reference code, or extraction artifact.",
+                pattern=shape,
+                dominant_pattern=most_common_shape,
+            ))
+
+    return confirmed, flagged
 
 
 # --- Hardware Set Extraction ---
@@ -1064,12 +1169,19 @@ class handler(BaseHTTPRequestHandler):
                 # Phase 3: Extract reference tables
                 reference_codes = extract_reference_tables(pdf)
 
+                # Phase 4: Pattern consensus validation
+                # Flag door numbers that don't match the dominant structural
+                # pattern. These are presented to the user for review, NOT
+                # silently removed.
+                confirmed_doors, flagged_doors = validate_door_number_consistency(openings)
+
                 result = ExtractionResult(
-                    success=len(openings) > 0 or len(hardware_sets) > 0,
-                    openings=openings,
+                    success=len(confirmed_doors) > 0 or len(hardware_sets) > 0,
+                    openings=confirmed_doors,
                     hardware_sets=hardware_sets,
                     reference_codes=reference_codes,
-                    expected_door_count=len(openings),
+                    flagged_doors=flagged_doors,
+                    expected_door_count=len(confirmed_doors) + len(flagged_doors),
                     tables_found=tables_found,
                     hw_sets_found=len(hardware_sets),
                     method="pdfplumber",

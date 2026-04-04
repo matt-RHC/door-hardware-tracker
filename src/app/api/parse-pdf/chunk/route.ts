@@ -32,6 +32,13 @@ interface DoorEntry {
   hand: string
 }
 
+interface FlaggedDoor {
+  door: DoorEntry
+  reason: string
+  pattern: string
+  dominant_pattern: string
+}
+
 interface PdfplumberResult {
   success: boolean
   openings: DoorEntry[]
@@ -51,6 +58,7 @@ interface PdfplumberResult {
     code: string
     full_name: string
   }>
+  flagged_doors: FlaggedDoor[]
   expected_door_count: number
   tables_found: number
   hw_sets_found: number
@@ -345,6 +353,7 @@ export async function POST(request: NextRequest) {
     }))
 
     let doors: DoorEntry[] = pdfplumberResult?.openings || []
+    const flaggedDoors: FlaggedDoor[] = pdfplumberResult?.flagged_doors || []
 
     // ==========================================
     // Step 2: LLM review pass (always)
@@ -355,6 +364,7 @@ export async function POST(request: NextRequest) {
       openings: [],
       hardware_sets: [],
       reference_codes: [],
+      flagged_doors: [],
       expected_door_count: 0,
       tables_found: 0,
       hw_sets_found: 0,
@@ -377,6 +387,7 @@ export async function POST(request: NextRequest) {
       chunkIndex,
       hardwareSets,
       doors,
+      flaggedDoors,
       reviewNotes: corrections.notes,
     })
   } catch (error) {
