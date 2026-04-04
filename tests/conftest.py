@@ -63,3 +63,12 @@ def large_pdf_path():
     if not p.exists():
         pytest.skip(f"LARGE PDF not found at {p}. Copy it from Downloads.")
     return p
+
+
+@pytest.fixture(scope="session")
+def rpl10_pdf_path():
+    """Path to the RPL10 golden test PDF (NW Data Center, 52 pages)."""
+    p = FIXTURES_DIR / "RPL10_NW_Data_Center.pdf"
+    if not p.exists():
+        pytest.skip(f"RPL10 PDF not found at {p}. Copy it from Downloads.")
+    return p

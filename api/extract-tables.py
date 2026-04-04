@@ -62,6 +62,7 @@ class DoorEntry(BaseModel):
     frame_type: str = ""
     fire_rating: str = ""
     hand: str = ""
+    by_others: bool = False
 
 
 class ReferenceCode(BaseModel):
@@ -549,12 +550,219 @@ def detect_column_mapping(headers: list[str]) -> dict[str, int]:
 def is_opening_list_table(headers: list[str]) -> bool:
     """
     Determine if a table is likely an Opening List based on headers.
-    Must have at least a door number column and one of hw_set or location.
+    Must have at least a door number column and one secondary field.
     """
     mapping = detect_column_mapping(headers)
     has_door = "door_number" in mapping
-    has_secondary = "hw_set" in mapping or "location" in mapping
+    has_secondary = (
+        "hw_set" in mapping
+        or "hw_heading" in mapping
+        or "location" in mapping
+    )
     return has_door and has_secondary
+
+
+# ── Content-Based Structural Table Detection ──────────────────────────
+# When headers don't match keywords (e.g., "DOOR INDEX" instead of
+# "Opening List"), identify columns by analyzing the DATA itself.
+# A column of values like 001.01.A.01A is door numbers regardless
+# of what the header says.
+
+# Known handing abbreviations (closed set)
+_HAND_VALUES = frozenset({
+    "LH", "RH", "LHR", "RHR", "LHRA", "RHRA",
+    "LH/LHR", "RH/RHR", "RHRA/LHR", "LHRA/RHR",
+    "RHR/LHR", "LHR/RHR",
+    "IN", "OUT", "LEFT", "RIGHT",
+})
+
+
+def _is_hw_set_value(val: str) -> bool:
+    """Check if a value looks like a hardware set/heading ID (short alphanumeric code)."""
+    v = val.strip()
+    if not v or len(v) > 20 or len(v) < 1:
+        return False
+    # Must contain at least one digit (pure text like "John" is not a set ID)
+    if not re.search(r"\d", v):
+        return False
+    # Must be a compact code (alphanumeric + separators, no spaces)
+    if " " in v:
+        return False
+    # Match typical set ID patterns: SSE1XL1, E2-XL.2, I1-B3, 13.0
+    return bool(re.match(r"^[A-Z0-9][A-Z0-9.\-:]{0,19}$", v, re.IGNORECASE))
+
+
+def _is_fire_rating_value(val: str) -> bool:
+    """Check if a value looks like a fire rating."""
+    v = val.strip().upper()
+    return bool(re.match(
+        r"^(\d{2,3}\s*MIN|[0-9.]+\s*HR|RATED|[ABC]|N/?A|NONE|NR|--|-|20|45|60|90|120|180)$",
+        v,
+    ))
+
+
+def score_column_by_values(cells: list[str], field: str) -> float:
+    """
+    Score how well a column's actual cell VALUES match expected patterns
+    for a field type. Returns 0.0–1.0.
+
+    This is the core of structural detection — instead of checking what
+    the header SAYS, check what the data LOOKS LIKE.
+    """
+    non_empty = [c.strip() for c in cells if c and c.strip()]
+    if len(non_empty) < 3:
+        return 0.0
+
+    validators = {
+        "door_number": lambda v: is_valid_door_number(v),
+        "hw_set": _is_hw_set_value,
+        "hw_heading": _is_hw_set_value,
+        "hand": lambda v: v.strip().upper() in _HAND_VALUES,
+        "fire_rating": _is_fire_rating_value,
+        "location": lambda v: len(v) > 8 and " " in v,
+        "door_type": lambda v: bool(re.match(r"^[A-Z]{1,5}[-]?[A-Z0-9]*$", v)) and len(v) <= 10,
+        "frame_type": lambda v: bool(re.match(r"^[A-Z]{1,5}[-]?[A-Z0-9]*$", v)) and len(v) <= 10,
+    }
+
+    validator = validators.get(field)
+    if not validator:
+        return 0.0
+
+    matches = sum(1 for c in non_empty if validator(c))
+    return matches / len(non_empty)
+
+
+def detect_table_by_content(
+    table: list[list[str | None]],
+    min_data_rows: int = 8,
+) -> tuple[dict[str, int], int] | None:
+    """
+    Identify opening list columns by analyzing cell VALUE patterns, not headers.
+
+    When header-keyword detection fails (e.g., table says "DOOR INDEX"
+    instead of "Opening List"), this function examines the actual data
+    to recognize door numbers, set IDs, handing, etc. by their structural
+    patterns.
+
+    Uses strict thresholds to avoid false positives on hardware set pages
+    or reference tables that may contain a few door-number-like values.
+
+    Returns (column_mapping, header_row_index) or None.
+    """
+    if not table or len(table) < min_data_rows + 1:
+        return None
+
+    # Try each of the first 3 rows as the potential header
+    for header_idx in range(min(3, len(table))):
+        data_rows = table[header_idx + 1:]
+        if len(data_rows) < min_data_rows:
+            continue
+
+        n_cols = max(len(row) for row in data_rows[:30])
+        if n_cols < 2:
+            continue
+
+        # Score each column against each field type using value patterns
+        fields = ["door_number", "hw_set", "hw_heading", "hand",
+                  "fire_rating", "location", "door_type", "frame_type"]
+        candidates: list[tuple[float, str, int]] = []
+
+        # Strict thresholds for content-based detection:
+        # door_number needs 50%+ match rate (real door lists have 90%+)
+        # Other fields need 30%+ match rate
+        field_thresholds = {
+            "door_number": 0.5,
+            "hw_set": 0.3,
+            "hw_heading": 0.3,
+            "hand": 0.4,
+            "fire_rating": 0.3,
+            "location": 0.3,
+            "door_type": 0.3,
+            "frame_type": 0.3,
+        }
+
+        for col_idx in range(n_cols):
+            col_values = []
+            for row in data_rows[:30]:
+                val = clean_cell(row[col_idx]) if col_idx < len(row) else ""
+                if val:
+                    col_values.append(val)
+
+            if len(col_values) < 5:
+                continue
+
+            for field in fields:
+                score = score_column_by_values(col_values, field)
+                threshold = field_thresholds.get(field, 0.3)
+                if score >= threshold:
+                    candidates.append((score, field, col_idx))
+
+        if not candidates:
+            continue
+
+        # Greedy assignment: highest scores first, no reuse
+        candidates.sort(key=lambda x: -x[0])
+        mapping: dict[str, int] = {}
+        used_cols: set[int] = set()
+
+        for score, field, col_idx in candidates:
+            if field in mapping or col_idx in used_cols:
+                continue
+            mapping[field] = col_idx
+            used_cols.add(col_idx)
+
+        # Require door_number + a strong secondary field.
+        # For content-based detection we require hw_set or hw_heading
+        # (not just hand/location) to avoid matching hardware set
+        # door-assignment lines which also have doors + hand + location.
+        has_door = "door_number" in mapping
+        has_set_column = "hw_set" in mapping or "hw_heading" in mapping
+
+        if not (has_door and has_set_column):
+            continue
+
+        # Additional validation: count actual valid door numbers in the column
+        # Require at least 5 unique valid door numbers to confirm this is
+        # a real opening list, not a coincidental match
+        door_col = mapping["door_number"]
+        valid_doors: set[str] = set()
+        for row in data_rows[:30]:
+            val = clean_cell(row[door_col]) if door_col < len(row) else ""
+            if val and is_valid_door_number(val):
+                valid_doors.add(val.strip().upper())
+
+        if len(valid_doors) < 5:
+            continue
+
+        # Check uniqueness: door numbers should be mostly unique
+        # (unlike quantities or reference codes which repeat heavily)
+        all_values = [
+            clean_cell(row[door_col]).strip()
+            for row in data_rows[:30]
+            if door_col < len(row) and clean_cell(row[door_col]).strip()
+        ]
+        if all_values:
+            unique_ratio = len(set(all_values)) / len(all_values)
+            if unique_ratio < 0.6:
+                continue
+
+        # Also incorporate any header keyword scores for unassigned columns
+        headers = [clean_cell(c) for c in table[header_idx]]
+        for col_idx, header in enumerate(headers):
+            if col_idx in used_cols or not header:
+                continue
+            for field in fields:
+                if field in mapping:
+                    continue
+                kw_score = score_header_for_field(header, field)
+                if kw_score >= 0.3:
+                    mapping[field] = col_idx
+                    used_cols.add(col_idx)
+                    break
+
+        return mapping, header_idx
+
+    return None
 
 
 # ── Comprehensive Mojibake Replacement Map ──────────────────────────────
@@ -693,7 +901,9 @@ DOOR_NUMBER_PATTERNS = [
     r'^[A-Z]{1,2}\d{2,4}[A-Z]?$',
     # Period-separated sub-doors: 101.1, A101.2
     r'^[A-Z]?\d{2,4}\.\d{1,2}$',
-    # Compound dot-separated: 1.01.A.01A, 2.01.F.06E
+    # 3-segment with alphanumeric middle: 10.E1.03, 10.N2.01A, 5.B2.14
+    r'^\d{1,3}\.[A-Z]\d{1,3}\.\d{2,4}[A-Z]?$',
+    # Compound dot-separated (4-segment): 1.01.A.01A, 2.01.F.06E
     r'^\d+\.\d+\.[A-Z]\.\d+[A-Z]?$',
     # Prefix-dash-digits: ST-100, ER-ADJ9.8-94
     r'^[A-Z]{1,4}[-]\w+$',
@@ -705,13 +915,29 @@ HARDWARE_SET_PATTERNS = [
     r'^(?:SET|HS|HW|DH|DCB|HM|HMS)\b',  # SET A, HS-1, HW3, DH1, DCB2
     r'^[A-Z]{3,}\d?$',                   # Pure letter codes: ABC, EXIT, STOR
     r'^\d{1}[A-Z]$',                     # Single digit + letter: 1A, 2B (too short)
-    r'^(?:EXIT|STOR|ELEC|MECH|STAIR|CORR|VEST|LOBBY|OFFICE)[-]?\d*$',
+    r'^(?:EXIT|STOR|ELEC|MECH)[-]?\d*$', # Zone codes (without location prefixes)
 ]
 
 # Explicit blocklist for known hardware set prefixes
 HARDWARE_SET_PREFIXES = frozenset({
     'DH', 'DCB', 'HM', 'HMS', 'HW', 'HS', 'HD', 'FH', 'AH',
     'SET', 'TYPE', 'GRP', 'GROUP', 'STYLE',
+})
+
+# Location prefixes that ARE valid door number prefixes (Task 3 / S-045)
+# ST-1 (stair door 1) should NOT be rejected as a hardware set ID.
+DOOR_LOCATION_PREFIXES = frozenset({
+    'ST', 'STAIR', 'EL', 'ELEV', 'EX', 'EXT', 'EY', 'EN',
+    'ENTRY', 'CORR', 'VEST', 'LOBBY',
+})
+
+# "No Hardware" set ID values (Task 4 / S-045)
+# Openings with these set IDs are marked by_others=True instead of
+# creating phantom hardware sets.
+NO_HARDWARE_VALUES = frozenset({
+    'NH', 'N/A', 'NA', 'NIC', 'BY OTHERS', 'BY OTHER', 'EXIST', 'EXISTING',
+    'EXIST HW', 'NO HW', 'NO HARDWARE', 'NONE', 'NOT USED',
+    '--', '\u2014', '\u2013', '',
 })
 
 
@@ -761,6 +987,15 @@ def is_valid_door_number(val: str, log_rejections: bool = False) -> bool:
     # Reject phone number patterns
     if re.match(r'^\d{3}-\d{3}-\d{4}$', clean):
         return False
+
+    # Accept location-prefix door numbers BEFORE hardware set rejection.
+    # ST-1 (stair door 1), EL-3 (elevator door 3), CORR-5 etc. would
+    # otherwise be rejected by the hardware set patterns below.
+    for prefix in DOOR_LOCATION_PREFIXES:
+        if clean.startswith(prefix) and re.match(
+            rf'^{re.escape(prefix)}[-]\d{{1,4}}[A-Z]?$', clean
+        ):
+            return True
 
     # Reject if it matches a hardware set pattern
     for pattern in HARDWARE_SET_PATTERNS:
@@ -1367,6 +1602,14 @@ def extract_opening_list(
                     mapping = user_column_mapping if user_column_mapping else detect_column_mapping(headers)
                     break
 
+            # Fallback: content-based structural detection
+            # If headers didn't match keywords, analyze the DATA itself
+            if header_row_idx is None and not user_column_mapping:
+                content_result = detect_table_by_content(table)
+                if content_result:
+                    mapping, header_row_idx = content_result
+                    logger.info("Content-based detection identified opening list table")
+
             if header_row_idx is None:
                 continue
 
@@ -1404,6 +1647,7 @@ def extract_opening_list(
                     frame_type=get_field("frame_type"),
                     fire_rating=get_field("fire_rating"),
                     hand=get_field("hand"),
+                    by_others=get_field("hw_set").strip().upper() in NO_HARDWARE_VALUES,
                 )
                 all_doors.append(entry)
 
@@ -1503,6 +1747,7 @@ def extract_opening_list_text_align(
                     frame_type=get_field("frame_type"),
                     fire_rating=get_field("fire_rating"),
                     hand=get_field("hand"),
+                    by_others=get_field("hw_set").strip().upper() in NO_HARDWARE_VALUES,
                 )
                 all_doors.append(entry)
 
@@ -1703,15 +1948,17 @@ def extract_opening_list_text(pdf: pdfplumber.PDF) -> tuple[list[DoorEntry], int
             seen_door_numbers.add(door_num)
             tables_found = max(tables_found, 1)
 
+            hw_set_val = clean_cell(vals.get("hw_set", ""))
             entry = DoorEntry(
                 door_number=door_num,
-                hw_set=clean_cell(vals.get("hw_set", "")),
+                hw_set=hw_set_val,
                 hw_heading=clean_cell(vals.get("hw_heading", "")),
                 location=clean_cell(vals.get("location", "")),
                 door_type=clean_cell(vals.get("door_type", "")),
                 frame_type=clean_cell(vals.get("frame_type", "")),
                 fire_rating=clean_cell(vals.get("fire_rating", "")),
                 hand=clean_cell(vals.get("hand", "")),
+                by_others=hw_set_val.strip().upper() in NO_HARDWARE_VALUES,
             )
             all_doors.append(entry)
 

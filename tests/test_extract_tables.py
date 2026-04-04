@@ -170,6 +170,10 @@ class TestBug5DoorValidation:
     @pytest.mark.parametrize("val", [
         "101", "A101", "1-101", "B1-101", "101A", "1.01.A.01A",
         "110-01C", "ST-100", "110-01A", "110A-04A", "120-02A",
+        # RPL10 3-segment alphanumeric format (S-045)
+        "10.E1.03", "10.N2.01A", "10.S1.05B", "10.E2.06A",
+        # Location-prefix door numbers (Task 3 / S-045)
+        "ST-1", "ST-1A", "EL-1", "EX-1", "EY-001", "CORR-5",
     ])
     def test_accepts_valid_doors(self, extract_tables, val):
         assert extract_tables.is_valid_door_number(val), (
@@ -191,6 +195,77 @@ class TestBug5DoorValidation:
 
     def test_rejects_pure_long_number(self, extract_tables):
         assert not extract_tables.is_valid_door_number("303872")
+
+
+# ── Content-based structural table detection ──
+
+class TestContentBasedDetection:
+    """Verify detect_table_by_content() identifies tables by data patterns."""
+
+    def test_recognizes_door_schedule_by_values(self, extract_tables):
+        """A table with door numbers + set codes should be detected even with nonsense headers."""
+        table = [
+            ["Banana", "Apple", "Cherry", "Grape"],  # nonsense headers
+            ["101", "DH1", "DH1.1", "LHR"],
+            ["102", "DH1", "DH1.1", "RHR"],
+            ["103A", "DH2", "DH2", "LH"],
+            ["104", "DH2", "DH2.1", "RHR"],
+            ["105", "DH3", "DH3", "LHR"],
+            ["106A", "DH3", "DH3", "RHR"],
+            ["107", "DH1", "DH1.1", "LHR"],
+            ["108", "DH4", "DH4", "RHR"],
+            ["109", "DH4", "DH4.1", "LHR"],
+        ]
+        result = extract_tables.detect_table_by_content(table)
+        assert result is not None, "Should detect door schedule by data patterns"
+        mapping, header_idx = result
+        assert "door_number" in mapping
+        assert "hw_set" in mapping or "hw_heading" in mapping
+
+    def test_rejects_non_door_table(self, extract_tables):
+        """A table without door numbers should not be detected."""
+        table = [
+            ["Name", "Email", "Phone"],
+            ["John", "john@test.com", "555-1234"],
+            ["Jane", "jane@test.com", "555-5678"],
+            ["Bob", "bob@test.com", "555-9012"],
+            ["Alice", "alice@test.com", "555-3456"],
+            ["Eve", "eve@test.com", "555-7890"],
+            ["Mallory", "mallory@test.com", "555-2345"],
+            ["Trent", "trent@test.com", "555-6789"],
+            ["Oscar", "oscar@test.com", "555-0123"],
+            ["Peggy", "peggy@test.com", "555-4567"],
+        ]
+        result = extract_tables.detect_table_by_content(table)
+        assert result is None, "Should not detect contact table as door schedule"
+
+    def test_rejects_small_table(self, extract_tables):
+        """Tables with fewer than min_data_rows should be rejected."""
+        table = [
+            ["Door", "Set"],
+            ["101", "DH1"],
+            ["102", "DH2"],
+        ]
+        result = extract_tables.detect_table_by_content(table)
+        assert result is None, "Should reject table with too few rows"
+
+    def test_score_column_door_numbers(self, extract_tables):
+        """Column scoring should recognize door number columns."""
+        cells = ["101", "102A", "103", "A104", "105B", "106", "107", "108"]
+        score = extract_tables.score_column_by_values(cells, "door_number")
+        assert score >= 0.5, f"Door number column should score >= 0.5, got {score}"
+
+    def test_score_column_hand_values(self, extract_tables):
+        """Column scoring should recognize hand columns."""
+        cells = ["LHR", "RHR", "RHRA/LHR", "LH", "RH", "LHR", "RHR", "LHR"]
+        score = extract_tables.score_column_by_values(cells, "hand")
+        assert score >= 0.5, f"Hand column should score >= 0.5, got {score}"
+
+    def test_score_column_random_text(self, extract_tables):
+        """Random text should not score as door numbers."""
+        cells = ["hello", "world", "foo", "bar", "testing", "random", "words", "here"]
+        score = extract_tables.score_column_by_values(cells, "door_number")
+        assert score < 0.3, f"Random text should score < 0.3 for door_number, got {score}"
 
 
 # ── MEDIUM PDF verification (44 pages) ──

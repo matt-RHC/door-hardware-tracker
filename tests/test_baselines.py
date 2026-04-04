@@ -90,11 +90,13 @@ class TestMediumBaseline:
             f"Door count changed: expected {baseline['door_count']}, got {actual}"
         )
 
-    def test_102_doors(self, extract_tables, medium_pdf_path):
-        """Critical regression: MEDIUM PDF must extract 102 doors (page-6 fix)."""
+    def test_104_doors(self, extract_tables, medium_pdf_path):
+        """Critical regression: MEDIUM PDF must extract 104 doors.
+        Was 102 before S-045; +2 from ST-1A/ST-1C (stair doors now accepted
+        via DOOR_LOCATION_PREFIXES)."""
         hw_sets, openings, confirmed, flagged, refs, tf = _run_full_pipeline(extract_tables, medium_pdf_path)
         actual = len(confirmed) + len(flagged)
-        assert actual == 102, f"MEDIUM PDF door count regression: expected 102, got {actual}"
+        assert actual == 104, f"MEDIUM PDF door count regression: expected 104, got {actual}"
 
     def test_hw_set_count(self, extract_tables, medium_pdf_path):
         baseline = _load_baseline("medium-baseline.json")
@@ -183,6 +185,80 @@ class TestLargeBaseline:
     def test_item_quantities(self, extract_tables, large_pdf_path):
         baseline = _load_baseline("large-baseline.json")
         hw_sets, *_ = _run_full_pipeline(extract_tables, large_pdf_path)
+        for hs, expected_set in zip(hw_sets, baseline["hardware_sets"]):
+            assert len(hs.items) == expected_set["item_count"], (
+                f"Set {hs.set_id}: item count changed from {expected_set['item_count']} to {len(hs.items)}"
+            )
+            for item, expected_item in zip(hs.items, expected_set["items"]):
+                assert item.qty == expected_item["qty"], (
+                    f"Set {hs.set_id}, '{item.name[:40]}': qty changed from {expected_item['qty']} to {item.qty}"
+                )
+                assert item.qty_source == expected_item["qty_source"], (
+                    f"Set {hs.set_id}, '{item.name[:40]}': qty_source changed from "
+                    f"'{expected_item['qty_source']}' to '{item.qty_source}'"
+                )
+
+
+class TestRPL10Baseline:
+    """RPL10 PDF (52 pages, NW Data Center) regression tests."""
+
+    def test_door_count(self, extract_tables, rpl10_pdf_path):
+        baseline = _load_baseline("RPL10_NW_Data_Center.json")
+        hw_sets, openings, confirmed, flagged, refs, tf = _run_full_pipeline(extract_tables, rpl10_pdf_path)
+        actual = len(confirmed) + len(flagged)
+        assert actual == baseline["door_count"], (
+            f"Door count changed: expected {baseline['door_count']}, got {actual}"
+        )
+
+    def test_rpl10_doors_not_zero(self, extract_tables, rpl10_pdf_path):
+        """Critical regression: RPL10 must extract doors (was 0 before S-045 fix)."""
+        hw_sets, openings, confirmed, flagged, refs, tf = _run_full_pipeline(extract_tables, rpl10_pdf_path)
+        actual = len(confirmed) + len(flagged)
+        assert actual >= 70, f"RPL10 door count regression: expected >=70, got {actual}"
+
+    def test_hw_set_count(self, extract_tables, rpl10_pdf_path):
+        baseline = _load_baseline("RPL10_NW_Data_Center.json")
+        hw_sets, *_ = _run_full_pipeline(extract_tables, rpl10_pdf_path)
+        assert len(hw_sets) == baseline["hw_set_count"], (
+            f"HW set count changed: expected {baseline['hw_set_count']}, got {len(hw_sets)}"
+        )
+
+    def test_set_ids_match(self, extract_tables, rpl10_pdf_path):
+        baseline = _load_baseline("RPL10_NW_Data_Center.json")
+        hw_sets, *_ = _run_full_pipeline(extract_tables, rpl10_pdf_path)
+        expected_ids = [s["set_id"] for s in baseline["hardware_sets"]]
+        actual_ids = [s.set_id for s in hw_sets]
+        assert actual_ids == expected_ids, (
+            f"Set IDs changed:\n  expected: {expected_ids}\n  actual:   {actual_ids}"
+        )
+
+    def test_closer_qty_is_1(self, extract_tables, rpl10_pdf_path):
+        """BUG-7 regression: closers must be 1 per opening after normalization."""
+        hw_sets, *_ = _run_full_pipeline(extract_tables, rpl10_pdf_path)
+        for hs in hw_sets:
+            for item in hs.items:
+                lower = item.name.lower()
+                if "closer" in lower and item.qty_source == "divided":
+                    assert item.qty <= 2, (
+                        f"Set {hs.set_id}: closer '{item.name[:40]}' has qty={item.qty} "
+                        f"(expected 1-2 after normalization)"
+                    )
+
+    def test_hinge_qty_reasonable(self, extract_tables, rpl10_pdf_path):
+        """BUG-7 regression: hinges must be 3-5 per leaf after normalization."""
+        hw_sets, *_ = _run_full_pipeline(extract_tables, rpl10_pdf_path)
+        for hs in hw_sets:
+            for item in hs.items:
+                lower = item.name.lower()
+                if "hinge" in lower and item.qty_source == "divided":
+                    assert item.qty <= 5, (
+                        f"Set {hs.set_id}: hinge '{item.name[:40]}' has qty={item.qty} "
+                        f"(expected <=5 after normalization)"
+                    )
+
+    def test_item_quantities(self, extract_tables, rpl10_pdf_path):
+        baseline = _load_baseline("RPL10_NW_Data_Center.json")
+        hw_sets, *_ = _run_full_pipeline(extract_tables, rpl10_pdf_path)
         for hs, expected_set in zip(hw_sets, baseline["hardware_sets"]):
             assert len(hs.items) == expected_set["item_count"], (
                 f"Set {hs.set_id}: item count changed from {expected_set['item_count']} to {len(hs.items)}"

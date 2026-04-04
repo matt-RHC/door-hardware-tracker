@@ -1,10 +1,10 @@
 {
   "pdf_name": "MEDIUM_306169.pdf",
-  "door_count": 102,
+  "door_count": 104,
   "confirmed_count": 86,
-  "flagged_count": 16,
+  "flagged_count": 18,
   "hw_set_count": 47,
-  "tables_found": 32,
+  "tables_found": 33,
   "reference_code_count": 0,
   "hardware_sets": [
     {
@@ -8221,6 +8221,14 @@
     {
       "door_number": "EY-008",
       "reason": "Pattern 'L-D' doesn't match dominant pattern(s) (D, D-DL, DL). May be a hardware set ID, reference code, or extraction artifact."
+    },
+    {
+      "door_number": "ST-1A",
+      "reason": "Pattern 'L-DL' doesn't match dominant pattern(s) (D, D-DL, DL). May be a hardware set ID, reference code, or extraction artifact."
+    },
+    {
+      "door_number": "ST-1C",
+      "reason": "Pattern 'L-DL' doesn't match dominant pattern(s) (D, D-DL, DL). May be a hardware set ID, reference code, or extraction artifact."
     }
   ]
 }

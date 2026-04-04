@@ -38,9 +38,10 @@ DOOR_SCHEDULE_HEADERS = re.compile(
 DOOR_NUMBER_COLUMN = re.compile(
     r"(?i)^(open(ing)?|door)\s*(no\.?|num(ber)?|#|tag)|^#$|^no\.?$|^tag$"
 )
-# Multiple door-number-like values on one page (e.g. "101-01", "A-201B")
+# Multiple door-number-like values on one page (e.g. "101-01", "A-201B", "10.E1.03")
 DOOR_NUMBER_VALUES = re.compile(
-    r"\b(\d{2,4}[-\.]\d{1,3}[A-Z]?|[A-Z]\d{3,4}[A-Z]?)\b"
+    r"\b(\d{2,4}[-\.]\d{1,3}[A-Z]?|[A-Z]\d{3,4}[A-Z]?|"
+    r"\d{1,3}\.[A-Z]\d{1,3}\.\d{2,4}[A-Z]?)\b"
 )
 
 # Hardware set indicators
@@ -71,9 +72,11 @@ REFERENCE_PATTERNS = re.compile(
 
 # Cover page indicators
 COVER_PATTERNS = re.compile(
-    r"(?i)(table\s*of\s*contents|index|project\s*directory|"
+    r"(?i)(table\s*of\s*contents|project\s*directory|"
     r"submittal\s*cover|transmittal|project\s*name|"
-    r"prepared\s*(by|for)|date\s*of\s*issue)"
+    r"prepared\s*(by|for)|date\s*of\s*issue|"
+    r"building\s*[a-z0-9]?\s*hardware|division\s*\d+|"
+    r"section\s*08\s*71)"
 )
 
 
@@ -203,10 +206,10 @@ def classify_page(page, page_index: int) -> dict:
         "garbage_ratio": scan_status["garbage_ratio"],
     }
 
-    # Check for cover page (usually first few pages, low content)
-    if page_index < 5 and COVER_PATTERNS.search(text):
+    # Check for cover page (can appear anywhere, higher confidence early)
+    if COVER_PATTERNS.search(text):
         result["type"] = PAGE_TYPE_COVER
-        result["confidence"] = 0.9
+        result["confidence"] = 0.9 if page_index < 5 else 0.7
         return result
 
     # Check for reference/legend pages
