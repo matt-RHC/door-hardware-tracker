@@ -514,9 +514,6 @@ interface ChunkResult {
 
 // --- Constants ---
 
-/** Max pages per chunk. ~30-40 pages keeps each Claude call well under 200K tokens. */
-const PAGES_PER_CHUNK = 35;
-
 /**
  * Page threshold for FRESH uploads only. PDFs at or below this count use the
  * original single-request streaming flow (/api/parse-pdf). Re-uploads always
@@ -524,10 +521,112 @@ const PAGES_PER_CHUNK = 35;
  */
 const CHUNK_THRESHOLD = 45;
 
+/** Fallback max pages per chunk if classifier fails */
+const FALLBACK_PAGES_PER_CHUNK = 35;
+
+// --- Types ---
+
+interface PageClassification {
+  index: number;
+  type: string;
+  confidence: number;
+  section_labels: string[];
+  hw_set_ids: string[];
+  has_door_numbers: boolean;
+  word_count: number;
+}
+
+interface SmartChunk {
+  pages: number[];
+  start_page: number;
+  end_page: number;
+  page_count: number;
+  types: string[];
+  labels: string[];
+  hw_set_ids: string[];
+}
+
+interface ClassifyPagesResponse {
+  success: boolean;
+  total_pages: number;
+  page_classifications: PageClassification[];
+  chunks: SmartChunk[];
+  reference_pages: number[];
+  summary: {
+    door_schedule_pages: number;
+    hardware_set_pages: number;
+    reference_pages: number;
+    cover_pages: number;
+    other_pages: number;
+    chunk_count: number;
+  };
+  error?: string;
+}
+
 // --- Helpers ---
 
-/** Split a PDF ArrayBuffer into chunks of N pages, returning base64 strings */
-async function splitPDF(buffer: ArrayBuffer, pagesPerChunk: number): Promise<string[]> {
+/**
+ * Call the page classifier to get smart chunk boundaries.
+ * Returns null if classification fails (caller should fall back to fixed splitting).
+ */
+async function classifyPages(pdfBase64: string): Promise<ClassifyPagesResponse | null> {
+  try {
+    const resp = await fetch("/api/classify-pages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pdfBase64 }),
+    });
+    if (!resp.ok) return null;
+    const data: ClassifyPagesResponse = await resp.json();
+    if (!data.success || !data.chunks?.length) return null;
+    return data;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Split a PDF into chunks by specific page indices.
+ * Each chunk is a base64-encoded PDF containing only the specified pages.
+ * Optionally prepends reference pages to each chunk for context.
+ */
+async function splitPDFByPages(
+  buffer: ArrayBuffer,
+  chunkPageSets: number[][],
+  referencePageIndices: number[] = []
+): Promise<string[]> {
+  const srcDoc = await PDFDocument.load(buffer);
+  const chunks: string[] = [];
+
+  for (const pageIndices of chunkPageSets) {
+    const chunkDoc = await PDFDocument.create();
+
+    // Prepend reference pages for context (if any)
+    if (referencePageIndices.length > 0) {
+      const refPages = await chunkDoc.copyPages(srcDoc, referencePageIndices);
+      for (const page of refPages) {
+        chunkDoc.addPage(page);
+      }
+    }
+
+    // Add the actual content pages
+    const contentPages = await chunkDoc.copyPages(srcDoc, pageIndices);
+    for (const page of contentPages) {
+      chunkDoc.addPage(page);
+    }
+
+    const chunkBytes = await chunkDoc.save();
+    const chunkBase64 = btoa(
+      new Uint8Array(chunkBytes).reduce((data, byte) => data + String.fromCharCode(byte), "")
+    );
+    chunks.push(chunkBase64);
+  }
+
+  return chunks;
+}
+
+/** Fallback: Split a PDF ArrayBuffer into fixed-size chunks (legacy behavior) */
+async function splitPDFFixed(buffer: ArrayBuffer, pagesPerChunk: number): Promise<string[]> {
   const srcDoc = await PDFDocument.load(buffer);
   const totalPages = srcDoc.getPageCount();
   const chunks: string[] = [];
@@ -689,7 +788,8 @@ export default function PDFUploadModal({
   };
 
   // ==========================================
-  // LARGE PDF: Chunked multi-request flow
+  // LARGE PDF: Smart chunked multi-request flow
+  // Uses page classifier for semantic boundaries (falls back to fixed splitting)
   // Returns parsed data if parseOnly=true, otherwise saves to DB
   // ==========================================
   const processLargePDF = async (
@@ -697,10 +797,49 @@ export default function PDFUploadModal({
     pageCount: number,
     parseOnly = false
   ): Promise<{ doors: DoorEntry[]; sets: HardwareSet[] } | void> => {
-    setStatus(`Splitting ${pageCount}-page PDF into chunks...`);
-    setProgress(3);
+    // Phase 1: Classify pages and find smart boundaries
+    setStatus(`Analyzing ${pageCount}-page PDF structure...`);
+    setProgress(2);
 
-    const chunks = await splitPDF(buffer, PAGES_PER_CHUNK);
+    // Convert buffer to base64 for classifier
+    const fullBase64 = btoa(
+      new Uint8Array(buffer).reduce((data, byte) => data + String.fromCharCode(byte), "")
+    );
+
+    const classification = await classifyPages(fullBase64);
+
+    let chunks: string[];
+    let chunkLabels: string[] = []; // human-readable labels for each chunk
+
+    if (classification && classification.chunks.length > 0) {
+      // Smart chunking: use semantic boundaries
+      const { chunks: smartChunks, reference_pages: refPages, summary } = classification;
+
+      setStatus(
+        `Found ${summary.door_schedule_pages} schedule pages, ` +
+        `${summary.hardware_set_pages} hardware pages, ` +
+        `${summary.reference_pages} reference pages. ` +
+        `Splitting into ${summary.chunk_count} smart chunks...`
+      );
+      setProgress(3);
+
+      const chunkPageSets = smartChunks.map((c) => c.pages);
+      chunks = await splitPDFByPages(buffer, chunkPageSets, refPages);
+
+      // Build labels for progress display
+      chunkLabels = smartChunks.map((c) => {
+        const types = c.types.join("+");
+        const sets = c.hw_set_ids.length > 0 ? ` (${c.hw_set_ids.join(", ")})` : "";
+        return `${types}${sets} [pp ${c.start_page + 1}-${c.end_page + 1}]`;
+      });
+    } else {
+      // Fallback: fixed splitting (legacy behavior)
+      setStatus(`Splitting ${pageCount}-page PDF into chunks...`);
+      setProgress(3);
+      chunks = await splitPDFFixed(buffer, FALLBACK_PAGES_PER_CHUNK);
+      chunkLabels = chunks.map((_, i) => `pages ${i * FALLBACK_PAGES_PER_CHUNK + 1}-${Math.min((i + 1) * FALLBACK_PAGES_PER_CHUNK, pageCount)}`);
+    }
+
     const totalChunks = chunks.length;
 
     setStatus(`Split into ${totalChunks} chunks. Starting analysis...`);
@@ -714,7 +853,8 @@ export default function PDFUploadModal({
       const chunkStartPct = Math.round(5 + (i / totalChunks) * 75);
       const chunkEndPct = Math.round(5 + ((i + 1) / totalChunks) * 75);
 
-      setStatus(`Processing chunk ${i + 1} of ${totalChunks}...`);
+      const label = chunkLabels[i] || `chunk ${i + 1}`;
+      setStatus(`Processing chunk ${i + 1}/${totalChunks}: ${label}...`);
       setProgress(chunkStartPct);
 
       // Simulate smooth progress while waiting for the API call.
