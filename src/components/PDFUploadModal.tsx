@@ -978,12 +978,13 @@ export default function PDFUploadModal({
     setStatus(`Analyzing ${pageCount}-page PDF structure...`);
     setProgress(2);
 
-    const classification = await classifyPages(fullBase64);
+    const classificationResult = await classifyPages(fullBase64);
+    const classification = classificationResult ?? undefined;
 
     let chunks: string[];
     let chunkLabels: string[] = []; // human-readable labels for each chunk
 
-    if (classification !== null && classification.chunks.length > 0) {
+    if (classification && classification.chunks.length > 0) {
       // Smart chunking: use semantic boundaries
       const { chunks: smartChunks, reference_pages: refPages, summary } = classification;
 
