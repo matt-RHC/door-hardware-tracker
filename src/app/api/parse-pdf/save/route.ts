@@ -58,9 +58,31 @@ export async function POST(request: NextRequest) {
       setMap.set(set.set_id, set)
     }
 
-    // Qty normalization (total → per-opening division) now happens in the Python
-    // extraction layer. Items arrive with qty already normalized plus metadata
-    // (qty_total, qty_door_count, qty_source) for audit trail.
+    // --- Final qty normalization safety net ---
+    // Python does primary normalization, but LLM corrections or other paths
+    // may revert quantities to PDF totals. Re-check and divide if needed.
+    const doorsPerSet = new Map<string, number>()
+    for (const door of doors) {
+      if (door.hw_set) {
+        doorsPerSet.set(door.hw_set, (doorsPerSet.get(door.hw_set) || 0) + 1)
+      }
+    }
+    for (const [setId, set] of setMap) {
+      const doorCount = doorsPerSet.get(setId) || 0
+      if (doorCount <= 1) continue
+      for (const item of set.items) {
+        // If qty_source is already "divided", trust it
+        if (item.qty_source === 'divided') continue
+        // If qty >= doorCount and divides evenly, normalize
+        if (item.qty >= doorCount) {
+          const perOpening = item.qty / doorCount
+          if (Number.isInteger(perOpening)) {
+            console.log(`[save-qty-norm] ${setId}: "${item.name}" qty ${item.qty} ÷ ${doorCount} = ${perOpening}`)
+            item.qty = perOpening
+          }
+        }
+      }
+    }
 
     // Delete existing openings (cascade deletes children)
     const { error: deleteError } = await (supabase as any)

@@ -155,8 +155,8 @@ If the extraction is accurate and complete, return: {"notes": "Extraction looks 
 
 CRITICAL RULES:
 - Only report REAL errors you can see in the PDF. Do not hallucinate corrections.
-- qty must be PER INDIVIDUAL DOOR/OPENING (not totals). Typical: hinges=3-4, closers=1, locksets=1.
-- Focus on: missing items/doors, wrong set assignments, incorrect quantities, misread text.
+- DO NOT "fix" item quantities. The quantities shown have ALREADY been normalized from PDF totals to per-opening values by dividing by the number of doors in each set. If the PDF shows "8" for closers across 8 doors, the correct per-opening qty is 1, and the extracted data will show 1. Do NOT change it back to 8.
+- Focus on: missing items/doors, wrong set assignments, misread text (names, manufacturers, models, finishes).
 - Do NOT correct formatting differences (e.g. "HM" vs "Hollow Metal" are both fine).
 
 ${getTaxonomyPromptText()}`
@@ -341,6 +341,33 @@ async function extractFromPDF(base64: string): Promise<{
   const corrected = applyCorrections(hardwareSets, allDoors, corrections)
   hardwareSets = corrected.hardwareSets
   allDoors = corrected.doors
+
+  // --- Post-LLM qty re-normalization ---
+  // The LLM may "correct" already-normalized quantities back to PDF totals.
+  // Re-count doors per set and re-divide any inflated values.
+  const doorsPerSet = new Map<string, number>()
+  for (const door of allDoors) {
+    if (door.hw_set) {
+      doorsPerSet.set(door.hw_set, (doorsPerSet.get(door.hw_set) || 0) + 1)
+    }
+  }
+  for (const set of hardwareSets) {
+    const doorCount = doorsPerSet.get(set.set_id) || 0
+    if (doorCount <= 1) continue
+    for (const item of set.items) {
+      // If qty >= doorCount AND divides evenly, it's likely a total that needs normalizing
+      if (item.qty >= doorCount) {
+        const perOpening = item.qty / doorCount
+        if (Number.isInteger(perOpening)) {
+          console.log(`[post-llm-renorm] ${set.set_id}: "${item.name}" qty ${item.qty} ÷ ${doorCount} = ${perOpening}`)
+          item.qty_total = item.qty
+          item.qty_door_count = doorCount
+          item.qty = perOpening
+          item.qty_source = 'divided'
+        }
+      }
+    }
+  }
 
   // --- Extract fire ratings from hw_heading if misplaced ---
   const fireRatingPattern = /\b(\d{1,3}\s*[Mm]in|[123]\s*[Hh]r)\b/

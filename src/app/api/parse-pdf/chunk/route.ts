@@ -164,8 +164,8 @@ If the extraction is accurate and complete, return: {"notes": "Extraction looks 
 
 CRITICAL RULES:
 - Only report REAL errors you can see in the PDF. Do not hallucinate corrections.
-- qty must be PER INDIVIDUAL DOOR/OPENING (not totals). Typical: hinges=3-4, closers=1, locksets=1.
-- Focus on: missing items/doors, wrong set assignments, incorrect quantities, misread text.
+- DO NOT "fix" item quantities. The quantities shown have ALREADY been normalized from PDF totals to per-opening values by dividing by the number of doors in each set. If the PDF shows "8" for closers across 8 doors, the correct per-opening qty is 1, and the extracted data will show 1. Do NOT change it back to 8.
+- Focus on: missing items/doors, wrong set assignments, misread text (names, manufacturers, models, finishes).
 - Do NOT correct formatting differences (e.g. "HM" vs "Hollow Metal" are both fine).
 
 ${getTaxonomyPromptText()}`
