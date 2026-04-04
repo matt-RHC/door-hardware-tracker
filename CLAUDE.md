@@ -40,14 +40,11 @@ Turbopack's type checker in Next.js 16.2 is significantly stricter than `tsc --n
 
 ## Git Workflow
 
-The Cowork mounted directory uses a bindfs FUSE mount that allows file creation but NOT deletion. Git requires creating and deleting temp files, so **all git operations fail on the mount**.
+Git operations run directly in the working directory — no `/tmp/` clone needed.
 
-**Required workflow:**
-1. Clone the repo fresh into `/tmp/` or a sandbox workspace for all git operations (commit, push, merge, rebase)
-2. Use the mounted directory only for reading/editing source files
-3. Copy edited files to the sandbox clone before committing
-4. Always set git identity: `git config user.email "m.feagin1@icloud.com" && git config user.name "Matthew Feagin"`
-5. Both `main` and `master` branches should be kept in sync
+1. Set git identity before first commit: `git config user.email "m.feagin1@icloud.com" && git config user.name "Matthew Feagin"`
+2. Default branch is `main`. There is no `master` branch.
+3. Use PRs for all changes — enable **"Automatically delete head branches"** in GitHub repo settings to prevent branch buildup.
 
 ## Database Schema (Key Tables)
 
