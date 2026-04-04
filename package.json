@@ -35,10 +35,6 @@
     "eslint-config-next": "16.2.1",
     "tailwindcss": "^4",
     "typescript": "^5",
-<<<<<<< Updated upstream
     "vitest": "^3.2.1"
-=======
-    "vitest": "^4.1.2"
->>>>>>> Stashed changes
   }
 }
