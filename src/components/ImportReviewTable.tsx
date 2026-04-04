@@ -16,7 +16,10 @@ interface HardwareItem {
 
 interface HardwareSet {
   set_id: string;
+  generic_set_id?: string;
   heading: string;
+  heading_door_count?: number;
+  heading_leaf_count?: number;
   items: HardwareItem[];
 }
 
@@ -426,7 +429,7 @@ export default function ImportReviewTable({
                     const isDivided = item.qty_source === "divided";
                     const isCapped = item.qty_source === "capped";
                     const tooltip = hasMeta
-                      ? `${item.qty_total} total ÷ ${item.qty_door_count} openings = ${item.qty} per opening`
+                      ? `${item.qty_total} total ÷ ${item.qty_door_count} = ${item.qty} each`
                       : undefined;
                     return (
                       <div

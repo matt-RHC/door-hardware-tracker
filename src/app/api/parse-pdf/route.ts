@@ -21,7 +21,10 @@ interface HardwareItem {
 
 interface HardwareSet {
   set_id: string
+  generic_set_id?: string
   heading: string
+  heading_door_count?: number
+  heading_leaf_count?: number
   items: HardwareItem[]
 }
 
@@ -345,27 +348,45 @@ async function extractFromPDF(base64: string): Promise<{
 
   // --- Post-LLM qty re-normalization ---
   // The LLM may "correct" already-normalized quantities back to PDF totals.
-  // Re-count doors per set and re-divide any inflated values.
+  // Use heading-based counts from Python, fall back to Opening List counting.
   const doorsPerSet = new Map<string, number>()
   for (const door of allDoors) {
     if (door.hw_set) {
-      doorsPerSet.set(door.hw_set, (doorsPerSet.get(door.hw_set) || 0) + 1)
+      doorsPerSet.set(door.hw_set.toUpperCase(), (doorsPerSet.get(door.hw_set.toUpperCase()) ?? 0) + 1)
     }
   }
   for (const set of hardwareSets) {
-    const doorCount = doorsPerSet.get(set.set_id) || 0
-    if (doorCount <= 1) continue
+    // Skip items already normalized by Python
+    // Prefer heading-based counts; fall back to Opening List
+    const leafCount = (set.heading_leaf_count ?? 0) > 1
+      ? (set.heading_leaf_count ?? 0)
+      : 0
+    const doorCount = (set.heading_door_count ?? 0) > 1
+      ? (set.heading_door_count ?? 0)
+      : (doorsPerSet.get((set.generic_set_id ?? set.set_id).toUpperCase()) ?? 0)
+    if (leafCount <= 1 && doorCount <= 1) continue
+
     for (const item of set.items) {
-      // Skip items already normalized by Python — re-dividing would corrupt them
-      // e.g., 21 hinges ÷ 7 doors = 3 (Python) → 3 ÷ 3 doors = 1 (wrong!)
       if (item.qty_source === 'divided' || item.qty_source === 'flagged' || item.qty_source === 'capped') {
         continue
       }
-      // Only re-normalize items the LLM may have reverted to PDF totals
-      if (item.qty >= doorCount) {
+      // Try leaf count first, then opening count (same strategy as Python)
+      let divided = false
+      if (leafCount > 1 && item.qty >= leafCount) {
+        const perLeaf = item.qty / leafCount
+        if (Number.isInteger(perLeaf)) {
+          console.log(`[post-llm-renorm] ${set.set_id}: "${item.name}" qty ${item.qty} ÷ ${leafCount} leaves = ${perLeaf}`)
+          item.qty_total = item.qty
+          item.qty_door_count = leafCount
+          item.qty = perLeaf
+          item.qty_source = 'divided'
+          divided = true
+        }
+      }
+      if (!divided && doorCount > 1 && doorCount !== leafCount && item.qty >= doorCount) {
         const perOpening = item.qty / doorCount
         if (Number.isInteger(perOpening)) {
-          console.log(`[post-llm-renorm] ${set.set_id}: "${item.name}" qty ${item.qty} ÷ ${doorCount} = ${perOpening}`)
+          console.log(`[post-llm-renorm] ${set.set_id}: "${item.name}" qty ${item.qty} ÷ ${doorCount} openings = ${perOpening}`)
           item.qty_total = item.qty
           item.qty_door_count = doorCount
           item.qty = perOpening

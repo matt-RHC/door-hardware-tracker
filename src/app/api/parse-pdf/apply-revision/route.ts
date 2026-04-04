@@ -5,6 +5,9 @@ import { createServerSupabaseClient } from '@/lib/supabase/server'
 
 interface HardwareItem {
   qty: number
+  qty_total?: number
+  qty_door_count?: number
+  qty_source?: string
   name: string
   model: string
   finish: string
@@ -13,7 +16,10 @@ interface HardwareItem {
 
 interface HardwareSet {
   set_id: string
+  generic_set_id?: string
   heading: string
+  heading_door_count?: number
+  heading_leaf_count?: number
   items: HardwareItem[]
 }
 
@@ -83,24 +89,26 @@ export async function POST(request: NextRequest) {
       setMap.set(set.set_id, set)
     }
 
-    // --- Quantity correction (same logic as save/route.ts) ---
-    const openingCountPerSet = new Map<string, number>()
-    for (const door of allDoors) {
-      if (door.hw_set) {
-        openingCountPerSet.set(door.hw_set, (openingCountPerSet.get(door.hw_set) || 0) + 1)
-      }
-    }
+    // --- Quantity correction (heading-based, same strategy as save/route.ts) ---
     for (const [setId, set] of setMap) {
-      const numOpenings = openingCountPerSet.get(setId) || 1
-      if (numOpenings <= 1) continue
-      const allDivisible = set.items.every(
-        (item) => item.qty === 1 || item.qty % numOpenings === 0
-      )
-      const anyInflated = set.items.some((item) => item.qty > numOpenings)
-      if (allDivisible && anyInflated) {
-        for (const item of set.items) {
-          if (item.qty > 1) {
-            item.qty = Math.round(item.qty / numOpenings)
+      const leafCount = (set.heading_leaf_count ?? 0) > 1 ? (set.heading_leaf_count ?? 0) : 0
+      const doorCount = (set.heading_door_count ?? 0) > 1 ? (set.heading_door_count ?? 0) : 0
+      if (leafCount <= 1 && doorCount <= 1) continue
+
+      for (const item of set.items) {
+        if (item.qty_source === 'divided' || item.qty_source === 'flagged' || item.qty_source === 'capped') continue
+        let divided = false
+        if (leafCount > 1 && item.qty >= leafCount) {
+          const perLeaf = item.qty / leafCount
+          if (Number.isInteger(perLeaf)) {
+            item.qty = perLeaf
+            divided = true
+          }
+        }
+        if (!divided && doorCount > 1 && doorCount !== leafCount && item.qty >= doorCount) {
+          const perOpening = item.qty / doorCount
+          if (Number.isInteger(perOpening)) {
+            item.qty = perOpening
           }
         }
       }
