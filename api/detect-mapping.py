@@ -179,12 +179,33 @@ def looks_like_door_number(val: str) -> bool:
     if len(s) > 20:
         return False
     # Reject phone numbers
-    if re.match(r"^\d{3}-\d{3}-\d{4}$", s):
+    if re.match(r"^\d{3}[-.]?\d{3}[-.]?\d{4}$", s):
         return False
     # Reject bare numbers (quantities, page refs)
     if re.match(r"^\d{1,3}$", s):
         return False
+    # Reject years (e.g., 2024, 1999)
+    if re.match(r"^(19|20)\d{2}$", s):
+        return False
+    # Reject ZIP codes
+    if re.match(r"^\d{5}(-\d{4})?$", s):
+        return False
     return True
+
+
+def _row_has_contact_data(row: list[str]) -> bool:
+    """Check if a row contains phone, email, or address patterns."""
+    text = " ".join(row).lower()
+    # Phone patterns
+    if re.search(r"\d{3}[-.]?\d{3}[-.]?\d{4}", text):
+        return True
+    # Email patterns
+    if re.search(r"[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}", text):
+        return True
+    # Address keywords
+    if re.search(r"\b(street|st\.|suite|ste\.|avenue|ave\.|blvd|boulevard|city|state|zip|po box)\b", text):
+        return True
+    return False
 
 
 def find_door_schedule_table(page) -> tuple[list[str], list[list[str]], str]:
@@ -233,23 +254,34 @@ def find_door_schedule_table(page) -> tuple[list[str], list[list[str]], str]:
                     if h and h.strip():
                         s = score_header_for_field(h, field)
                         best_field_score = max(best_field_score, s)
-                if best_field_score >= 0.3:
+                if best_field_score >= 0.4:
                     field_scores[field] = best_field_score
 
             # MUST have door_number
             if "door_number" not in field_scores:
                 continue
 
-            # MUST have at least one other recognized field (hw_set, location,
+            # MUST have at least TWO other recognized fields (hw_set, location,
             # door_type, etc.) — a cover page won't have these
             other_fields = {k for k in field_scores if k != "door_number"}
-            if len(other_fields) < 1:
+            if len(other_fields) < 2:
                 continue
 
             # Extract sample rows
             sample_rows = []
             for row in table[1:6]:
                 sample_rows.append([clean_cell(c) for c in row])
+
+            # MUST have at least 3 data rows — real schedules have many openings
+            non_empty_rows = [r for r in sample_rows if any(c.strip() for c in r)]
+            if len(non_empty_rows) < 3:
+                continue
+
+            # Reject tables where >50% of rows contain contact data (phones, emails, addresses)
+            if non_empty_rows:
+                contact_count = sum(1 for r in non_empty_rows if _row_has_contact_data(r))
+                if contact_count / len(non_empty_rows) > 0.5:
+                    continue
 
             # Content validation: check if sample data actually looks like
             # door numbers in the mapped door_number column

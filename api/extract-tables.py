@@ -144,6 +144,105 @@ STANDARD_COLUMN_ORDER = [
 ]
 
 
+# --- Display-name → snake_case alias map ---
+# The column mapper UI (detect-mapping.py) returns display names like
+# "Door Number", "HW Set", "Fire Rating". Users confirm/adjust these and
+# they arrive here as user_column_mapping keys. Internal code uses snake_case.
+_DISPLAY_NAME_ALIASES: dict[str, str] = {
+    # Direct display label matches (from FIELD_LABELS in detect-mapping.py)
+    "door number": "door_number",
+    "hw set": "hw_set",
+    "hw heading": "hw_heading",
+    "location": "location",
+    "door type": "door_type",
+    "frame type": "frame_type",
+    "fire rating": "fire_rating",
+    "hand/swing": "hand",
+    # Common variations
+    "door no": "door_number",
+    "door no.": "door_number",
+    "door #": "door_number",
+    "door#": "door_number",
+    "opening": "door_number",
+    "opening number": "door_number",
+    "opening no": "door_number",
+    "opening no.": "door_number",
+    "mark": "door_number",
+    "mark no": "door_number",
+    "mark no.": "door_number",
+    "tag": "door_number",
+    "hardware set": "hw_set",
+    "hardware group": "hw_set",
+    "hdw set": "hw_set",
+    "set": "hw_set",
+    "set id": "hw_set",
+    "hw group": "hw_set",
+    "hardware heading": "hw_heading",
+    "set heading": "hw_heading",
+    "heading": "hw_heading",
+    "set description": "hw_heading",
+    "frame": "frame_type",
+    "frame material": "frame_type",
+    "door material": "door_type",
+    "material": "door_type",
+    "fire rated": "fire_rating",
+    "rating": "fire_rating",
+    "fire label": "fire_rating",
+    "fire": "fire_rating",
+    "hand": "hand",
+    "handing": "hand",
+    "swing": "hand",
+    "room": "location",
+    "room name": "location",
+    "description": "location",
+    "from / to": "location",
+    "from/to": "location",
+    # Snake_case pass-through (already correct)
+    "door_number": "door_number",
+    "hw_set": "hw_set",
+    "hw_heading": "hw_heading",
+    "door_type": "door_type",
+    "frame_type": "frame_type",
+    "fire_rating": "fire_rating",
+}
+
+
+def normalize_mapping_keys(
+    user_mapping: dict[str, int] | None,
+) -> dict[str, int] | None:
+    """
+    Normalize user-facing column names to internal snake_case keys.
+
+    The column mapper UI passes display names like 'Door Number' but
+    extract_opening_list() expects snake_case keys like 'door_number'.
+    Returns None if user_mapping is None or empty.
+    """
+    if not user_mapping:
+        return None
+
+    normalized: dict[str, int] = {}
+    for display_name, col_index in user_mapping.items():
+        key = display_name.lower().strip()
+        internal_key = _DISPLAY_NAME_ALIASES.get(key)
+
+        if internal_key is None:
+            # Fallback: convert to snake_case by replacing spaces/special chars
+            internal_key = re.sub(r"[^a-z0-9]+", "_", key).strip("_")
+
+        # Ensure col_index is int (JSON may deliver strings)
+        try:
+            idx = int(col_index)
+        except (ValueError, TypeError):
+            continue
+
+        normalized[internal_key] = idx
+
+    if not normalized:
+        return None
+
+    return normalized
+
+
 def score_header_for_field(header: str, field: str) -> float:
     """
     Score how well a header string matches a field using keyword matching.
@@ -329,46 +428,105 @@ def is_opening_list_table(headers: list[str]) -> bool:
     return has_door and has_secondary
 
 
+# ── Comprehensive Mojibake Replacement Map ──────────────────────────────
+# Covers Latin-1/UTF-8 confusion, Windows-1252 artifacts, CIDFont encoding
+# failures, double-encoding, and ligatures from Comsense/Openings Studio PDFs.
+# Sorted longest-first at runtime to avoid partial replacements.
+MOJIBAKE_MAP = {
+    # === Latin-1 interpreted as UTF-8 (most common in construction PDFs) ===
+    "\u00c2\u00b7": "\u00b7",       # middle dot (Â· → ·)
+    "\u00c3\u0097": "\u00d7",       # multiplication sign (Ã— → ×)
+    "\u00c3\u00b7": "\u00f7",       # division sign
+    "\u00c2\u00bd": "\u00bd",       # one half (Â½ → ½)
+    "\u00c2\u00bc": "\u00bc",       # one quarter (Â¼ → ¼)
+    "\u00c2\u00be": "\u00be",       # three quarters (Â¾ → ¾)
+    "\u00c2\u00ae": "\u00ae",       # registered (Â® → ®)
+    "\u00c2\u00a9": "\u00a9",       # copyright (Â© → ©)
+    "\u00c2\u00b0": "\u00b0",       # degree (Â° → °)
+    "\u00e2\u0080\u0093": "\u2013", # en dash (â€" → –)
+    "\u00e2\u0080\u0094": "\u2014", # em dash (â€" → —)
+    "\u00e2\u0080\u0099": "\u2019", # right single quote (â€™ → ')
+    "\u00e2\u0080\u0098": "\u2018", # left single quote (â€˜ → ')
+    "\u00e2\u0080\u009c": "\u201c", # left double quote (â€œ → ")
+    "\u00e2\u0080\u009d": "\u201d", # right double quote (â€ → ")
+    "\u00e2\u0080\u00a2": "\u2022", # bullet (â€¢ → •)
+    "\u00e2\u0080\u00a6": "\u2026", # ellipsis (â€¦ → …)
+    "\u00e2\u0080": "\u2014",       # partial em dash (truncated â€ → —)
+    "\u00c3\u00a0": "\u00e0",       # à
+    "\u00c3\u00a4": "\u00e4",       # ä
+    "\u00c3\u00a8": "\u00e8",       # è
+    "\u00c3\u00a9": "\u00e9",       # é
+    "\u00c3\u00ad": "\u00ed",       # í
+    "\u00c3\u00b3": "\u00f3",       # ó
+    "\u00c3\u00b6": "\u00f6",       # ö
+    "\u00c3\u00ba": "\u00fa",       # ú
+    "\u00c3\u00bc": "\u00fc",       # ü
+    "\u00c3\u00b1": "\u00f1",       # ñ
+    "\u00c3\u00a7": "\u00e7",       # ç (c-cedilla)
+    "\u00c2\u00a0": " ",            # NBSP artifact (Â  → space)
+
+    # === Windows-1252 specific ===
+    "\x91": "\u2018",   # left single quote
+    "\x92": "\u2019",   # right single quote
+    "\x93": "\u201c",   # left double quote
+    "\x94": "\u201d",   # right double quote
+    "\x95": "\u2022",   # bullet
+    "\x96": "\u2013",   # en dash
+    "\x97": "\u2014",   # em dash
+    "\x85": "\u2026",   # ellipsis
+    "\x99": "\u2122",   # trademark
+    "\xa0": " ",         # NBSP
+
+    # === Double-encoding artifacts ===
+    "\u00c3\u00a2\u00e2\u201a\u00ac\u00e2\u20ac\u0153": "\u2013", # double-encoded en dash
+    "\u00c3\u00a2\u00e2\u201a\u00ac\u00e2\u20ac":       "\u2014", # double-encoded em dash
+    "\u00c3\u00a2\u00e2\u201a\u00ac\u00c2\u00a2":       "\u2022", # double-encoded bullet
+    "\u00c3\u00a2\u00e2\u201a\u00ac\u00c5\u201c":       "\u201c", # double-encoded left quote
+    "\u00c3\u00a2\u00e2\u201a\u00ac\u0178":              "\u201d", # double-encoded right quote
+
+    # === CIDFont encoding artifacts (Comsense / Openings Studio) ===
+    "\u00e0\u2016": "\u2013",  # CID en dash
+    "\u00e0\u00a1": "!",
+    "\u00e0\u00a2": "\"",
+    "\u00e0\u00a8": "(",
+    "\u00e0\u00a9": ")",
+    "\u00e0\u00ab": "+",
+    "\u00e0\u00ac": ",",
+    "\u00e0\u00ad": "-",
+    "\u00e0\u00ae": ".",
+    "\u00e0\u00af": "/",
+    "\u00e0\u00ba": ":",
+
+    # === PDF ligature codepoints ===
+    "\ufb01": "fi",
+    "\ufb02": "fl",
+    "\ufb00": "ff",
+    "\ufb03": "ffi",
+    "\ufb04": "ffl",
+}
+# Pre-sort keys longest-first so longer sequences match before their prefixes
+_MOJIBAKE_SORTED = sorted(MOJIBAKE_MAP.keys(), key=len, reverse=True)
+
+
 def clean_cell(val) -> str:
     """Clean a cell value, handling None, whitespace, and mojibake characters."""
     if val is None:
         return ""
     s = str(val).strip()
-    # Fix common UTF-8/Latin-1 mojibake patterns
-    # Â· (C2 B7 decoded as Latin-1) → · (middle dot, standard hardware separator)
-    mojibake_map = {
-        "\u00c2\u00b7": "\u00b7",       # middle dot (Â· → ·)
-        "\u00c3\u0097": "\u00d7",       # multiplication sign (Ã— → ×)
-        "\u00c3\u00b7": "\u00f7",       # division sign
-        "\u00c2\u00bd": "\u00bd",       # one half (Â½ → ½)
-        "\u00c2\u00bc": "\u00bc",       # one quarter (Â¼ → ¼)
-        "\u00c2\u00be": "\u00be",       # three quarters (Â¾ → ¾)
-        "\u00c2\u00ae": "\u00ae",       # registered (Â® → ®)
-        "\u00c2\u00a9": "\u00a9",       # copyright (Â© → ©)
-        "\u00e2\u0080\u0093": "\u2013", # en dash (â€" → –)
-        "\u00e2\u0080\u0094": "\u2014", # em dash (â€" → —)
-        "\u00e2\u0080\u0099": "\u2019", # right single quote (â€™ → ')
-        "\u00e2\u0080\u0098": "\u2018", # left single quote (â€˜ → ')
-        "\u00e2\u0080\u009c": "\u201c", # left double quote (â€œ → ")
-        "\u00e2\u0080\u009d": "\u201d", # right double quote (â€ → ")
-        "\u00e2\u0080\u00a2": "\u2022", # bullet (â€¢ → •)
-        "\u00c3\u00a0": "\u00e0",       # à (Ã  → à)
-        "\u00c3\u00a8": "\u00e8",       # è
-        "\u00c3\u00a9": "\u00e9",       # é
-        "\u00c3\u00ad": "\u00ed",       # í
-        "\u00c3\u00b3": "\u00f3",       # ó
-        "\u00c3\u00ba": "\u00fa",       # ú
-        "\u00c3\u00bc": "\u00fc",       # ü
-        "\u00c3\u00b1": "\u00f1",       # ñ
-    }
-    for bad, good in mojibake_map.items():
+    if not s:
+        return ""
+
+    # Apply mojibake map (longest match first to avoid partial replacements)
+    for bad in _MOJIBAKE_SORTED:
         if bad in s:
-            s = s.replace(bad, good)
+            s = s.replace(bad, MOJIBAKE_MAP[bad])
+
     # Normalize Unicode to NFC form
     s = unicodedata.normalize("NFC", s)
-    # Strip non-printable control characters and isolated mojibake fragments
-    # that slip through the map (common in PDF-extracted hardware headings)
+    # Strip non-printable control characters (keep newline/tab)
     s = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]", "", s)
+    # Remove (cid:XX) artifacts from CIDFont failures
+    s = re.sub(r"\(cid:\d+\)", "", s)
     # Strip double vertical bar (‖) that appears in garbled headings
     s = s.replace("\u2016", " ").replace("\u2551", " ")
     # Collapse multiple spaces from replacements
@@ -379,85 +537,127 @@ def clean_cell(val) -> str:
     return s
 
 
-def is_valid_door_number(val: str) -> bool:
-    """
-    Check if a value looks like a valid door number.
+# ── Door Number Validation ───────────────────────────────────────────────
+# Real-world commercial door numbering conventions:
+#   Numeric only:      101, 1001, 2145
+#   Letter prefix:     A101, B2145, L1-101, N101, S201
+#   Floor/area prefix: 1-101, 2A-201, B1-101
+#   With letter suffix: 101A, 2145B (pair doors)
+#   Room-based:        101.1, 101.2 (multiple doors in same room)
+#   Dash-separated:    A-101, B-201, 1-101
+#   Compound:          1.01.A.01A, 2.01.F.06E, ER-ADJ9.8-94
 
-    Valid patterns (real examples):
-      1.01.A.01A, 110-01C, A-201B, ST-100, 2.01.F.06E, B1-101, ER-ADJ9.8-94
-    Invalid (should reject):
-      94, 4, 20, 8, MCA1-2-, L583-363, #2.01.A.14
-    """
-    if not val:
-        return False
-    s = val.strip()
-    lower = s.lower()
+# Positive patterns: what IS a door number
+DOOR_NUMBER_PATTERNS = [
+    # Core: letter prefix + optional area digit + separator + room number
+    # Requires at least a prefix OR separator to avoid matching bare numbers
+    r'^[A-Z]{1,2}\d?[-.]?[A-Z]?\d{2,4}[A-Z]?(?:\.\d{1,2})?$',
+    # Floor-area-room: 1-101, 2A-201, B1-101
+    r'^[A-Z]?\d[A-Z]?[-]\d{2,4}[A-Z]?$',
+    # Simple numeric: 101, 1001 (3-4 digits, optionally with letter suffix)
+    # Bare 2-digit numbers (20, 94) are quantities/page numbers, not doors
+    r'^\d{3,4}[A-Z]?$',
+    # Letter prefix: A101, B2145, N101
+    r'^[A-Z]{1,2}\d{2,4}[A-Z]?$',
+    # Period-separated sub-doors: 101.1, A101.2
+    r'^[A-Z]?\d{2,4}\.\d{1,2}$',
+    # Compound dot-separated: 1.01.A.01A, 2.01.F.06E
+    r'^\d+\.\d+\.[A-Z]\.\d+[A-Z]?$',
+    # Prefix-dash-digits: ST-100, ER-ADJ9.8-94
+    r'^[A-Z]{1,4}[-]\w+$',
+]
 
-    # Reject common non-door values
-    if lower in ("", "total", "totals", "note", "notes", "cont", "continued",
-                 "qty", "quantity", "n/a", "none", "see", "above", "below"):
+# Negative patterns: what is NOT a door number (hardware set IDs)
+HARDWARE_SET_PATTERNS = [
+    r'^[A-Z]{2,}[-]?\d{1,2}[A-Z]?$',   # DCB2, DH1, HM1, HW3, AA1
+    r'^(?:SET|HS|HW|DH|DCB|HM|HMS)\b',  # SET A, HS-1, HW3, DH1, DCB2
+    r'^[A-Z]{3,}\d?$',                   # Pure letter codes: ABC, EXIT, STOR
+    r'^\d{1}[A-Z]$',                     # Single digit + letter: 1A, 2B (too short)
+    r'^(?:EXIT|STOR|ELEC|MECH|STAIR|CORR|VEST|LOBBY|OFFICE)[-]?\d*$',
+]
+
+# Explicit blocklist for known hardware set prefixes
+HARDWARE_SET_PREFIXES = frozenset({
+    'DH', 'DCB', 'HM', 'HMS', 'HW', 'HS', 'HD', 'FH', 'AH',
+    'SET', 'TYPE', 'GRP', 'GROUP', 'STYLE',
+})
+
+
+def is_valid_door_number(val: str, log_rejections: bool = False) -> bool:
+    """
+    Validate whether a string is a plausible commercial door number.
+    Returns True for door numbers, False for hardware set IDs and garbage.
+
+    Valid:   101, A101, 1-101, B1-101, 101A, 101.1, 2A-201, ST-100,
+             1.01.A.01A, 110-01C, ER-ADJ9.8-94
+    Invalid: DCB2, DH1, HW3, SET A, AA, 94, 4, MCA1-2-, #2.01.A.14
+    """
+    if not val or not isinstance(val, str):
         return False
-    if lower.startswith("note:") or lower.startswith("*"):
+
+    clean = val.strip().upper()
+
+    # Reject empty or extreme lengths
+    if len(clean) < 2 or len(clean) > 15:
+        if log_rejections:
+            print(f"[DOOR_VALIDATION] Rejected '{val}': length {len(clean)}")
+        return False
+
+    # Reject common non-door text values
+    if clean.lower() in ("total", "totals", "note", "notes", "cont", "continued",
+                          "qty", "quantity", "n/a", "none", "see", "above", "below"):
+        return False
+    if clean.startswith("NOTE:") or clean.startswith("*") or clean.startswith("#"):
+        return False
+
+    # Door numbers never contain spaces
+    if " " in clean:
+        if log_rejections:
+            print(f"[DOOR_VALIDATION] Rejected '{val}': contains space")
         return False
 
     # Must contain at least one digit
-    if not re.search(r"\d", s):
+    if not re.search(r'\d', clean):
+        if log_rejections:
+            print(f"[DOOR_VALIDATION] Rejected '{val}': no digits")
         return False
 
-    # Door numbers are single tokens — never contain spaces.
-    # Rejects: "Single Door #1.0", "Tel: 615-622-5777", "g #IS1-7C:1"
-    if " " in s:
+    # Reject trailing dash (project/document IDs like MCA1-2-)
+    if clean.endswith("-"):
         return False
 
-    # Reject bare numbers (quantities, page numbers, etc.)
-    # Door numbers are NEVER just 1-3 digits alone
-    if re.match(r"^\d{1,3}$", s):
+    # Reject phone number patterns
+    if re.match(r'^\d{3}-\d{3}-\d{4}$', clean):
         return False
 
-    # Reject values starting with # (often header artifacts)
-    if s.startswith("#"):
-        return False
+    # Reject if it matches a hardware set pattern
+    for pattern in HARDWARE_SET_PATTERNS:
+        if re.match(pattern, clean, re.IGNORECASE):
+            if log_rejections:
+                print(f"[DOOR_VALIDATION] Rejected '{val}': matches HW set pattern {pattern}")
+            return False
 
-    # Reject phone number patterns (e.g. 615-622-5777)
-    if re.match(r"^\d{3}-\d{3}-\d{4}$", s):
-        return False
+    # Reject known hardware set prefixes (short codes only)
+    for prefix in HARDWARE_SET_PREFIXES:
+        if clean.startswith(prefix) and len(clean) <= len(prefix) + 2:
+            if log_rejections:
+                print(f"[DOOR_VALIDATION] Rejected '{val}': HW set prefix {prefix}")
+            return False
 
-    # Reject values that are clearly project/document identifiers
-    # (e.g. "MCA1-2-" ending in dash, or very long codes without dots/structure)
-    if s.endswith("-"):
-        return False
+    # Must match at least one positive door number pattern
+    for pattern in DOOR_NUMBER_PATTERNS:
+        if re.match(pattern, clean):
+            return True
 
-    # Must have a recognizable door number structure:
-    # - Contains a dot or dash separator with digits on both sides, OR
-    # - Starts with a letter prefix followed by digits (A101, ST-100), OR
-    # - Starts with digits followed by a letter/dot/dash separator
-    has_structure = bool(
-        re.match(r"^\d+[.\-]\d", s) or          # 1.01, 110-01
-        re.match(r"^[A-Z]{1,4}[.\-]?\d", s) or  # A101, ST-100, B1-101
-        re.match(r"^\d+[.\-][A-Z]", s, re.I) or  # 1.A, 2.01.F
-        re.search(r"\d[.\-]\d", s)                # any digit.digit or digit-digit
-    )
+    # Fallback: if it has 3+ consecutive digits and isn't a set ID, cautiously accept
+    # This catches unconventional numbering we haven't seen yet.
+    # Require 3+ digits to avoid matching bare quantities (20, 94, etc.)
+    if re.search(r'\d{3,}', clean) and len(clean) >= 3 and len(clean) <= 12:
+        return True
 
-    if not has_structure:
-        return False
-
-    # Minimum length — real door numbers are at least 3 chars (e.g. "A01")
-    if len(s) < 3:
-        return False
-
-    # Short alphanumeric codes without separators are likely hardware set IDs
-    # (e.g. DCB2, HW1, AB3) rather than door numbers. Real short door numbers
-    # have separators: A-101, B1-101, 1.01. Require a dot or dash separator
-    # for strings ≤ 5 chars that are just letters+digits.
-    if len(s) <= 5 and re.match(r"^[A-Za-z]+\d+$", s) and not re.search(r"[.\-]", s):
-        return False
-
-    # Known hardware set ID patterns to reject
-    hw_set_pattern = re.match(r"^(DCB|HW|HS|SET|GRP)\d", s, re.I)
-    if hw_set_pattern:
-        return False
-
-    return True
+    if log_rejections:
+        print(f"[DOOR_VALIDATION] Rejected '{val}': no pattern match")
+    return False
 
 
 def door_number_shape(door_num: str) -> str:
@@ -687,11 +887,25 @@ def extract_hardware_sets_from_page(page, page_text: str) -> list[HardwareSetDef
             elif re.search(r"(?i)(finish|fin\.?|color)", hl):
                 finish_col = i
 
-        # If we found a total_qty_col but no per-set qty_col, the table may
-        # only show totals. We'll still use total_qty_col for extraction but
-        # flag it so the caller can divide by opening count.
+        # If we found a total_qty_col but no per-set qty_col, detect which
+        # column type we're dealing with using value heuristics.
+        is_aggregate_qty = False
         if qty_col is None and total_qty_col is not None:
             qty_col = total_qty_col
+            is_aggregate_qty = True  # Flag for normalization below
+        elif qty_col is not None:
+            # Even when we found a "per-item" qty col, validate with heuristics:
+            # if all values are > 10, it's probably an aggregate column mislabeled
+            data_rows = table[1:6]
+            qty_values = []
+            for row in data_rows:
+                cells = [clean_cell(c) for c in row]
+                if qty_col < len(cells):
+                    m = re.match(r"(\d+)", cells[qty_col])
+                    if m:
+                        qty_values.append(int(m.group(1)))
+            if qty_values and min(qty_values) > 6:
+                is_aggregate_qty = True
 
         # If we didn't find explicit headers, try positional inference
         # Many submittals have: Qty | Description | Manufacturer | Catalog No. | Finish
@@ -745,6 +959,12 @@ def extract_hardware_sets_from_page(page, page_text: str) -> list[HardwareSetDef
                 qty_match = re.match(r"(\d+)", raw_qty)
                 if qty_match:
                     qty_val = int(qty_match.group(1))
+                    # Normalize aggregate quantities to per-opening estimates
+                    if is_aggregate_qty and qty_val > 6:
+                        # Heuristic: typical per-door quantities are 1-4 for most items
+                        # hinges=3-4, closers=1, locksets=1, kick plates=1, etc.
+                        # When we detect aggregate, cap at 4 (most common max is hinges)
+                        qty_val = min(qty_val, 4)
 
             # Handle text wrapping — if name is very long and contains what looks
             # like a split model/finish, try to separate
@@ -1146,7 +1366,8 @@ class handler(BaseHTTPRequestHandler):
             data = json.loads(body)
 
             pdf_base64 = data.get("pdf_base64", "")
-            user_column_mapping = data.get("user_column_mapping")  # Optional override
+            raw_mapping = data.get("user_column_mapping")  # Optional override
+            user_column_mapping = normalize_mapping_keys(raw_mapping)
             if not pdf_base64:
                 self._send_json(400, ExtractionResult(
                     success=False,

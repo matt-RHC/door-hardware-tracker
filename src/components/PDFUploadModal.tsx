@@ -577,28 +577,20 @@ interface ClassifyPagesResponse {
 /**
  * Call the page classifier to get smart chunk boundaries.
  * Returns null if classification fails (caller should fall back to fixed splitting).
- * On error, logs are available in processLargePDF context where setStatus is accessible.
  */
-async function classifyPages(pdfBase64: string): Promise<{ fallback: boolean; data: ClassifyPagesResponse | null }> {
+async function classifyPages(pdfBase64: string): Promise<ClassifyPagesResponse | null> {
   try {
     const resp = await fetch("/api/classify-pages", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ pdfBase64 }),
     });
-    if (!resp.ok) {
-      console.warn(`/api/classify-pages returned ${resp.status}, falling back to fixed chunking`);
-      return { fallback: true, data: null };
-    }
+    if (!resp.ok) return null;
     const data: ClassifyPagesResponse = await resp.json();
-    if (!data.success || !data.chunks?.length) {
-      console.warn("classify-pages returned no valid chunks, falling back to fixed chunking");
-      return { fallback: true, data: null };
-    }
-    return { fallback: false, data };
-  } catch (err) {
-    console.warn("classifyPages exception, falling back to fixed chunking:", err);
-    return { fallback: true, data: null };
+    if (!data.success || !data.chunks?.length) return null;
+    return data;
+  } catch {
+    return null;
   }
 }
 
@@ -826,18 +818,76 @@ export default function PDFUploadModal({
     pageCount: number,
     parseOnly = false
   ): Promise<{ doors: DoorEntry[]; sets: HardwareSet[]; flaggedDoors?: FlaggedDoor[] } | void> => {
-    // Phase 1: Classify pages and find smart boundaries
-    setStatus(`Analyzing ${pageCount}-page PDF structure...`);
-    setProgress(2);
-
-    // Convert buffer to base64 for classifier
+    // Convert buffer to base64 (needed by both paths)
     const fullBase64 = btoa(
       new Uint8Array(buffer).reduce((data, byte) => data + String.fromCharCode(byte), "")
     );
 
-    const classificationResult = await classifyPages(fullBase64);
-    const classification = classificationResult.data;
-    let usedFallback = classificationResult.fallback;
+    // ── Small PDF fast-path: use full pdfplumber + LLM review pipeline ──
+    // Avoids chunking boundary issues where tables span chunk edges
+    if (pageCount <= CHUNK_THRESHOLD) {
+      setStatus(`Analyzing ${pageCount}-page PDF with full pipeline...`);
+      setProgress(5);
+
+      // Show column mapper first if needed
+      if (!mapperDoneRef.current) {
+        setStatus("Detecting column layout...");
+        try {
+          const detectResp = await fetch("/api/detect-mapping", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ pdf_base64: fullBase64, page_index: 0 }),
+          });
+          if (detectResp.ok) {
+            const detectResult: DetectMappingResponse = await detectResp.json();
+            if (detectResult.success && detectResult.headers.length > 0) {
+              pendingUploadRef.current = { buffer, pageCount, parseOnly };
+              setMapperData(detectResult);
+              setLoading(false);
+              return;
+            }
+          }
+        } catch (err) {
+          console.warn("Column detection failed, proceeding with auto-detect:", err);
+        }
+      }
+
+      setStatus("Extracting tables and running AI review...");
+      setProgress(15);
+
+      const resp = await fetch("/api/parse-pdf?parseOnly=true", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          pdfBase64: fullBase64,
+          userColumnMapping: confirmedMapping || null,
+        }),
+      });
+
+      if (!resp.ok) {
+        const errBody = await resp.json().catch(() => ({}));
+        throw new Error(errBody.error || `PDF analysis failed (${resp.status})`);
+      }
+
+      const result = await resp.json();
+      setProgress(100);
+      setStatus(
+        `Parsed ${result.sets?.length || 0} hardware sets, ${result.doors?.length || 0} doors. Ready for review.`
+      );
+
+      return {
+        doors: result.doors || [],
+        sets: result.sets || [],
+        flaggedDoors: result.flaggedDoors || [],
+      };
+    }
+
+    // ── Large PDF: Smart chunked multi-request flow ──
+    // Phase 1: Classify pages and find smart boundaries
+    setStatus(`Analyzing ${pageCount}-page PDF structure...`);
+    setProgress(2);
+
+    const classification = await classifyPages(fullBase64);
 
     let chunks: string[];
     let chunkLabels: string[] = []; // human-readable labels for each chunk
@@ -890,19 +940,15 @@ export default function PDFUploadModal({
                 setLoading(false);
                 return; // Will resume when user confirms mapping
               }
-            } else {
-              console.warn(`/api/detect-mapping returned ${detectResp.status}, will auto-detect columns per chunk`);
-              setStatus("Column detection unavailable — proceeding with auto-detect per chunk");
             }
           } catch (err) {
             console.warn("Column detection failed, proceeding with auto-detect:", err);
-            setStatus("Column detection unavailable — proceeding with auto-detect per chunk");
           }
         }
       }
     } else {
       // Fallback: fixed splitting (legacy behavior)
-      setStatus(`Smart page classification unavailable (endpoint issue or invalid PDF), using fixed chunking instead...`);
+      setStatus(`Splitting ${pageCount}-page PDF into chunks...`);
       setProgress(3);
       chunks = await splitPDFFixed(buffer, FALLBACK_PAGES_PER_CHUNK);
       chunkLabels = chunks.map((_, i) => `pages ${i * FALLBACK_PAGES_PER_CHUNK + 1}-${Math.min((i + 1) * FALLBACK_PAGES_PER_CHUNK, pageCount)}`);
@@ -1000,15 +1046,7 @@ export default function PDFUploadModal({
     const mergedDoors = mergeDoors(allDoors);
 
     if (mergedDoors.length === 0 && allFlaggedDoors.length === 0) {
-      // Check if the issue is likely an endpoint problem vs a non-door-schedule PDF
-      const allChunksEmpty = allDoors.length === 0 && allHardwareSets.length === 0;
-      let errorMsg = "No doors found across all chunks. The PDF may not contain a door schedule.";
-
-      if (allChunksEmpty && usedFallback) {
-        errorMsg += " This may be caused by column detection issues. Try re-uploading and carefully verifying the column mapping.";
-      }
-
-      throw new Error(errorMsg);
+      throw new Error("No doors found across all chunks. The PDF may not contain a door schedule.");
     }
 
     if (mergedDoors.length === 0 && allFlaggedDoors.length > 0) {
@@ -1107,9 +1145,9 @@ export default function PDFUploadModal({
       setProgress(4);
 
       if (hasExisting) {
-        // âââ WIZARD MODE: parse only (chunked), then show wizard âââ
-        // Always use chunked processing for re-uploads â even "small" PDFs
-        // can be 40+ pages which is too large for a single Claude API call.
+        // âââ WIZARD MODE: parse only, then show comparison wizard âââ
+        // Small PDFs use full pdfplumber+LLM pipeline (inside processLargePDF).
+        // Large PDFs use smart chunking with per-chunk Claude extraction.
         setStatus(`Parsing ${pageCount > 0 ? `${pageCount}-page ` : ""}PDF for comparison...`);
         setProgress(2);
         const result = await processLargePDF(buffer, pageCount || 50, true);
