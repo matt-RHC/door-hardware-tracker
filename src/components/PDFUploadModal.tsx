@@ -937,13 +937,17 @@ export default function PDFUploadModal({
         if (resp.ok) {
           const result = await resp.json();
           if (result.doors?.length > 0 || result.sets?.length > 0) {
+            setProgress(95);
+            setStatus("Deduplicating hardware items...");
+            // Apply the same dedup that the chunked path uses
+            const dedupedSets = mergeHardwareSets(result.sets || []);
             setProgress(100);
             setStatus(
-              `Parsed ${result.sets?.length || 0} hardware sets, ${result.doors?.length || 0} doors. Ready for review.`
+              `Parsed ${dedupedSets.length} hardware sets, ${result.doors?.length || 0} doors. Ready for review.`
             );
             return {
               doors: result.doors || [],
-              sets: result.sets || [],
+              sets: dedupedSets,
               flaggedDoors: result.flaggedDoors || [],
             };
           }

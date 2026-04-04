@@ -1002,18 +1002,16 @@ def extract_hardware_sets_from_page(page, page_text: str) -> list[HardwareSetDef
             if not HARDWARE_ITEM_NAMES.search(name_val) and len(name_val) < 3:
                 continue
 
-            # Get qty
+            # Get qty — door hardware per-opening quantities are always 1-6
+            # (hinges max ~4, panic devices ~2, flush bolts ~2).
+            # Any value > 6 is an aggregate/total column value; cap it.
             qty_val = 1
             if qty_col is not None and qty_col < len(cells):
                 raw_qty = cells[qty_col]
                 qty_match = re.match(r"(\d+)", raw_qty)
                 if qty_match:
                     qty_val = int(qty_match.group(1))
-                    # Normalize aggregate quantities to per-opening estimates
-                    if is_aggregate_qty and qty_val > 6:
-                        # Heuristic: typical per-door quantities are 1-4 for most items
-                        # hinges=3-4, closers=1, locksets=1, kick plates=1, etc.
-                        # When we detect aggregate, cap at 4 (most common max is hinges)
+                    if qty_val > 6:
                         qty_val = min(qty_val, 4)
 
             # Handle text wrapping — if name is very long and contains what looks
