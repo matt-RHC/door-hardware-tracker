@@ -45,8 +45,11 @@ class HardwareItem(BaseModel):
 
 
 class HardwareSetDef(BaseModel):
-    set_id: str
+    set_id: str              # heading-level ID (e.g., "I2S-1E:WI")
+    generic_set_id: str = "" # set-level ID (e.g., "I2S-1E") for UI grouping
     heading: str = ""
+    heading_door_count: int = 0   # openings listed in heading block
+    heading_leaf_count: int = 0   # total leaves (pairs × 2, singles × 1)
     items: list[HardwareItem] = []
 
 
@@ -427,7 +430,7 @@ OPTION_HEADER = re.compile(
 HW_SET_HEADING_PATTERN = re.compile(
     r"(?i)"
     r"(?:"
-    r"heading\s*#?\s*([A-Z0-9][A-Z0-9.\-]*)\s*\(set\s*#?\s*([A-Z0-9][A-Z0-9.\-]*)\)"  # Heading #X (Set #Y)
+    r"heading\s*#?\s*([A-Z0-9][A-Z0-9.\-:]*)\s*\(set\s*#?\s*([A-Z0-9][A-Z0-9.\-]*)\)"  # Heading #X (Set #Y)
     r"|"
     r"(?:hardware\s+)?set\s*[:# ]\s*([A-Z0-9][A-Z0-9.\-]*)"  # Hardware Set DH1 / SET: DH2
     r")"
@@ -897,36 +900,47 @@ def is_hardware_set_page(text: str) -> bool:
     return bool(HW_SET_HEADING_PATTERN.search(text))
 
 
-def parse_hw_set_id_from_text(text: str) -> tuple[str, str]:
+def parse_hw_set_id_from_text(text: str) -> tuple[str, str, str]:
     """
-    Extract set_id and heading description from page text.
-    Returns (set_id, heading_description).
+    Extract heading ID, generic set ID, and description from page text.
+    Returns (heading_id, generic_set_id, heading_description).
+
+    For "Heading #I2S-1E:WI (Set #I2S-1E)":
+      heading_id = "I2S-1E:WI", generic_set_id = "I2S-1E"
+    For "Hardware Set DH1":
+      heading_id = "DH1", generic_set_id = "DH1"
     """
     m = HW_SET_HEADING_PATTERN.search(text)
     if not m:
-        return ("", "")
+        return ("", "", "")
 
-    # Group 1 = heading number, Group 2 = set ID (from "Heading #X (Set #Y)" format)
+    # Group 1 = heading ID (from "Heading #X (Set #Y)" format, includes :suffix)
+    # Group 2 = generic set ID (from same format)
     # Group 3 = set ID (from "Hardware Set X" / "SET: X" format)
-    if m.group(2):
-        set_id = m.group(2).strip()
+    heading_id = ""
+    generic_set_id = ""
+
+    if m.group(1) and m.group(2):
+        # "Heading #I2S-1E:WI (Set #I2S-1E)" → heading=I2S-1E:WI, generic=I2S-1E
+        heading_id = m.group(1).strip()
+        generic_set_id = m.group(2).strip()
     elif m.group(3):
-        set_id = m.group(3).strip()
+        # "Hardware Set DH1" → both are the same
+        heading_id = m.group(3).strip()
+        generic_set_id = m.group(3).strip()
     elif m.group(1):
-        set_id = m.group(1).strip()
-    else:
-        set_id = ""
+        # Heading number only (fallback)
+        heading_id = m.group(1).strip()
+        generic_set_id = m.group(1).strip()
 
     # Try to extract the heading description
     heading = ""
-    # Look for pattern: "Heading #ID - Description (Set #ID)"
-    # or just take the line containing the set heading
     lines = text.split("\n")
     for line in lines:
         if HW_SET_HEADING_PATTERN.search(line):
             # Try to extract description after dash
             dash_match = re.search(
-                r"(?:heading\s*#?\s*[A-Z0-9][A-Z0-9.\-]*)\s*[-–—]\s*(.+?)(?:\(|$)",
+                r"(?:heading\s*#?\s*[A-Z0-9][A-Z0-9.\-:]*)\s*[-–—]\s*(.+?)(?:\(|$)",
                 line, re.IGNORECASE
             )
             if dash_match:
@@ -934,14 +948,41 @@ def parse_hw_set_id_from_text(text: str) -> tuple[str, str]:
             else:
                 # Use the full line as heading, cleaned up
                 heading = re.sub(
-                    r"(?i)(?:heading|set)\s*#?\s*[A-Z0-9][A-Z0-9.\-]*\s*[-–—:]\s*",
+                    r"(?i)(?:heading|set)\s*#?\s*[A-Z0-9][A-Z0-9.\-:]*\s*[-–—:]\s*",
                     "", line
                 ).strip()
                 # Remove trailing "(Set #...)" if present
                 heading = re.sub(r"\(set\s*#?\s*[A-Z0-9][A-Z0-9.\-]*\)\s*$", "", heading, flags=re.IGNORECASE).strip()
             break
 
-    return (set_id, heading)
+    return (heading_id, generic_set_id, heading)
+
+
+# Pattern to count doors listed in heading block: "1 Pair Doors #..." or "1 Single Door #..."
+HEADING_DOOR_LINE = re.compile(
+    r"(\d+)\s+(Pair|Single)\s+Doors?\s+#",
+    re.IGNORECASE,
+)
+
+
+def count_heading_doors(page_text: str) -> tuple[int, int]:
+    """
+    Count doors listed in a hardware set heading block.
+    Returns (opening_count, leaf_count).
+
+    "1 Pair Doors #1.01.B.03A" → 1 opening, 2 leaves
+    "1 Single Door #2.01.E.08" → 1 opening, 1 leaf
+
+    Leaf count accounts for pair doors having 2 leaves each.
+    """
+    opening_count = 0
+    leaf_count = 0
+    for m in HEADING_DOOR_LINE.finditer(page_text):
+        qty = int(m.group(1))
+        is_pair = m.group(2).lower() == "pair"
+        opening_count += qty
+        leaf_count += qty * (2 if is_pair else 1)
+    return (opening_count, leaf_count)
 
 
 def extract_hardware_sets_from_page(page, page_text: str) -> list[HardwareSetDef]:
@@ -951,9 +992,12 @@ def extract_hardware_sets_from_page(page, page_text: str) -> list[HardwareSetDef
     """
     sets: list[HardwareSetDef] = []
 
-    set_id, heading = parse_hw_set_id_from_text(page_text)
-    if not set_id:
+    heading_id, generic_set_id, heading = parse_hw_set_id_from_text(page_text)
+    if not heading_id:
         return sets
+
+    # Count doors from the heading block (e.g., "1 Pair Doors #1.01.B.03A")
+    heading_door_count, heading_leaf_count = count_heading_doors(page_text)
 
     # Try text-based table extraction first (for transparent grid lines)
     tables = page.extract_tables(
@@ -1128,8 +1172,11 @@ def extract_hardware_sets_from_page(page, page_text: str) -> list[HardwareSetDef
         # Level 1 dedup: remove duplicates from within this page's extraction
         items = deduplicate_hardware_items(items)
         sets.append(HardwareSetDef(
-            set_id=set_id,
+            set_id=heading_id,
+            generic_set_id=generic_set_id,
             heading=heading,
+            heading_door_count=heading_door_count,
+            heading_leaf_count=heading_leaf_count,
             items=items,
         ))
 
@@ -1707,58 +1754,65 @@ class handler(BaseHTTPRequestHandler):
                 # Phase 3: Extract reference tables
                 reference_codes = extract_reference_tables(pdf)
 
-                # Phase 3.5: Normalize item qty from total → per-opening
-                # Count how many openings reference each hardware set
+                # Phase 3.5: Normalize item qty from total → per-opening/per-leaf
+                #
+                # Primary source: heading block door count (most accurate)
+                # Fallback: Opening List hw_heading / hw_set matching
+                # Last resort: category cap
+                #
+                # Division strategy: try leaf count first (most items are per-leaf),
+                # then opening count (per-opening items like coordinators, flush bolts).
+                # If neither divides evenly, flag for AI review.
+
+                # Build fallback dicts from Opening List
+                doors_per_heading: dict[str, int] = {}
                 doors_per_set: dict[str, int] = {}
                 for door in openings:
-                    sid = door.hw_set
+                    hid = door.hw_heading.strip().upper() if door.hw_heading else ""
+                    if hid:
+                        doors_per_heading[hid] = doors_per_heading.get(hid, 0) + 1
+                    sid = door.hw_set.strip().upper() if door.hw_set else ""
                     if sid:
                         doors_per_set[sid] = doors_per_set.get(sid, 0) + 1
 
+                if doors_per_heading:
+                    logger.info(f"Doors per heading (Opening List): {doors_per_heading}")
                 if doors_per_set:
-                    logger.info(f"Doors per set: {doors_per_set}")
+                    logger.info(f"Doors per set (Opening List): {doors_per_set}")
 
                 for hw_set in hardware_sets:
-                    set_door_count = doors_per_set.get(hw_set.set_id, 0)
-                    if set_door_count > 1:
-                        for item in hw_set.items:
-                            raw_qty = item.qty
-                            item.qty_total = raw_qty
-                            item.qty_door_count = set_door_count
-                            if raw_qty >= set_door_count:
-                                per_opening = raw_qty / set_door_count
-                                if per_opening == int(per_opening):
-                                    item.qty = int(per_opening)
-                                    item.qty_source = "divided"
-                                    logger.info(
-                                        f"[qty-norm] {hw_set.set_id}: '{item.name}' "
-                                        f"{raw_qty} ÷ {set_door_count} = {item.qty}"
-                                    )
-                                else:
-                                    # Doesn't divide evenly — flag for review
-                                    item.qty = raw_qty  # keep original
-                                    item.qty_source = "flagged"
-                                    logger.warning(
-                                        f"[qty-norm] {hw_set.set_id}: '{item.name}' "
-                                        f"{raw_qty} ÷ {set_door_count} = {per_opening:.2f} "
-                                        f"(not even, flagged)"
-                                    )
-                            else:
-                                # qty < door_count: likely per-opening already
-                                item.qty_source = "parsed"
-                        # Sanity-check: if divided qty still exceeds category max, flag it
-                        for item in hw_set.items:
-                            if item.qty_source == "divided":
-                                category = _classify_hardware_item(item.name)
-                                max_qty = _max_qty_for_category(category)
-                                if item.qty > max_qty:
-                                    logger.warning(
-                                        f"[qty-norm] {hw_set.set_id}: '{item.name}' "
-                                        f"divided qty {item.qty} exceeds category max {max_qty}, flagging"
-                                    )
-                                    item.qty_source = "flagged"
-                    elif set_door_count <= 1:
-                        # Single door or unknown count — fall back to category cap
+                    # --- Determine door count and leaf count ---
+                    door_count = hw_set.heading_door_count
+                    leaf_count = hw_set.heading_leaf_count
+
+                    if door_count > 0:
+                        logger.info(
+                            f"[qty-norm] {hw_set.set_id}: using heading block count "
+                            f"({door_count} openings, {leaf_count} leaves)"
+                        )
+                    else:
+                        # Fallback 1: Opening List hw_heading match
+                        norm_heading = hw_set.set_id.strip().upper()
+                        door_count = doors_per_heading.get(norm_heading, 0)
+                        leaf_count = door_count  # assume single if unknown from heading
+                        if door_count > 0:
+                            logger.info(
+                                f"[qty-norm] {hw_set.set_id}: fallback to Opening List "
+                                f"heading match ({door_count} doors)"
+                            )
+                        else:
+                            # Fallback 2: Opening List hw_set (generic) match
+                            norm_set = hw_set.generic_set_id.strip().upper() if hw_set.generic_set_id else norm_heading
+                            door_count = doors_per_set.get(norm_set, 0)
+                            leaf_count = door_count
+                            if door_count > 0:
+                                logger.info(
+                                    f"[qty-norm] {hw_set.set_id}: fallback to Opening List "
+                                    f"generic set match '{norm_set}' ({door_count} doors)"
+                                )
+
+                    # --- Single door or unknown: category cap fallback ---
+                    if door_count <= 1 and leaf_count <= 1:
                         for item in hw_set.items:
                             category = _classify_hardware_item(item.name)
                             max_qty = _max_qty_for_category(category)
@@ -1766,12 +1820,74 @@ class handler(BaseHTTPRequestHandler):
                             if raw_qty > max_qty:
                                 logger.warning(
                                     f"[qty-cap-fallback] {hw_set.set_id}: '{item.name}' "
-                                    f"qty {raw_qty} capped to {max_qty} (no door count for division)"
+                                    f"qty {raw_qty} capped to {max_qty} (no door count)"
                                 )
                                 item.qty = max_qty
                                 item.qty_source = "capped"
                                 item.qty_total = raw_qty
-                                item.qty_door_count = set_door_count or None
+                                item.qty_door_count = None
+                        continue
+
+                    # --- Multi-door set: divide quantities ---
+                    for item in hw_set.items:
+                        raw_qty = item.qty
+                        item.qty_total = raw_qty
+                        divided = False
+
+                        # Try 1: divide by leaf count (per-leaf items: hinges, closers, etc.)
+                        if leaf_count > 1 and raw_qty >= leaf_count:
+                            per_leaf = raw_qty / leaf_count
+                            if per_leaf == int(per_leaf):
+                                item.qty = int(per_leaf)
+                                item.qty_door_count = leaf_count
+                                item.qty_source = "divided"
+                                divided = True
+                                logger.info(
+                                    f"[qty-norm] {hw_set.set_id}: '{item.name}' "
+                                    f"{raw_qty} ÷ {leaf_count} leaves = {item.qty}"
+                                )
+
+                        # Try 2: divide by opening count (per-opening items: coordinator, etc.)
+                        if not divided and door_count > 1 and door_count != leaf_count and raw_qty >= door_count:
+                            per_opening = raw_qty / door_count
+                            if per_opening == int(per_opening):
+                                item.qty = int(per_opening)
+                                item.qty_door_count = door_count
+                                item.qty_source = "divided"
+                                divided = True
+                                logger.info(
+                                    f"[qty-norm] {hw_set.set_id}: '{item.name}' "
+                                    f"{raw_qty} ÷ {door_count} openings = {item.qty}"
+                                )
+
+                        # Neither worked
+                        if not divided:
+                            if raw_qty < min(door_count, leaf_count):
+                                # qty smaller than door count → likely already per-unit
+                                item.qty_source = "parsed"
+                                item.qty_door_count = leaf_count
+                            else:
+                                # Doesn't divide evenly by leaves or openings → flag
+                                item.qty_source = "flagged"
+                                item.qty_door_count = leaf_count
+                                logger.warning(
+                                    f"[qty-norm] {hw_set.set_id}: '{item.name}' "
+                                    f"qty {raw_qty} doesn't divide evenly by "
+                                    f"{leaf_count} leaves or {door_count} openings, flagged"
+                                )
+
+                    # Sanity-check: if divided qty still exceeds category max, flag
+                    for item in hw_set.items:
+                        if item.qty_source == "divided":
+                            category = _classify_hardware_item(item.name)
+                            max_qty = _max_qty_for_category(category)
+                            if item.qty > max_qty:
+                                logger.warning(
+                                    f"[qty-norm] {hw_set.set_id}: '{item.name}' "
+                                    f"divided qty {item.qty} exceeds category max "
+                                    f"{max_qty}, flagging for review"
+                                )
+                                item.qty_source = "flagged"
 
                 # Phase 4: Pattern consensus validation
                 # Flag door numbers that don't match the dominant structural

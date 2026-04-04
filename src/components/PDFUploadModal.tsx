@@ -496,7 +496,10 @@ interface HardwareItem {
 
 interface HardwareSet {
   set_id: string;
+  generic_set_id?: string;
   heading: string;
+  heading_door_count?: number;
+  heading_leaf_count?: number;
   items: HardwareItem[];
 }
 

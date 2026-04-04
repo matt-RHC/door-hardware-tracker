@@ -21,7 +21,10 @@ interface HardwareItem {
 
 interface HardwareSet {
   set_id: string
+  generic_set_id?: string
   heading: string
+  heading_door_count?: number
+  heading_leaf_count?: number
   items: HardwareItem[]
 }
 
@@ -386,6 +389,40 @@ export async function POST(request: NextRequest) {
     const corrected = applyCorrections(hardwareSets, doors, corrections)
     hardwareSets = corrected.hardwareSets
     doors = corrected.doors
+
+    // --- Post-LLM qty re-normalization ---
+    // LLM may revert normalized quantities back to PDF totals.
+    for (const set of hardwareSets) {
+      const leafCount = (set.heading_leaf_count ?? 0) > 1 ? (set.heading_leaf_count ?? 0) : 0
+      const doorCount = (set.heading_door_count ?? 0) > 1 ? (set.heading_door_count ?? 0) : 0
+      if (leafCount <= 1 && doorCount <= 1) continue
+
+      for (const item of set.items) {
+        if (item.qty_source === 'divided' || item.qty_source === 'flagged' || item.qty_source === 'capped') {
+          continue
+        }
+        let divided = false
+        if (leafCount > 1 && item.qty >= leafCount) {
+          const perLeaf = item.qty / leafCount
+          if (Number.isInteger(perLeaf)) {
+            item.qty_total = item.qty
+            item.qty_door_count = leafCount
+            item.qty = perLeaf
+            item.qty_source = 'divided'
+            divided = true
+          }
+        }
+        if (!divided && doorCount > 1 && doorCount !== leafCount && item.qty >= doorCount) {
+          const perOpening = item.qty / doorCount
+          if (Number.isInteger(perOpening)) {
+            item.qty_total = item.qty
+            item.qty_door_count = doorCount
+            item.qty = perOpening
+            item.qty_source = 'divided'
+          }
+        }
+      }
+    }
 
     // Fire rating extraction from hw_heading/location fields
     const fireRatingPattern = /\b(\d{1,3}\s*[Mm]in|[123]\s*[Hh]r)\b/

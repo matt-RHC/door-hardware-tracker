@@ -10,6 +10,15 @@
  * Categories are intentionally broad — the name_patterns catch variations.
  */
 
+/**
+ * Install scope determines how quantities scale with door configuration:
+ * - "per_leaf": qty applies to each door leaf (hinges, closers, protection plates)
+ * - "per_opening": qty is per opening regardless of single/pair (lockset, threshold)
+ * - "per_pair": qty applies only to pair openings (coordinator, flush bolt, astragal)
+ * - "per_frame": qty is per frame (seals, weatherstripping, silencers)
+ */
+export type InstallScope = 'per_leaf' | 'per_opening' | 'per_pair' | 'per_frame'
+
 export interface HardwareCategory {
   /** Unique category ID */
   id: string
@@ -27,6 +36,8 @@ export interface HardwareCategory {
   fire_rated: boolean
   /** Expected only on pairs (double doors)? */
   pairs_only: boolean
+  /** How quantities scale with door configuration */
+  install_scope: InstallScope
   /** Typical per-opening qty range [min, max] for single doors */
   typical_qty_single: [number, number]
   /** Typical per-opening qty range [min, max] for pairs */
@@ -50,6 +61,7 @@ export const HARDWARE_TAXONOMY: HardwareCategory[] = [
     interior: true,
     fire_rated: true,
     pairs_only: false,
+    install_scope: 'per_leaf',
     typical_qty_single: [3, 5],
     typical_qty_pair: [6, 10],
   },
@@ -81,6 +93,7 @@ export const HARDWARE_TAXONOMY: HardwareCategory[] = [
     interior: true,
     fire_rated: true,
     pairs_only: false,
+    install_scope: 'per_opening',
     typical_qty_single: [1, 1],
     typical_qty_pair: [1, 2],
   },
@@ -105,6 +118,7 @@ export const HARDWARE_TAXONOMY: HardwareCategory[] = [
     interior: false,  // some interior egress doors have them
     fire_rated: true,
     pairs_only: false,
+    install_scope: 'per_leaf',
     typical_qty_single: [1, 1],
     typical_qty_pair: [2, 2],
   },
@@ -123,6 +137,7 @@ export const HARDWARE_TAXONOMY: HardwareCategory[] = [
     interior: false,
     fire_rated: true,
     pairs_only: true,
+    install_scope: 'per_pair',
     typical_qty_single: [0, 0],
     typical_qty_pair: [1, 2],
   },
@@ -139,6 +154,7 @@ export const HARDWARE_TAXONOMY: HardwareCategory[] = [
     interior: false,
     fire_rated: false,
     pairs_only: false,
+    install_scope: 'per_opening',
     typical_qty_single: [0, 1],
     typical_qty_pair: [0, 2],
   },
@@ -161,6 +177,7 @@ export const HARDWARE_TAXONOMY: HardwareCategory[] = [
     interior: false,
     fire_rated: false,
     pairs_only: false,
+    install_scope: 'per_opening',
     typical_qty_single: [1, 1],
     typical_qty_pair: [1, 2],
   },
@@ -180,6 +197,7 @@ export const HARDWARE_TAXONOMY: HardwareCategory[] = [
     interior: false,
     fire_rated: false,
     pairs_only: false,
+    install_scope: 'per_leaf',
     typical_qty_single: [1, 2],
     typical_qty_pair: [2, 4],
   },
@@ -199,6 +217,7 @@ export const HARDWARE_TAXONOMY: HardwareCategory[] = [
     interior: true,
     fire_rated: true,
     pairs_only: false,
+    install_scope: 'per_leaf',
     typical_qty_single: [1, 1],
     typical_qty_pair: [2, 2],
   },
@@ -213,6 +232,7 @@ export const HARDWARE_TAXONOMY: HardwareCategory[] = [
     interior: false,
     fire_rated: false,
     pairs_only: true,
+    install_scope: 'per_pair',
     typical_qty_single: [0, 0],
     typical_qty_pair: [1, 1],
   },
@@ -231,6 +251,7 @@ export const HARDWARE_TAXONOMY: HardwareCategory[] = [
     interior: false,
     fire_rated: false,
     pairs_only: false,
+    install_scope: 'per_opening',
     typical_qty_single: [1, 1],
     typical_qty_pair: [1, 2],
   },
@@ -249,6 +270,7 @@ export const HARDWARE_TAXONOMY: HardwareCategory[] = [
     interior: true,
     fire_rated: false,
     pairs_only: false,
+    install_scope: 'per_opening',
     typical_qty_single: [1, 2],
     typical_qty_pair: [1, 2],
   },
@@ -269,6 +291,7 @@ export const HARDWARE_TAXONOMY: HardwareCategory[] = [
     interior: false,
     fire_rated: false,
     pairs_only: false,
+    install_scope: 'per_leaf',
     typical_qty_single: [1, 1],
     typical_qty_pair: [2, 2],
   },
@@ -288,6 +311,7 @@ export const HARDWARE_TAXONOMY: HardwareCategory[] = [
     interior: true,
     fire_rated: false,
     pairs_only: false,
+    install_scope: 'per_leaf',
     typical_qty_single: [1, 1],
     typical_qty_pair: [2, 2],
   },
@@ -308,6 +332,7 @@ export const HARDWARE_TAXONOMY: HardwareCategory[] = [
     interior: false,
     fire_rated: false,
     pairs_only: false,
+    install_scope: 'per_leaf',
     typical_qty_single: [1, 1],
     typical_qty_pair: [2, 2],
   },
@@ -325,6 +350,7 @@ export const HARDWARE_TAXONOMY: HardwareCategory[] = [
     interior: false,
     fire_rated: false,
     pairs_only: false,
+    install_scope: 'per_frame',
     typical_qty_single: [1, 1],
     typical_qty_pair: [1, 1],
   },
@@ -342,6 +368,7 @@ export const HARDWARE_TAXONOMY: HardwareCategory[] = [
     interior: false,
     fire_rated: true,
     pairs_only: false,
+    install_scope: 'per_frame',
     typical_qty_single: [1, 1],
     typical_qty_pair: [1, 2],
   },
@@ -357,6 +384,7 @@ export const HARDWARE_TAXONOMY: HardwareCategory[] = [
     interior: false,
     fire_rated: true,
     pairs_only: false,
+    install_scope: 'per_frame',
     typical_qty_single: [1, 1],
     typical_qty_pair: [2, 2],
   },
@@ -371,6 +399,7 @@ export const HARDWARE_TAXONOMY: HardwareCategory[] = [
     interior: false,
     fire_rated: true,
     pairs_only: false,
+    install_scope: 'per_frame',
     typical_qty_single: [1, 1],
     typical_qty_pair: [2, 2],
   },
@@ -387,6 +416,7 @@ export const HARDWARE_TAXONOMY: HardwareCategory[] = [
     interior: false,
     fire_rated: false,
     pairs_only: false,
+    install_scope: 'per_frame',
     typical_qty_single: [1, 2],
     typical_qty_pair: [2, 4],
   },
@@ -403,6 +433,7 @@ export const HARDWARE_TAXONOMY: HardwareCategory[] = [
     interior: false,
     fire_rated: false,
     pairs_only: false,
+    install_scope: 'per_frame',
     typical_qty_single: [1, 1],
     typical_qty_pair: [2, 2],
   },
@@ -421,6 +452,7 @@ export const HARDWARE_TAXONOMY: HardwareCategory[] = [
     interior: false,
     fire_rated: false,
     pairs_only: false,
+    install_scope: 'per_frame',
     typical_qty_single: [1, 1],
     typical_qty_pair: [2, 2],
   },
@@ -436,6 +468,7 @@ export const HARDWARE_TAXONOMY: HardwareCategory[] = [
     interior: false,
     fire_rated: false,
     pairs_only: true,
+    install_scope: 'per_pair',
     typical_qty_single: [0, 0],
     typical_qty_pair: [1, 1],
   },
@@ -454,6 +487,7 @@ export const HARDWARE_TAXONOMY: HardwareCategory[] = [
     interior: true,
     fire_rated: false,
     pairs_only: false,
+    install_scope: 'per_frame',
     typical_qty_single: [1, 3],
     typical_qty_pair: [1, 3],
   },
@@ -475,6 +509,7 @@ export const HARDWARE_TAXONOMY: HardwareCategory[] = [
     interior: false,
     fire_rated: false,
     pairs_only: false,
+    install_scope: 'per_opening',
     typical_qty_single: [0, 5],
     typical_qty_pair: [0, 5],
   },
@@ -558,10 +593,17 @@ export function getTaxonomyPromptText(): string {
     if (cat.fire_rated) contexts.push('FIRE')
     if (cat.pairs_only) contexts.push('PAIRS-ONLY')
 
-    return `- ${cat.label} [${contexts.join(',')}] typical qty: ${cat.typical_qty_single[0]}-${cat.typical_qty_single[1]} (single), ${cat.typical_qty_pair[0]}-${cat.typical_qty_pair[1]} (pair)`
+    const scope = cat.install_scope.replace('_', '-')
+    return `- ${cat.label} [${contexts.join(',')}] ${scope} | typical qty: ${cat.typical_qty_single[0]}-${cat.typical_qty_single[1]} (single), ${cat.typical_qty_pair[0]}-${cat.typical_qty_pair[1]} (pair)`
   })
 
-  return `HARDWARE ITEM CATEGORIES (expected per opening):\n${lines.join('\n')}`
+  return [
+    'HARDWARE ITEM CATEGORIES (expected per opening):',
+    'Install scopes: per-leaf (each door panel), per-opening (1 per doorway), per-pair (pairs only), per-frame (1 per frame)',
+    'Hinge rule: 1 per 30" of height + 1 (3 for ≤7\'6", 4 for 7\'6"-10\'0", 5 for 10\'0"+). Electrified/spring hinges REPLACE a standard hinge, not additive. Continuous = 1 per leaf.',
+    'Pair doors: active leaf gets lockset/exit device, inactive gets flush bolts. Both leaves get hinges, closers, protection plates, sweeps.',
+    ...lines,
+  ].join('\n')
 }
 
 /**
