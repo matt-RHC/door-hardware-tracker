@@ -485,6 +485,9 @@ function HoloLoader({ progress, status }: { progress: number; status: string }) 
 
 interface HardwareItem {
   qty: number;
+  qty_total?: number;
+  qty_door_count?: number;
+  qty_source?: string;
   name: string;
   model: string;
   finish: string;

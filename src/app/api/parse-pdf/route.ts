@@ -9,7 +9,10 @@ export const maxDuration = 300
 // --- Types ---
 
 interface HardwareItem {
-  qty: number
+  qty: number              // per-opening (normalized)
+  qty_total?: number       // raw total from PDF
+  qty_door_count?: number  // openings in this set
+  qty_source?: string      // "parsed" | "divided" | "flagged" | "capped"
   name: string
   model: string
   finish: string
@@ -41,6 +44,9 @@ interface PdfplumberResult {
     heading: string
     items: Array<{
       qty: number
+      qty_total?: number
+      qty_door_count?: number
+      qty_source?: string
       name: string
       manufacturer: string
       model: string
@@ -83,28 +89,6 @@ interface LLMCorrections {
 }
 
 // --- Helpers ---
-
-// Category-aware qty cap: prevents aggregate totals from reaching UI
-const QTY_MAX_MAP: Record<string, number> = {
-  hinge: 5, continuous: 2, pivot: 2,
-  lockset: 1, latch: 1, passage: 1, privacy: 1, storeroom: 1,
-  classroom: 1, entrance: 1, mortise: 1, cylindrical: 1, deadbolt: 2,
-  exit: 2, panic: 2, 'flush bolt': 2, 'surface bolt': 2,
-  closer: 2, coordinator: 1, stop: 2, holder: 2,
-  silencer: 4, bumper: 4, threshold: 1, 'kick plate': 2,
-  seal: 3, gasket: 3, sweep: 1, 'door bottom': 1,
-  astragal: 1, cylinder: 2, core: 2, strike: 2,
-  pull: 2, push: 2, lever: 1, knob: 1,
-}
-
-function capItemQty(qty: number, name: string): number {
-  if (qty <= 0) return 1
-  const lower = name.toLowerCase()
-  for (const [keyword, max] of Object.entries(QTY_MAX_MAP)) {
-    if (lower.includes(keyword)) return Math.min(qty, max)
-  }
-  return Math.min(qty, 4)
-}
 
 async function callPdfplumber(
   base64: string,
@@ -323,11 +307,16 @@ async function extractFromPDF(base64: string): Promise<{
     console.error('Pdfplumber extraction failed:', msg)
   }
 
+  // Python layer now handles qty normalization (total ÷ door_count = per-opening).
+  // Pass through qty metadata fields as-is.
   let hardwareSets: HardwareSet[] = (pdfplumberResult?.hardware_sets || []).map(s => ({
     set_id: s.set_id,
     heading: s.heading,
     items: s.items.map(i => ({
-      qty: capItemQty(i.qty, i.name),
+      qty: i.qty,
+      qty_total: i.qty_total,
+      qty_door_count: i.qty_door_count,
+      qty_source: i.qty_source,
       name: i.name,
       manufacturer: i.manufacturer,
       model: i.model,
@@ -353,17 +342,6 @@ async function extractFromPDF(base64: string): Promise<{
   const corrected = applyCorrections(hardwareSets, allDoors, corrections)
   hardwareSets = corrected.hardwareSets
   allDoors = corrected.doors
-
-  // --- Final programmatic qty cap (safety net after all corrections) ---
-  for (const set of hardwareSets) {
-    for (const item of set.items) {
-      const capped = capItemQty(item.qty, item.name)
-      if (capped !== item.qty) {
-        console.log(`[final-qty-cap] ${set.set_id}: "${item.name}" qty ${item.qty} → ${capped}`)
-        item.qty = capped
-      }
-    }
-  }
 
   // --- Extract fire ratings from hw_heading if misplaced ---
   const fireRatingPattern = /\b(\d{1,3}\s*[Mm]in|[123]\s*[Hh]r)\b/
