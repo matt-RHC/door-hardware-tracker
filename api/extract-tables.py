@@ -342,12 +342,28 @@ def clean_cell(val) -> str:
         "\u00e2\u0080\u0098": "\u2018", # left single quote (â€˜ → ')
         "\u00e2\u0080\u009c": "\u201c", # left double quote (â€œ → ")
         "\u00e2\u0080\u009d": "\u201d", # right double quote (â€ → ")
+        "\u00e2\u0080\u00a2": "\u2022", # bullet (â€¢ → •)
+        "\u00c3\u00a0": "\u00e0",       # à (Ã  → à)
+        "\u00c3\u00a8": "\u00e8",       # è
+        "\u00c3\u00a9": "\u00e9",       # é
+        "\u00c3\u00ad": "\u00ed",       # í
+        "\u00c3\u00b3": "\u00f3",       # ó
+        "\u00c3\u00ba": "\u00fa",       # ú
+        "\u00c3\u00bc": "\u00fc",       # ü
+        "\u00c3\u00b1": "\u00f1",       # ñ
     }
     for bad, good in mojibake_map.items():
         if bad in s:
             s = s.replace(bad, good)
     # Normalize Unicode to NFC form
     s = unicodedata.normalize("NFC", s)
+    # Strip non-printable control characters and isolated mojibake fragments
+    # that slip through the map (common in PDF-extracted hardware headings)
+    s = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]", "", s)
+    # Strip double vertical bar (‖) that appears in garbled headings
+    s = s.replace("\u2016", " ").replace("\u2551", " ")
+    # Collapse multiple spaces from replacements
+    s = re.sub(r"  +", " ", s).strip()
     # Strip trailing em-dashes, en-dashes, and regular dashes that are
     # artifacts of table-cell extraction (e.g. "1.01.A.06A—" → "1.01.A.06A")
     s = s.rstrip("\u2014\u2013\u2012-")
@@ -418,6 +434,18 @@ def is_valid_door_number(val: str) -> bool:
 
     # Minimum length — real door numbers are at least 3 chars (e.g. "A01")
     if len(s) < 3:
+        return False
+
+    # Short alphanumeric codes without separators are likely hardware set IDs
+    # (e.g. DCB2, HW1, AB3) rather than door numbers. Real short door numbers
+    # have separators: A-101, B1-101, 1.01. Require a dot or dash separator
+    # for strings ≤ 5 chars that are just letters+digits.
+    if len(s) <= 5 and re.match(r"^[A-Za-z]+\d+$", s) and not re.search(r"[.\-]", s):
+        return False
+
+    # Known hardware set ID patterns to reject
+    hw_set_pattern = re.match(r"^(DCB|HW|HS|SET|GRP)\d", s, re.I)
+    if hw_set_pattern:
         return False
 
     return True
