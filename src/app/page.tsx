@@ -158,7 +158,7 @@ export default function LoginPage() {
 
   return (
     <div
-      className="min-h-screen w-full flex items-center justify-center px-4 py-8 relative overflow-hidden"
+      className="min-h-screen w-full flex items-center justify-center px-4 py-8 relative overflow-hidden login-scanlines"
       style={{ background: "var(--background)" }}
     >
       {/* Layered background */}

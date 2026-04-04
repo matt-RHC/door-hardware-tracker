@@ -51,6 +51,27 @@
   --radius-pill: 20px;
 }
 
+/* Light theme overrides */
+[data-theme="light"] {
+  --background: #f5f5f7;
+  --foreground: #1d1d1f;
+  --surface: rgba(0,0,0,0.03);
+  --surface-hover: rgba(0,0,0,0.06);
+  --surface-raised: rgba(0,0,0,0.05);
+  --border: rgba(0,0,0,0.08);
+  --border-hover: rgba(0,0,0,0.15);
+  --text-primary: #1d1d1f;
+  --text-secondary: #6e6e73;
+  --text-tertiary: #aeaeb2;
+  --blue-dim: rgba(10,132,255,0.08);
+  --green-dim: rgba(48,209,88,0.08);
+  --orange-dim: rgba(255,159,10,0.08);
+  --purple-dim: rgba(191,90,242,0.08);
+  --red-dim: rgba(255,69,58,0.08);
+  --cyan-dim: rgba(90,200,250,0.08);
+  --yellow-dim: rgba(255,214,10,0.08);
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -73,8 +94,8 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* ── Subtle scan line overlay on body ── */
-body::after {
+/* Scan line overlay — login page only */
+.login-scanlines::after {
   content: '';
   position: fixed;
   inset: 0;
@@ -119,6 +140,36 @@ body::after {
 }
 .glow-card:active {
   transform: scale(0.985);
+}
+
+/* Pre-rendered glow for GPU compositing */
+.glow-card::after {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  box-shadow: var(--glow-sm) rgba(90,200,250,0.2);
+  opacity: 0;
+  transition: opacity 0.25s ease;
+  pointer-events: none;
+}
+.glow-card:hover::after {
+  opacity: 1;
+}
+
+/* Light theme overrides for glow card */
+[data-theme="light"] .glow-card {
+  background: rgba(255,255,255,0.7);
+  border-color: rgba(0,0,0,0.08);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+}
+[data-theme="light"] .glow-card:hover {
+  background: rgba(255,255,255,0.9);
+  border-color: rgba(0,0,0,0.12);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+}
+[data-theme="light"] .glow-card::after {
+  display: none;
 }
 
 /* Color variants */
@@ -220,6 +271,16 @@ body::after {
   color: var(--text-primary);
   border-color: rgba(255,255,255,0.14);
 }
+
+/* Light theme overrides for buttons */
+[data-theme="light"] .glow-btn--ghost {
+  background: rgba(0,0,0,0.03);
+  border-color: rgba(0,0,0,0.08);
+}
+[data-theme="light"] .glow-btn--ghost:hover {
+  background: rgba(0,0,0,0.06);
+  border-color: rgba(0,0,0,0.12);
+}
 .glow-btn--success {
   background: rgba(48,209,88,0.12);
   color: var(--green);
@@ -257,6 +318,13 @@ body::after {
 .text-glow-blue {
   color: var(--blue);
   text-shadow: 0 0 8px rgba(10,132,255,0.4), 0 0 20px rgba(10,132,255,0.15);
+}
+
+/* Light theme: disable glow effects */
+[data-theme="light"] .text-glow-cyan,
+[data-theme="light"] .text-glow-green,
+[data-theme="light"] .text-glow-blue {
+  text-shadow: none;
 }
 
 /* ── Status Badge ── */
@@ -313,12 +381,25 @@ body::after {
   box-shadow: 0 0 0 2px rgba(90,200,250,0.08), var(--glow-sm) rgba(90,200,250,0.06);
 }
 
+/* Light theme overrides for input */
+[data-theme="light"] .input-field {
+  background: rgba(255,255,255,0.8);
+  border-color: rgba(0,0,0,0.12);
+  color: var(--text-primary);
+}
+
 /* ── Panel (Modals, Overlays) ── */
 .panel {
   background: rgba(12,12,16,0.95);
   border: 1px solid rgba(255,255,255,0.08);
   border-radius: var(--radius);
   backdrop-filter: blur(20px);
+}
+
+/* Light theme overrides for panel */
+[data-theme="light"] .panel {
+  background: rgba(255,255,255,0.95);
+  border-color: rgba(0,0,0,0.1);
 }
 
 /* ── Divider ── */
@@ -331,6 +412,11 @@ body::after {
     rgba(90,200,250,0.15) 80%,
     transparent
   );
+}
+
+/* Light theme override for divider */
+[data-theme="light"] .divider {
+  background: linear-gradient(90deg, transparent, rgba(0,0,0,0.08) 20%, rgba(0,0,0,0.08) 80%, transparent);
 }
 
 /* ═══════════════════════════════════════════════
@@ -784,6 +870,83 @@ body::after {
 }
 ::-webkit-scrollbar-thumb:hover {
   background: rgba(90,200,250,0.3);
+}
+
+/* Light theme scrollbar */
+[data-theme="light"] ::-webkit-scrollbar-thumb {
+  background: rgba(0,0,0,0.12);
+}
+[data-theme="light"] ::-webkit-scrollbar-thumb:hover {
+  background: rgba(0,0,0,0.25);
+}
+
+/* ═══════════════════════════════════════════════
+   ADAPTIVE PERFORMANCE TIERS
+   ═══════════════════════════════════════════════ */
+
+/* Low-end: disable all glow/animation decorations */
+[data-perf="low"] .glow-card:hover,
+[data-perf="low"] .glow-card-cel:hover {
+  box-shadow: none;
+}
+[data-perf="low"] .cel-border,
+[data-perf="low"] .cel-border-heavy,
+[data-perf="low"] .cel-border-glow,
+[data-perf="low"] .cel-border-glow--green,
+[data-perf="low"] .cel-border-glow--orange,
+[data-perf="low"] .cel-border-glow--blue,
+[data-perf="low"] .cel-border-glow--purple,
+[data-perf="low"] .cel-border-glow--red {
+  box-shadow: none;
+}
+[data-perf="low"] .ink-texture,
+[data-perf="low"] .ink-splash {
+  background-image: none;
+}
+[data-perf="low"] .heavy-scanlines::after {
+  display: none;
+}
+[data-perf="low"] .stagger-children > * {
+  animation: none;
+  opacity: 1;
+}
+[data-perf="low"] .animate-fade-in-up {
+  animation: none;
+  opacity: 1;
+}
+[data-perf="low"] .sketch-reveal {
+  animation: none;
+  clip-path: none;
+}
+[data-perf="low"] .text-glow-cyan,
+[data-perf="low"] .text-glow-green,
+[data-perf="low"] .text-glow-blue {
+  text-shadow: none;
+}
+
+/* Mid-tier: keep static decorations, disable animations */
+[data-perf="mid"] .stagger-children > * {
+  animation: none;
+  opacity: 1;
+}
+[data-perf="mid"] .animate-fade-in-up {
+  animation: none;
+  opacity: 1;
+}
+[data-perf="mid"] .sketch-reveal {
+  animation: none;
+  clip-path: none;
+}
+
+/* Reduced motion preference override (highest priority) */
+@media (prefers-reduced-motion: reduce) {
+  .stagger-children > *,
+  .animate-fade-in-up,
+  .sketch-reveal {
+    animation: none !important;
+    opacity: 1 !important;
+    clip-path: none !important;
+  }
 }
 
 @media print {

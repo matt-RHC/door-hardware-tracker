@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import SoundToggle from "./SoundToggle";
+import ThemeToggle from "./ThemeToggle";
 import { playClick } from "@/lib/sounds";
 
 export default function Navbar() {
@@ -89,6 +90,7 @@ export default function Navbar() {
         {/* User section */}
         <div className="flex items-center gap-3">
           <SoundToggle />
+          <ThemeToggle />
           {!loading && email && (
             <>
               <span className="hidden sm:inline text-[12px] text-[#636366] tabular-nums">

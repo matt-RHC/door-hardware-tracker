@@ -574,7 +574,7 @@ export default function DoorDetailPage() {
           {!editingOpening && (
             <button
               onClick={startEditOpening}
-              className="text-[#a1a1a6] hover:text-[#f5f5f7] p-1"
+              className="text-[#a1a1a6] hover:text-[#f5f5f7] p-2.5 -m-1.5"
               title="Edit door details"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -689,14 +689,14 @@ export default function DoorDetailPage() {
 
         {/* Hero Card */}
         {!editingOpening && (
-          <div className="mb-6 bg-white/[0.04] border border-white/[0.08] rounded-xl p-4 ink-texture">
-            <h1 className="text-[34px] md:text-[42px] font-bold tracking-tight text-[#f5f5f7] mb-2 comic-heading">
+          <div className="mb-6 bg-white/[0.04] border border-white/[0.08] rounded-xl p-4">
+            <h1 className="text-[34px] md:text-[42px] font-bold tracking-tight text-[var(--text-primary)] mb-2">
               {opening.door_number}
             </h1>
 
             {opening.hw_set && (
               <div className="mb-3 flex items-center gap-2">
-                <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-[rgba(48,209,88,0.15)] border border-[#30d158] text-[12px] font-medium text-[#30d158] cel-border">
+                <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-[rgba(48,209,88,0.15)] border border-[#30d158] text-[12px] font-medium text-[#30d158]">
                   {opening.hw_set}
                   {opening.hw_heading && ` — ${opening.hw_heading}`}
                 </span>
@@ -704,24 +704,24 @@ export default function DoorDetailPage() {
             )}
 
             {opening.location && (
-              <p className="text-[15px] text-[#a1a1a6] mb-3">
+              <p className="text-[15px] text-[var(--text-secondary)] mb-3">
                 {opening.location}
               </p>
             )}
 
             <div className="flex flex-wrap gap-2">
               {opening.door_type && (
-                <span className="text-[11px] font-medium uppercase text-[#6e6e73] bg-white/[0.04] border border-white/[0.08] px-2 py-1 rounded-full cel-border">
+                <span className="text-[11px] font-medium uppercase text-[#6e6e73] bg-white/[0.04] border border-white/[0.08] px-2 py-1 rounded-full">
                   {opening.door_type}
                 </span>
               )}
               {opening.fire_rating && (
-                <span className="text-[11px] font-medium uppercase text-[#ff453a] bg-[rgba(255,69,58,0.15)] border border-[#ff453a] px-2 py-1 rounded-full cel-border">
+                <span className="text-[11px] font-medium uppercase text-[#ff453a] bg-[rgba(255,69,58,0.15)] border border-[#ff453a] px-2 py-1 rounded-full">
                   {opening.fire_rating}
                 </span>
               )}
               {opening.hand && (
-                <span className="text-[11px] font-medium uppercase text-[#6e6e73] bg-white/[0.04] border border-white/[0.08] px-2 py-1 rounded-full cel-border">
+                <span className="text-[11px] font-medium uppercase text-[#6e6e73] bg-white/[0.04] border border-white/[0.08] px-2 py-1 rounded-full">
                   {opening.hand}
                 </span>
               )}
@@ -753,9 +753,9 @@ export default function DoorDetailPage() {
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
-                className={`flex-1 px-3 py-2 rounded-lg text-[12px] font-medium uppercase transition-colors ${
+                className={`flex-1 px-3 py-3 rounded-lg text-[13px] font-medium uppercase transition-colors ${
                   activeTab === tab
-                    ? 'bg-white/[0.07] text-[#f5f5f7] cel-border border border-white/[0.15]'
+                    ? 'bg-white/[0.07] text-[#f5f5f7] border border-white/[0.15]'
                     : 'text-[#6e6e73] hover:text-[#a1a1a6]'
                 }`}
               >
@@ -774,7 +774,7 @@ export default function DoorDetailPage() {
               opening.hardware_items.map((item) => (
                 <div
                   key={item.id}
-                  className={`bg-white/[0.04] border rounded-xl p-3.5 transition-colors hover:bg-white/[0.07] hover:border-white/[0.14] cel-border ${
+                  className={`bg-white/[0.04] border rounded-xl p-3.5 transition-colors hover:bg-white/[0.07] hover:border-white/[0.14] ${
                     item.install_type === 'bench'
                       ? 'border-l-[3px] border-l-[#bf5af2] border-white/[0.08]'
                       : item.install_type === 'field'
@@ -885,16 +885,27 @@ export default function DoorDetailPage() {
                     // View mode
                     <>
                       <div className="flex justify-between items-start mb-2">
-                        <h3 className="text-[15px] font-medium text-[#f5f5f7]">{item.name}</h3>
+                        <div className="flex items-center gap-2">
+                          {item.install_type && (
+                            <span className={`text-[10px] font-bold uppercase px-1.5 py-0.5 rounded ${
+                              item.install_type === 'bench'
+                                ? 'bg-[rgba(191,90,242,0.15)] text-[#bf5af2] border border-[rgba(191,90,242,0.3)]'
+                                : 'bg-[rgba(255,159,10,0.15)] text-[#ff9f0a] border border-[rgba(255,159,10,0.3)]'
+                            }`}>
+                              {item.install_type === 'bench' ? 'B' : 'F'}
+                            </span>
+                          )}
+                          <h3 className="text-[15px] font-medium text-[var(--text-primary)]">{item.name}</h3>
+                        </div>
                         <div className="flex items-center gap-2">
                           {item.qty > 0 && (
-                            <span className="text-[12px] font-medium text-[#a1a1a6] bg-white/[0.04] px-2 py-1 rounded-lg cel-border border border-white/[0.08]">
+                            <span className="text-[12px] font-medium text-[#a1a1a6] bg-white/[0.04] px-2 py-1 rounded-lg border border-white/[0.08]">
                               Qty {item.qty}
                             </span>
                           )}
                           <button
                             onClick={() => startEditItem(item)}
-                            className="text-[#6e6e73] hover:text-[#a1a1a6] p-1"
+                            className="text-[#6e6e73] hover:text-[#a1a1a6] p-2.5 -m-1.5"
                             title="Edit item"
                           >
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -918,20 +929,22 @@ export default function DoorDetailPage() {
 
                       {/* Install type selector (if not set) */}
                       {!item.install_type && (
-                        <div className="flex items-center gap-2 mb-3">
+                        <div className="flex flex-col gap-2 w-full mb-3">
                           <span className="text-[12px] text-[#6e6e73]">Classify:</span>
-                          <button
-                            onClick={() => handleInstallTypeChange(item.id, 'bench')}
-                            className="text-[12px] px-2.5 py-1 bg-[rgba(191,90,242,0.15)] text-[#bf5af2] rounded-lg hover:bg-[rgba(191,90,242,0.25)] transition-colors border border-[#bf5af2]"
-                          >
-                            Bench
-                          </button>
-                          <button
-                            onClick={() => handleInstallTypeChange(item.id, 'field')}
-                            className="text-[12px] px-2.5 py-1 bg-[rgba(255,159,10,0.15)] text-[#ff9f0a] rounded-lg hover:bg-[rgba(255,159,10,0.25)] transition-colors border border-[#ff9f0a]"
-                          >
-                            Field
-                          </button>
+                          <div className="flex flex-col gap-2 w-full">
+                            <button
+                              onClick={() => handleInstallTypeChange(item.id, 'bench')}
+                              className="text-[14px] px-4 py-3 min-h-[48px] bg-[rgba(191,90,242,0.15)] text-[#bf5af2] rounded-lg hover:bg-[rgba(191,90,242,0.25)] transition-colors border border-[#bf5af2]"
+                            >
+                              Bench
+                            </button>
+                            <button
+                              onClick={() => handleInstallTypeChange(item.id, 'field')}
+                              className="text-[14px] px-4 py-3 min-h-[48px] bg-[rgba(255,159,10,0.15)] text-[#ff9f0a] rounded-lg hover:bg-[rgba(255,159,10,0.25)] transition-colors border border-[#ff9f0a]"
+                            >
+                              Field
+                            </button>
+                          </div>
                         </div>
                       )}
 
@@ -947,14 +960,14 @@ export default function DoorDetailPage() {
                                   playToggle();
                                   handleStepToggle(item.id, step, isActive);
                                 }}
-                                className="flex items-center justify-center w-7 h-7 rounded-full transition-colors"
+                                className="flex items-center justify-center w-12 h-12 rounded-full transition-colors"
                                 style={{
                                   background: isActive ? '#30d158' : 'transparent',
                                   border: isActive ? '2px solid #30d158' : '2px solid rgba(110,110,115,0.4)',
                                 }}
                               >
                                 {isActive && (
-                                  <svg className="w-3.5 h-3.5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                  <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20">
                                     <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
                                   </svg>
                                 )}
