@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import OfflineIndicator from "@/components/OfflineIndicator";
 import { Project } from "@/lib/types/database";
+import { playClick, playSuccess, playHover } from "@/lib/sounds";
 
 interface ProjectFormData {
   name: string;
@@ -74,6 +75,7 @@ export default function DashboardPage() {
           message: data.error || "Sync failed",
         });
       } else {
+        playSuccess();
         setPortfolioResult({
           success: true,
           message: `Portfolio synced: ${data.projectCount} projects`,
@@ -159,7 +161,7 @@ export default function DashboardPage() {
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
           <div>
             <h1
-              className="text-2xl sm:text-3xl font-bold text-[#e8e8ed]"
+              className="text-2xl sm:text-3xl font-bold text-[#e8e8ed] comic-heading"
               style={{ fontFamily: "var(--font-display)", letterSpacing: "0.02em" }}
             >
               PROJECTS
@@ -170,9 +172,12 @@ export default function DashboardPage() {
           </div>
           <div className="flex gap-2 w-full sm:w-auto">
             <button
-              onClick={syncPortfolio}
+              onClick={() => {
+                playClick();
+                syncPortfolio();
+              }}
               disabled={syncingPortfolio}
-              className="glow-btn--success flex-1 sm:flex-none text-[13px] rounded-lg"
+              className="glow-btn--success cel-border flex-1 sm:flex-none text-[13px] rounded-lg"
               style={{ padding: "0.5rem 1rem" }}
             >
               {syncingPortfolio ? (
@@ -190,8 +195,11 @@ export default function DashboardPage() {
               )}
             </button>
             <button
-              onClick={openNewProject}
-              className="glow-btn--primary flex-1 sm:flex-none text-[13px] rounded-lg"
+              onClick={() => {
+                playClick();
+                openNewProject();
+              }}
+              className="glow-btn--primary cel-border flex-1 sm:flex-none text-[13px] rounded-lg"
               style={{ padding: "0.5rem 1rem" }}
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -250,12 +258,16 @@ export default function DashboardPage() {
             <p className="text-[13px] text-[#636366]">Create one to start tracking door hardware</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 stagger-children">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 stagger-children ink-texture">
             {projects.map((project) => (
               <div
                 key={project.id}
-                onClick={() => router.push(`/project/${project.id}`)}
-                className="glow-card glow-card--cyan cursor-pointer p-5 relative group"
+                onClick={() => {
+                  playClick();
+                  router.push(`/project/${project.id}`);
+                }}
+                onMouseEnter={() => playHover()}
+                className="glow-card glow-card-cel glow-card--cyan cursor-pointer p-5 relative group"
               >
                 {/* Actions menu */}
                 <div

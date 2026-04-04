@@ -5,7 +5,6 @@ import { useRouter, useParams } from "next/navigation";
 import OfflineIndicator from "@/components/OfflineIndicator";
 import ProgressBar from "@/components/ProgressBar";
 import PDFUploadModal from "@/components/PDFUploadModal";
-import DeliveryTrackerPanel from "@/components/DeliveryTrackerPanel";
 
 interface OpeningWithProgress {
   id: string;
@@ -454,10 +453,6 @@ export default function ProjectDetailPage() {
           </div>
         )}
 
-        {/* Delivery Tracker */}
-        <div className="mt-8">
-          <DeliveryTrackerPanel projectId={projectId} />
-        </div>
       </main>
 
       {showUploadModal && (

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 
 // ─── Types ───
 
@@ -68,22 +68,162 @@ const FIELD_COLORS: Record<string, string> = {
   hand: "#ffd60a",
 };
 
-// ─── Main Component ───
+// ─── Step indicator component ───
 
-export default function ColumnMapperWizard({
+function StepIndicator({ currentStep, totalSteps }: { currentStep: number; totalSteps: number }) {
+  return (
+    <div className="flex items-center justify-center gap-3 mb-8">
+      {Array.from({ length: totalSteps }).map((_, i) => (
+        <div key={i} className="flex items-center gap-3">
+          <div
+            className="flex items-center justify-center w-10 h-10 rounded-full font-display font-bold text-sm transition-all"
+            style={{
+              backgroundColor: i === currentStep ? "rgba(90,200,250,0.2)" : "rgba(255,255,255,0.03)",
+              borderColor: i === currentStep ? "rgba(90,200,250,0.5)" : "rgba(255,255,255,0.1)",
+              borderWidth: "1px",
+              color: i === currentStep ? "#5ac8fa" : "#636366",
+              boxShadow: i === currentStep ? "0 0 12px rgba(90,200,250,0.2)" : "none",
+            }}
+          >
+            {i + 1}
+          </div>
+          {i < totalSteps - 1 && (
+            <div className="w-8 h-px" style={{
+              background: i < currentStep
+                ? "linear-gradient(90deg, #5ac8fa, rgba(90,200,250,0.3))"
+                : "rgba(255,255,255,0.1)"
+            }} />
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ─── Step 1: Identify Table ───
+
+function Step1IdentifyTable({
   data,
   onConfirm,
   onSkip,
-}: ColumnMapperWizardProps) {
-  const fieldLabels = { ...DEFAULT_FIELD_LABELS, ...(data.field_labels || {}) };
+}: {
+  data: DetectMappingResponse;
+  onConfirm: () => void;
+  onSkip: () => void;
+}) {
+  return (
+    <div className="space-y-6 animate-fade-in-up">
+      <div>
+        <h2 className="font-display text-2xl font-bold text-white mb-2">
+          IDENTIFY YOUR TABLE
+        </h2>
+        <p className="text-sm text-[#8e8e93]">
+          Verify this is the correct table. We detected {data.headers.length} columns and{" "}
+          {data.sample_rows.length} sample rows.
+          {data.page_index !== undefined && (
+            <span className="block mt-1">
+              <span className="text-[#636366]">Detected on page {data.page_index + 1} of {data.total_pages}</span>
+            </span>
+          )}
+        </p>
+      </div>
 
-  // Initialize mapping from auto-detection
-  const [mapping, setMapping] = useState<ColumnMapping>(() => ({ ...data.auto_mapping }));
+      {/* Low confidence warning */}
+      {data.low_confidence && (
+        <div className="glow-card glow-card--orange p-4">
+          <p className="text-[#ff9f0a] font-semibold text-sm mb-1">
+            Low Confidence Detection
+          </p>
+          <p className="text-xs text-[#a1a1a6]">
+            The system is not very confident about this table. Please review it carefully, or click
+            &quot;Skip&quot; to let the system auto-detect per chunk.
+          </p>
+        </div>
+      )}
 
-  // Which field is currently being assigned (user clicked a field button)
-  const [activeField, setActiveField] = useState<string | null>(null);
+      {/* Sample table - large and readable */}
+      <div className="glow-card p-4 overflow-hidden flex flex-col max-h-96">
+        <div className="overflow-x-auto flex-1">
+          <table className="w-full text-sm">
+            <thead>
+              <tr>
+                {data.headers.map((header, idx) => (
+                  <th
+                    key={idx}
+                    className="px-3 py-3 text-left font-semibold text-[#5ac8fa] whitespace-nowrap bg-[rgba(90,200,250,0.08)] border-b border-[rgba(90,200,250,0.2)]"
+                  >
+                    <div className="flex flex-col gap-1">
+                      <span className="text-[10px] uppercase tracking-widest text-[#636366]">
+                        Col {idx + 1}
+                      </span>
+                      <span className="text-sm">{header || "(empty)"}</span>
+                    </div>
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {data.sample_rows.map((row, rowIdx) => (
+                <tr
+                  key={rowIdx}
+                  className={`border-b border-[rgba(255,255,255,0.04)] ${
+                    rowIdx % 2 === 0 ? "bg-[rgba(255,255,255,0.01)]" : ""
+                  }`}
+                >
+                  {data.headers.map((_, colIdx) => (
+                    <td
+                      key={colIdx}
+                      className="px-3 py-2.5 text-[#e8e8ed] text-sm max-w-[200px] truncate"
+                    >
+                      {row[colIdx] || "—"}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
 
-  // Build reverse mapping: column index → field name
+      {/* Actions */}
+      <div className="flex items-center justify-between pt-4 gap-4">
+        <button onClick={onSkip} className="glow-btn glow-btn--ghost">
+          This isn't the right table
+        </button>
+        <button onClick={onConfirm} className="glow-btn glow-btn--primary">
+          Looks Good, Next
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Step 2: Map Columns ───
+
+function Step2MapColumns({
+  data,
+  mapping,
+  activeField,
+  onFieldClick,
+  onColumnClick,
+  onReset,
+  onConfirm,
+  onBack,
+  onSkip,
+  fieldLabels,
+}: {
+  data: DetectMappingResponse;
+  mapping: ColumnMapping;
+  activeField: string | null;
+  onFieldClick: (field: string | null) => void;
+  onColumnClick: (colIdx: number) => void;
+  onReset: () => void;
+  onConfirm: () => void;
+  onBack: () => void;
+  onSkip: () => void;
+  fieldLabels: Record<string, string>;
+}) {
+  // Reverse mapping: column index → field name
   const reverseMapping = useMemo(() => {
     const rev: Record<number, string> = {};
     for (const [field, colIdx] of Object.entries(mapping)) {
@@ -95,8 +235,372 @@ export default function ColumnMapperWizard({
   // Check if required fields are mapped
   const canConfirm = REQUIRED_FIELDS.every((f) => f in mapping);
 
-  // Assign a column to the active field
-  const assignColumn = (colIdx: number) => {
+  // Unassign a field
+  const unassignField = (field: string) => {
+    // This is handled by parent, but we show it in UI
+  };
+
+  const getFieldGlowClass = (field: string): string => {
+    const colorMap: Record<string, string> = {
+      door_number: "glow-card--blue",
+      hw_set: "glow-card--green",
+      hw_heading: "glow-card--purple",
+      location: "glow-card--orange",
+      door_type: "glow-card",
+      frame_type: "glow-card--red",
+      fire_rating: "glow-card--red",
+      hand: "glow-card",
+    };
+    return colorMap[field] || "glow-card";
+  };
+
+  return (
+    <div className="space-y-6 animate-fade-in-up">
+      <div>
+        <h2 className="font-display text-2xl font-bold text-white mb-2">
+          MAP YOUR COLUMNS
+        </h2>
+        <p className="text-sm text-[#8e8e93]">
+          Click a field on the left, then click a column header to assign it. Fields marked with{" "}
+          <span className="text-[#ff453a]">*</span> are required.
+        </p>
+      </div>
+
+      <div className="grid grid-cols-2 gap-6 min-h-[500px]">
+        {/* Left: Field cards */}
+        <div className="space-y-3">
+          <div className="text-xs uppercase tracking-widest text-[#636366] font-semibold mb-3 ml-1">
+            Fields to Assign
+          </div>
+          <div className="stagger-children space-y-2">
+            {ALL_FIELDS.map((field) => {
+              const isMapped = field in mapping;
+              const isActive = activeField === field;
+              const isRequired = REQUIRED_FIELDS.includes(field);
+              const confidence = data.confidence_scores[field];
+              const color = FIELD_COLORS[field];
+              const glowClass = getFieldGlowClass(field);
+
+              return (
+                <button
+                  key={field}
+                  onClick={() => onFieldClick(isActive ? null : field)}
+                  className={`glow-card ${glowClass} w-full p-4 text-left transition-all ${
+                    isActive ? "ring-2 ring-offset-2 ring-offset-[#050508] scale-105" : ""
+                  }`}
+                  style={{
+                    minHeight: "56px",
+                    boxShadow: isActive
+                      ? `0 0 20px ${color}40, inset 0 0 12px ${color}08`
+                      : "none",
+                  }}
+                >
+                  <div className="space-y-1">
+                    <div className="flex items-baseline justify-between gap-2">
+                      <span className="font-semibold text-sm text-[#e8e8ed]">
+                        {fieldLabels[field]}
+                      </span>
+                      {isRequired && <span className="text-[#ff453a]">*</span>}
+                    </div>
+                    {isMapped && (
+                      <div className="text-xs" style={{ color }}>
+                        <strong>→ Column {mapping[field] + 1}</strong>
+                        {confidence !== undefined && (
+                          <span className="ml-1 opacity-60">({Math.round(confidence * 100)}%)</span>
+                        )}
+                      </div>
+                    )}
+                    {!isMapped && (
+                      <p className="text-xs text-[#8e8e93]">Click to assign column</p>
+                    )}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Right: Column headers */}
+        <div className="space-y-3">
+          <div className="text-xs uppercase tracking-widest text-[#636366] font-semibold mb-3 ml-1">
+            Available Columns
+          </div>
+          <div className="stagger-children space-y-2 max-h-[600px] overflow-y-auto">
+            {data.headers.map((header, colIdx) => {
+              const assignedField = reverseMapping[colIdx];
+              const color = assignedField
+                ? FIELD_COLORS[assignedField]
+                : "#636366";
+              const isSelectable = activeField !== null;
+
+              return (
+                <button
+                  key={colIdx}
+                  onClick={() => isSelectable && onColumnClick(colIdx)}
+                  disabled={!isSelectable}
+                  className={`glow-card p-4 w-full text-left transition-all min-h-[56px] ${
+                    isSelectable
+                      ? "cursor-pointer hover:scale-102"
+                      : "opacity-60 cursor-default"
+                  }`}
+                  style={{
+                    borderLeftColor: assignedField ? color : "rgba(255,255,255,0.08)",
+                    background: assignedField
+                      ? `${color}12`
+                      : "rgba(255,255,255,0.02)",
+                    boxShadow: isSelectable && activeField
+                      ? "inset 0 0 8px rgba(90,200,250,0.1)"
+                      : "none",
+                  }}
+                >
+                  <div className="space-y-1">
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-xs uppercase tracking-widest text-[#636366]">
+                        Col {colIdx + 1}
+                      </span>
+                      <span className="text-sm font-semibold text-[#e8e8ed] flex-1 truncate">
+                        {header || "(empty)"}
+                      </span>
+                    </div>
+                    {assignedField && (
+                      <div className="text-xs" style={{ color }}>
+                        <strong>→ {fieldLabels[assignedField]}</strong>
+                      </div>
+                    )}
+                    {data.sample_rows.length > 0 && (
+                      <p className="text-xs text-[#8e8e93] truncate">
+                        e.g. &quot;{data.sample_rows[0][colIdx]}&quot;
+                      </p>
+                    )}
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* Status message */}
+      {activeField && (
+        <div className="p-3 rounded-lg bg-[rgba(90,200,250,0.1)] border border-[rgba(90,200,250,0.2)]">
+          <p className="text-sm text-[#5ac8fa]">
+            Assigning <strong>{fieldLabels[activeField]}</strong> — click a column header on the right
+          </p>
+        </div>
+      )}
+
+      {/* Validation message */}
+      {!canConfirm && (
+        <div className="p-3 rounded-lg bg-[rgba(255,69,58,0.1)] border border-[rgba(255,69,58,0.2)]">
+          <p className="text-sm text-[#ff453a]">
+            <strong>Required field missing:</strong> Door Number must be mapped before confirming.
+          </p>
+        </div>
+      )}
+
+      {/* Actions */}
+      <div className="flex items-center justify-between pt-4 gap-4 border-t border-[rgba(255,255,255,0.06)] pt-6">
+        <div className="flex gap-2">
+          <button onClick={onReset} className="glow-btn glow-btn--ghost text-xs">
+            Reset to Auto
+          </button>
+          <button onClick={onBack} className="glow-btn glow-btn--ghost">
+            Back
+          </button>
+        </div>
+        <div className="flex gap-2">
+          <button onClick={onSkip} className="glow-btn glow-btn--ghost">
+            Skip
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={!canConfirm}
+            className="glow-btn glow-btn--primary disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Continue
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Step 3: Confirm ───
+
+function Step3Confirm({
+  data,
+  mapping,
+  onConfirm,
+  onBack,
+  fieldLabels,
+}: {
+  data: DetectMappingResponse;
+  mapping: ColumnMapping;
+  onConfirm: () => void;
+  onBack: () => void;
+  fieldLabels: Record<string, string>;
+}) {
+  // Reverse mapping
+  const reverseMapping = useMemo(() => {
+    const rev: Record<number, string> = {};
+    for (const [field, colIdx] of Object.entries(mapping)) {
+      rev[colIdx] = field;
+    }
+    return rev;
+  }, [mapping]);
+
+  return (
+    <div className="space-y-6 animate-fade-in-up">
+      <div>
+        <h2 className="font-display text-2xl font-bold text-white mb-2">
+          CONFIRM MAPPING
+        </h2>
+        <p className="text-sm text-[#8e8e93]">
+          Review your column assignments. Click Confirm to proceed with extraction.
+        </p>
+      </div>
+
+      {/* Summary table showing all assignments */}
+      <div className="glow-card p-6">
+        <div className="mb-4">
+          <h3 className="font-semibold text-sm text-[#e8e8ed] mb-3">
+            Field Assignments
+          </h3>
+          <div className="space-y-2">
+            {Object.entries(mapping).map(([field, colIdx]) => {
+              const color = FIELD_COLORS[field];
+              const confidence = data.confidence_scores[field];
+
+              return (
+                <div
+                  key={field}
+                  className="flex items-center justify-between p-3 rounded border"
+                  style={{
+                    backgroundColor: `${color}08`,
+                    borderColor: `${color}20`,
+                  }}
+                >
+                  <div className="flex-1">
+                    <div className="font-semibold text-sm" style={{ color }}>
+                      {fieldLabels[field]}
+                    </div>
+                    <div className="text-xs text-[#8e8e93] mt-1">
+                      Column {colIdx + 1}: <strong>{data.headers[colIdx]}</strong>
+                    </div>
+                    {confidence !== undefined && (
+                      <div className="text-xs text-[#8e8e93] mt-0.5">
+                        Confidence: {Math.round(confidence * 100)}%
+                      </div>
+                    )}
+                  </div>
+                  {data.sample_rows.length > 0 && (
+                    <div className="text-right text-xs text-[#636366] max-w-[150px] truncate">
+                      Sample: &quot;{data.sample_rows[0][colIdx]}&quot;
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </div>
+
+      {/* Sample data preview table */}
+      {data.sample_rows.length > 0 && (
+        <div className="glow-card p-4">
+          <div className="text-xs uppercase tracking-widest text-[#636366] font-semibold mb-3">
+            Preview with Extracted Data
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr>
+                  {Object.entries(mapping).map(([field, colIdx]) => {
+                    const color = FIELD_COLORS[field];
+                    return (
+                      <th
+                        key={field}
+                        className="px-2 py-2 text-left font-semibold whitespace-nowrap"
+                        style={{
+                          color,
+                          backgroundColor: `${color}08`,
+                          borderBottom: `2px solid ${color}30`,
+                        }}
+                      >
+                        {fieldLabels[field]}
+                      </th>
+                    );
+                  })}
+                </tr>
+              </thead>
+              <tbody>
+                {data.sample_rows.map((row, rowIdx) => (
+                  <tr
+                    key={rowIdx}
+                    className={`border-b border-[rgba(255,255,255,0.04)] ${
+                      rowIdx % 2 === 0 ? "bg-[rgba(255,255,255,0.01)]" : ""
+                    }`}
+                  >
+                    {Object.entries(mapping).map(([field, colIdx]) => (
+                      <td key={`${rowIdx}-${field}`}
+                          className="px-2 py-2 text-[#e8e8ed] truncate max-w-[150px]">
+                        {row[colIdx] || "—"}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* Actions */}
+      <div className="flex items-center justify-between pt-4 gap-4 border-t border-[rgba(255,255,255,0.06)] pt-6">
+        <button onClick={onBack} className="glow-btn glow-btn--ghost">
+          Back
+        </button>
+        <button onClick={onConfirm} className="glow-btn glow-btn--primary glow-btn--success">
+          Confirm & Extract
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Main Component ───
+
+export default function ColumnMapperWizard({
+  data,
+  onConfirm: onConfirmProp,
+  onSkip: onSkipProp,
+}: ColumnMapperWizardProps) {
+  const fieldLabels = { ...DEFAULT_FIELD_LABELS, ...(data.field_labels || {}) };
+
+  // Wizard state
+  const [step, setStep] = useState(1);
+  const [mapping, setMapping] = useState<ColumnMapping>(() => ({ ...data.auto_mapping }));
+  const [activeField, setActiveField] = useState<string | null>(null);
+
+  // Step 1 handlers
+  const handleStep1Confirm = useCallback(() => {
+    setStep(2);
+  }, []);
+
+  const handleStep1Skip = useCallback(() => {
+    onSkipProp();
+  }, [onSkipProp]);
+
+  // Step 2 handlers
+  const handleFieldClick = useCallback((field: string | null) => {
+    if (field === null) {
+      setActiveField(null);
+    } else {
+      setActiveField((prev) => (prev === field ? null : field));
+    }
+  }, []);
+
+  const handleColumnClick = useCallback((colIdx: number) => {
     if (!activeField) return;
 
     setMapping((prev) => {
@@ -112,227 +616,79 @@ export default function ColumnMapperWizard({
       return next;
     });
     setActiveField(null);
-  };
+  }, [activeField]);
 
-  // Unassign a field
-  const unassignField = (field: string) => {
-    setMapping((prev) => {
-      const next = { ...prev };
-      delete next[field];
-      return next;
-    });
-  };
-
-  // Reset to auto-detected
-  const resetMapping = () => {
+  const handleReset = useCallback(() => {
     setMapping({ ...data.auto_mapping });
     setActiveField(null);
-  };
+  }, [data.auto_mapping]);
+
+  const handleStep2Confirm = useCallback(() => {
+    setStep(3);
+  }, []);
+
+  const handleStep2Back = useCallback(() => {
+    setStep(1);
+  }, []);
+
+  const handleStep2Skip = useCallback(() => {
+    onSkipProp();
+  }, [onSkipProp]);
+
+  // Step 3 handlers
+  const handleStep3Confirm = useCallback(() => {
+    onConfirmProp(mapping);
+  }, [mapping, onConfirmProp]);
+
+  const handleStep3Back = useCallback(() => {
+    setStep(2);
+  }, []);
 
   return (
-    <div className="space-y-4">
-      {/* Header */}
-      <div>
-        <h3 className="text-[#f5f5f7] text-lg font-semibold mb-1">
-          Column Mapping
-        </h3>
-        <p className="text-[#a1a1a6] text-sm">
-          Verify the auto-detected column assignments below. Click a field label,
-          then click a column header to reassign.
-          {data.page_index !== undefined && (
-            <span className="text-[#6e6e73]">
-              {" "}(Detected on page {data.page_index + 1} of {data.total_pages})
-            </span>
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div
+        className="panel corner-brackets relative w-full max-w-6xl max-h-[90vh] overflow-y-auto p-8 md:p-10"
+        style={{
+          backgroundColor: "rgba(12,12,16,0.98)",
+          backdropFilter: "blur(30px)",
+        }}
+      >
+        {/* Step indicator */}
+        <StepIndicator currentStep={step - 1} totalSteps={3} />
+
+        {/* Step content */}
+        <div className="relative">
+          {step === 1 && (
+            <Step1IdentifyTable
+              data={data}
+              onConfirm={handleStep1Confirm}
+              onSkip={handleStep1Skip}
+            />
           )}
-        </p>
-      </div>
-
-      {/* Low confidence warning */}
-      {data.low_confidence && (
-        <div className="px-4 py-3 bg-[rgba(255,159,10,0.08)] border border-[rgba(255,159,10,0.3)] rounded-lg">
-          <p className="text-[13px] text-[#ff9f0a] font-medium">
-            Low confidence detection
-          </p>
-          <p className="text-[12px] text-[#a1a1a6] mt-1">
-            The auto-detected mapping may be incorrect. Please verify each column
-            assignment carefully, or click &quot;Skip&quot; to let the system auto-detect
-            per chunk.
-          </p>
+          {step === 2 && (
+            <Step2MapColumns
+              data={data}
+              mapping={mapping}
+              activeField={activeField}
+              onFieldClick={handleFieldClick}
+              onColumnClick={handleColumnClick}
+              onReset={handleReset}
+              onConfirm={handleStep2Confirm}
+              onBack={handleStep2Back}
+              onSkip={handleStep2Skip}
+              fieldLabels={fieldLabels}
+            />
+          )}
+          {step === 3 && (
+            <Step3Confirm
+              data={data}
+              mapping={mapping}
+              onConfirm={handleStep3Confirm}
+              onBack={handleStep3Back}
+              fieldLabels={fieldLabels}
+            />
+          )}
         </div>
-      )}
-
-      {/* Field assignment panel */}
-      <div className="flex flex-wrap gap-2">
-        {ALL_FIELDS.map((field) => {
-          const isMapped = field in mapping;
-          const isActive = activeField === field;
-          const isRequired = REQUIRED_FIELDS.includes(field);
-          const confidence = data.confidence_scores[field];
-          const color = FIELD_COLORS[field] || "#a1a1a6";
-
-          return (
-            <button
-              key={field}
-              onClick={() => setActiveField(isActive ? null : field)}
-              className={`relative px-3 py-1.5 rounded-lg text-xs font-medium transition-all border ${
-                isActive
-                  ? "ring-2 ring-offset-1 ring-offset-black"
-                  : ""
-              }`}
-              style={{
-                borderColor: isMapped ? color : "rgba(255,255,255,0.08)",
-                backgroundColor: isMapped
-                  ? `${color}15`
-                  : isActive
-                  ? "rgba(255,255,255,0.06)"
-                  : "rgba(255,255,255,0.02)",
-                color: isMapped ? color : "#6e6e73",
-                ...(isActive ? { ringColor: color } : {}),
-              }}
-            >
-              {fieldLabels[field]}
-              {isRequired && !isMapped && (
-                <span className="text-[#ff453a] ml-1">*</span>
-              )}
-              {isMapped && (
-                <span className="ml-1.5 opacity-60">
-                  → Col {mapping[field] + 1}
-                </span>
-              )}
-              {confidence !== undefined && isMapped && (
-                <span className="ml-1 opacity-40">
-                  ({Math.round(confidence * 100)}%)
-                </span>
-              )}
-              {isMapped && (
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    unassignField(field);
-                  }}
-                  className="ml-1.5 opacity-40 hover:opacity-100"
-                  title="Unassign"
-                >
-                  ×
-                </button>
-              )}
-            </button>
-          );
-        })}
-      </div>
-
-      {activeField && (
-        <p className="text-sm text-[#0a84ff] animate-pulse">
-          Click a column header below to assign it as{" "}
-          <strong>{fieldLabels[activeField]}</strong>
-        </p>
-      )}
-
-      {/* Sample table */}
-      <div className="overflow-x-auto rounded-xl border border-white/[0.08]">
-        <table className="w-full text-sm">
-          <thead>
-            <tr>
-              {data.headers.map((header, colIdx) => {
-                const assignedField = reverseMapping[colIdx];
-                const color = assignedField
-                  ? FIELD_COLORS[assignedField] || "#a1a1a6"
-                  : undefined;
-
-                return (
-                  <th
-                    key={colIdx}
-                    onClick={() => activeField && assignColumn(colIdx)}
-                    className={`px-3 py-2 text-left font-medium whitespace-nowrap transition-all ${
-                      activeField
-                        ? "cursor-pointer hover:bg-white/[0.08]"
-                        : ""
-                    }`}
-                    style={{
-                      backgroundColor: color
-                        ? `${color}15`
-                        : "rgba(255,255,255,0.02)",
-                      borderBottom: color
-                        ? `2px solid ${color}`
-                        : "1px solid rgba(255,255,255,0.06)",
-                      color: color || "#a1a1a6",
-                    }}
-                  >
-                    <div className="flex flex-col gap-0.5">
-                      <span className="text-[10px] uppercase tracking-wider opacity-50">
-                        Col {colIdx + 1}
-                      </span>
-                      <span>{header || "(empty)"}</span>
-                      {assignedField && (
-                        <span
-                          className="text-[10px] font-bold uppercase tracking-wider"
-                          style={{ color }}
-                        >
-                          → {fieldLabels[assignedField]}
-                        </span>
-                      )}
-                    </div>
-                  </th>
-                );
-              })}
-            </tr>
-          </thead>
-          <tbody>
-            {data.sample_rows.map((row, rowIdx) => (
-              <tr
-                key={rowIdx}
-                className="border-t border-white/[0.04] hover:bg-white/[0.02]"
-              >
-                {data.headers.map((_, colIdx) => {
-                  const val = row[colIdx] || "";
-                  const assignedField = reverseMapping[colIdx];
-                  const color = assignedField
-                    ? FIELD_COLORS[assignedField]
-                    : undefined;
-
-                  return (
-                    <td
-                      key={colIdx}
-                      className="px-3 py-1.5 text-[#f5f5f7] whitespace-nowrap max-w-[200px] truncate"
-                      style={
-                        color
-                          ? { backgroundColor: `${color}08` }
-                          : undefined
-                      }
-                    >
-                      {val}
-                    </td>
-                  );
-                })}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Actions */}
-      <div className="flex items-center justify-between pt-2">
-        <div className="flex gap-2">
-          <button
-            onClick={resetMapping}
-            className="text-xs px-3 py-1.5 rounded-lg bg-white/[0.04] border border-white/[0.08] text-[#a1a1a6] hover:bg-white/[0.08] transition-colors"
-          >
-            Reset to Auto-Detect
-          </button>
-          <button
-            onClick={onSkip}
-            className="text-xs px-3 py-1.5 rounded-lg bg-white/[0.04] border border-white/[0.08] text-[#6e6e73] hover:bg-white/[0.08] transition-colors"
-          >
-            Skip (use auto-detect)
-          </button>
-        </div>
-        <button
-          onClick={() => onConfirm(mapping)}
-          disabled={!canConfirm}
-          className="px-5 py-2 rounded-lg bg-[#30d158] hover:bg-[#26c14a] text-white font-semibold text-sm transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-        >
-          Confirm Mapping
-        </button>
       </div>
     </div>
   );

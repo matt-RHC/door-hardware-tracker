@@ -334,6 +334,391 @@ body::after {
 }
 
 /* ═══════════════════════════════════════════════
+   CEL-SHADED / COMIC-BOOK INK-EDGE SYSTEM
+   ═══════════════════════════════════════════════ */
+
+/* ── Cel-Shaded Borders (Core Borderlands Look) ── */
+/* Thick, irregular hand-drawn-looking outlines */
+.cel-border {
+  box-shadow:
+    2px 2px 0 rgba(0,0,0,0.8),
+    -1px -1px 0 rgba(0,0,0,0.4),
+    1px -1px 0 rgba(0,0,0,0.4),
+    -1px 1px 0 rgba(0,0,0,0.4);
+}
+
+.cel-border-heavy {
+  box-shadow:
+    3px 3px 0 rgba(0,0,0,0.9),
+    -2px -2px 0 rgba(0,0,0,0.5),
+    2px -2px 0 rgba(0,0,0,0.5),
+    -2px 2px 0 rgba(0,0,0,0.5);
+}
+
+/* Cel border + color glow combo */
+.cel-border-glow {
+  box-shadow:
+    2px 2px 0 rgba(0,0,0,0.8),
+    -1px -1px 0 rgba(0,0,0,0.4),
+    1px -1px 0 rgba(0,0,0,0.4),
+    -1px 1px 0 rgba(0,0,0,0.4),
+    0 0 12px rgba(90,200,250,0.2);
+}
+
+.cel-border-glow--green {
+  box-shadow:
+    2px 2px 0 rgba(0,0,0,0.8),
+    -1px -1px 0 rgba(0,0,0,0.4),
+    1px -1px 0 rgba(0,0,0,0.4),
+    -1px 1px 0 rgba(0,0,0,0.4),
+    0 0 12px rgba(48,209,88,0.2);
+}
+
+.cel-border-glow--orange {
+  box-shadow:
+    2px 2px 0 rgba(0,0,0,0.8),
+    -1px -1px 0 rgba(0,0,0,0.4),
+    1px -1px 0 rgba(0,0,0,0.4),
+    -1px 1px 0 rgba(0,0,0,0.4),
+    0 0 12px rgba(255,159,10,0.2);
+}
+
+.cel-border-glow--blue {
+  box-shadow:
+    2px 2px 0 rgba(0,0,0,0.8),
+    -1px -1px 0 rgba(0,0,0,0.4),
+    1px -1px 0 rgba(0,0,0,0.4),
+    -1px 1px 0 rgba(0,0,0,0.4),
+    0 0 12px rgba(10,132,255,0.2);
+}
+
+.cel-border-glow--purple {
+  box-shadow:
+    2px 2px 0 rgba(0,0,0,0.8),
+    -1px -1px 0 rgba(0,0,0,0.4),
+    1px -1px 0 rgba(0,0,0,0.4),
+    -1px 1px 0 rgba(0,0,0,0.4),
+    0 0 12px rgba(191,90,242,0.2);
+}
+
+.cel-border-glow--red {
+  box-shadow:
+    2px 2px 0 rgba(0,0,0,0.8),
+    -1px -1px 0 rgba(0,0,0,0.4),
+    1px -1px 0 rgba(0,0,0,0.4),
+    -1px 1px 0 rgba(0,0,0,0.4),
+    0 0 12px rgba(255,69,58,0.2);
+}
+
+/* ── Ink Texture / Hatching Overlays ── */
+/* Subtle crosshatch overlay for hand-drawn paper texture */
+.ink-texture {
+  background-image:
+    repeating-linear-gradient(
+      45deg,
+      transparent,
+      transparent 3px,
+      rgba(255,255,255,0.012) 3px,
+      rgba(255,255,255,0.012) 4px
+    );
+}
+
+/* More visible hatching for decorative accents */
+.ink-splash {
+  background-image:
+    repeating-linear-gradient(
+      45deg,
+      transparent,
+      transparent 2px,
+      rgba(255,255,255,0.03) 2px,
+      rgba(255,255,255,0.03) 3px
+    ),
+    repeating-linear-gradient(
+      -45deg,
+      transparent,
+      transparent 2px,
+      rgba(255,255,255,0.03) 2px,
+      rgba(255,255,255,0.03) 3px
+    );
+}
+
+/* ── Comic Panel Heading ── */
+/* Combines Orbitron font + cel-border + text-shadow for comic-book section titles */
+.comic-heading {
+  font-family: var(--font-display);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  text-shadow: 2px 2px 0 rgba(0,0,0,0.8), 0 0 10px rgba(90,200,250,0.3);
+  position: relative;
+  padding-bottom: 8px;
+}
+
+.comic-heading::after {
+  content: '';
+  position: absolute;
+  bottom: -4px;
+  left: 0;
+  width: 100%;
+  height: 3px;
+  background: linear-gradient(90deg, var(--cyan), transparent);
+  box-shadow: 0 0 8px rgba(90,200,250,0.3);
+}
+
+/* Color variants for comic headings */
+.comic-heading--green::after {
+  background: linear-gradient(90deg, var(--green), transparent);
+  box-shadow: 0 0 8px rgba(48,209,88,0.3);
+}
+
+.comic-heading--orange::after {
+  background: linear-gradient(90deg, var(--orange), transparent);
+  box-shadow: 0 0 8px rgba(255,159,10,0.3);
+}
+
+.comic-heading--blue::after {
+  background: linear-gradient(90deg, var(--blue), transparent);
+  box-shadow: 0 0 8px rgba(10,132,255,0.3);
+}
+
+.comic-heading--purple::after {
+  background: linear-gradient(90deg, var(--purple), transparent);
+  box-shadow: 0 0 8px rgba(191,90,242,0.3);
+}
+
+.comic-heading--red::after {
+  background: linear-gradient(90deg, var(--red), transparent);
+  box-shadow: 0 0 8px rgba(255,69,58,0.3);
+}
+
+/* ── Glow Card with Cel Shading ── */
+/* Extends .glow-card with cel-shaded borders */
+.glow-card-cel {
+  position: relative;
+  background: rgba(255,255,255,0.025);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-left: 3px solid var(--cyan);
+  border-radius: var(--radius);
+  transition: all 0.25s ease;
+  box-shadow:
+    2px 2px 0 rgba(0,0,0,0.6),
+    -1px -1px 0 rgba(0,0,0,0.3),
+    1px -1px 0 rgba(0,0,0,0.3),
+    -1px 1px 0 rgba(0,0,0,0.3);
+}
+
+.glow-card-cel:hover {
+  background: rgba(255,255,255,0.04);
+  border-color: rgba(90,200,250,0.3);
+  border-left-color: var(--cyan);
+  box-shadow:
+    2px 2px 0 rgba(0,0,0,0.8),
+    -1px -1px 0 rgba(0,0,0,0.4),
+    1px -1px 0 rgba(0,0,0,0.4),
+    -1px 1px 0 rgba(0,0,0,0.4),
+    var(--glow-sm) rgba(90,200,250,0.15),
+    inset 0 1px 0 rgba(255,255,255,0.04);
+}
+
+.glow-card-cel:active {
+  transform: scale(0.985);
+}
+
+/* Color variants for glow-card-cel */
+.glow-card-cel--green { border-left-color: var(--green); }
+.glow-card-cel--green:hover {
+  border-color: rgba(48,209,88,0.3);
+  border-left-color: var(--green);
+  box-shadow:
+    2px 2px 0 rgba(0,0,0,0.8),
+    -1px -1px 0 rgba(0,0,0,0.4),
+    1px -1px 0 rgba(0,0,0,0.4),
+    -1px 1px 0 rgba(0,0,0,0.4),
+    var(--glow-sm) rgba(48,209,88,0.15);
+}
+
+.glow-card-cel--orange { border-left-color: var(--orange); }
+.glow-card-cel--orange:hover {
+  border-color: rgba(255,159,10,0.3);
+  border-left-color: var(--orange);
+  box-shadow:
+    2px 2px 0 rgba(0,0,0,0.8),
+    -1px -1px 0 rgba(0,0,0,0.4),
+    1px -1px 0 rgba(0,0,0,0.4),
+    -1px 1px 0 rgba(0,0,0,0.4),
+    var(--glow-sm) rgba(255,159,10,0.15);
+}
+
+.glow-card-cel--blue { border-left-color: var(--blue); }
+.glow-card-cel--blue:hover {
+  border-color: rgba(10,132,255,0.3);
+  border-left-color: var(--blue);
+  box-shadow:
+    2px 2px 0 rgba(0,0,0,0.8),
+    -1px -1px 0 rgba(0,0,0,0.4),
+    1px -1px 0 rgba(0,0,0,0.4),
+    -1px 1px 0 rgba(0,0,0,0.4),
+    var(--glow-sm) rgba(10,132,255,0.15);
+}
+
+.glow-card-cel--purple { border-left-color: var(--purple); }
+.glow-card-cel--purple:hover {
+  border-color: rgba(191,90,242,0.3);
+  border-left-color: var(--purple);
+  box-shadow:
+    2px 2px 0 rgba(0,0,0,0.8),
+    -1px -1px 0 rgba(0,0,0,0.4),
+    1px -1px 0 rgba(0,0,0,0.4),
+    -1px 1px 0 rgba(0,0,0,0.4),
+    var(--glow-sm) rgba(191,90,242,0.15);
+}
+
+.glow-card-cel--red { border-left-color: var(--red); }
+.glow-card-cel--red:hover {
+  border-color: rgba(255,69,58,0.3);
+  border-left-color: var(--red);
+  box-shadow:
+    2px 2px 0 rgba(0,0,0,0.8),
+    -1px -1px 0 rgba(0,0,0,0.4),
+    1px -1px 0 rgba(0,0,0,0.4),
+    -1px 1px 0 rgba(0,0,0,0.4),
+    var(--glow-sm) rgba(255,69,58,0.15);
+}
+
+/* ── Sketch Reveal Animation ── */
+/* Makes a border or element look like it's being drawn */
+@keyframes sketch-draw {
+  0% { clip-path: inset(0 100% 0 0); }
+  100% { clip-path: inset(0 0 0 0); }
+}
+
+.sketch-reveal {
+  animation: sketch-draw 0.6s ease-out both;
+}
+
+/* ── Heavy Scanlines ── */
+/* Heavier scanline effect for specific panels */
+.heavy-scanlines::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 9999;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0,0,0,0.06) 2px,
+    rgba(0,0,0,0.06) 4px
+  );
+  mix-blend-mode: multiply;
+}
+
+/* ── Item Card (Borderlands Loot Inspection) ── */
+/* For hover tooltips that look like Borderlands item cards */
+.item-card {
+  background: linear-gradient(180deg, rgba(12,12,16,0.98), rgba(8,8,12,0.98));
+  border: 2px solid;
+  border-color: rgba(90,200,250,0.4);
+  border-radius: var(--radius-sm);
+  padding: 1rem;
+  position: relative;
+  box-shadow:
+    2px 2px 0 rgba(0,0,0,0.8),
+    -1px -1px 0 rgba(0,0,0,0.4),
+    1px -1px 0 rgba(0,0,0,0.4),
+    -1px 1px 0 rgba(0,0,0,0.4),
+    0 0 12px rgba(90,200,250,0.15);
+}
+
+/* Corner brackets for item cards */
+.item-card::before,
+.item-card::after {
+  content: '';
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  pointer-events: none;
+  border: 1.5px solid rgba(90,200,250,0.5);
+}
+
+.item-card::before {
+  top: -1px;
+  left: -1px;
+  border-right: none;
+  border-bottom: none;
+  border-radius: 2px 0 0 0;
+}
+
+.item-card::after {
+  bottom: -1px;
+  right: -1px;
+  border-left: none;
+  border-top: none;
+  border-radius: 0 0 0 2px;
+}
+
+/* Item rarity variants */
+.item-card--legendary {
+  border-color: rgba(255,159,10,0.5);
+  box-shadow:
+    2px 2px 0 rgba(0,0,0,0.8),
+    -1px -1px 0 rgba(0,0,0,0.4),
+    1px -1px 0 rgba(0,0,0,0.4),
+    -1px 1px 0 rgba(0,0,0,0.4),
+    0 0 12px rgba(255,159,10,0.2);
+}
+
+.item-card--legendary::before,
+.item-card--legendary::after {
+  border-color: rgba(255,159,10,0.5);
+}
+
+.item-card--epic {
+  border-color: rgba(191,90,242,0.4);
+  box-shadow:
+    2px 2px 0 rgba(0,0,0,0.8),
+    -1px -1px 0 rgba(0,0,0,0.4),
+    1px -1px 0 rgba(0,0,0,0.4),
+    -1px 1px 0 rgba(0,0,0,0.4),
+    0 0 12px rgba(191,90,242,0.15);
+}
+
+.item-card--epic::before,
+.item-card--epic::after {
+  border-color: rgba(191,90,242,0.5);
+}
+
+.item-card--rare {
+  border-color: rgba(10,132,255,0.4);
+  box-shadow:
+    2px 2px 0 rgba(0,0,0,0.8),
+    -1px -1px 0 rgba(0,0,0,0.4),
+    1px -1px 0 rgba(0,0,0,0.4),
+    -1px 1px 0 rgba(0,0,0,0.4),
+    0 0 12px rgba(10,132,255,0.15);
+}
+
+.item-card--rare::before,
+.item-card--rare::after {
+  border-color: rgba(10,132,255,0.5);
+}
+
+.item-card--common {
+  border-color: rgba(255,255,255,0.2);
+  box-shadow:
+    2px 2px 0 rgba(0,0,0,0.8),
+    -1px -1px 0 rgba(0,0,0,0.4),
+    1px -1px 0 rgba(0,0,0,0.4),
+    -1px 1px 0 rgba(0,0,0,0.4),
+    0 0 8px rgba(255,255,255,0.05);
+}
+
+.item-card--common::before,
+.item-card--common::after {
+  border-color: rgba(255,255,255,0.3);
+}
+
+/* ═══════════════════════════════════════════════
    ANIMATIONS
    ═══════════════════════════════════════════════ */
 

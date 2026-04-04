@@ -31,6 +31,14 @@
     "api/extract-tables.py": {
       "maxDuration": 60,
       "memory": 1024
+    },
+    "api/classify-pages.py": {
+      "maxDuration": 60,
+      "memory": 1024
+    },
+    "api/detect-mapping.py": {
+      "maxDuration": 60,
+      "memory": 1024
     }
   }
 }

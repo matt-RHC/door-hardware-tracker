@@ -3,6 +3,8 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import SoundToggle from "./SoundToggle";
+import { playClick } from "@/lib/sounds";
 
 export default function Navbar() {
   const [email, setEmail] = useState<string | null>(null);
@@ -28,8 +30,14 @@ export default function Navbar() {
   };
 
   const handleSignOut = async () => {
+    playClick();
     await supabase.auth.signOut();
     router.push("/");
+  };
+
+  const handleDashboardClick = () => {
+    playClick();
+    router.push("/dashboard");
   };
 
   return (
@@ -46,7 +54,7 @@ export default function Navbar() {
       <div className="max-w-7xl mx-auto px-4 py-3.5 flex justify-between items-center">
         {/* Brand */}
         <button
-          onClick={() => router.push("/dashboard")}
+          onClick={handleDashboardClick}
           className="flex items-center gap-2.5 group"
         >
           {/* Logo mark */}
@@ -80,6 +88,7 @@ export default function Navbar() {
 
         {/* User section */}
         <div className="flex items-center gap-3">
+          <SoundToggle />
           {!loading && email && (
             <>
               <span className="hidden sm:inline text-[12px] text-[#636366] tabular-nums">

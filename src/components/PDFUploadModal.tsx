@@ -577,20 +577,28 @@ interface ClassifyPagesResponse {
 /**
  * Call the page classifier to get smart chunk boundaries.
  * Returns null if classification fails (caller should fall back to fixed splitting).
+ * On error, logs are available in processLargePDF context where setStatus is accessible.
  */
-async function classifyPages(pdfBase64: string): Promise<ClassifyPagesResponse | null> {
+async function classifyPages(pdfBase64: string): Promise<{ fallback: boolean; data: ClassifyPagesResponse | null }> {
   try {
     const resp = await fetch("/api/classify-pages", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ pdfBase64 }),
     });
-    if (!resp.ok) return null;
+    if (!resp.ok) {
+      console.warn(`/api/classify-pages returned ${resp.status}, falling back to fixed chunking`);
+      return { fallback: true, data: null };
+    }
     const data: ClassifyPagesResponse = await resp.json();
-    if (!data.success || !data.chunks?.length) return null;
-    return data;
-  } catch {
-    return null;
+    if (!data.success || !data.chunks?.length) {
+      console.warn("classify-pages returned no valid chunks, falling back to fixed chunking");
+      return { fallback: true, data: null };
+    }
+    return { fallback: false, data };
+  } catch (err) {
+    console.warn("classifyPages exception, falling back to fixed chunking:", err);
+    return { fallback: true, data: null };
   }
 }
 
@@ -827,7 +835,9 @@ export default function PDFUploadModal({
       new Uint8Array(buffer).reduce((data, byte) => data + String.fromCharCode(byte), "")
     );
 
-    const classification = await classifyPages(fullBase64);
+    const classificationResult = await classifyPages(fullBase64);
+    const classification = classificationResult.data;
+    let usedFallback = classificationResult.fallback;
 
     let chunks: string[];
     let chunkLabels: string[] = []; // human-readable labels for each chunk
@@ -880,15 +890,19 @@ export default function PDFUploadModal({
                 setLoading(false);
                 return; // Will resume when user confirms mapping
               }
+            } else {
+              console.warn(`/api/detect-mapping returned ${detectResp.status}, will auto-detect columns per chunk`);
+              setStatus("Column detection unavailable — proceeding with auto-detect per chunk");
             }
           } catch (err) {
             console.warn("Column detection failed, proceeding with auto-detect:", err);
+            setStatus("Column detection unavailable — proceeding with auto-detect per chunk");
           }
         }
       }
     } else {
       // Fallback: fixed splitting (legacy behavior)
-      setStatus(`Splitting ${pageCount}-page PDF into chunks...`);
+      setStatus(`Smart page classification unavailable (endpoint issue or invalid PDF), using fixed chunking instead...`);
       setProgress(3);
       chunks = await splitPDFFixed(buffer, FALLBACK_PAGES_PER_CHUNK);
       chunkLabels = chunks.map((_, i) => `pages ${i * FALLBACK_PAGES_PER_CHUNK + 1}-${Math.min((i + 1) * FALLBACK_PAGES_PER_CHUNK, pageCount)}`);
@@ -986,7 +1000,15 @@ export default function PDFUploadModal({
     const mergedDoors = mergeDoors(allDoors);
 
     if (mergedDoors.length === 0 && allFlaggedDoors.length === 0) {
-      throw new Error("No doors found across all chunks. The PDF may not contain a door schedule.");
+      // Check if the issue is likely an endpoint problem vs a non-door-schedule PDF
+      const allChunksEmpty = allDoors.length === 0 && allHardwareSets.length === 0;
+      let errorMsg = "No doors found across all chunks. The PDF may not contain a door schedule.";
+
+      if (allChunksEmpty && usedFallback) {
+        errorMsg += " This may be caused by column detection issues. Try re-uploading and carefully verifying the column mapping.";
+      }
+
+      throw new Error(errorMsg);
     }
 
     if (mergedDoors.length === 0 && allFlaggedDoors.length > 0) {

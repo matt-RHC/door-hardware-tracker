@@ -10,6 +10,7 @@ import IssueReportModal from "@/components/IssueReportModal";
 import { createClient } from "@/lib/supabase/client";
 import { initDB, cacheOpening, getCachedOpening } from "@/lib/offline/db";
 import { Opening, HardwareItem, ChecklistProgress, Attachment } from "@/lib/types/database";
+import { playClick, playSuccess, playToggle } from "@/lib/sounds";
 
 interface HardwareItemWithProgress extends HardwareItem {
   progress?: ChecklistProgress;
@@ -152,6 +153,22 @@ export default function DoorDetailPage() {
       );
 
       if (!response.ok) throw new Error("Failed to update step");
+
+      // Fetch and check if the entire stage is now complete
+      const updatedData = await fetch(`/api/openings/${doorId}`).then(r => r.json());
+      const item = updatedData?.hardware_items?.find((i: any) => i.id === itemId);
+
+      if (item) {
+        // Check if all workflow steps for this item are now complete
+        const allStepsComplete = ['bench_staged', 'bench_inspect', 'field_staged', 'field_inspect'].every(
+          s => !(item.progress as any)?.[s] === false
+        );
+
+        if (allStepsComplete && item.progress?.qa_qc) {
+          playSuccess();
+        }
+      }
+
       await fetchOpeningData();
     } catch (err) {
       console.error("Error toggling step:", err);
@@ -672,14 +689,14 @@ export default function DoorDetailPage() {
 
         {/* Hero Card */}
         {!editingOpening && (
-          <div className="mb-6 bg-white/[0.04] border border-white/[0.08] rounded-xl p-4">
-            <h1 className="text-[34px] md:text-[42px] font-bold tracking-tight text-[#f5f5f7] mb-2">
+          <div className="mb-6 bg-white/[0.04] border border-white/[0.08] rounded-xl p-4 ink-texture">
+            <h1 className="text-[34px] md:text-[42px] font-bold tracking-tight text-[#f5f5f7] mb-2 comic-heading">
               {opening.door_number}
             </h1>
 
             {opening.hw_set && (
               <div className="mb-3 flex items-center gap-2">
-                <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-[rgba(48,209,88,0.15)] border border-[#30d158] text-[12px] font-medium text-[#30d158]">
+                <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-[rgba(48,209,88,0.15)] border border-[#30d158] text-[12px] font-medium text-[#30d158] cel-border">
                   {opening.hw_set}
                   {opening.hw_heading && ` — ${opening.hw_heading}`}
                 </span>
@@ -694,17 +711,17 @@ export default function DoorDetailPage() {
 
             <div className="flex flex-wrap gap-2">
               {opening.door_type && (
-                <span className="text-[11px] font-medium uppercase text-[#6e6e73] bg-white/[0.04] border border-white/[0.08] px-2 py-1 rounded-full">
+                <span className="text-[11px] font-medium uppercase text-[#6e6e73] bg-white/[0.04] border border-white/[0.08] px-2 py-1 rounded-full cel-border">
                   {opening.door_type}
                 </span>
               )}
               {opening.fire_rating && (
-                <span className="text-[11px] font-medium uppercase text-[#ff453a] bg-[rgba(255,69,58,0.15)] border border-[#ff453a] px-2 py-1 rounded-full">
+                <span className="text-[11px] font-medium uppercase text-[#ff453a] bg-[rgba(255,69,58,0.15)] border border-[#ff453a] px-2 py-1 rounded-full cel-border">
                   {opening.fire_rating}
                 </span>
               )}
               {opening.hand && (
-                <span className="text-[11px] font-medium uppercase text-[#6e6e73] bg-white/[0.04] border border-white/[0.08] px-2 py-1 rounded-full">
+                <span className="text-[11px] font-medium uppercase text-[#6e6e73] bg-white/[0.04] border border-white/[0.08] px-2 py-1 rounded-full cel-border">
                   {opening.hand}
                 </span>
               )}
@@ -738,7 +755,7 @@ export default function DoorDetailPage() {
                 onClick={() => setActiveTab(tab)}
                 className={`flex-1 px-3 py-2 rounded-lg text-[12px] font-medium uppercase transition-colors ${
                   activeTab === tab
-                    ? 'bg-white/[0.07] text-[#f5f5f7]'
+                    ? 'bg-white/[0.07] text-[#f5f5f7] cel-border border border-white/[0.15]'
                     : 'text-[#6e6e73] hover:text-[#a1a1a6]'
                 }`}
               >
@@ -757,7 +774,7 @@ export default function DoorDetailPage() {
               opening.hardware_items.map((item) => (
                 <div
                   key={item.id}
-                  className={`bg-white/[0.04] border rounded-xl p-3.5 transition-colors hover:bg-white/[0.07] hover:border-white/[0.14] ${
+                  className={`bg-white/[0.04] border rounded-xl p-3.5 transition-colors hover:bg-white/[0.07] hover:border-white/[0.14] cel-border ${
                     item.install_type === 'bench'
                       ? 'border-l-[3px] border-l-[#bf5af2] border-white/[0.08]'
                       : item.install_type === 'field'
@@ -871,7 +888,7 @@ export default function DoorDetailPage() {
                         <h3 className="text-[15px] font-medium text-[#f5f5f7]">{item.name}</h3>
                         <div className="flex items-center gap-2">
                           {item.qty > 0 && (
-                            <span className="text-[12px] font-medium text-[#a1a1a6] bg-white/[0.04] px-2 py-1 rounded-lg">
+                            <span className="text-[12px] font-medium text-[#a1a1a6] bg-white/[0.04] px-2 py-1 rounded-lg cel-border border border-white/[0.08]">
                               Qty {item.qty}
                             </span>
                           )}
@@ -926,7 +943,10 @@ export default function DoorDetailPage() {
                           return (
                             <div key={step} className="flex items-center gap-2">
                               <button
-                                onClick={() => handleStepToggle(item.id, step, isActive)}
+                                onClick={() => {
+                                  playToggle();
+                                  handleStepToggle(item.id, step, isActive);
+                                }}
                                 className="flex items-center justify-center w-7 h-7 rounded-full transition-colors"
                                 style={{
                                   background: isActive ? '#30d158' : 'transparent',
@@ -1209,7 +1229,7 @@ export default function DoorDetailPage() {
         <IssueReportModal
           projectId={projectId}
           doorNumber={issueModal.doorNumber}
-          hardwareItem={issueModal.hardwareItem}
+          hardwareItemId={issueModal.hardwareItem}
           onClose={() => setIssueModal(null)}
           onCreated={() => setIssueModal(null)}
         />
