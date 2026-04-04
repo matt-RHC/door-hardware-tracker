@@ -788,6 +788,7 @@ export default function PDFUploadModal({
   // Column mapper: shown between classification and extraction
   const [mapperData, setMapperData] = useState<DetectMappingResponse | null>(null);
   const [confirmedMapping, setConfirmedMapping] = useState<ColumnMapping | null>(null);
+  const [mappingSummary, setMappingSummary] = useState<string | null>(null);
   const mapperDoneRef = useRef(false); // true after user confirms or skips
   // Store buffer/pageCount/parseOnly so we can resume after mapping confirmation
   const pendingUploadRef = useRef<{
@@ -999,11 +1000,11 @@ export default function PDFUploadModal({
       );
       setProgress(3);
 
-      const chunkPageSets = smartChunks.map((c) => c.pages);
+      const chunkPageSets = smartChunks.map((c: SmartChunk) => c.pages);
       chunks = await splitPDFByPages(buffer, chunkPageSets, refPages);
 
       // Build labels for progress display
-      chunkLabels = smartChunks.map((c) => {
+      chunkLabels = smartChunks.map((c: SmartChunk) => {
         const types = c.types.join("+");
         const sets = c.hw_set_ids.length > 0 ? ` (${c.hw_set_ids.join(", ")})` : "";
         return `${types}${sets} [pp ${c.start_page + 1}-${c.end_page + 1}]`;
@@ -1013,7 +1014,7 @@ export default function PDFUploadModal({
       // If user hasn't seen the mapper yet, detect columns from first door_schedule
       // chunk and pause for user confirmation
       if (!mapperDoneRef.current) {
-        const doorChunkIdx = smartChunks.findIndex((c) =>
+        const doorChunkIdx = smartChunks.findIndex((c: SmartChunk) =>
           c.types.includes("door_schedule")
         );
         const sampleChunkBase64 = chunks[doorChunkIdx >= 0 ? doorChunkIdx : 0];
@@ -1116,7 +1117,7 @@ export default function PDFUploadModal({
         const result: ChunkResult = await resp.json();
         allHardwareSets.push(...result.hardwareSets);
         allDoors.push(...result.doors);
-        if (result.flaggedDoors) allFlaggedDoors.push(...(result.flaggedDoors ?? []));
+        allFlaggedDoors.push(...(result.flaggedDoors ?? []));
 
         for (const set of result.hardwareSets) {
           if (!knownSetIds.includes(set.set_id)) knownSetIds.push(set.set_id);
@@ -1292,6 +1293,20 @@ export default function PDFUploadModal({
             data={mapperData}
             onConfirm={(mapping) => {
               setConfirmedMapping(mapping);
+              // Build human-readable summary of confirmed column mapping
+              const headers = mapperData?.headers ?? [];
+              const FIELD_LABELS: Record<string, string> = {
+                door_number: "Door #", hw_set: "HW Set", hw_heading: "Heading",
+                location: "Location", door_type: "Door Type", frame_type: "Frame Type",
+                fire_rating: "Fire Rating", hand: "Hand",
+              };
+              const parts = Object.entries(mapping)
+                .map(([field, colIdx]) => {
+                  const label = FIELD_LABELS[field] ?? field;
+                  const header = headers[colIdx] ?? `Col ${colIdx + 1}`;
+                  return `${label} \u2190 "${header}"`;
+                });
+              setMappingSummary(parts.length > 0 ? parts.join(" \u00b7 ") : null);
               setMapperData(null);
               mapperDoneRef.current = true;
               // Resume the upload with confirmed mapping
@@ -1307,6 +1322,7 @@ export default function PDFUploadModal({
             }}
             onSkip={() => {
               setConfirmedMapping(null);
+              setMappingSummary(null);
               setMapperData(null);
               mapperDoneRef.current = true;
               // Resume without confirmed mapping (auto-detect per chunk)
@@ -1382,6 +1398,12 @@ export default function PDFUploadModal({
                 }}
               />
             </div>
+            {mappingSummary && (
+              <p className="mt-2 text-xs text-[#6e6e73] leading-relaxed">
+                <span className="text-[#a1a1a6] font-medium">Column mapping:</span>{" "}
+                {mappingSummary}
+              </p>
+            )}
           </div>
         )}
 
