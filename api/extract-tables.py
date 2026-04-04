@@ -985,16 +985,81 @@ def count_heading_doors(page_text: str) -> tuple[int, int]:
     return (opening_count, leaf_count)
 
 
+# Strict pattern for splitting: only "Heading #X" at start of line.
+# The broader HW_SET_HEADING_PATTERN also matches "Set X" / "Hardware Set X"
+# inside item descriptions, which causes false splits.
+_HEADING_LINE_PATTERN = re.compile(
+    r"(?i)^heading\s+#([A-Z0-9][A-Z0-9.\-:]*)"
+)
+
+
+def _split_page_at_headings(page_text: str) -> list[str]:
+    """Split page text into sections, one per heading.
+
+    Uses strict "Heading #X" pattern (not the broader HW_SET_HEADING_PATTERN)
+    to avoid false splits on item lines containing "Set" or model numbers.
+
+    Returns a list of text sections. Each starts with a Heading # line
+    and contains all text up to (but not including) the next heading.
+    """
+    lines = page_text.split("\n")
+    heading_lines = []
+    for i, line in enumerate(lines):
+        if _HEADING_LINE_PATTERN.match(line.strip()):
+            heading_lines.append(i)
+
+    if len(heading_lines) <= 1:
+        return [page_text]
+
+    sections = []
+    for idx, start in enumerate(heading_lines):
+        end = heading_lines[idx + 1] if idx + 1 < len(heading_lines) else len(lines)
+        sections.append("\n".join(lines[start:end]))
+    return sections
+
+
 def extract_hardware_sets_from_page(page, page_text: str) -> list[HardwareSetDef]:
     """
     Extract hardware set definitions from a single page using text-alignment
     table detection (for transparent/invisible grid lines).
+
+    For pages with multiple headings, splits at heading boundaries and
+    extracts each set independently via text-line parsing.
     """
     sets: list[HardwareSetDef] = []
 
     heading_id, generic_set_id, heading = parse_hw_set_id_from_text(page_text)
     if not heading_id:
         return sets
+
+    # Check for multiple headings on this page
+    sections = _split_page_at_headings(page_text)
+
+    if len(sections) > 1:
+        # Multi-heading page: extract each section independently via text parsing
+        logger.info(
+            f"Multi-heading page detected ({len(sections)} headings), "
+            f"splitting for independent extraction"
+        )
+        for section_text in sections:
+            sec_id, sec_generic, sec_heading = parse_hw_set_id_from_text(section_text)
+            if not sec_id:
+                continue
+            sec_door_count, sec_leaf_count = count_heading_doors(section_text)
+            sec_items = extract_hw_items_from_text(section_text)
+            if sec_items:
+                sec_items = deduplicate_hardware_items(sec_items)
+                sets.append(HardwareSetDef(
+                    set_id=sec_id,
+                    generic_set_id=sec_generic,
+                    heading=sec_heading,
+                    heading_door_count=sec_door_count,
+                    heading_leaf_count=sec_leaf_count,
+                    items=sec_items,
+                ))
+        return sets
+
+    # Single heading: use full table-based extraction (richer column parsing)
 
     # Count doors from the heading block (e.g., "1 Pair Doors #1.01.B.03A")
     heading_door_count, heading_leaf_count = count_heading_doors(page_text)
