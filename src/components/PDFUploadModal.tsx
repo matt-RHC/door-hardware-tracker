@@ -482,29 +482,65 @@ export default function PDFUploadModal({
     const knownSetIds: string[] = [];
 
     for (let i = 0; i < totalChunks; i++) {
-      const chunkPct = Math.round(5 + (i / totalChunks) * 75);
+      const chunkStartPct = Math.round(5 + (i / totalChunks) * 75);
+      const chunkEndPct = Math.round(5 + ((i + 1) / totalChunks) * 75);
+
       setStatus(`Processing chunk ${i + 1} of ${totalChunks}...`);
-      setProgress(chunkPct);
+      setProgress(chunkStartPct);
 
-      const resp = await fetch("/api/parse-pdf/chunk", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chunkBase64: chunks[i], chunkIndex: i, totalChunks, knownSetIds }),
-      });
+      // Simulate smooth progress while waiting for the API call.
+      // Ticks up gradually toward the chunk's end %, but never quite reaches it
+      // so the snap to real progress on completion feels natural.
+      const progressCeiling = chunkEndPct - 2; // leave room for snap
+      let simPct = chunkStartPct;
+      const simTimer = setInterval(() => {
+        const remaining = progressCeiling - simPct;
+        // Move ~8% of remaining distance each tick (decelerating curve)
+        if (remaining > 1) {
+          simPct = Math.round(simPct + Math.max(0.5, remaining * 0.08));
+          setProgress(simPct);
+        }
+      }, 1500);
 
-      if (!resp.ok) {
-        const errBody = await resp.json().catch(() => ({}));
-        throw new Error(errBody.error || `Chunk ${i + 1} failed (${resp.status})`);
+      // Phase labels to keep the status text informative during long waits
+      const phaseTimer = setTimeout(() => {
+        setStatus(`Chunk ${i + 1}/${totalChunks}: Extracting hardware sets...`);
+      }, 15000);
+      const phaseTimer2 = setTimeout(() => {
+        setStatus(`Chunk ${i + 1}/${totalChunks}: Reading door schedule...`);
+      }, 45000);
+      const phaseTimer3 = setTimeout(() => {
+        setStatus(`Chunk ${i + 1}/${totalChunks}: Validating extraction...`);
+      }, 90000);
+
+      try {
+        const resp = await fetch("/api/parse-pdf/chunk", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ chunkBase64: chunks[i], chunkIndex: i, totalChunks, knownSetIds }),
+        });
+
+        if (!resp.ok) {
+          const errBody = await resp.json().catch(() => ({}));
+          throw new Error(errBody.error || `Chunk ${i + 1} failed (${resp.status})`);
+        }
+
+        const result: ChunkResult = await resp.json();
+        allHardwareSets.push(...result.hardwareSets);
+        allDoors.push(...result.doors);
+
+        for (const set of result.hardwareSets) {
+          if (!knownSetIds.includes(set.set_id)) knownSetIds.push(set.set_id);
+        }
+      } finally {
+        clearInterval(simTimer);
+        clearTimeout(phaseTimer);
+        clearTimeout(phaseTimer2);
+        clearTimeout(phaseTimer3);
       }
 
-      const result: ChunkResult = await resp.json();
-      allHardwareSets.push(...result.hardwareSets);
-      allDoors.push(...result.doors);
-
-      for (const set of result.hardwareSets) {
-        if (!knownSetIds.includes(set.set_id)) knownSetIds.push(set.set_id);
-      }
-
+      // Snap to real completion % for this chunk
+      setProgress(chunkEndPct);
       const setsSoFar = new Set(allHardwareSets.map((s) => s.set_id)).size;
       setStatus(`Chunk ${i + 1}/${totalChunks} done. ${setsSoFar} sets, ${allDoors.length} doors so far.`);
     }
@@ -583,11 +619,12 @@ export default function PDFUploadModal({
 
     setLoading(true);
     setError(null);
-    setProgress(0);
+    setProgress(1);
     setStatus("Reading PDF...");
 
     try {
       const buffer = await file.arrayBuffer();
+      setProgress(2);
 
       // Check page count
       let pageCount = 0;
@@ -597,10 +634,12 @@ export default function PDFUploadModal({
       } catch {
         pageCount = 0;
       }
+      setProgress(3);
 
-      // Check if project has existing openings â wizard mode
+      // Check if project has existing openings
       setStatus("Checking existing data...");
       const hasExisting = await checkExistingOpenings();
+      setProgress(4);
 
       if (hasExisting) {
         // âââ WIZARD MODE: parse only (chunked), then show wizard âââ
