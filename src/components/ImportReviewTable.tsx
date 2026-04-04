@@ -2,7 +2,7 @@
 
 import { useState, useCallback, useRef, useEffect } from "react";
 
-/* --- Types (shared with PDFUploadModal) --- */
+/* ─── Types (shared with PDFUploadModal) ─── */
 interface HardwareItem {
   qty: number;
   name: string;
@@ -27,7 +27,7 @@ interface DoorEntry {
   hand: string;
 }
 
-/* --- Editable Cell --- */
+/* ─── Editable Cell ─── */
 function EditableCell({
   value,
   onChange,
@@ -87,7 +87,7 @@ function EditableCell({
   );
 }
 
-/* --- Main Component --- */
+/* ─── Main Component ─── */
 interface ImportReviewTableProps {
   projectId: string;
   doors: DoorEntry[];
@@ -108,6 +108,25 @@ export default function ImportReviewTable({
   const [error, setError] = useState<string | null>(null);
   const [showSets, setShowSets] = useState(false);
   const [deletedRows, setDeletedRows] = useState<Set<number>>(new Set());
+  const [byOthersRows, setByOthersRows] = useState<Set<number>>(new Set());
+
+  // Auto-detect likely "By Others" candidates: N/A hw_set, OH/Gate door types
+  const isByOthersCandidate = useCallback((door: DoorEntry): boolean => {
+    const hwSet = door.hw_set?.trim().toUpperCase();
+    const doorType = door.door_type?.trim().toUpperCase();
+    return (
+      hwSet === "N/A" ||
+      hwSet === "NA" ||
+      hwSet === "BY OTHERS" ||
+      hwSet === "" ||
+      doorType === "OH" ||
+      doorType === "OVERHEAD" ||
+      doorType === "GATE" ||
+      doorType === "ROLL-UP" ||
+      doorType === "ROLLUP" ||
+      doorType === "COILING"
+    );
+  }, []);
 
   // Cross-validation warnings
   const knownSetIds = new Set(sets.map((s) => s.set_id));
@@ -150,6 +169,41 @@ export default function ImportReviewTable({
       else next.add(idx);
       return next;
     });
+    // Clear from byOthers if marking as deleted
+    setByOthersRows((prev) => {
+      const next = new Set(prev);
+      next.delete(idx);
+      return next;
+    });
+  };
+
+  const toggleByOthers = (idx: number) => {
+    setByOthersRows((prev) => {
+      const next = new Set(prev);
+      if (next.has(idx)) next.delete(idx);
+      else next.add(idx);
+      return next;
+    });
+    // Clear from deleted if marking as byOthers
+    setDeletedRows((prev) => {
+      const next = new Set(prev);
+      next.delete(idx);
+      return next;
+    });
+  };
+
+  const markAllSuggestedByOthers = () => {
+    const suggested = new Set(byOthersRows);
+    doors.forEach((door, idx) => {
+      if (!deletedRows.has(idx) && isByOthersCandidate(door)) {
+        suggested.add(idx);
+      }
+    });
+    setByOthersRows(suggested);
+  };
+
+  const clearAllByOthers = () => {
+    setByOthersRows(new Set());
   };
 
   const addRow = () => {
@@ -171,13 +225,16 @@ export default function ImportReviewTable({
   const referencedSets = new Set(doors.filter((_, i) => !deletedRows.has(i)).map((d) => d.hw_set));
   const orphanedSets = sets.filter((s) => !referencedSets.has(s.set_id));
 
-  const activeDoors = doors.filter((_, i) => !deletedRows.has(i));
+  const activeDoors = doors.filter((_, i) => !deletedRows.has(i) && !byOthersRows.has(i));
+  const byOthersCount = byOthersRows.size;
+  const suggestedByOthersCount = doors.filter((d, i) => !deletedRows.has(i) && !byOthersRows.has(i) && isByOthersCandidate(d)).length;
   const warningCount = doors.reduce((count, d, i) => {
     return count + Object.keys(getWarnings(d, i)).length;
   }, 0);
 
   const handleConfirmAndSave = async () => {
-    const finalDoors = doors.filter((_, i) => !deletedRows.has(i));
+    // Filter out deleted and "by others" rows
+    const finalDoors = doors.filter((_, i) => !deletedRows.has(i) && !byOthersRows.has(i));
     if (finalDoors.length === 0) {
       setError("Cannot save with zero openings. Add at least one door.");
       return;
@@ -205,6 +262,7 @@ export default function ImportReviewTable({
       const result = await resp.json();
       if (!result.success) throw new Error("Save returned no success");
 
+      // Store PDF hash if available
       onComplete();
       onClose();
     } catch (err) {
@@ -226,7 +284,7 @@ export default function ImportReviewTable({
 
   return (
     <div className="fixed inset-0 bg-black/90 backdrop-blur-lg flex flex-col z-50">
-      {/* Header */}
+      {/* ── Header ── */}
       <div className="flex items-center justify-between px-6 py-4 border-b border-white/[0.08] bg-[#1c1c1e]">
         <div>
           <h2 className="text-xl font-semibold text-[#f5f5f7]">
@@ -234,6 +292,11 @@ export default function ImportReviewTable({
           </h2>
           <p className="text-sm text-[#a1a1a6] mt-1">
             {activeDoors.length} openings &middot; {sets.length} hardware sets
+            {byOthersCount > 0 && (
+              <span className="ml-2 text-[#a78bfa]">
+                &middot; {byOthersCount} by others
+              </span>
+            )}
             {warningCount > 0 && (
               <span className="ml-2 text-[#ffd60a]">
                 &middot; {warningCount} warning{warningCount !== 1 ? "s" : ""}
@@ -248,6 +311,22 @@ export default function ImportReviewTable({
           </p>
         </div>
         <div className="flex items-center gap-3">
+          {suggestedByOthersCount > 0 && (
+            <button
+              onClick={markAllSuggestedByOthers}
+              className="px-3 py-1.5 text-sm bg-[rgba(167,139,250,0.1)] border border-[rgba(167,139,250,0.25)] text-[#a78bfa] rounded-lg hover:bg-[rgba(167,139,250,0.18)] transition-colors"
+            >
+              Mark {suggestedByOthersCount} as By Others
+            </button>
+          )}
+          {byOthersCount > 0 && (
+            <button
+              onClick={clearAllByOthers}
+              className="px-3 py-1.5 text-sm bg-white/[0.04] border border-white/[0.08] text-[#a1a1a6] rounded-lg hover:bg-white/[0.07] transition-colors"
+            >
+              Clear By Others
+            </button>
+          )}
           <button
             onClick={() => setShowSets(!showSets)}
             className="px-3 py-1.5 text-sm bg-white/[0.04] border border-white/[0.08] text-[#a1a1a6] rounded-lg hover:bg-white/[0.07] transition-colors"
@@ -271,19 +350,19 @@ export default function ImportReviewTable({
         </div>
       </div>
 
-      {/* Error banner */}
+      {/* ── Error banner ── */}
       {error && (
         <div className="mx-6 mt-3 p-3 bg-[rgba(255,69,58,0.1)] border border-[rgba(255,69,58,0.2)] rounded-xl text-[#ff6961] text-sm">
           {error}
         </div>
       )}
 
-      {/* Info banner */}
+      {/* ── Info banner ── */}
       <div className="mx-6 mt-3 p-3 bg-[rgba(10,132,255,0.08)] border border-[rgba(10,132,255,0.15)] rounded-xl text-[#0a84ff] text-sm">
         Click any cell to edit. Remove rows with the &times; button. This is your chance to fix any parsing errors before data is saved.
       </div>
 
-      {/* Hardware Sets Panel (collapsible) */}
+      {/* ── Hardware Sets Panel (collapsible) ── */}
       {showSets && (
         <div className="mx-6 mt-3 max-h-48 overflow-y-auto bg-[#2c2c2e] rounded-xl border border-white/[0.08] p-4">
           <h3 className="text-sm font-semibold text-[#f5f5f7] mb-2">
@@ -300,7 +379,7 @@ export default function ImportReviewTable({
                 }`}
               >
                 <span className="font-semibold text-[#f5f5f7]">{s.set_id}</span>
-                {" -- "}
+                {" — "}
                 {s.heading || "No heading"}
                 <span className="ml-1 text-[#6e6e73]">
                   ({s.items.length} item{s.items.length !== 1 ? "s" : ""})
@@ -314,7 +393,7 @@ export default function ImportReviewTable({
         </div>
       )}
 
-      {/* Table */}
+      {/* ── Table ── */}
       <div className="flex-1 overflow-auto mx-6 mt-3 mb-6 rounded-xl border border-white/[0.08] bg-[#1c1c1e]">
         <table className="w-full text-sm">
           <thead className="sticky top-0 z-10 bg-[#2c2c2e] border-b border-white/[0.08]">
@@ -335,12 +414,18 @@ export default function ImportReviewTable({
             {doors.map((door, idx) => {
               const warnings = getWarnings(door, idx);
               const isDeleted = deletedRows.has(idx);
+              const isByOthers = byOthersRows.has(idx);
+              const isCandidate = !isDeleted && !isByOthers && isByOthersCandidate(door);
               return (
                 <tr
                   key={idx}
                   className={`border-b border-white/[0.04] ${
                     isDeleted
                       ? "opacity-30 line-through"
+                      : isByOthers
+                      ? "opacity-50 bg-[rgba(167,139,250,0.04)]"
+                      : isCandidate
+                      ? "bg-[rgba(167,139,250,0.02)]"
                       : Object.keys(warnings).length > 0
                       ? "bg-[rgba(255,214,10,0.03)]"
                       : "hover:bg-white/[0.02]"
@@ -351,9 +436,9 @@ export default function ImportReviewTable({
                   </td>
                   {columns.map((col) => (
                     <td key={col.key} className={`${col.width} px-1 py-1`}>
-                      {isDeleted ? (
+                      {isDeleted || isByOthers ? (
                         <span className="px-2 py-1 text-[#6e6e73]">
-                          {door[col.key]}
+                          {door[col.key] || <span className="italic">empty</span>}
                         </span>
                       ) : (
                         <EditableCell
@@ -364,7 +449,20 @@ export default function ImportReviewTable({
                       )}
                     </td>
                   ))}
-                  <td className="px-2 py-1 text-center">
+                  <td className="px-2 py-1 text-center whitespace-nowrap">
+                    <button
+                      onClick={() => toggleByOthers(idx)}
+                      title={isByOthers ? "Include this opening" : "Mark as By Others (excluded)"}
+                      className={`w-auto px-1.5 h-6 rounded text-[10px] font-semibold uppercase tracking-wide transition-colors mr-1 ${
+                        isByOthers
+                          ? "bg-[rgba(167,139,250,0.2)] text-[#a78bfa] hover:bg-[rgba(167,139,250,0.3)]"
+                          : isCandidate
+                          ? "bg-[rgba(167,139,250,0.08)] text-[#a78bfa]/60 hover:bg-[rgba(167,139,250,0.15)] border border-dashed border-[rgba(167,139,250,0.2)]"
+                          : "bg-white/[0.03] text-[#6e6e73] hover:bg-[rgba(167,139,250,0.1)] hover:text-[#a78bfa]"
+                      }`}
+                    >
+                      {isByOthers ? "BO" : "BO"}
+                    </button>
                     <button
                       onClick={() => toggleDeleteRow(idx)}
                       title={isDeleted ? "Restore row" : "Remove row"}
@@ -374,7 +472,7 @@ export default function ImportReviewTable({
                           : "bg-[rgba(255,69,58,0.1)] text-[#ff6961] hover:bg-[rgba(255,69,58,0.2)]"
                       }`}
                     >
-                      {isDeleted ? "\u21ba" : "\u00d7"}
+                      {isDeleted ? "↺" : "×"}
                     </button>
                   </td>
                 </tr>
@@ -384,7 +482,7 @@ export default function ImportReviewTable({
         </table>
       </div>
 
-      {/* Footer: Add Row */}
+      {/* ── Footer: Add Row ── */}
       <div className="px-6 pb-4 flex justify-between items-center">
         <button
           onClick={addRow}
@@ -395,9 +493,15 @@ export default function ImportReviewTable({
         </button>
         <div className="text-xs text-[#6e6e73]">
           {activeDoors.length} opening{activeDoors.length !== 1 ? "s" : ""} will
-          be saved &middot; {deletedRows.size > 0 && (
+          be saved
+          {byOthersCount > 0 && (
+            <span className="text-[#a78bfa]">
+              {" "}&middot; {byOthersCount} by others (excluded)
+            </span>
+          )}
+          {deletedRows.size > 0 && (
             <span className="text-[#ff9f0a]">
-              {deletedRows.size} removed
+              {" "}&middot; {deletedRows.size} removed
             </span>
           )}
         </div>
