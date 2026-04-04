@@ -1,18 +1,16 @@
 """
-Phase 2.1: Deterministic table extraction via pdfplumber.
+Phase 2: Deterministic table extraction via pdfplumber.
 
 Vercel Python serverless function that receives base64-encoded PDF pages,
 extracts BOTH:
   1. Hardware Set definitions (set ID, heading, items with qty/name/mfr/model/finish)
   2. Opening List / Door Schedule (door number, hw_set, location, types, rating, hand)
 
-Multi-strategy extraction pipeline:
-  - Strategy 1: Line-based table detection (explicit grid lines)
-  - Strategy 2: Text-alignment table detection (transparent/invisible grid lines)
-  - Strategy 3: Pure text parsing fallback
-  - Best result wins (most data extracted)
+Uses text-alignment-based table detection for hardware sets (transparent grid lines)
+and line-based detection for Opening List tables, with text fallback for both.
 
-Also extracts reference tables and reports text layer health for OCR decisions.
+Also extracts reference tables (Manufacturer List, Finish List, Option List)
+and returns them as lookup dictionaries for decoding abbreviations.
 
 Location: /api/extract-tables.py (project root, Vercel Python runtime)
 """
@@ -22,7 +20,7 @@ import io
 import json
 import re
 import traceback
-from concurrent.futures import ThreadPoolExecutor, as_completed
+import unicodedata
 from http.server import BaseHTTPRequestHandler
 
 import pdfplumber
@@ -72,48 +70,6 @@ class ExtractionResult(BaseModel):
     hw_sets_found: int = 0
     method: str = "pdfplumber"
     error: str = ""
-    has_text_layer: bool = True
-    pages_with_text: int = 0
-    total_pages: int = 0
-
-
-# --- Table extraction settings presets ---
-
-# Strategy 1: Explicit line-based (visible grid lines)
-LINES_SETTINGS = {
-    "vertical_strategy": "lines",
-    "horizontal_strategy": "lines",
-    "intersection_tolerance": 8,
-    "snap_tolerance": 8,
-    "join_tolerance": 8,
-    "edge_min_length": 8,
-    "min_words_vertical": 1,
-    "min_words_horizontal": 1,
-}
-
-# Strategy 2: Text-alignment (transparent/invisible grid lines)
-TEXT_ALIGN_SETTINGS = {
-    "vertical_strategy": "text",
-    "horizontal_strategy": "text",
-    "intersection_tolerance": 8,
-    "snap_tolerance": 8,
-    "join_tolerance": 8,
-    "min_words_vertical": 2,
-    "min_words_horizontal": 1,
-    "text_x_tolerance": 5,
-    "text_y_tolerance": 5,
-}
-
-# Strategy 3: Mixed — lines vertical, text horizontal (for partial grids)
-MIXED_SETTINGS = {
-    "vertical_strategy": "lines",
-    "horizontal_strategy": "text",
-    "intersection_tolerance": 8,
-    "snap_tolerance": 8,
-    "join_tolerance": 8,
-    "min_words_horizontal": 1,
-    "text_y_tolerance": 5,
-}
 
 
 # --- Column Detection for Opening List ---
@@ -153,57 +109,83 @@ OPTION_HEADER = re.compile(
 
 # --- Hardware Set Page Detection ---
 
+# Pattern to match hardware set heading lines like:
+# "Heading #DH4.1 (Set #DH4-R-NOCR)" or "Hardware Set DH1" or "SET: DH2"
 HW_SET_HEADING_PATTERN = re.compile(
     r"(?i)"
     r"(?:"
-    r"heading\s*#?\s*([A-Z0-9][A-Z0-9.\-]*)\s*\(set\s*#?\s*([A-Z0-9][A-Z0-9.\-]*)\)"
+    r"heading\s*#?\s*([A-Z0-9][A-Z0-9.\-]*)\s*\(set\s*#?\s*([A-Z0-9][A-Z0-9.\-]*)\)"  # Heading #X (Set #Y)
     r"|"
-    r"(?:hardware\s+)?set\s*[:# ]\s*([A-Z0-9][A-Z0-9.\-]*)"
+    r"(?:hardware\s+)?set\s*[:# ]\s*([A-Z0-9][A-Z0-9.\-]*)"  # Hardware Set DH1 / SET: DH2
     r")"
 )
 
+# Pattern to detect the heading description (e.g. "Interior Single Door - Office")
 HW_SET_DESC_PATTERN = re.compile(
-    r"(?i)heading\s*#?\s*[A-Z0-9][A-Z0-9.\-]*\s*[-\u2013\u2014]\s*(.+?)(?:\(|$)"
+    r"(?i)heading\s*#?\s*[A-Z0-9][A-Z0-9.\-]*\s*[-–—]\s*(.+?)(?:\(|$)"
 )
 
-# Common hardware item name patterns (kept in sync with src/lib/hardware-taxonomy.ts)
+# Common hardware item name patterns to validate extracted items
+# Kept in sync with src/lib/hardware-taxonomy.ts
 HARDWARE_ITEM_NAMES = re.compile(
     r"(?i)("
+    # Hanging
     r"hinge|pivot|spring\s*hinge|continuous\s*hinge|"
+    # Locking/Latching
     r"lockset|latchset|latch\s*set|lock\s*set|passage|privacy|"
     r"storeroom|classroom|entrance|office|mortise.*lock|"
     r"cylindrical|deadbolt|dead\s*bolt|night\s*latch|"
+    # Exit Devices
     r"exit\s*device|panic|rim\s*device|concealed\s*vertical|"
     r"surface\s*vertical|crossbar|touch\s*bar|push\s*bar|"
+    # Flush Bolts
     r"flush\s*bolt|constant\s*latching|surface\s*bolt|dust\s*proof|"
+    # Strikes
     r"strike|electric\s*strike|power\s*strike|"
+    # Electronic
     r"elec.*modif|electrif|power\s*transfer|ept|"
     r"wire\s*harness|connector|molex|con-\d|wiring|pigtail|"
+    # Closers
     r"closer|door\s*check|floor\s*closer|"
+    # Coordinators
     r"coordinator|"
+    # Cylinders & Cores
     r"cylinder|core|interchangeable|"
+    # Protection
     r"kick\s*plate|protection\s*plate|mop\s*plate|armor\s*plate|"
     r"wall\s*stop|floor\s*stop|overhead\s*stop|door\s*stop|holder|hold\s*open|"
+    # Sweeps/Bottoms
     r"door\s*sweep|auto.*door\s*bottom|drop\s*seal|door\s*bottom|"
+    # Thresholds
     r"threshold|saddle|"
+    # Sealing
     r"gasket|smoke\s*seal|gasketing|acoustic\s*seal|weatherstrip|"
     r"perimeter\s*seal|sound\s*seal|"
+    # Rain Drip / Astragal
     r"rain\s*drip|drip\s*cap|astragal|meeting\s*stile|"
+    # Silencers
     r"silencer|bumper|mute|"
+    # By Others / Special
     r"by\s*others|hardware\s*by\s*others|not\s*in\s*contract|"
     r"not\s*used|no\s*hardware|"
+    # Misc common items
     r"pull|push|plate|lever|knob|key|magnetic|roller|catch"
     r")"
 )
 
 
 def match_column(header: str, pattern: re.Pattern) -> bool:
+    """Check if a header string matches a column pattern."""
     if not header:
         return False
     return bool(pattern.search(header.strip()))
 
 
 def detect_column_mapping(headers: list[str]) -> dict[str, int]:
+    """
+    Given a list of column headers, return a mapping of
+    field_name -> column_index for Opening List fields.
+    """
     mapping = {}
     patterns = {
         "door_number": DOOR_NUMBER_PATTERNS,
@@ -214,6 +196,7 @@ def detect_column_mapping(headers: list[str]) -> dict[str, int]:
         "fire_rating": FIRE_RATING_PATTERNS,
         "hand": HAND_PATTERNS,
     }
+
     for i, header in enumerate(headers):
         if not header:
             continue
@@ -222,10 +205,15 @@ def detect_column_mapping(headers: list[str]) -> dict[str, int]:
             if field not in mapping and match_column(h, pattern):
                 mapping[field] = i
                 break
+
     return mapping
 
 
 def is_opening_list_table(headers: list[str]) -> bool:
+    """
+    Determine if a table is likely an Opening List based on headers.
+    Must have at least a door number column and one of hw_set or location.
+    """
     mapping = detect_column_mapping(headers)
     has_door = "door_number" in mapping
     has_secondary = "hw_set" in mapping or "location" in mapping
@@ -233,12 +221,43 @@ def is_opening_list_table(headers: list[str]) -> bool:
 
 
 def clean_cell(val) -> str:
+    """Clean a cell value, handling None, whitespace, and mojibake characters."""
     if val is None:
         return ""
-    return str(val).strip()
+    s = str(val).strip()
+    # Fix common UTF-8/Latin-1 mojibake patterns
+    # Â· (C2 B7 decoded as Latin-1) → · (middle dot, standard hardware separator)
+    mojibake_map = {
+        "Â·": "·",       # middle dot
+        "Â\u00b7": "·",  # alternate encoding
+        "â€"": "–",      # en dash
+        "â€"": "—",      # em dash
+        "â€™": "'",      # right single quote
+        "â€˜": "'",      # left single quote
+        "â€œ": '"',      # left double quote
+        "â€\u009d": '"', # right double quote
+        "Ã—": "×",       # multiplication sign
+        "Â½": "½",       # one half
+        "Â¼": "¼",       # one quarter
+        "Â¾": "¾",       # three quarters
+        "Â®": "®",       # registered
+        "Â©": "©",       # copyright
+        "Ã\u0097": "×",  # multiplication sign variant
+    }
+    for bad, good in mojibake_map.items():
+        if bad in s:
+            s = s.replace(bad, good)
+    # Normalize Unicode to NFC form
+    s = unicodedata.normalize("NFC", s)
+    return s
 
 
 def is_valid_door_number(val: str) -> bool:
+    """
+    Check if a value looks like a valid door number.
+    Door numbers typically contain digits and may have letter suffixes,
+    hyphens, or prefixes like ST-, EY-.
+    """
     if not val:
         return False
     lower = val.lower()
@@ -249,34 +268,24 @@ def is_valid_door_number(val: str) -> bool:
     return bool(re.search(r"\d", val))
 
 
-# --- Text layer detection ---
-
-def check_text_layer(pdf: pdfplumber.PDF) -> tuple[bool, int]:
-    """
-    Check if the PDF has a usable text layer.
-    Returns (has_text_layer, pages_with_text).
-    """
-    pages_with_text = 0
-    for page in pdf.pages:
-        text = (page.extract_text() or "").strip()
-        # A page has useful text if it has at least 20 chars of non-whitespace
-        if len(re.sub(r"\s+", "", text)) > 20:
-            pages_with_text += 1
-    has_text = pages_with_text > len(pdf.pages) * 0.3  # >30% of pages have text
-    return has_text, pages_with_text
-
-
 # --- Hardware Set Extraction ---
 
 def is_hardware_set_page(text: str) -> bool:
+    """Check if a page likely contains hardware set definitions."""
     return bool(HW_SET_HEADING_PATTERN.search(text))
 
 
 def parse_hw_set_id_from_text(text: str) -> tuple[str, str]:
+    """
+    Extract set_id and heading description from page text.
+    Returns (set_id, heading_description).
+    """
     m = HW_SET_HEADING_PATTERN.search(text)
     if not m:
         return ("", "")
 
+    # Group 1 = heading number, Group 2 = set ID (from "Heading #X (Set #Y)" format)
+    # Group 3 = set ID (from "Hardware Set X" / "SET: X" format)
     if m.group(2):
         set_id = m.group(2).strip()
     elif m.group(3):
@@ -286,123 +295,37 @@ def parse_hw_set_id_from_text(text: str) -> tuple[str, str]:
     else:
         set_id = ""
 
+    # Try to extract the heading description
     heading = ""
+    # Look for pattern: "Heading #ID - Description (Set #ID)"
+    # or just take the line containing the set heading
     lines = text.split("\n")
     for line in lines:
         if HW_SET_HEADING_PATTERN.search(line):
+            # Try to extract description after dash
             dash_match = re.search(
-                r"(?:heading\s*#?\s*[A-Z0-9][A-Z0-9.\-]*)\s*[-\u2013\u2014]\s*(.+?)(?:\(|$)",
+                r"(?:heading\s*#?\s*[A-Z0-9][A-Z0-9.\-]*)\s*[-–—]\s*(.+?)(?:\(|$)",
                 line, re.IGNORECASE
             )
             if dash_match:
                 heading = dash_match.group(1).strip()
             else:
+                # Use the full line as heading, cleaned up
                 heading = re.sub(
-                    r"(?i)(?:heading|set)\s*#?\s*[A-Z0-9][A-Z0-9.\-]*\s*[-\u2013\u2014:]\s*",
+                    r"(?i)(?:heading|set)\s*#?\s*[A-Z0-9][A-Z0-9.\-]*\s*[-–—:]\s*",
                     "", line
                 ).strip()
-                heading = re.sub(
-                    r"\(set\s*#?\s*[A-Z0-9][A-Z0-9.\-]*\)\s*$", "",
-                    heading, flags=re.IGNORECASE
-                ).strip()
+                # Remove trailing "(Set #...)" if present
+                heading = re.sub(r"\(set\s*#?\s*[A-Z0-9][A-Z0-9.\-]*\)\s*$", "", heading, flags=re.IGNORECASE).strip()
             break
 
     return (set_id, heading)
 
 
-def _extract_hw_items_from_table(table: list, page_text: str) -> list[HardwareItem]:
-    """Extract hardware items from a single detected table."""
-    items: list[HardwareItem] = []
-    if not table or len(table) < 2:
-        return items
-
-    header_row = [clean_cell(c) for c in table[0]]
-
-    # Skip if this looks like a door list table
-    if any(match_column(h, DOOR_NUMBER_PATTERNS) for h in header_row):
-        return items
-
-    qty_col = None
-    name_col = None
-    mfr_col = None
-    model_col = None
-    finish_col = None
-
-    for i, h in enumerate(header_row):
-        hl = h.lower()
-        if re.match(r"(?i)^(qty\.?|quantity|#)$", hl):
-            qty_col = i
-        elif re.search(r"(?i)(item|description|hardware|product)", hl):
-            name_col = i
-        elif re.search(r"(?i)(mfr|mfg|manufacturer|vendor)", hl):
-            mfr_col = i
-        elif re.search(r"(?i)(model|catalog|cat\.?\s*#?|product\s*#?|series)", hl):
-            model_col = i
-        elif re.search(r"(?i)(finish|fin\.?|color)", hl):
-            finish_col = i
-
-    # Positional inference fallback
-    if qty_col is None and name_col is None and len(header_row) >= 3:
-        data_rows = table[1:6]
-        first_col_is_qty = all(
-            re.match(r"^\d{1,3}$", clean_cell(row[0]))
-            for row in data_rows
-            if row and clean_cell(row[0])
-        )
-        if first_col_is_qty and len(header_row) >= 4:
-            qty_col = 0
-            name_col = 1
-            mfr_col = 2 if len(header_row) > 2 else None
-            model_col = 3 if len(header_row) > 3 else None
-            finish_col = 4 if len(header_row) > 4 else None
-
-    if name_col is None and qty_col is None:
-        return items
-
-    if name_col is None and qty_col is not None:
-        name_col = qty_col + 1
-
-    for row in table[1:]:
-        cells = [clean_cell(c) for c in row]
-        name_val = cells[name_col] if name_col is not None and name_col < len(cells) else ""
-        if not name_val:
-            continue
-
-        name_lower = name_val.lower()
-        if name_lower in ("total", "totals", "note", "notes", ""):
-            continue
-        if name_lower.startswith("note:") or name_lower.startswith("*"):
-            continue
-
-        if not HARDWARE_ITEM_NAMES.search(name_val) and len(name_val) < 3:
-            continue
-
-        qty_val = 1
-        if qty_col is not None and qty_col < len(cells):
-            raw_qty = cells[qty_col]
-            qty_match = re.match(r"(\d+)", raw_qty)
-            if qty_match:
-                qty_val = int(qty_match.group(1))
-
-        mfr_val = cells[mfr_col] if mfr_col is not None and mfr_col < len(cells) else ""
-        model_val = cells[model_col] if model_col is not None and model_col < len(cells) else ""
-        finish_val = cells[finish_col] if finish_col is not None and finish_col < len(cells) else ""
-
-        items.append(HardwareItem(
-            qty=qty_val,
-            name=name_val,
-            manufacturer=mfr_val,
-            model=model_val,
-            finish=finish_val,
-        ))
-
-    return items
-
-
 def extract_hardware_sets_from_page(page, page_text: str) -> list[HardwareSetDef]:
     """
-    Extract hardware set definitions from a single page.
-    Tries multiple table detection strategies and picks the best result.
+    Extract hardware set definitions from a single page using text-alignment
+    table detection (for transparent/invisible grid lines).
     """
     sets: list[HardwareSetDef] = []
 
@@ -410,40 +333,162 @@ def extract_hardware_sets_from_page(page, page_text: str) -> list[HardwareSetDef
     if not set_id:
         return sets
 
-    best_items: list[HardwareItem] = []
+    # Try text-based table extraction first (for transparent grid lines)
+    tables = page.extract_tables(
+        table_settings={
+            "vertical_strategy": "text",
+            "horizontal_strategy": "text",
+            "intersection_tolerance": 5,
+            "snap_tolerance": 5,
+            "join_tolerance": 5,
+            "min_words_vertical": 2,
+            "min_words_horizontal": 1,
+            "text_x_tolerance": 3,
+            "text_y_tolerance": 3,
+        }
+    )
 
-    # Try each strategy, keep the one with the most items
-    for settings in [TEXT_ALIGN_SETTINGS, LINES_SETTINGS, MIXED_SETTINGS]:
-        try:
-            tables = page.extract_tables(table_settings=settings)
-            strategy_items: list[HardwareItem] = []
-            for table in (tables or []):
-                strategy_items.extend(_extract_hw_items_from_table(table, page_text))
-            if len(strategy_items) > len(best_items):
-                best_items = strategy_items
-        except Exception:
+    # Also try line-based as fallback for pages that DO have visible lines
+    if not tables:
+        tables = page.extract_tables(
+            table_settings={
+                "vertical_strategy": "lines",
+                "horizontal_strategy": "lines",
+                "intersection_tolerance": 5,
+                "snap_tolerance": 5,
+            }
+        )
+
+    items: list[HardwareItem] = []
+
+    for table in tables:
+        if not table or len(table) < 2:
             continue
 
-    # If table extraction found nothing, try text-line parsing
-    if not best_items:
-        best_items = extract_hw_items_from_text(page_text)
+        # Detect which table this is — we want the hardware items table
+        # Hardware items tables typically have columns like:
+        # Qty | Item/Description | Manufacturer | Model/Catalog | Finish
+        header_row = [clean_cell(c) for c in table[0]]
+        header_text_lower = " ".join(header_row).lower()
 
-    if best_items:
+        # Skip if this looks like a door list table (Qty | Description | Door # | Location)
+        if any(match_column(h, DOOR_NUMBER_PATTERNS) for h in header_row):
+            continue
+
+        # Detect hardware items table by looking for qty + item/description columns
+        qty_col = None
+        name_col = None
+        mfr_col = None
+        model_col = None
+        finish_col = None
+
+        for i, h in enumerate(header_row):
+            hl = h.lower()
+            if re.match(r"(?i)^(qty\.?|quantity|#)$", hl):
+                qty_col = i
+            elif re.search(r"(?i)(item|description|hardware|product)", hl):
+                name_col = i
+            elif re.search(r"(?i)(mfr|mfg|manufacturer|vendor)", hl):
+                mfr_col = i
+            elif re.search(r"(?i)(model|catalog|cat\.?\s*#?|product\s*#?|series)", hl):
+                model_col = i
+            elif re.search(r"(?i)(finish|fin\.?|color)", hl):
+                finish_col = i
+
+        # If we didn't find explicit headers, try positional inference
+        # Many submittals have: Qty | Description | Manufacturer | Catalog No. | Finish
+        if qty_col is None and name_col is None and len(header_row) >= 3:
+            # Check if first column values look like quantities (small integers)
+            data_rows = table[1:6]  # sample first 5 data rows
+            first_col_is_qty = all(
+                re.match(r"^\d{1,3}$", clean_cell(row[0]))
+                for row in data_rows
+                if row and clean_cell(row[0])
+            )
+            if first_col_is_qty and len(header_row) >= 4:
+                qty_col = 0
+                name_col = 1
+                mfr_col = 2 if len(header_row) > 2 else None
+                model_col = 3 if len(header_row) > 3 else None
+                finish_col = 4 if len(header_row) > 4 else None
+
+        # Need at least name to extract items
+        if name_col is None and qty_col is None:
+            continue
+
+        # If we only have qty_col, name is likely the next column
+        if name_col is None and qty_col is not None:
+            name_col = qty_col + 1
+
+        for row in table[1:]:
+            cells = [clean_cell(c) for c in row]
+
+            # Get item name
+            name_val = cells[name_col] if name_col is not None and name_col < len(cells) else ""
+            if not name_val:
+                continue
+
+            # Skip rows that look like notes, totals, or continuation text
+            name_lower = name_val.lower()
+            if name_lower in ("total", "totals", "note", "notes", ""):
+                continue
+            if name_lower.startswith("note:") or name_lower.startswith("*"):
+                continue
+
+            # Validate it looks like a hardware item (or "by others" / "not used")
+            # Be lenient — some items have unusual names
+            if not HARDWARE_ITEM_NAMES.search(name_val) and len(name_val) < 3:
+                continue
+
+            # Get qty
+            qty_val = 1
+            if qty_col is not None and qty_col < len(cells):
+                raw_qty = cells[qty_col]
+                qty_match = re.match(r"(\d+)", raw_qty)
+                if qty_match:
+                    qty_val = int(qty_match.group(1))
+
+            # Handle text wrapping — if name is very long and contains what looks
+            # like a split model/finish, try to separate
+            # e.g. "Lockset Schlage ND50PD RHO 626" when columns collapsed
+            mfr_val = cells[mfr_col] if mfr_col is not None and mfr_col < len(cells) else ""
+            model_val = cells[model_col] if model_col is not None and model_col < len(cells) else ""
+            finish_val = cells[finish_col] if finish_col is not None and finish_col < len(cells) else ""
+
+            items.append(HardwareItem(
+                qty=qty_val,
+                name=name_val,
+                manufacturer=mfr_val,
+                model=model_val,
+                finish=finish_val,
+            ))
+
+    # If table extraction found nothing, try text-line parsing
+    if not items:
+        items = extract_hw_items_from_text(page_text)
+
+    if items:
         sets.append(HardwareSetDef(
             set_id=set_id,
             heading=heading,
-            items=best_items,
+            items=items,
         ))
 
     return sets
 
 
 def extract_hw_items_from_text(text: str) -> list[HardwareItem]:
-    """Fallback: extract hardware items from raw text lines."""
+    """
+    Fallback: extract hardware items from raw text when table detection fails.
+    Looks for lines that match qty + item name patterns.
+    """
     items: list[HardwareItem] = []
     lines = text.split("\n")
 
-    item_line_pattern = re.compile(r"^\s*(\d{1,3})\s+(.+)")
+    # Pattern: starts with a small integer (qty), followed by item description
+    item_line_pattern = re.compile(
+        r"^\s*(\d{1,3})\s+(.+)"
+    )
 
     for line in lines:
         m = item_line_pattern.match(line)
@@ -453,9 +498,12 @@ def extract_hw_items_from_text(text: str) -> list[HardwareItem]:
         qty = int(m.group(1))
         rest = m.group(2).strip()
 
+        # Check if this looks like a hardware item
         if not HARDWARE_ITEM_NAMES.search(rest):
             continue
 
+        # Try to split: name | manufacturer | model | finish
+        # Separated by 2+ spaces or tabs
         parts = re.split(r"\s{2,}|\t", rest)
 
         items.append(HardwareItem(
@@ -469,33 +517,27 @@ def extract_hw_items_from_text(text: str) -> list[HardwareItem]:
     return items
 
 
-def _process_hw_page(page_data: tuple) -> list[HardwareSetDef]:
-    """Process a single page for hardware sets (for parallel execution)."""
-    page, page_text = page_data
-    if not is_hardware_set_page(page_text):
-        return []
-    return extract_hardware_sets_from_page(page, page_text)
-
-
 def extract_all_hardware_sets(pdf: pdfplumber.PDF) -> list[HardwareSetDef]:
     """
     Extract all hardware set definitions from the entire PDF.
-    Uses parallel page processing for speed.
+    Scans each page for hardware set headings and extracts items.
     """
     all_sets: list[HardwareSetDef] = []
     seen_set_ids: set[str] = set()
 
-    # Prepare page data (extract text first since page objects aren't thread-safe)
-    # Process sequentially since pdfplumber page objects share the PDF file handle
     for page_num, page in enumerate(pdf.pages):
         text = page.extract_text() or ""
+
         if not is_hardware_set_page(text):
             continue
 
+        # A single page might have multiple sets (less common but possible)
+        # For now, extract per-page (most submittals = 1 set per page)
         page_sets = extract_hardware_sets_from_page(page, text)
 
         for hw_set in page_sets:
             if hw_set.set_id in seen_set_ids:
+                # Merge items if same set appears on multiple pages (continuation)
                 for existing in all_sets:
                     if existing.set_id == hw_set.set_id:
                         existing.items.extend(hw_set.items)
@@ -509,133 +551,181 @@ def extract_all_hardware_sets(pdf: pdfplumber.PDF) -> list[HardwareSetDef]:
 
 # --- Opening List Extraction ---
 
-def _extract_doors_from_tables(tables: list, seen: set[str],
-                               last_mapping: dict[str, int] | None = None
-                               ) -> tuple[list[DoorEntry], int, dict[str, int] | None]:
-    """
-    Extract door entries from a list of pdfplumber tables.
-    Uses last_mapping as fallback for continuation pages without headers.
-    Returns (doors, tables_found, last_valid_mapping).
-    """
-    doors: list[DoorEntry] = []
-    tables_found = 0
-
-    for table in tables:
-        if not table or len(table) < 2:
-            continue
-
-        header_row_idx = None
-        mapping = {}
-
-        # Look for header row in first 5 rows
-        for row_idx, row in enumerate(table[:5]):
-            headers = [clean_cell(c) for c in row]
-            if is_opening_list_table(headers):
-                header_row_idx = row_idx
-                mapping = detect_column_mapping(headers)
-                last_mapping = mapping
-                break
-
-        # If no header found, try using the last known mapping
-        # (for continuation pages of multi-page tables)
-        if header_row_idx is None and last_mapping:
-            # Check if first data row looks like door data using last mapping
-            first_row = [clean_cell(c) for c in table[0]]
-            door_col = last_mapping.get("door_number")
-            if door_col is not None and door_col < len(first_row):
-                if is_valid_door_number(first_row[door_col]):
-                    header_row_idx = -1  # No header row, start from row 0
-                    mapping = last_mapping
-
-        if not mapping:
-            continue
-
-        tables_found += 1
-        start_row = header_row_idx + 1 if header_row_idx >= 0 else 0
-
-        for row in table[start_row:]:
-            cells = [clean_cell(c) for c in row]
-
-            door_col = mapping.get("door_number")
-            if door_col is None or door_col >= len(cells):
-                continue
-
-            door_num = cells[door_col]
-            if not is_valid_door_number(door_num):
-                continue
-
-            door_num = re.sub(r"\s+", " ", door_num).strip()
-
-            if door_num in seen:
-                continue
-            seen.add(door_num)
-
-            def get_field(field: str, m=mapping, c=cells) -> str:
-                idx = m.get(field)
-                if idx is None or idx >= len(c):
-                    return ""
-                return c[idx]
-
-            doors.append(DoorEntry(
-                door_number=door_num,
-                hw_set=get_field("hw_set"),
-                location=get_field("location"),
-                door_type=get_field("door_type"),
-                frame_type=get_field("frame_type"),
-                fire_rating=get_field("fire_rating"),
-                hand=get_field("hand"),
-            ))
-
-    return doors, tables_found, last_mapping
-
-
 def extract_opening_list(pdf: pdfplumber.PDF) -> tuple[list[DoorEntry], int]:
     """
-    Extract the Opening List / Door Schedule using multi-strategy pipeline.
-    Tries line-based, text-alignment, and mixed strategies.
-    Keeps the strategy that produces the most doors.
-    Also carries column mapping across pages for continuation tables.
+    Extract the Opening List / Door Schedule from a PDF.
+    Returns (list of door entries, number of tables found).
     """
-    best_doors: list[DoorEntry] = []
-    best_tables = 0
+    all_doors: list[DoorEntry] = []
+    tables_found = 0
+    seen_door_numbers: set[str] = set()
 
-    for settings in [LINES_SETTINGS, TEXT_ALIGN_SETTINGS, MIXED_SETTINGS]:
-        strategy_doors: list[DoorEntry] = []
-        strategy_tables = 0
-        seen: set[str] = set()
-        last_mapping: dict[str, int] | None = None
+    for page_num, page in enumerate(pdf.pages):
+        tables = page.extract_tables(
+            table_settings={
+                "vertical_strategy": "lines",
+                "horizontal_strategy": "lines",
+                "intersection_tolerance": 5,
+                "snap_tolerance": 5,
+                "join_tolerance": 5,
+                "edge_min_length": 10,
+                "min_words_vertical": 1,
+                "min_words_horizontal": 1,
+            }
+        )
 
-        for page in pdf.pages:
-            try:
-                tables = page.extract_tables(table_settings=settings)
-                page_doors, page_tables, last_mapping = _extract_doors_from_tables(
-                    tables or [], seen, last_mapping
-                )
-                strategy_doors.extend(page_doors)
-                strategy_tables += page_tables
-            except Exception:
+        for table in tables:
+            if not table or len(table) < 2:
                 continue
 
-        if len(strategy_doors) > len(best_doors):
-            best_doors = strategy_doors
-            best_tables = strategy_tables
+            header_row_idx = None
+            mapping = {}
+            for row_idx, row in enumerate(table[:5]):
+                headers = [clean_cell(c) for c in row]
+                if is_opening_list_table(headers):
+                    header_row_idx = row_idx
+                    mapping = detect_column_mapping(headers)
+                    break
+
+            if header_row_idx is None:
+                continue
+
+            tables_found += 1
+
+            for row in table[header_row_idx + 1:]:
+                cells = [clean_cell(c) for c in row]
+
+                door_col = mapping.get("door_number")
+                if door_col is None or door_col >= len(cells):
+                    continue
+
+                door_num = cells[door_col]
+                if not is_valid_door_number(door_num):
+                    continue
+
+                door_num = re.sub(r"\s+", " ", door_num).strip()
+
+                if door_num in seen_door_numbers:
+                    continue
+                seen_door_numbers.add(door_num)
+
+                def get_field(field: str) -> str:
+                    idx = mapping.get(field)
+                    if idx is None or idx >= len(cells):
+                        return ""
+                    return cells[idx]
+
+                entry = DoorEntry(
+                    door_number=door_num,
+                    hw_set=get_field("hw_set"),
+                    location=get_field("location"),
+                    door_type=get_field("door_type"),
+                    frame_type=get_field("frame_type"),
+                    fire_rating=get_field("fire_rating"),
+                    hand=get_field("hand"),
+                )
+                all_doors.append(entry)
+
+    # If line-based found nothing, try text-alignment strategy
+    if not all_doors:
+        all_doors, tables_found = extract_opening_list_text_align(pdf)
 
     # Final fallback: pure text parsing
-    if not best_doors:
-        best_doors, best_tables = extract_opening_list_text(pdf)
+    if not all_doors:
+        all_doors, tables_found = extract_opening_list_text(pdf)
 
-    return best_doors, best_tables
+    return all_doors, tables_found
+
+
+def extract_opening_list_text_align(pdf: pdfplumber.PDF) -> tuple[list[DoorEntry], int]:
+    """
+    Try text-alignment based table extraction for Opening List.
+    Useful when the table has transparent grid lines.
+    """
+    all_doors: list[DoorEntry] = []
+    tables_found = 0
+    seen_door_numbers: set[str] = set()
+
+    for page in pdf.pages:
+        tables = page.extract_tables(
+            table_settings={
+                "vertical_strategy": "text",
+                "horizontal_strategy": "text",
+                "intersection_tolerance": 5,
+                "snap_tolerance": 5,
+                "min_words_vertical": 2,
+                "min_words_horizontal": 1,
+                "text_x_tolerance": 3,
+                "text_y_tolerance": 3,
+            }
+        )
+
+        for table in tables:
+            if not table or len(table) < 2:
+                continue
+
+            header_row_idx = None
+            mapping = {}
+            for row_idx, row in enumerate(table[:5]):
+                headers = [clean_cell(c) for c in row]
+                if is_opening_list_table(headers):
+                    header_row_idx = row_idx
+                    mapping = detect_column_mapping(headers)
+                    break
+
+            if header_row_idx is None:
+                continue
+
+            tables_found += 1
+
+            for row in table[header_row_idx + 1:]:
+                cells = [clean_cell(c) for c in row]
+
+                door_col = mapping.get("door_number")
+                if door_col is None or door_col >= len(cells):
+                    continue
+
+                door_num = cells[door_col]
+                if not is_valid_door_number(door_num):
+                    continue
+
+                door_num = re.sub(r"\s+", " ", door_num).strip()
+                if door_num in seen_door_numbers:
+                    continue
+                seen_door_numbers.add(door_num)
+
+                def get_field(field: str, m=mapping, c=cells) -> str:
+                    idx = m.get(field)
+                    if idx is None or idx >= len(c):
+                        return ""
+                    return c[idx]
+
+                entry = DoorEntry(
+                    door_number=door_num,
+                    hw_set=get_field("hw_set"),
+                    location=get_field("location"),
+                    door_type=get_field("door_type"),
+                    frame_type=get_field("frame_type"),
+                    fire_rating=get_field("fire_rating"),
+                    hand=get_field("hand"),
+                )
+                all_doors.append(entry)
+
+    return all_doors, tables_found
 
 
 def extract_opening_list_text(pdf: pdfplumber.PDF) -> tuple[list[DoorEntry], int]:
-    """Fallback extraction using text parsing."""
+    """
+    Fallback extraction using text parsing when table grid detection fails.
+    Looks for structured text patterns typical of Opening List pages.
+    """
     all_doors: list[DoorEntry] = []
     seen_door_numbers: set[str] = set()
     tables_found = 0
 
     door_line_pattern = re.compile(
-        r"^(\S+)\s+"
-        r"([A-Z][A-Z0-9\-]+)"
+        r"^(\S+)\s+"           # door number
+        r"([A-Z][A-Z0-9\-]+)"  # hw_set (starts with letter, alphanumeric with hyphens)
     )
 
     for page in pdf.pages:
@@ -676,22 +766,25 @@ def extract_opening_list_text(pdf: pdfplumber.PDF) -> tuple[list[DoorEntry], int
 # --- Reference Table Extraction ---
 
 def extract_reference_tables(pdf: pdfplumber.PDF) -> list[ReferenceCode]:
+    """
+    Extract reference/legend tables (Manufacturer List, Finish List, Option List).
+    These are typically 2-column tables: abbreviation -> full name.
+    """
     codes: list[ReferenceCode] = []
 
     for page in pdf.pages:
         text = page.extract_text() or ""
 
-        # Try both line-based and text-alignment for reference tables
-        all_tables = []
-        for settings in [LINES_SETTINGS, TEXT_ALIGN_SETTINGS]:
-            try:
-                tables = page.extract_tables(table_settings=settings)
-                if tables:
-                    all_tables.extend(tables)
-            except Exception:
-                continue
+        tables = page.extract_tables(
+            table_settings={
+                "vertical_strategy": "lines",
+                "horizontal_strategy": "lines",
+                "intersection_tolerance": 5,
+                "snap_tolerance": 5,
+            }
+        )
 
-        for table in all_tables:
+        for table in tables:
             if not table or len(table) < 2:
                 continue
 
@@ -707,7 +800,8 @@ def extract_reference_tables(pdf: pdfplumber.PDF) -> list[ReferenceCode]:
                 code_type = "option"
 
             if not code_type:
-                for line in text.split("\n"):
+                page_text_lines = text.split("\n")
+                for line in page_text_lines:
                     if MANUFACTURER_HEADER.search(line):
                         code_type = "manufacturer"
                         break
@@ -724,14 +818,11 @@ def extract_reference_tables(pdf: pdfplumber.PDF) -> list[ReferenceCode]:
             for row in table[1:]:
                 cells = [clean_cell(c) for c in row]
                 if len(cells) >= 2 and cells[0] and cells[1]:
-                    code_val = f"{code_type}:{cells[0]}"
-                    # Avoid duplicates
-                    if not any(c.code_type == code_type and c.code == cells[0] for c in codes):
-                        codes.append(ReferenceCode(
-                            code_type=code_type,
-                            code=cells[0],
-                            full_name=cells[1],
-                        ))
+                    codes.append(ReferenceCode(
+                        code_type=code_type,
+                        code=cells[0],
+                        full_name=cells[1],
+                    ))
 
     return codes
 
@@ -753,32 +844,15 @@ class handler(BaseHTTPRequestHandler):
                 ))
                 return
 
+            # Decode base64 PDF
             pdf_bytes = base64.b64decode(pdf_base64)
             pdf_file = io.BytesIO(pdf_bytes)
 
-            with pdfplumber.open(pdf_file) as pdf:
-                total_pages = len(pdf.pages)
-
-                # Check text layer health
-                has_text, pages_with_text = check_text_layer(pdf)
-
-                if not has_text:
-                    # No usable text layer — return immediately so LLM can take over
-                    result = ExtractionResult(
-                        success=False,
-                        has_text_layer=False,
-                        pages_with_text=pages_with_text,
-                        total_pages=total_pages,
-                        method="pdfplumber",
-                        error="PDF has no usable text layer (likely scanned/image-based). OCR or LLM vision needed.",
-                    )
-                    self._send_json(200, result)
-                    return
-
-                # Phase 1: Extract Hardware Sets
+            with pdfplumber.open(pdf_file, unicode_norm="NFC") as pdf:
+                # Phase 1: Extract Hardware Sets (text-alignment detection)
                 hardware_sets = extract_all_hardware_sets(pdf)
 
-                # Phase 2: Extract Opening List (multi-strategy)
+                # Phase 2: Extract Opening List via table grid detection
                 openings, tables_found = extract_opening_list(pdf)
 
                 # Phase 3: Extract reference tables
@@ -793,9 +867,6 @@ class handler(BaseHTTPRequestHandler):
                     tables_found=tables_found,
                     hw_sets_found=len(hardware_sets),
                     method="pdfplumber",
-                    has_text_layer=True,
-                    pages_with_text=pages_with_text,
-                    total_pages=total_pages,
                 )
 
             self._send_json(200, result)
