@@ -142,6 +142,7 @@ export default function SubmittalWizard({
   // User decisions
   const [removedActions, setRemovedActions] = useState<Record<string, "keep" | "delete">>({});
   const [changedTransfer, setChangedTransfer] = useState<Record<string, boolean>>({});
+  const [newExcluded, setNewExcluded] = useState<Record<string, boolean>>({});
 
   // Apply result
   const [applyResult, setApplyResult] = useState<Record<string, number> | null>(null);
@@ -219,7 +220,9 @@ export default function SubmittalWizard({
             existing_id: c.existing_id,
             transfer_progress: changedTransfer[c.door_number] ?? true,
           })),
-          new_door_numbers: compareResult.added.map((a) => a.door_number),
+          new_door_numbers: compareResult.added
+            .filter((a) => !newExcluded[a.door_number])
+            .map((a) => a.door_number),
           matched_door_numbers: compareResult.matched.map((m) => m.door_number),
         }),
       });
@@ -510,17 +513,76 @@ export default function SubmittalWizard({
               ) : (
                 <>
                   <p className="text-[#a1a1a6] text-sm mb-3">
-                    These <strong className="text-[#0a84ff]">{compareResult.added.length} new doors</strong> will be
-                    added to your project.
+                    These <strong className="text-[#0a84ff]">
+                      {compareResult.added.length - Object.values(newExcluded).filter(Boolean).length} new doors
+                    </strong> will be added to your project.
+                    {Object.values(newExcluded).filter(Boolean).length > 0 && (
+                      <span className="text-[#ff453a]">
+                        {" "}({Object.values(newExcluded).filter(Boolean).length} excluded)
+                      </span>
+                    )}
                   </p>
-                  <div className="space-y-2">
+                  <div className="flex gap-2 mb-3">
+                    <button
+                      onClick={() => {
+                        const all: Record<string, boolean> = {};
+                        compareResult.added.forEach((a) => { all[a.door_number] = false; });
+                        setNewExcluded(all);
+                      }}
+                      className="text-xs px-3 py-1 rounded-lg bg-white/[0.04] border border-white/[0.08] text-[#a1a1a6] hover:bg-white/[0.08] transition-colors"
+                    >
+                      Add All
+                    </button>
+                    <button
+                      onClick={() => {
+                        const all: Record<string, boolean> = {};
+                        compareResult.added.forEach((a) => { all[a.door_number] = true; });
+                        setNewExcluded(all);
+                      }}
+                      className="text-xs px-3 py-1 rounded-lg bg-[rgba(255,69,58,0.1)] border border-[rgba(255,69,58,0.2)] text-[#ff453a] hover:bg-[rgba(255,69,58,0.15)] transition-colors"
+                    >
+                      Skip All
+                    </button>
+                  </div>
+                  <div className="space-y-2 max-h-[50vh] overflow-y-auto">
                     {compareResult.added.map((a) => (
-                      <div key={a.door_number} className="bg-white/[0.04] border border-white/[0.08] rounded-xl p-3 flex items-center gap-3">
-                        <span className="text-[#f5f5f7] font-mono text-sm">{a.door_number}</span>
-                        <span className="text-[#0a84ff] text-xs">{a.hw_set}</span>
-                        <span className="text-[#6e6e73] text-xs">{a.door_type || "—"}</span>
-                        <span className="text-[#6e6e73] text-xs">{a.fire_rating || "—"}</span>
-                        <span className="text-[#6e6e73] text-xs">{a.hand || "—"}</span>
+                      <div
+                        key={a.door_number}
+                        className={`border rounded-xl p-3 flex items-center justify-between transition-colors ${
+                          newExcluded[a.door_number]
+                            ? "bg-white/[0.02] border-white/[0.04] opacity-50"
+                            : "bg-white/[0.04] border-white/[0.08]"
+                        }`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <span className="text-[#f5f5f7] font-mono text-sm">{a.door_number}</span>
+                          <span className="text-[#0a84ff] text-xs">{a.hw_set}</span>
+                          <span className="text-[#6e6e73] text-xs">{a.door_type || "—"}</span>
+                          <span className="text-[#6e6e73] text-xs">{a.fire_rating || "—"}</span>
+                          <span className="text-[#6e6e73] text-xs">{a.hand || "—"}</span>
+                        </div>
+                        <div className="flex gap-1 shrink-0">
+                          <button
+                            onClick={() => setNewExcluded((p) => ({ ...p, [a.door_number]: false }))}
+                            className={`text-xs px-3 py-1 rounded-lg transition-colors ${
+                              !newExcluded[a.door_number]
+                                ? "bg-[#30d158] text-white"
+                                : "bg-white/[0.04] text-[#a1a1a6] hover:bg-white/[0.08]"
+                            }`}
+                          >
+                            Add
+                          </button>
+                          <button
+                            onClick={() => setNewExcluded((p) => ({ ...p, [a.door_number]: true }))}
+                            className={`text-xs px-3 py-1 rounded-lg transition-colors ${
+                              newExcluded[a.door_number]
+                                ? "bg-[#ff453a] text-white"
+                                : "bg-white/[0.04] text-[#a1a1a6] hover:bg-white/[0.08]"
+                            }`}
+                          >
+                            Skip
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>

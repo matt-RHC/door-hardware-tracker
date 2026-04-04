@@ -348,6 +348,9 @@ def clean_cell(val) -> str:
             s = s.replace(bad, good)
     # Normalize Unicode to NFC form
     s = unicodedata.normalize("NFC", s)
+    # Strip trailing em-dashes, en-dashes, and regular dashes that are
+    # artifacts of table-cell extraction (e.g. "1.01.A.06A—" → "1.01.A.06A")
+    s = s.rstrip("\u2014\u2013\u2012-")
     return s
 
 
@@ -376,6 +379,11 @@ def is_valid_door_number(val: str) -> bool:
     if not re.search(r"\d", s):
         return False
 
+    # Door numbers are single tokens — never contain spaces.
+    # Rejects: "Single Door #1.0", "Tel: 615-622-5777", "g #IS1-7C:1"
+    if " " in s:
+        return False
+
     # Reject bare numbers (quantities, page numbers, etc.)
     # Door numbers are NEVER just 1-3 digits alone
     if re.match(r"^\d{1,3}$", s):
@@ -383,6 +391,10 @@ def is_valid_door_number(val: str) -> bool:
 
     # Reject values starting with # (often header artifacts)
     if s.startswith("#"):
+        return False
+
+    # Reject phone number patterns (e.g. 615-622-5777)
+    if re.match(r"^\d{3}-\d{3}-\d{4}$", s):
         return False
 
     # Reject values that are clearly project/document identifiers
