@@ -4,6 +4,7 @@ import { useState, useRef, useEffect, ChangeEvent, FormEvent } from "react";
 import { PDFDocument } from "pdf-lib";
 import SubmittalWizard from "./SubmittalWizard";
 import ImportReviewTable from "./ImportReviewTable";
+import ColumnMapperWizard, { type ColumnMapping, type DetectMappingResponse } from "./ColumnMapperWizard";
 
 /* âââ Holographic Loading Overlay âââ */
 function HoloLoader({ progress, status }: { progress: number; status: string }) {
@@ -706,6 +707,17 @@ export default function PDFUploadModal({
     sets: HardwareSet[];
   } | null>(null);
 
+  // Column mapper: shown between classification and extraction
+  const [mapperData, setMapperData] = useState<DetectMappingResponse | null>(null);
+  const [confirmedMapping, setConfirmedMapping] = useState<ColumnMapping | null>(null);
+  const mapperDoneRef = useRef(false); // true after user confirms or skips
+  // Store buffer/pageCount/parseOnly so we can resume after mapping confirmation
+  const pendingUploadRef = useRef<{
+    buffer: ArrayBuffer;
+    pageCount: number;
+    parseOnly: boolean;
+  } | null>(null);
+
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     const selectedFile = e.target.files?.[0];
     if (selectedFile) {
@@ -832,6 +844,39 @@ export default function PDFUploadModal({
         const sets = c.hw_set_ids.length > 0 ? ` (${c.hw_set_ids.join(", ")})` : "";
         return `${types}${sets} [pp ${c.start_page + 1}-${c.end_page + 1}]`;
       });
+
+      // ── Column Mapper Step ──
+      // If user hasn't seen the mapper yet, detect columns from first door_schedule
+      // chunk and pause for user confirmation
+      if (!mapperDoneRef.current) {
+        const doorChunkIdx = smartChunks.findIndex((c) =>
+          c.types.includes("door_schedule")
+        );
+        const sampleChunkBase64 = chunks[doorChunkIdx >= 0 ? doorChunkIdx : 0];
+
+        if (sampleChunkBase64) {
+          setStatus("Detecting column layout...");
+          try {
+            const detectResp = await fetch("/api/detect-mapping", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ pdf_base64: sampleChunkBase64, page_index: 0 }),
+            });
+            if (detectResp.ok) {
+              const detectResult: DetectMappingResponse = await detectResp.json();
+              if (detectResult.success && detectResult.headers.length > 0) {
+                // Pause: show the column mapper wizard
+                pendingUploadRef.current = { buffer, pageCount, parseOnly };
+                setMapperData(detectResult);
+                setLoading(false);
+                return; // Will resume when user confirms mapping
+              }
+            }
+          } catch (err) {
+            console.warn("Column detection failed, proceeding with auto-detect:", err);
+          }
+        }
+      }
     } else {
       // Fallback: fixed splitting (legacy behavior)
       setStatus(`Splitting ${pageCount}-page PDF into chunks...`);
@@ -839,6 +884,9 @@ export default function PDFUploadModal({
       chunks = await splitPDFFixed(buffer, FALLBACK_PAGES_PER_CHUNK);
       chunkLabels = chunks.map((_, i) => `pages ${i * FALLBACK_PAGES_PER_CHUNK + 1}-${Math.min((i + 1) * FALLBACK_PAGES_PER_CHUNK, pageCount)}`);
     }
+
+    // ── Use confirmed mapping for extraction ──
+    const userMapping = confirmedMapping || null;
 
     const totalChunks = chunks.length;
 
@@ -886,7 +934,13 @@ export default function PDFUploadModal({
         const resp = await fetch("/api/parse-pdf/chunk", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ chunkBase64: chunks[i], chunkIndex: i, totalChunks, knownSetIds }),
+          body: JSON.stringify({
+            chunkBase64: chunks[i],
+            chunkIndex: i,
+            totalChunks,
+            knownSetIds,
+            userColumnMapping: userMapping,
+          }),
         });
 
         if (!resp.ok) {
@@ -1049,6 +1103,49 @@ export default function PDFUploadModal({
       setLoading(false);
     }
   };
+
+  // ─── Column Mapper: shown after classification, before extraction ───
+  if (mapperData) {
+    return (
+      <div className="fixed inset-0 bg-black/80 backdrop-blur-lg flex items-center justify-center z-50 p-4">
+        <div className="bg-[#1c1c1e] rounded-2xl border border-white/[0.08] p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto relative">
+          <ColumnMapperWizard
+            data={mapperData}
+            onConfirm={(mapping) => {
+              setConfirmedMapping(mapping);
+              setMapperData(null);
+              mapperDoneRef.current = true;
+              // Resume the upload with confirmed mapping
+              const pending = pendingUploadRef.current;
+              if (pending) {
+                pendingUploadRef.current = null;
+                setLoading(true);
+                setError(null);
+                processLargePDF(pending.buffer, pending.pageCount, pending.parseOnly)
+                  .catch((err) => setError(err instanceof Error ? err.message : "Upload failed"))
+                  .finally(() => setLoading(false));
+              }
+            }}
+            onSkip={() => {
+              setConfirmedMapping(null);
+              setMapperData(null);
+              mapperDoneRef.current = true;
+              // Resume without confirmed mapping (auto-detect per chunk)
+              const pending = pendingUploadRef.current;
+              if (pending) {
+                pendingUploadRef.current = null;
+                setLoading(true);
+                setError(null);
+                processLargePDF(pending.buffer, pending.pageCount, pending.parseOnly)
+                  .catch((err) => setError(err instanceof Error ? err.message : "Upload failed"))
+                  .finally(() => setLoading(false));
+              }
+            }}
+          />
+        </div>
+      </div>
+    );
+  }
 
   // If review data is ready (fresh upload), show the editable review table
   if (reviewData) {

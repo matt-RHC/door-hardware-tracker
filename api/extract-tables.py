@@ -717,9 +717,13 @@ def extract_all_hardware_sets(pdf: pdfplumber.PDF) -> list[HardwareSetDef]:
 
 # --- Opening List Extraction ---
 
-def extract_opening_list(pdf: pdfplumber.PDF) -> tuple[list[DoorEntry], int]:
+def extract_opening_list(
+    pdf: pdfplumber.PDF,
+    user_column_mapping: dict[str, int] | None = None,
+) -> tuple[list[DoorEntry], int]:
     """
     Extract the Opening List / Door Schedule from a PDF.
+    If user_column_mapping is provided, it overrides auto-detection.
     Returns (list of door entries, number of tables found).
     """
     all_doors: list[DoorEntry] = []
@@ -750,7 +754,8 @@ def extract_opening_list(pdf: pdfplumber.PDF) -> tuple[list[DoorEntry], int]:
                 headers = [clean_cell(c) for c in row]
                 if is_opening_list_table(headers):
                     header_row_idx = row_idx
-                    mapping = detect_column_mapping(headers)
+                    # Use user mapping if provided, otherwise auto-detect
+                    mapping = user_column_mapping if user_column_mapping else detect_column_mapping(headers)
                     break
 
             if header_row_idx is None:
@@ -795,7 +800,7 @@ def extract_opening_list(pdf: pdfplumber.PDF) -> tuple[list[DoorEntry], int]:
 
     # If line-based found nothing, try text-alignment strategy
     if not all_doors:
-        all_doors, tables_found = extract_opening_list_text_align(pdf)
+        all_doors, tables_found = extract_opening_list_text_align(pdf, user_column_mapping)
 
     # Final fallback: pure text parsing
     if not all_doors:
@@ -804,7 +809,10 @@ def extract_opening_list(pdf: pdfplumber.PDF) -> tuple[list[DoorEntry], int]:
     return all_doors, tables_found
 
 
-def extract_opening_list_text_align(pdf: pdfplumber.PDF) -> tuple[list[DoorEntry], int]:
+def extract_opening_list_text_align(
+    pdf: pdfplumber.PDF,
+    user_column_mapping: dict[str, int] | None = None,
+) -> tuple[list[DoorEntry], int]:
     """
     Try text-alignment based table extraction for Opening List.
     Useful when the table has transparent grid lines.
@@ -837,7 +845,7 @@ def extract_opening_list_text_align(pdf: pdfplumber.PDF) -> tuple[list[DoorEntry
                 headers = [clean_cell(c) for c in row]
                 if is_opening_list_table(headers):
                     header_row_idx = row_idx
-                    mapping = detect_column_mapping(headers)
+                    mapping = user_column_mapping if user_column_mapping else detect_column_mapping(headers)
                     break
 
             if header_row_idx is None:
@@ -1005,6 +1013,7 @@ class handler(BaseHTTPRequestHandler):
             data = json.loads(body)
 
             pdf_base64 = data.get("pdf_base64", "")
+            user_column_mapping = data.get("user_column_mapping")  # Optional override
             if not pdf_base64:
                 self._send_json(400, ExtractionResult(
                     success=False,
@@ -1021,7 +1030,8 @@ class handler(BaseHTTPRequestHandler):
                 hardware_sets = extract_all_hardware_sets(pdf)
 
                 # Phase 2: Extract Opening List via table grid detection
-                openings, tables_found = extract_opening_list(pdf)
+                # If user provided a confirmed column mapping, use it
+                openings, tables_found = extract_opening_list(pdf, user_column_mapping)
 
                 # Phase 3: Extract reference tables
                 reference_codes = extract_reference_tables(pdf)
