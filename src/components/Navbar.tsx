@@ -48,7 +48,7 @@ export default function Navbar() {
         className="absolute bottom-0 left-0 right-0 h-[1px]"
         style={{
           background:
-            "linear-gradient(90deg, transparent, rgba(90,200,250,0.2) 30%, rgba(90,200,250,0.3) 50%, rgba(90,200,250,0.2) 70%, transparent)",
+            "linear-gradient(90deg, transparent, rgba(10,132,255,0.2) 30%, rgba(10,132,255,0.3) 50%, rgba(10,132,255,0.2) 70%, transparent)",
         }}
       />
 
@@ -59,9 +59,9 @@ export default function Navbar() {
           className="flex items-center gap-2.5 group"
         >
           {/* Logo mark */}
-          <div className="relative w-8 h-8 rounded-md bg-[rgba(90,200,250,0.08)] border border-[rgba(90,200,250,0.2)] flex items-center justify-center group-hover:border-[rgba(90,200,250,0.4)] transition-all">
+          <div className="relative w-8 h-8 rounded-md bg-[rgba(10,132,255,0.08)] border border-[rgba(10,132,255,0.2)] flex items-center justify-center group-hover:border-[rgba(10,132,255,0.4)] transition-all">
             <svg
-              className="w-4 h-4 text-[#5ac8fa]"
+              className="w-4 h-4 text-[var(--blue)]"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -76,7 +76,7 @@ export default function Navbar() {
           </div>
           <div className="flex flex-col">
             <span
-              className="font-display text-[13px] font-semibold tracking-wider text-[var(--text-primary)] group-hover:text-[#5ac8fa] transition-colors"
+              className="font-display text-[13px] font-semibold tracking-wider text-[var(--text-primary)] group-hover:text-[var(--blue)] transition-colors"
               style={{ fontFamily: "var(--font-display)" }}
             >
               RABBIT HOLE

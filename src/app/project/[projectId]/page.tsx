@@ -172,7 +172,7 @@ export default function ProjectDetailPage() {
         <div className="mb-6">
           <button
             onClick={() => router.push("/dashboard")}
-            className="text-[#5ac8fa] hover:text-[#5ac8fa]/80 mb-3 text-[13px] flex items-center gap-1 transition-colors"
+            className="text-[var(--blue)] hover:text-[var(--blue)]/80 mb-3 text-[13px] flex items-center gap-1 transition-colors"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -216,7 +216,7 @@ export default function ProjectDetailPage() {
               onClick={() => setShowFilters(!showFilters)}
               className={`shrink-0 glow-btn text-[13px] rounded-lg ${
                 showFilters || activeFilterCount > 0
-                  ? "bg-[rgba(90,200,250,0.1)] border-[rgba(90,200,250,0.25)] text-[#5ac8fa]"
+                  ? "bg-[rgba(10,132,255,0.1)] border-[rgba(10,132,255,0.25)] text-[var(--blue)]"
                   : "glow-btn--ghost"
               }`}
               style={{ padding: "0.5rem 0.875rem" }}
@@ -226,7 +226,7 @@ export default function ProjectDetailPage() {
               </svg>
               Filters
               {activeFilterCount > 0 && (
-                <span className="bg-[rgba(90,200,250,0.2)] text-[10px] px-1.5 py-0.5 rounded-full text-[#5ac8fa] font-semibold">
+                <span className="bg-[rgba(10,132,255,0.2)] text-[10px] px-1.5 py-0.5 rounded-full text-[var(--blue)] font-semibold">
                   {activeFilterCount}
                 </span>
               )}
@@ -255,7 +255,7 @@ export default function ProjectDetailPage() {
             >
               {syncing ? (
                 <>
-                  <span className="w-3.5 h-3.5 border-2 border-[#30d158] border-t-transparent rounded-full animate-spin" />
+                  <span className="w-3.5 h-3.5 border-2 border-[var(--green)] border-t-transparent rounded-full animate-spin" />
                   Syncing...
                 </>
               ) : (
@@ -285,8 +285,8 @@ export default function ProjectDetailPage() {
           <div
             className={`mb-5 p-3 rounded-lg flex items-center justify-between text-[13px] border animate-fade-in-up ${
               syncResult.success
-                ? "bg-[rgba(48,209,88,0.08)] border-[rgba(48,209,88,0.15)] text-[#30d158]"
-                : "bg-[rgba(255,69,58,0.08)] border-[rgba(255,69,58,0.15)] text-[#ff6961]"
+                ? "bg-[rgba(48,209,88,0.08)] border-[rgba(48,209,88,0.15)] text-[var(--green)]"
+                : "bg-[rgba(255,69,58,0.08)] border-[rgba(255,69,58,0.15)] text-[var(--red)]"
             }`}
           >
             <span>{syncResult.message}</span>
@@ -296,7 +296,7 @@ export default function ProjectDetailPage() {
                   href={syncResult.permalink}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-[#5ac8fa] hover:opacity-80 underline transition-opacity text-[12px]"
+                  className="text-[var(--blue)] hover:opacity-80 underline transition-opacity text-[12px]"
                 >
                   Open in Smartsheet
                 </a>
@@ -323,7 +323,7 @@ export default function ProjectDetailPage() {
               {activeFilterCount > 0 && (
                 <button
                   onClick={clearFilters}
-                  className="text-[12px] text-[#5ac8fa] hover:opacity-80 transition-opacity"
+                  className="text-[12px] text-[var(--blue)] hover:opacity-80 transition-opacity"
                 >
                   Clear all
                 </button>
@@ -362,11 +362,11 @@ export default function ProjectDetailPage() {
         {/* ── Openings Grid ── */}
         {loading ? (
           <div className="flex items-center justify-center py-20 gap-3">
-            <div className="w-5 h-5 border-2 border-[#5ac8fa] border-t-transparent rounded-full animate-spin" />
+            <div className="w-5 h-5 border-2 border-[var(--blue)] border-t-transparent rounded-full animate-spin" />
             <span className="text-[13px] text-[var(--text-tertiary)]">Loading openings...</span>
           </div>
         ) : error ? (
-          <div className="p-4 bg-[rgba(255,69,58,0.08)] border border-[rgba(255,69,58,0.15)] rounded-lg text-[#ff453a] text-[14px]">
+          <div className="p-4 bg-[rgba(255,69,58,0.08)] border border-[rgba(255,69,58,0.15)] rounded-lg text-[var(--red)] text-[14px]">
             {error}
           </div>
         ) : filteredOpenings.length === 0 ? (
@@ -443,7 +443,7 @@ export default function ProjectDetailPage() {
 
                   {/* Hover arrow */}
                   <div className="absolute bottom-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <svg className="w-3.5 h-3.5 text-[#5ac8fa]/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-3.5 h-3.5 text-[var(--blue)]/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                     </svg>
                   </div>
