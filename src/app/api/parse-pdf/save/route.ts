@@ -4,7 +4,10 @@ import { createServerSupabaseClient } from '@/lib/supabase/server'
 // --- Types ---
 
 interface HardwareItem {
-  qty: number
+  qty: number              // per-opening (already normalized by Python layer)
+  qty_total?: number       // raw total from PDF
+  qty_door_count?: number  // openings in this set
+  qty_source?: string      // "parsed" | "divided" | "flagged" | "capped"
   name: string
   model: string
   finish: string
@@ -55,36 +58,9 @@ export async function POST(request: NextRequest) {
       setMap.set(set.set_id, set)
     }
 
-    // --- Quantity correction ---
-    // PDFs sometimes show aggregate/total quantities on hardware set pages
-    // (e.g. 112 hinges across 16 openings) instead of per-set quantities
-    // (e.g. 7 hinges per opening). Detect and correct this.
-    const openingCountPerSet = new Map<string, number>()
-    for (const door of doors) {
-      if (door.hw_set) {
-        openingCountPerSet.set(door.hw_set, (openingCountPerSet.get(door.hw_set) || 0) + 1)
-      }
-    }
-    for (const [setId, set] of setMap) {
-      const numOpenings = openingCountPerSet.get(setId) || 1
-      if (numOpenings <= 1) continue
-      // Check if ALL item quantities are evenly divisible by the opening count
-      // and at least one qty > numOpenings (indicating aggregate totals)
-      const allDivisible = set.items.every(
-        (item) => item.qty === 1 || item.qty % numOpenings === 0
-      )
-      const anyInflated = set.items.some((item) => item.qty > numOpenings)
-      if (allDivisible && anyInflated) {
-        console.log(
-          `[qty-correction] Set ${setId}: dividing quantities by ${numOpenings} openings`
-        )
-        for (const item of set.items) {
-          if (item.qty > 1) {
-            item.qty = Math.round(item.qty / numOpenings)
-          }
-        }
-      }
-    }
+    // Qty normalization (total → per-opening division) now happens in the Python
+    // extraction layer. Items arrive with qty already normalized plus metadata
+    // (qty_total, qty_door_count, qty_source) for audit trail.
 
     // Delete existing openings (cascade deletes children)
     const { error: deleteError } = await (supabase as any)

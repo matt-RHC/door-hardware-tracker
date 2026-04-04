@@ -5,6 +5,9 @@ import { useState, useCallback, useRef, useEffect } from "react";
 /* ─── Types (shared with PDFUploadModal) ─── */
 interface HardwareItem {
   qty: number;
+  qty_total?: number;
+  qty_door_count?: number;
+  qty_source?: string;
   name: string;
   model: string;
   finish: string;
@@ -398,7 +401,7 @@ export default function ImportReviewTable({
           <h3 className="text-sm font-semibold text-[#f5f5f7] mb-2">
             Hardware Sets ({sets.length})
           </h3>
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
             {sets.map((s) => (
               <div
                 key={s.set_id}
@@ -408,15 +411,57 @@ export default function ImportReviewTable({
                     : "bg-white/[0.04] text-[#a1a1a6]"
                 }`}
               >
-                <span className="font-semibold text-[#f5f5f7]">{s.set_id}</span>
-                {" — "}
-                {s.heading || "No heading"}
-                <span className="ml-1 text-[#6e6e73]">
-                  ({s.items.length} item{s.items.length !== 1 ? "s" : ""})
-                </span>
-                {orphanedSets.includes(s) && (
-                  <span className="ml-1 text-[#ff9f0a]">(orphaned)</span>
-                )}
+                <div className="flex items-center gap-1 mb-1">
+                  <span className="font-semibold text-[#f5f5f7]">{s.set_id}</span>
+                  {" — "}
+                  {s.heading || "No heading"}
+                  {orphanedSets.includes(s) && (
+                    <span className="ml-1 text-[#ff9f0a]">(orphaned)</span>
+                  )}
+                </div>
+                <div className="space-y-0.5">
+                  {s.items.map((item, i) => {
+                    const hasMeta = item.qty_total != null && item.qty_door_count != null;
+                    const isFlagged = item.qty_source === "flagged";
+                    const isDivided = item.qty_source === "divided";
+                    const isCapped = item.qty_source === "capped";
+                    const tooltip = hasMeta
+                      ? `${item.qty_total} total ÷ ${item.qty_door_count} openings = ${item.qty} per opening`
+                      : undefined;
+                    return (
+                      <div
+                        key={i}
+                        className="flex items-center gap-2 text-[10px]"
+                        title={tooltip}
+                      >
+                        <span className={`font-mono w-5 text-right ${
+                          isFlagged ? "text-[#ff9f0a] font-bold" :
+                          isDivided ? "text-[#30d158]" :
+                          isCapped ? "text-[#ffd60a]" :
+                          "text-[#a1a1a6]"
+                        }`}>
+                          {item.qty}
+                        </span>
+                        <span className="text-[#e8e8ed] truncate flex-1">{item.name}</span>
+                        {isFlagged && (
+                          <span className="text-[#ff9f0a] shrink-0" title={`Does not divide evenly: ${item.qty_total} ÷ ${item.qty_door_count}`}>
+                            !!
+                          </span>
+                        )}
+                        {isDivided && hasMeta && (
+                          <span className="text-[#6e6e73] shrink-0">
+                            {item.qty_total}&divide;{item.qty_door_count}
+                          </span>
+                        )}
+                        {isCapped && (
+                          <span className="text-[#ffd60a] shrink-0" title="Qty capped (no door count available)">
+                            cap
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
             ))}
           </div>

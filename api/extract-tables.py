@@ -34,7 +34,10 @@ from pydantic import BaseModel
 # --- Pydantic Models ---
 
 class HardwareItem(BaseModel):
-    qty: int = 1
+    qty: int = 1                        # per-opening qty (normalized)
+    qty_total: int | None = None        # raw total from PDF before division
+    qty_door_count: int | None = None   # doors in this set (divisor)
+    qty_source: str = "parsed"          # "parsed" | "divided" | "flagged" | "capped"
     name: str = ""
     manufacturer: str = ""
     model: str = ""
@@ -1084,12 +1087,8 @@ def extract_hardware_sets_from_page(page, page_text: str) -> list[HardwareSetDef
             if not HARDWARE_ITEM_NAMES.search(name_val) and len(name_val) < 3:
                 continue
 
-            # Classify item for category-aware qty validation
-            item_category = _classify_hardware_item(name_val)
-            max_qty = _max_qty_for_category(item_category)
-
-            # Get qty — use category-aware expected ranges instead of blind cap.
-            # Hinges: 2-5, locksets: 1, closers: 1-2, silencers: 2-4, etc.
+            # Get raw qty — pass through as-is; normalization happens in handler
+            # after we know the door count per set.
             qty_val = 1
             if qty_col is not None and qty_col < len(cells):
                 raw_qty = cells[qty_col].strip()
@@ -1103,13 +1102,6 @@ def extract_hardware_sets_from_page(page, page_text: str) -> list[HardwareSetDef
                         # Zero qty → default to 1
                         if qty_val == 0:
                             qty_val = 1
-                        # Cap using category-aware max
-                        if is_aggregate_qty and qty_val > max_qty:
-                            logger.warning(f"Qty {qty_val} appears aggregate for '{name_val}' ({item_category or 'unknown'}), capped to {max_qty}")
-                            qty_val = max_qty
-                        elif qty_val > max_qty:
-                            logger.warning(f"Qty {qty_val} exceeds expected max {max_qty} for '{name_val}' ({item_category or 'unknown'}), capped")
-                            qty_val = max_qty
 
             # Handle text wrapping — if name is very long and contains what looks
             # like a split model/finish, try to separate
@@ -1701,6 +1693,72 @@ class handler(BaseHTTPRequestHandler):
 
                 # Phase 3: Extract reference tables
                 reference_codes = extract_reference_tables(pdf)
+
+                # Phase 3.5: Normalize item qty from total → per-opening
+                # Count how many openings reference each hardware set
+                doors_per_set: dict[str, int] = {}
+                for door in openings:
+                    sid = door.hw_set
+                    if sid:
+                        doors_per_set[sid] = doors_per_set.get(sid, 0) + 1
+
+                if doors_per_set:
+                    logger.info(f"Doors per set: {doors_per_set}")
+
+                for hw_set in hardware_sets:
+                    set_door_count = doors_per_set.get(hw_set.set_id, 0)
+                    if set_door_count > 1:
+                        for item in hw_set.items:
+                            raw_qty = item.qty
+                            item.qty_total = raw_qty
+                            item.qty_door_count = set_door_count
+                            if raw_qty >= set_door_count:
+                                per_opening = raw_qty / set_door_count
+                                if per_opening == int(per_opening):
+                                    item.qty = int(per_opening)
+                                    item.qty_source = "divided"
+                                    logger.info(
+                                        f"[qty-norm] {hw_set.set_id}: '{item.name}' "
+                                        f"{raw_qty} ÷ {set_door_count} = {item.qty}"
+                                    )
+                                else:
+                                    # Doesn't divide evenly — flag for review
+                                    item.qty = raw_qty  # keep original
+                                    item.qty_source = "flagged"
+                                    logger.warning(
+                                        f"[qty-norm] {hw_set.set_id}: '{item.name}' "
+                                        f"{raw_qty} ÷ {set_door_count} = {per_opening:.2f} "
+                                        f"(not even, flagged)"
+                                    )
+                            else:
+                                # qty < door_count: likely per-opening already
+                                item.qty_source = "parsed"
+                        # Sanity-check: if divided qty still exceeds category max, flag it
+                        for item in hw_set.items:
+                            if item.qty_source == "divided":
+                                category = _classify_hardware_item(item.name)
+                                max_qty = _max_qty_for_category(category)
+                                if item.qty > max_qty:
+                                    logger.warning(
+                                        f"[qty-norm] {hw_set.set_id}: '{item.name}' "
+                                        f"divided qty {item.qty} exceeds category max {max_qty}, flagging"
+                                    )
+                                    item.qty_source = "flagged"
+                    elif set_door_count <= 1:
+                        # Single door or unknown count — fall back to category cap
+                        for item in hw_set.items:
+                            category = _classify_hardware_item(item.name)
+                            max_qty = _max_qty_for_category(category)
+                            raw_qty = item.qty
+                            if raw_qty > max_qty:
+                                logger.warning(
+                                    f"[qty-cap-fallback] {hw_set.set_id}: '{item.name}' "
+                                    f"qty {raw_qty} capped to {max_qty} (no door count for division)"
+                                )
+                                item.qty = max_qty
+                                item.qty_source = "capped"
+                                item.qty_total = raw_qty
+                                item.qty_door_count = set_door_count or None
 
                 # Phase 4: Pattern consensus validation
                 # Flag door numbers that don't match the dominant structural
