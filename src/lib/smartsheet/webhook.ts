@@ -5,7 +5,11 @@ import { createAdminSupabaseClient } from '@/lib/supabase/server'
 import { SheetType } from './types'
 import crypto from 'crypto'
 
-const WEBHOOK_SECRET = process.env.SMARTSHEET_WEBHOOK_SECRET || 'dht_webhook_secret_v1'
+function getWebhookSecret(): string {
+  const secret = process.env.SMARTSHEET_WEBHOOK_SECRET
+  if (!secret) throw new Error('SMARTSHEET_WEBHOOK_SECRET environment variable is not set')
+  return secret
+}
 
 export async function registerWebhook(params: {
   sheetId: number
@@ -33,12 +37,14 @@ export async function registerWebhook(params: {
     return { webhookId: existing.smartsheet_webhook_id }
   }
 
+  const secret = getWebhookSecret()
+
   // Create webhook in Smartsheet
   const webhook = await createWebhook(
     sheetId,
     `DHT - ${sheetName} (${sheetType})`,
     callbackUrl,
-    WEBHOOK_SECRET
+    secret
   )
 
   // Store in DB
@@ -51,7 +57,7 @@ export async function registerWebhook(params: {
       smartsheet_sheet_id: sheetId,
       callback_url: callbackUrl,
       status: 'NEW_NOT_VERIFIED',
-      shared_secret: WEBHOOK_SECRET,
+      shared_secret: secret,
     })
 
   // Enable the webhook (triggers verification handshake)
@@ -74,5 +80,9 @@ export function verifyWebhookSignature(body: string, signature: string, secret: 
   const hmac = crypto.createHmac('sha256', secret)
   hmac.update(body)
   const computed = hmac.digest('hex')
-  return crypto.timingSafeEqual(Buffer.from(computed), Buffer.from(signature))
+  const computedBuf = Buffer.from(computed)
+  const signatureBuf = Buffer.from(signature)
+  // timingSafeEqual throws if buffers differ in length — reject early
+  if (computedBuf.length !== signatureBuf.length) return false
+  return crypto.timingSafeEqual(computedBuf, signatureBuf)
 }

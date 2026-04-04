@@ -203,16 +203,9 @@ export async function POST(
     let sheetPermalink: string
 
     if (!sheetId) {
-      // Create per-project folder in workspace
-      const projectFolderName = project.job_number
-        ? `${project.job_number} - ${project.name}`
-        : project.name
+      // Get or create the "Door Hardware QR" folder in the workspace
       const parentFolderId = await getOrCreateFolder(WORKSPACE_ID, FOLDER_NAME)
-      const projectFolderId = await getOrCreateFolder(parentFolderId as any, projectFolderName)
 
-      // Note: createFolderInWorkspace only works for workspace-level, need folder-level
-      // Actually Smartsheet uses /folders/{folderId}/folders for subfolders
-      // For simplicity, create sheet directly in the parent folder
       const newSheet = await createSheetInFolder(parentFolderId, sheetName, [...PROJECT_SHEET_COLUMNS])
       sheetId = newSheet.id
       sheetPermalink = newSheet.permalink
