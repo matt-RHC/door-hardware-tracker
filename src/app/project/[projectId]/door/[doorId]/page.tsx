@@ -554,7 +554,7 @@ export default function DoorDetailPage() {
   };
 
   return (
-    <div className="min-h-screen bg-black pb-20">
+    <div className="min-h-screen bg-[var(--background)] pb-28">
       <OfflineIndicator />
 
       {/* Sticky Header */}
@@ -1192,7 +1192,7 @@ export default function DoorDetailPage() {
       </main>
 
       {/* Bottom Navigation Bar */}
-      <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[430px] md:max-w-[900px] bg-black/90 backdrop-blur-xl border-t border-white/[0.08] h-16 flex items-center justify-around">
+      <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[430px] md:max-w-[900px] bg-[var(--background)]/90 backdrop-blur-xl border-t border-[var(--border)] pb-[env(safe-area-inset-bottom)] h-16 flex items-center justify-around z-50">
         {(['hardware', 'files', 'notes', 'qr'] as const).map((tab) => (
           <button
             key={tab}
