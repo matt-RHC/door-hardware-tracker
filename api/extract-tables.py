@@ -74,27 +74,106 @@ class ExtractionResult(BaseModel):
 
 # --- Column Detection for Opening List ---
 
-DOOR_NUMBER_PATTERNS = re.compile(
-    r"(?i)^(open(ing)?|door)\s*(no\.?|num(ber)?|#|tag)|^#$|^no\.?$|^tag$"
-)
-HW_SET_PATTERNS = re.compile(
-    r"(?i)(h\.?w\.?\s*(set|group)|hardware\s*set|set\s*(no\.?|#|id))"
-)
-LOCATION_PATTERNS = re.compile(
-    r"(?i)(location|label|description|opening\s*label|from\s*/?\s*to)"
-)
-DOOR_TYPE_PATTERNS = re.compile(
-    r"(?i)(door\s*type|dr\.?\s*type|type\s*d)"
-)
-FRAME_TYPE_PATTERNS = re.compile(
-    r"(?i)(frame\s*type|fr\.?\s*type|type\s*f)"
-)
-FIRE_RATING_PATTERNS = re.compile(
-    r"(?i)(fire\s*rat(ing|e)|rating|f\.?r\.?)"
-)
-HAND_PATTERNS = re.compile(
-    r"(?i)^hand(ing)?$|^handing$"
-)
+# --- Intelligent Column Detection ---
+#
+# Instead of brittle regex, use keyword scoring. Each field has weighted
+# keywords. A header is scored against ALL fields and the best match wins.
+# This handles variants like "Hdw Set", "HW Set", "Hardware Set", "Set #",
+# "Opening", "Door No.", "Door #", etc. without needing exact patterns.
+
+COLUMN_KEYWORDS: dict[str, list[tuple[str, float]]] = {
+    "door_number": [
+        ("opening", 0.7), ("door", 0.7), ("no", 0.3), ("num", 0.3),
+        ("number", 0.3), ("#", 0.3), ("tag", 0.3), ("mark", 0.3),
+    ],
+    "hw_set": [
+        ("hw", 0.5), ("hdw", 0.5), ("hardware", 0.5), ("set", 0.5),
+        ("group", 0.4),
+    ],
+    "hw_heading": [
+        ("hw", 0.3), ("hdw", 0.3), ("hardware", 0.3), ("heading", 0.7),
+        ("set", 0.1), ("description", 0.2),
+    ],
+    "location": [
+        ("location", 0.9), ("label", 0.5), ("description", 0.4),
+        ("from", 0.4), ("to", 0.3), ("room", 0.5), ("area", 0.4),
+    ],
+    "door_type": [
+        ("door", 0.5), ("type", 0.5), ("dr", 0.5), ("material", 0.3),
+    ],
+    "frame_type": [
+        ("frame", 0.7), ("type", 0.3), ("fr", 0.5), ("material", 0.2),
+    ],
+    "fire_rating": [
+        ("fire", 0.6), ("rating", 0.4), ("rate", 0.4), ("rated", 0.4),
+        ("fr", 0.3), ("min", 0.2),
+    ],
+    "hand": [
+        ("hand", 0.8), ("handing", 0.9), ("swing", 0.5),
+    ],
+}
+
+# Fields that should NOT match a bare header like "Opening" if another field
+# already has a stronger claim. Higher = more specific (less likely to be
+# a standalone header).
+FIELD_SPECIFICITY = {
+    "door_number": 1,    # "Opening" alone is likely door_number
+    "hw_set": 3,         # needs "set" or "hw"
+    "hw_heading": 3,
+    "location": 2,
+    "door_type": 3,
+    "frame_type": 3,
+    "fire_rating": 3,
+    "hand": 5,           # very specific
+}
+
+# Standard column order in door hardware submittals (used for positional
+# inference when keyword scoring is ambiguous)
+STANDARD_COLUMN_ORDER = [
+    "door_number", "hw_set", "hw_heading", "location",
+    "door_type", "frame_type", "fire_rating", "hand",
+]
+
+
+def score_header_for_field(header: str, field: str) -> float:
+    """
+    Score how well a header string matches a field using keyword matching.
+    Returns a float 0.0–1.0.
+    """
+    h = header.lower().strip()
+    if not h:
+        return 0.0
+
+    # Tokenize: split on whitespace, punctuation, dots
+    tokens = re.split(r"[\s._/#\-]+", h)
+    tokens = [t for t in tokens if t]
+
+    keywords = COLUMN_KEYWORDS.get(field, [])
+    score = 0.0
+    matched_keywords = 0
+
+    for token in tokens:
+        for keyword, weight in keywords:
+            # Exact match
+            if token == keyword:
+                score += weight
+                matched_keywords += 1
+                break
+            # Prefix match (e.g. "open" matches "opening")
+            if len(token) >= 3 and (token.startswith(keyword) or keyword.startswith(token)):
+                score += weight * 0.7
+                matched_keywords += 1
+                break
+
+    # Bonus for matching multiple keywords (e.g. "Door Type" hits both "door" and "type")
+    if matched_keywords >= 2:
+        score *= 1.2
+
+    # Penalty for very long headers that only match one keyword
+    if len(tokens) > 3 and matched_keywords <= 1:
+        score *= 0.5
+
+    return min(score, 1.0)
 
 # Reference table header patterns
 MANUFACTURER_HEADER = re.compile(
@@ -174,37 +253,58 @@ HARDWARE_ITEM_NAMES = re.compile(
 )
 
 
-def match_column(header: str, pattern: re.Pattern) -> bool:
-    """Check if a header string matches a column pattern."""
-    if not header:
-        return False
-    return bool(pattern.search(header.strip()))
-
-
 def detect_column_mapping(headers: list[str]) -> dict[str, int]:
     """
     Given a list of column headers, return a mapping of
     field_name -> column_index for Opening List fields.
+
+    Uses keyword scoring instead of rigid regex — handles "Hdw Set",
+    "HW Set", "Hardware Set", "Opening", "Door No.", etc. without
+    needing to enumerate every variant.
     """
-    mapping = {}
-    patterns = {
-        "door_number": DOOR_NUMBER_PATTERNS,
-        "hw_set": HW_SET_PATTERNS,
-        "location": LOCATION_PATTERNS,
-        "door_type": DOOR_TYPE_PATTERNS,
-        "frame_type": FRAME_TYPE_PATTERNS,
-        "fire_rating": FIRE_RATING_PATTERNS,
-        "hand": HAND_PATTERNS,
-    }
+    fields = list(COLUMN_KEYWORDS.keys())
+    mapping: dict[str, int] = {}
+    used_columns: set[int] = set()
+
+    # Phase 1: Score every header against every field
+    # Build a list of (score, field, col_index) and assign greedily
+    candidates: list[tuple[float, str, int]] = []
 
     for i, header in enumerate(headers):
-        if not header:
+        if not header or not header.strip():
             continue
-        h = header.strip()
-        for field, pattern in patterns.items():
-            if field not in mapping and match_column(h, pattern):
-                mapping[field] = i
-                break
+        for field in fields:
+            score = score_header_for_field(header, field)
+            if score >= 0.3:  # minimum threshold
+                candidates.append((score, field, i))
+
+    # Sort by score descending — best matches assigned first
+    candidates.sort(key=lambda x: -x[0])
+
+    for score, field, col_idx in candidates:
+        if field in mapping or col_idx in used_columns:
+            continue
+        mapping[field] = col_idx
+        used_columns.add(col_idx)
+
+    # Phase 2: Positional inference for unmapped columns
+    # If we have door_number but are missing other fields, try to infer
+    # from standard column order (door_number, hw_set, hw_heading, location,
+    # door_type, frame_type, fire_rating, hand)
+    if "door_number" in mapping and len(mapping) < len(headers):
+        door_col = mapping["door_number"]
+        # Map remaining headers by position relative to door_number
+        for offset, field in enumerate(STANDARD_COLUMN_ORDER):
+            col_idx = door_col + offset
+            if field not in mapping and col_idx < len(headers) and col_idx not in used_columns:
+                # Only assign if header isn't obviously wrong (e.g., empty or numeric)
+                h = (headers[col_idx] or "").strip()
+                if h and not re.match(r"^\d+$", h):
+                    # Check that this header has at least minimal relevance
+                    best_score = score_header_for_field(h, field)
+                    if best_score >= 0.15:  # very low bar for positional inference
+                        mapping[field] = col_idx
+                        used_columns.add(col_idx)
 
     return mapping
 
@@ -228,21 +328,20 @@ def clean_cell(val) -> str:
     # Fix common UTF-8/Latin-1 mojibake patterns
     # Â· (C2 B7 decoded as Latin-1) → · (middle dot, standard hardware separator)
     mojibake_map = {
-        "Â·": "·",       # middle dot
-        "Â\u00b7": "·",  # alternate encoding
-        "â€"": "–",      # en dash
-        "â€"": "—",      # em dash
-        "â€™": "'",      # right single quote
-        "â€˜": "'",      # left single quote
-        "â€œ": '"',      # left double quote
-        "â€\u009d": '"', # right double quote
-        "Ã—": "×",       # multiplication sign
-        "Â½": "½",       # one half
-        "Â¼": "¼",       # one quarter
-        "Â¾": "¾",       # three quarters
-        "Â®": "®",       # registered
-        "Â©": "©",       # copyright
-        "Ã\u0097": "×",  # multiplication sign variant
+        "\u00c2\u00b7": "\u00b7",       # middle dot (Â· → ·)
+        "\u00c3\u0097": "\u00d7",       # multiplication sign (Ã— → ×)
+        "\u00c3\u00b7": "\u00f7",       # division sign
+        "\u00c2\u00bd": "\u00bd",       # one half (Â½ → ½)
+        "\u00c2\u00bc": "\u00bc",       # one quarter (Â¼ → ¼)
+        "\u00c2\u00be": "\u00be",       # three quarters (Â¾ → ¾)
+        "\u00c2\u00ae": "\u00ae",       # registered (Â® → ®)
+        "\u00c2\u00a9": "\u00a9",       # copyright (Â© → ©)
+        "\u00e2\u0080\u0093": "\u2013", # en dash (â€" → –)
+        "\u00e2\u0080\u0094": "\u2014", # em dash (â€" → —)
+        "\u00e2\u0080\u0099": "\u2019", # right single quote (â€™ → ')
+        "\u00e2\u0080\u0098": "\u2018", # left single quote (â€˜ → ')
+        "\u00e2\u0080\u009c": "\u201c", # left double quote (â€œ → ")
+        "\u00e2\u0080\u009d": "\u201d", # right double quote (â€ → ")
     }
     for bad, good in mojibake_map.items():
         if bad in s:
@@ -255,17 +354,61 @@ def clean_cell(val) -> str:
 def is_valid_door_number(val: str) -> bool:
     """
     Check if a value looks like a valid door number.
-    Door numbers typically contain digits and may have letter suffixes,
-    hyphens, or prefixes like ST-, EY-.
+
+    Valid patterns (real examples):
+      1.01.A.01A, 110-01C, A-201B, ST-100, 2.01.F.06E, B1-101, ER-ADJ9.8-94
+    Invalid (should reject):
+      94, 4, 20, 8, MCA1-2-, L583-363, #2.01.A.14
     """
     if not val:
         return False
-    lower = val.lower()
-    if lower in ("", "total", "totals", "note", "notes", "cont", "continued"):
+    s = val.strip()
+    lower = s.lower()
+
+    # Reject common non-door values
+    if lower in ("", "total", "totals", "note", "notes", "cont", "continued",
+                 "qty", "quantity", "n/a", "none", "see", "above", "below"):
         return False
     if lower.startswith("note:") or lower.startswith("*"):
         return False
-    return bool(re.search(r"\d", val))
+
+    # Must contain at least one digit
+    if not re.search(r"\d", s):
+        return False
+
+    # Reject bare numbers (quantities, page numbers, etc.)
+    # Door numbers are NEVER just 1-3 digits alone
+    if re.match(r"^\d{1,3}$", s):
+        return False
+
+    # Reject values starting with # (often header artifacts)
+    if s.startswith("#"):
+        return False
+
+    # Reject values that are clearly project/document identifiers
+    # (e.g. "MCA1-2-" ending in dash, or very long codes without dots/structure)
+    if s.endswith("-"):
+        return False
+
+    # Must have a recognizable door number structure:
+    # - Contains a dot or dash separator with digits on both sides, OR
+    # - Starts with a letter prefix followed by digits (A101, ST-100), OR
+    # - Starts with digits followed by a letter/dot/dash separator
+    has_structure = bool(
+        re.match(r"^\d+[.\-]\d", s) or          # 1.01, 110-01
+        re.match(r"^[A-Z]{1,4}[.\-]?\d", s) or  # A101, ST-100, B1-101
+        re.match(r"^\d+[.\-][A-Z]", s, re.I) or  # 1.A, 2.01.F
+        re.search(r"\d[.\-]\d", s)                # any digit.digit or digit-digit
+    )
+
+    if not has_structure:
+        return False
+
+    # Minimum length — real door numbers are at least 3 chars (e.g. "A01")
+    if len(s) < 3:
+        return False
+
+    return True
 
 
 # --- Hardware Set Extraction ---
@@ -371,8 +514,8 @@ def extract_hardware_sets_from_page(page, page_text: str) -> list[HardwareSetDef
         header_row = [clean_cell(c) for c in table[0]]
         header_text_lower = " ".join(header_row).lower()
 
-        # Skip if this looks like a door list table (Qty | Description | Door # | Location)
-        if any(match_column(h, DOOR_NUMBER_PATTERNS) for h in header_row):
+        # Skip if this looks like a door list table (has door_number column)
+        if is_opening_list_table(header_row):
             continue
 
         # Detect hardware items table by looking for qty + item/description columns
@@ -618,6 +761,7 @@ def extract_opening_list(pdf: pdfplumber.PDF) -> tuple[list[DoorEntry], int]:
                 entry = DoorEntry(
                     door_number=door_num,
                     hw_set=get_field("hw_set"),
+                    hw_heading=get_field("hw_heading"),
                     location=get_field("location"),
                     door_type=get_field("door_type"),
                     frame_type=get_field("frame_type"),
@@ -703,6 +847,7 @@ def extract_opening_list_text_align(pdf: pdfplumber.PDF) -> tuple[list[DoorEntry
                 entry = DoorEntry(
                     door_number=door_num,
                     hw_set=get_field("hw_set"),
+                    hw_heading=get_field("hw_heading"),
                     location=get_field("location"),
                     door_type=get_field("door_type"),
                     frame_type=get_field("frame_type"),
