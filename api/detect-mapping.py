@@ -59,13 +59,13 @@ STANDARD_COLUMN_ORDER = [
 
 FIELD_LABELS = {
     "door_number": "Door Number",
-    "hw_set": "HW Set",
-    "hw_heading": "HW Heading",
+    "hw_set": "Hardware Set",
+    "hw_heading": "Hardware Heading",
     "location": "Location",
     "door_type": "Door Type",
     "frame_type": "Frame Type",
     "fire_rating": "Fire Rating",
-    "hand": "Hand/Swing",
+    "hand": "Hand / Swing",
 }
 
 
