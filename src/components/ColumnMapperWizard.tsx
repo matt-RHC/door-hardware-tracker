@@ -243,6 +243,8 @@ function Step2MapColumns({
   onConfirm,
   onBack,
   fieldLabels,
+  skippedFields,
+  onToggleSkip,
 }: {
   data: DetectMappingResponse;
   mapping: ColumnMapping;
@@ -253,6 +255,8 @@ function Step2MapColumns({
   onConfirm: () => void;
   onBack: () => void;
   fieldLabels: Record<string, string>;
+  skippedFields: Set<string>;
+  onToggleSkip: (field: string) => void;
 }) {
   // Reverse mapping: column index → field name
   const reverseMapping = useMemo(() => {
@@ -314,49 +318,79 @@ function Step2MapColumns({
           <div className="stagger-children space-y-2">
             {ALL_FIELDS.map((field) => {
               const isMapped = field in mapping;
+              const isSkipped = skippedFields.has(field);
               const isActive = activeField === field;
               const isRequired = REQUIRED_FIELDS.includes(field);
               const confidence = data.confidence_scores[field];
               const color = FIELD_COLORS[field];
-              const glowClass = getFieldGlowClass(field);
 
               return (
-                <button
-                  key={field}
-                  onClick={() => onFieldClick(isActive ? null : field)}
-                  className={`glow-card ${glowClass} w-full p-4 text-left transition-all ${
-                    isActive ? "ring-2 ring-offset-2 ring-offset-[#050508] scale-105" : ""
-                  }`}
-                  style={{
-                    minHeight: "56px",
-                    boxShadow: isActive
-                      ? `0 0 20px ${color}40, inset 0 0 12px ${color}08`
-                      : "none",
-                  }}
-                >
-                  <div className="space-y-1">
-                    <div className="flex items-baseline justify-between gap-2">
-                      <span
-                        className="font-semibold text-sm"
-                        style={{ color: "#f5f5f7", textShadow: "0 1px 4px rgba(0,0,0,0.6)" }}
-                      >
-                        {fieldLabels[field]}
-                      </span>
-                      {isRequired && <span className="text-[#ff453a]">*</span>}
-                    </div>
-                    {isMapped && (
-                      <div className="text-xs" style={{ color }}>
-                        <strong>→ Column {mapping[field] + 1}</strong>
-                        {confidence !== undefined && (
-                          <span className="ml-1 opacity-60">({Math.round(confidence * 100)}%)</span>
+                <div key={field} className="flex gap-1.5">
+                  <button
+                    onClick={() => {
+                      if (isSkipped) return;
+                      onFieldClick(isActive ? null : field);
+                    }}
+                    className={`flex-1 rounded-lg p-3 text-left transition-all ${
+                      isActive ? "ring-2 ring-[#5ac8fa] scale-[1.02]" : ""
+                    }`}
+                    style={{
+                      backgroundColor: isSkipped
+                        ? "rgba(255,255,255,0.02)"
+                        : `${color}10`,
+                      border: `1px solid ${isSkipped ? "rgba(255,255,255,0.06)" : `${color}25`}`,
+                      opacity: isSkipped ? 0.5 : 1,
+                    }}
+                    disabled={isSkipped}
+                  >
+                    <div className="space-y-0.5">
+                      <div className="flex items-baseline justify-between gap-2">
+                        <span
+                          className="font-semibold text-sm"
+                          style={{
+                            color: isSkipped ? "#636366" : color,
+                            textDecoration: isSkipped ? "line-through" : "none",
+                          }}
+                        >
+                          {fieldLabels[field]}
+                        </span>
+                        {isRequired && !isSkipped && (
+                          <span className="text-[#ff453a] text-xs">required</span>
                         )}
                       </div>
-                    )}
-                    {!isMapped && (
-                      <p className="text-xs text-[#8e8e93]">Click to assign column</p>
-                    )}
-                  </div>
-                </button>
+                      {isSkipped && (
+                        <p className="text-xs text-[#636366] italic">Not in this table</p>
+                      )}
+                      {!isSkipped && isMapped && (
+                        <div className="text-xs" style={{ color }}>
+                          <strong>→ Column {mapping[field] + 1}</strong>
+                          {confidence !== undefined && (
+                            <span className="ml-1 opacity-60">({Math.round(confidence * 100)}%)</span>
+                          )}
+                        </div>
+                      )}
+                      {!isSkipped && !isMapped && (
+                        <p className="text-xs text-[#8e8e93]">Click to assign</p>
+                      )}
+                    </div>
+                  </button>
+                  {!isRequired && (
+                    <button
+                      onClick={() => onToggleSkip(field)}
+                      className="flex-shrink-0 w-8 rounded-lg flex items-center justify-center text-xs transition-all"
+                      style={{
+                        backgroundColor: isSkipped
+                          ? "rgba(90,200,250,0.1)"
+                          : "rgba(255,255,255,0.03)",
+                        border: "1px solid rgba(255,255,255,0.08)",
+                        color: isSkipped ? "#5ac8fa" : "#636366",
+                      }}
+                      title={isSkipped ? "Re-enable this field" : "Not in this table"}
+                    >
+                      {isSkipped ? "↩" : "✕"}
+                    </button>
+                  )}
+                </div>
               );
             })}
           </div>
@@ -664,6 +698,7 @@ export default function ColumnMapperWizard({
   const [phase, setPhase] = useState<WizardPhase>(initialPhase);
   const [currentData, setCurrentData] = useState<DetectMappingResponse>(data);
   const [mapping, setMapping] = useState<ColumnMapping>(() => ({ ...data.auto_mapping }));
+  const [skippedFields, setSkippedFields] = useState<Set<string>>(new Set());
   const [activeField, setActiveField] = useState<string | null>(null);
   const [redetecting, setRedetecting] = useState(false);
   const [redetectError, setRedetectError] = useState<string | null>(null);
@@ -726,8 +761,28 @@ export default function ColumnMapperWizard({
     setActiveField(null);
   }, [activeField]);
 
+  const handleToggleSkip = useCallback((field: string) => {
+    setSkippedFields((prev) => {
+      const next = new Set(prev);
+      if (next.has(field)) {
+        next.delete(field);
+      } else {
+        next.add(field);
+        // Also remove from mapping when skipping
+        setMapping((m) => {
+          const updated = { ...m };
+          delete updated[field];
+          return updated;
+        });
+        if (activeField === field) setActiveField(null);
+      }
+      return next;
+    });
+  }, [activeField]);
+
   const handleReset = useCallback(() => {
     setMapping({ ...currentData.auto_mapping });
+    setSkippedFields(new Set());
     setActiveField(null);
   }, [currentData.auto_mapping]);
 
@@ -789,6 +844,8 @@ export default function ColumnMapperWizard({
               onConfirm={handleStep2Confirm}
               onBack={handleStep2Back}
               fieldLabels={fieldLabels}
+              skippedFields={skippedFields}
+              onToggleSkip={handleToggleSkip}
             />
           )}
           {phase === "step3" && (

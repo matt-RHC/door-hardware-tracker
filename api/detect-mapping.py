@@ -317,6 +317,32 @@ def find_door_schedule_table(page) -> tuple[list[str], list[list[str]], str]:
     # Some PDFs have text-aligned tables without visible rules or consistent
     # column widths. pdfplumber's extract_tables() fails on these. Scan the
     # raw text for a line that looks like column headers.
+
+    # Known multi-word column headers that should NOT be split
+    MERGE_PAIRS = {
+        ("door", "type"), ("frame", "type"), ("door", "no"),
+        ("door", "number"), ("door", "no."), ("hdw", "set"),
+        ("hdw", "heading"), ("hw", "set"), ("hw", "heading"),
+        ("hardware", "set"), ("hardware", "heading"),
+        ("fire", "rating"), ("opening", "label"), ("opening", "no"),
+        ("opening", "no."), ("opening", "number"),
+    }
+
+    def merge_header_tokens(tokens: list[str]) -> list[str]:
+        """Merge adjacent tokens that form known multi-word headers."""
+        merged: list[str] = []
+        i = 0
+        while i < len(tokens):
+            if i + 1 < len(tokens):
+                pair = (tokens[i].lower(), tokens[i + 1].lower())
+                if pair in MERGE_PAIRS:
+                    merged.append(f"{tokens[i]} {tokens[i + 1]}")
+                    i += 2
+                    continue
+            merged.append(tokens[i])
+            i += 1
+        return merged
+
     text = page.extract_text() or ""
     lines = text.split("\n")
     for line_idx, line in enumerate(lines[:20]):
@@ -332,11 +358,13 @@ def find_door_schedule_table(page) -> tuple[list[str], list[list[str]], str]:
         stop_count = sum(1 for t in tokens if t.lower() in stop_words)
         if stop_count >= 2:
             continue
+        # Merge known multi-word headers before scoring
+        merged_tokens = merge_header_tokens(tokens)
         # Score the whole line as potential headers
         field_scores: dict[str, float] = {}
         for field in COLUMN_KEYWORDS:
             best_s = 0.0
-            for token in tokens:
+            for token in merged_tokens:
                 best_s = max(best_s, score_header_for_field(token, field))
             if best_s >= 0.4:
                 field_scores[field] = best_s
@@ -346,11 +374,17 @@ def find_door_schedule_table(page) -> tuple[list[str], list[list[str]], str]:
         if len(other) < 2:
             continue
         # Found a plausible header line — extract data rows below it
-        headers = tokens
+        headers = merged_tokens
+        num_cols = len(headers)
         sample_rows = []
         for data_line in lines[line_idx + 1: line_idx + 6]:
             row_tokens = data_line.split()
             if row_tokens and len(row_tokens) >= 2:
+                # Align data row to header count — pad or truncate
+                if len(row_tokens) < num_cols:
+                    row_tokens.extend([""] * (num_cols - len(row_tokens)))
+                elif len(row_tokens) > num_cols:
+                    row_tokens = row_tokens[:num_cols]
                 sample_rows.append(row_tokens)
         if len(sample_rows) < 3:
             continue
