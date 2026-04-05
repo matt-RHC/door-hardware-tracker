@@ -1491,7 +1491,7 @@ export default function PDFUploadModal({
               // Build human-readable summary of confirmed column mapping
               const headers = mapperData?.headers ?? [];
               const FIELD_LABELS: Record<string, string> = {
-                door_number: "Door Number", hw_set: "Hardware Set", hw_heading: "Hardware Heading",
+                door_number: "Door Number", hw_set: "Hardware Heading", hw_heading: "Hardware Subheading",
                 location: "Location", door_type: "Door Type", frame_type: "Frame Type",
                 fire_rating: "Fire Rating", hand: "Hand / Swing",
               };

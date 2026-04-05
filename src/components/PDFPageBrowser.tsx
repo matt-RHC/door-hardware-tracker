@@ -32,7 +32,10 @@ export default function PDFPageBrowser({
       try {
         const pdfjsLib = await import("pdfjs-dist");
         pdfjsLib.GlobalWorkerOptions.workerSrc = "/pdf.worker.min.mjs";
-        const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(pdfBuffer) });
+        // Clone the buffer — pdfjs-dist transfers it to its Web Worker,
+        // which detaches the original and breaks extraction later
+        const bufferCopy = pdfBuffer.slice(0);
+        const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(bufferCopy) });
         const doc = await loadingTask.promise;
         if (!cancelled) {
           pdfDocRef.current = doc;
@@ -142,8 +145,8 @@ export default function PDFPageBrowser({
         <div className="flex flex-wrap gap-2 mt-3">
           {[
             { label: "Door Number", color: "#0a84ff", required: true },
-            { label: "Hardware Set", color: "#30d158" },
-            { label: "Hardware Heading", color: "#bf5af2" },
+            { label: "Hardware Heading", color: "#30d158" },
+            { label: "Hardware Subheading", color: "#bf5af2" },
             { label: "Location", color: "#ff9f0a" },
             { label: "Door Type", color: "#64d2ff" },
             { label: "Frame Type", color: "#ff6482" },
