@@ -403,9 +403,17 @@ function Step2MapColumns({
                       </div>
                     )}
                     {data.sample_rows.length > 0 && (
-                      <p className="text-xs text-[#8e8e93] truncate">
-                        e.g. &quot;{data.sample_rows[0][colIdx]}&quot;
-                      </p>
+                      <div className="mt-1 space-y-0.5">
+                        {data.sample_rows.map((row, rIdx) => {
+                          const val = row[colIdx];
+                          return (
+                            <p key={rIdx} className="text-[11px] text-[#8e8e93] truncate">
+                              <span className="text-[#4a4a4e] mr-1">r{rIdx + 1}</span>
+                              {val || <span className="italic text-[#3a3a3e]">(empty)</span>}
+                            </p>
+                          );
+                        })}
+                      </div>
                     )}
                   </div>
                 </button>
