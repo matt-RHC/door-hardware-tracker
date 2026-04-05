@@ -663,6 +663,137 @@ async function splitPDFFixed(buffer: ArrayBuffer, pagesPerChunk: number): Promis
   return chunks;
 }
 
+/**
+ * Build a filtered PDF containing only pages of specified types.
+ * Used to reduce token cost: triage and LLM review only need
+ * opening list + hardware schedule pages, not cut sheets or reference tables.
+ */
+async function buildFilteredPDF(
+  buffer: ArrayBuffer,
+  classifications: PageClassification[],
+  allowedTypes: string[] = ["door_schedule", "hardware_set"]
+): Promise<string | null> {
+  try {
+    const relevantPages = classifications
+      .filter((p) => allowedTypes.includes(p.type))
+      .map((p) => p.index);
+
+    if (relevantPages.length === 0) return null;
+
+    const srcDoc = await PDFDocument.load(buffer);
+    const totalPages = srcDoc.getPageCount();
+
+    // Filter out any page indices beyond the PDF's actual page count
+    const validPages = relevantPages.filter((p) => p < totalPages);
+    if (validPages.length === 0) return null;
+
+    const filteredDoc = await PDFDocument.create();
+    const copiedPages = await filteredDoc.copyPages(srcDoc, validPages);
+    for (const page of copiedPages) {
+      filteredDoc.addPage(page);
+    }
+
+    const filteredBytes = await filteredDoc.save();
+    const filteredBase64 = btoa(
+      new Uint8Array(filteredBytes).reduce((data, byte) => data + String.fromCharCode(byte), "")
+    );
+
+    console.log(`Page filter: ${totalPages} pages → ${validPages.length} relevant pages (${Math.round((1 - validPages.length / totalPages) * 100)}% reduction)`);
+    return filteredBase64;
+  } catch (err) {
+    console.warn("Failed to build filtered PDF, will use full PDF:", err);
+    return null;
+  }
+}
+
+/**
+ * Call the AI triage endpoint to classify door candidates.
+ * Returns null if triage fails (caller should proceed with all candidates).
+ */
+interface TriageClassification {
+  door_number: string;
+  class: "door" | "by_others" | "reject";
+  confidence: "high" | "medium" | "low";
+  reason: string;
+}
+
+interface TriageResult {
+  classifications: TriageClassification[];
+  stats: { total: number; doors: number; by_others: number; rejected: number };
+}
+
+async function runTriage(
+  candidates: DoorEntry[],
+  filteredPdfBase64?: string | null
+): Promise<TriageResult | null> {
+  try {
+    const body: Record<string, unknown> = {
+      candidates: candidates.map((c) => ({
+        door_number: c.door_number,
+        hw_set: c.hw_set || null,
+        door_type: c.door_type || null,
+        frame_type: c.frame_type || null,
+        fire_rating: c.fire_rating || null,
+        hand: c.hand || null,
+        location: c.location || null,
+        page_number: null,
+      })),
+    };
+    if (filteredPdfBase64) {
+      body.filteredPdfBase64 = filteredPdfBase64;
+    }
+
+    const resp = await fetch("/api/parse-pdf/triage", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+
+    if (!resp.ok) {
+      console.warn("Triage endpoint failed:", resp.status);
+      return null;
+    }
+
+    return await resp.json();
+  } catch (err) {
+    console.warn("Triage call failed, proceeding without classification:", err);
+    return null;
+  }
+}
+
+/**
+ * Apply triage results: filter out rejected doors, identify by_others indices.
+ * Returns the filtered door array and a Set of by_others indices in the filtered array.
+ */
+function applyTriageResults(
+  doors: DoorEntry[],
+  triage: TriageResult
+): { filteredDoors: DoorEntry[]; byOthersIndices: Set<number> } {
+  const classMap = new Map<string, TriageClassification>();
+  for (const c of triage.classifications) {
+    classMap.set(c.door_number, c);
+  }
+
+  const filteredDoors: DoorEntry[] = [];
+  const byOthersIndices = new Set<number>();
+
+  for (const door of doors) {
+    const classification = classMap.get(door.door_number);
+    if (classification?.class === "reject") {
+      console.log(`[triage-reject] ${door.door_number}: ${classification.reason} (${classification.confidence})`);
+      continue; // Filter out
+    }
+    const idx = filteredDoors.length;
+    filteredDoors.push(door);
+    if (classification?.class === "by_others") {
+      byOthersIndices.add(idx);
+      console.log(`[triage-by-others] ${door.door_number}: ${classification.reason}`);
+    }
+  }
+
+  return { filteredDoors, byOthersIndices };
+}
+
 // --- Hardware item dedup helpers (Level 2: cross-chunk, Level 3: pre-save) ---
 
 const NAME_ABBREVIATIONS: Record<string, string> = {
@@ -786,6 +917,7 @@ export default function PDFUploadModal({
     doors: DoorEntry[];
     sets: HardwareSet[];
     flaggedDoors?: FlaggedDoor[];
+    byOthersFromTriage?: Set<number>;
   } | null>(null);
 
   // Column mapper: shown between classification and extraction
@@ -890,7 +1022,7 @@ export default function PDFUploadModal({
     buffer: ArrayBuffer,
     pageCount: number,
     parseOnly = false
-  ): Promise<{ doors: DoorEntry[]; sets: HardwareSet[]; flaggedDoors?: FlaggedDoor[] } | void> => {
+  ): Promise<{ doors: DoorEntry[]; sets: HardwareSet[]; flaggedDoors?: FlaggedDoor[]; filteredPdfBase64?: string } | void> => {
     // Convert buffer to base64 (needed by both paths)
     const fullBase64 = btoa(
       new Uint8Array(buffer).reduce((data, byte) => data + String.fromCharCode(byte), "")
@@ -928,33 +1060,49 @@ export default function PDFUploadModal({
         }
       }
 
+      // Classify pages to build a filtered PDF for cheaper LLM review + triage
+      setStatus("Classifying pages...");
+      setProgress(10);
+      const pageClassResult = await classifyPages(fullBase64);
+      let filteredPdfBase64: string | null = null;
+      if (pageClassResult?.page_classifications) {
+        filteredPdfBase64 = await buildFilteredPDF(buffer, pageClassResult.page_classifications);
+      }
+
       setStatus("Extracting tables and running AI review...");
       setProgress(15);
 
       try {
+        const parseBody: Record<string, unknown> = {
+          pdfBase64: fullBase64,
+          userColumnMapping: confirmedMapping || null,
+        };
+        // Send filtered PDF for cheaper LLM review (server still extracts from full PDF)
+        if (filteredPdfBase64) {
+          parseBody.filteredPdfBase64 = filteredPdfBase64;
+        }
+
         const resp = await fetch("/api/parse-pdf?parseOnly=true", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            pdfBase64: fullBase64,
-            userColumnMapping: confirmedMapping || null,
-          }),
+          body: JSON.stringify(parseBody),
         });
 
         if (resp.ok) {
           const result = await resp.json();
           if (result.doors?.length > 0 || result.sets?.length > 0) {
-            setProgress(95);
+            setProgress(90);
             setStatus("Deduplicating hardware items...");
             // Apply the same dedup that the chunked path uses
             const dedupedSets = mergeHardwareSets(result.sets || []);
-            setProgress(100);
+            setProgress(92);
             console.log(`Parsed ${dedupedSets.length} hardware sets, ${result.doors?.length ?? 0} doors`);
             setStatus("Extraction complete. Ready for review.");
             return {
               doors: result.doors || [],
               sets: dedupedSets,
               flaggedDoors: result.flaggedDoors || [],
+              filteredPdfBase64: filteredPdfBase64 ?? undefined,
             };
           }
           // If pdfplumber returned zero results, report clearly instead of
@@ -1253,7 +1401,18 @@ export default function PDFUploadModal({
           if (result.doors.length === 0) {
             throw new Error("No doors found in the document.");
           }
-          setWizardData({ doors: result.doors, sets: result.sets });
+
+          // Run AI triage to filter false positives (fail-open)
+          setStatus("Validating door candidates...");
+          const triage = await runTriage(result.doors, result.filteredPdfBase64);
+          let wizardDoors = result.doors;
+          if (triage) {
+            const { filteredDoors } = applyTriageResults(result.doors, triage);
+            wizardDoors = filteredDoors;
+            console.log(`Triage: ${result.doors.length} → ${filteredDoors.length} doors (${triage.stats.rejected} rejected, ${triage.stats.by_others} by_others)`);
+          }
+
+          setWizardData({ doors: wizardDoors, sets: result.sets });
         }
         // Don't close â wizard will render
         setLoading(false);
@@ -1268,10 +1427,25 @@ export default function PDFUploadModal({
         if (freshResult.doors.length === 0) {
           throw new Error("No doors found in the document.");
         }
+
+        // Run AI triage to filter false positives and identify by_others (fail-open)
+        setStatus("Validating door candidates...");
+        const triage = await runTriage(freshResult.doors, freshResult.filteredPdfBase64);
+        let reviewDoors = freshResult.doors;
+        let triageByOthers: Set<number> | undefined;
+        if (triage) {
+          const { filteredDoors, byOthersIndices } = applyTriageResults(freshResult.doors, triage);
+          reviewDoors = filteredDoors;
+          triageByOthers = byOthersIndices.size > 0 ? byOthersIndices : undefined;
+          console.log(`Triage: ${freshResult.doors.length} → ${filteredDoors.length} doors (${triage.stats.rejected} rejected, ${triage.stats.by_others} by_others)`);
+        }
+
+        setProgress(100);
         setReviewData({
-          doors: freshResult.doors,
+          doors: reviewDoors,
           sets: freshResult.sets,
           flaggedDoors: freshResult.flaggedDoors,
+          byOthersFromTriage: triageByOthers,
         });
       }
       // Don't close - review table will render
@@ -1352,6 +1526,7 @@ export default function PDFUploadModal({
         doors={reviewData.doors}
         sets={reviewData.sets}
         flaggedDoors={reviewData.flaggedDoors}
+        byOthersFromTriage={reviewData.byOthersFromTriage}
         onClose={onClose}
         onComplete={onSuccess}
       />

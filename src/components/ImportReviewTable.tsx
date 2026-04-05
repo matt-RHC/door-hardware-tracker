@@ -106,6 +106,7 @@ interface ImportReviewTableProps {
   doors: DoorEntry[];
   sets: HardwareSet[];
   flaggedDoors?: FlaggedDoor[];
+  byOthersFromTriage?: Set<number>;
   onClose: () => void;
   onComplete: () => void;
 }
@@ -115,6 +116,7 @@ export default function ImportReviewTable({
   doors: initialDoors,
   sets,
   flaggedDoors = [],
+  byOthersFromTriage,
   onClose,
   onComplete,
 }: ImportReviewTableProps) {
@@ -123,7 +125,10 @@ export default function ImportReviewTable({
   const [error, setError] = useState<string | null>(null);
   const [showSets, setShowSets] = useState(false);
   const [deletedRows, setDeletedRows] = useState<Set<number>>(new Set());
-  const [byOthersRows, setByOthersRows] = useState<Set<number>>(new Set());
+  // Pre-populate from AI triage if available, otherwise start empty
+  const [byOthersRows, setByOthersRows] = useState<Set<number>>(
+    () => byOthersFromTriage ?? new Set()
+  );
 
   // Flagged doors: user decides which to include
   const [approvedFlagged, setApprovedFlagged] = useState<Set<number>>(new Set());
