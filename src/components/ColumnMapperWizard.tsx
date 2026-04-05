@@ -115,11 +115,14 @@ function Step1IdentifyTable({
     <div className="space-y-6 animate-fade-in-up">
       <div>
         <h2 className="font-display text-2xl font-bold text-white mb-2">
-          IDENTIFY YOUR TABLE
+          IS THIS YOUR OPENING LIST?
         </h2>
         <p className="text-sm text-[#8e8e93]">
-          Verify this is the correct table. We detected {data.headers.length} columns and{" "}
-          {data.sample_rows.length} sample rows.
+          We found a table that looks like a door schedule or opening list. It should have
+          columns like <span className="text-[#e8e8ed]">Door No.</span>,{" "}
+          <span className="text-[#e8e8ed]">HW Set</span>,{" "}
+          <span className="text-[#e8e8ed]">Location</span>, and{" "}
+          <span className="text-[#e8e8ed]">Door Type</span>.
           {data.page_index !== undefined && (
             <span className="block mt-1">
               <span className="text-[#636366]">Detected on page {data.page_index + 1} of {data.total_pages}</span>
@@ -187,9 +190,14 @@ function Step1IdentifyTable({
 
       {/* Actions */}
       <div className="flex items-center justify-between pt-4 gap-4">
-        <button onClick={onSkip} className="glow-btn glow-btn--ghost">
-          This isn't the right table
-        </button>
+        <div className="flex flex-col items-start gap-1">
+          <button onClick={onSkip} className="glow-btn glow-btn--ghost">
+            This isn&apos;t the right table
+          </button>
+          <span className="text-[10px] text-[#636366] ml-1">
+            We&apos;ll skip mapping and auto-detect per page
+          </span>
+        </div>
         <button onClick={onConfirm} className="glow-btn glow-btn--primary">
           Looks Good, Next
         </button>
@@ -261,9 +269,15 @@ function Step2MapColumns({
           MAP YOUR COLUMNS
         </h2>
         <p className="text-sm text-[#8e8e93]">
-          Click a field on the left, then click a column header to assign it. Fields marked with{" "}
-          <span className="text-[#ff453a]">*</span> are required.
+          Tell us which column contains each field. We pre-filled our best guesses below
+          — adjust any that look wrong.
         </p>
+        <div className="mt-2 p-2.5 rounded bg-[rgba(90,200,250,0.06)] border border-[rgba(90,200,250,0.12)]">
+          <p className="text-xs text-[#5ac8fa]">
+            <strong>How:</strong> Click a field on the left, then click the matching column on the right.
+            Only <span className="text-[#ff453a]">Door Number</span> is required — map as many others as your PDF has.
+          </p>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-6 min-h-[500px]">
@@ -453,10 +467,12 @@ function Step3Confirm({
     <div className="space-y-6 animate-fade-in-up">
       <div>
         <h2 className="font-display text-2xl font-bold text-white mb-2">
-          CONFIRM MAPPING
+          CONFIRM & EXTRACT
         </h2>
         <p className="text-sm text-[#8e8e93]">
-          Review your column assignments. Click Confirm to proceed with extraction.
+          Review the mapping below. The preview shows how your data will be read.
+          When everything looks right, hit <span className="text-[#e8e8ed]">Confirm &amp; Extract</span> to
+          start parsing your submittal.
         </p>
       </div>
 

@@ -323,6 +323,15 @@ def find_door_schedule_table(page) -> tuple[list[str], list[list[str]], str]:
         tokens = line.split()
         if len(tokens) < 3:
             continue
+        # Reject prose/sentence lines: real column headers don't have
+        # trailing commas or common English stop-words
+        punct_count = sum(1 for t in tokens if t.endswith(",") or t.endswith(";"))
+        if punct_count >= 2:
+            continue
+        stop_words = {"and", "the", "for", "with", "from", "that", "this", "are", "has", "been"}
+        stop_count = sum(1 for t in tokens if t.lower() in stop_words)
+        if stop_count >= 2:
+            continue
         # Score the whole line as potential headers
         field_scores: dict[str, float] = {}
         for field in COLUMN_KEYWORDS:
