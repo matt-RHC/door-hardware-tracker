@@ -136,10 +136,38 @@ export default function PDFPageBrowser({
           SELECT YOUR DOOR SCHEDULE
         </h2>
         <p className="text-sm text-[#a1a1a6] leading-relaxed">
-          Click the page(s) that contain your opening list (master door schedule).
-          Look for pages with a table of door numbers, hardware sets, and door types.
+          Find the page(s) with your opening list — the master table that lists every
+          door in the project. We&apos;ll use it to extract:
         </p>
-        <div className="flex items-center gap-3 mt-2">
+        <div className="flex flex-wrap gap-2 mt-3">
+          {[
+            { label: "Door Number", color: "#0a84ff", required: true },
+            { label: "Hardware Set", color: "#30d158" },
+            { label: "Hardware Heading", color: "#bf5af2" },
+            { label: "Location", color: "#ff9f0a" },
+            { label: "Door Type", color: "#64d2ff" },
+            { label: "Frame Type", color: "#ff6482" },
+            { label: "Fire Rating", color: "#ff453a" },
+            { label: "Hand / Swing", color: "#ffd60a" },
+          ].map(({ label, color, required }) => (
+            <span
+              key={label}
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-medium"
+              style={{
+                backgroundColor: `${color}15`,
+                color,
+                border: `1px solid ${color}30`,
+              }}
+            >
+              {label}
+              {required && <span className="text-[#ff453a]">*</span>}
+            </span>
+          ))}
+        </div>
+        <p className="text-[11px] text-[#636366] mt-2">
+          <span className="text-[#ff453a]">*</span> Required — others are optional but improve tracking
+        </p>
+        <div className="flex items-center gap-3 mt-3">
           <p className="text-xs text-[#636366]">
             {pageCount} pages total
           </p>
