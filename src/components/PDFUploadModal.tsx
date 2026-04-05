@@ -949,9 +949,8 @@ export default function PDFUploadModal({
             // Apply the same dedup that the chunked path uses
             const dedupedSets = mergeHardwareSets(result.sets || []);
             setProgress(100);
-            setStatus(
-              `Parsed ${dedupedSets.length} hardware sets, ${result.doors?.length || 0} doors. Ready for review.`
-            );
+            console.log(`Parsed ${dedupedSets.length} hardware sets, ${result.doors?.length ?? 0} doors`);
+            setStatus("Extraction complete. Ready for review.");
             return {
               doors: result.doors || [],
               sets: dedupedSets,
@@ -995,12 +994,8 @@ export default function PDFUploadModal({
       // Smart chunking: use semantic boundaries
       const { chunks: smartChunks, reference_pages: refPages, summary } = classification!;
 
-      setStatus(
-        `Found ${summary.door_schedule_pages} schedule pages, ` +
-        `${summary.hardware_set_pages} hardware pages, ` +
-        `${summary.reference_pages} reference pages. ` +
-        `Splitting into ${summary.chunk_count} smart chunks...`
-      );
+      console.log(`Classification: ${summary.door_schedule_pages} schedule, ${summary.hardware_set_pages} hardware, ${summary.reference_pages} reference pages → ${summary.chunk_count} chunks`);
+      setStatus("Analyzing document structure...");
       setProgress(3);
 
       const chunkPageSets = smartChunks.map((c: SmartChunk) => c.pages);
@@ -1135,7 +1130,8 @@ export default function PDFUploadModal({
       // Snap to real completion % for this chunk
       setProgress(chunkEndPct);
       const setsSoFar = new Set(allHardwareSets.map((s) => s.set_id)).size;
-      setStatus(`Chunk ${i + 1}/${totalChunks} done. ${setsSoFar} sets, ${allDoors.length} doors so far.`);
+      console.log(`Chunk ${i + 1}/${totalChunks}: ${setsSoFar} sets, ${allDoors.length} doors so far`);
+      setStatus(`Chunk ${i + 1} of ${totalChunks} complete.`);
     }
 
     setStatus("Merging results across chunks...");
@@ -1151,7 +1147,8 @@ export default function PDFUploadModal({
     if (mergedDoors.length === 0 && allFlaggedDoors.length > 0) {
       // All doors were flagged as pattern outliers — still surface them for review
       // rather than failing with "no doors found"
-      setStatus(`All ${allFlaggedDoors.length} doors flagged for pattern review.`);
+      console.log(`All ${allFlaggedDoors.length} doors flagged for pattern review`);
+      setStatus("Flagged doors for review.");
     }
 
     // Parse-only mode: return data for wizard
@@ -1160,12 +1157,14 @@ export default function PDFUploadModal({
       const flagNote = allFlaggedDoors.length > 0
         ? ` (${allFlaggedDoors.length} flagged for review)`
         : "";
-      setStatus(`Parsed ${mergedSets.length} hardware sets, ${mergedDoors.length} doors${flagNote}. Ready for review.`);
+      console.log(`Parsed ${mergedSets.length} sets, ${mergedDoors.length} doors${flagNote}`);
+      setStatus("Extraction complete. Ready for review.");
       return { doors: mergedDoors, sets: mergedSets, flaggedDoors: allFlaggedDoors };
     }
 
     // Save mode: write to DB
-    setStatus(`Merged: ${mergedSets.length} hardware sets, ${mergedDoors.length} unique doors. Saving...`);
+    console.log(`Merged: ${mergedSets.length} sets, ${mergedDoors.length} doors`);
+    setStatus("Saving results...");
     setProgress(85);
 
     const saveResp = await fetch("/api/parse-pdf/save", {

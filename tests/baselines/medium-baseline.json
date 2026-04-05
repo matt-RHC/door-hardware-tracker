@@ -3,7 +3,7 @@
   "door_count": 104,
   "confirmed_count": 86,
   "flagged_count": 18,
-  "hw_set_count": 47,
+  "hw_set_count": 35,
   "tables_found": 33,
   "reference_code_count": 0,
   "hardware_sets": [
@@ -675,7 +675,7 @@
       ]
     },
     {
-      "set_id": "EX1.0",
+      "set_id": "EX1",
       "heading": "Heading #EX1.0",
       "item_count": 3,
       "items": [
@@ -712,7 +712,7 @@
       ]
     },
     {
-      "set_id": "EX3.0",
+      "set_id": "EX3-R",
       "heading": "Heading #EX3.0 (R)",
       "item_count": 19,
       "items": [
@@ -909,7 +909,7 @@
       ]
     },
     {
-      "set_id": "EX3.1",
+      "set_id": "EX3-NR",
       "heading": "Heading #EX3.1 (NR)",
       "item_count": 20,
       "items": [
@@ -918,17 +918,17 @@
           "qty": 1,
           "qty_source": "parsed",
           "qty_total": 1,
-          "qty_door_count": 3,
+          "qty_door_count": 5,
           "manufacturer": "#1201A",
           "model": "",
           "finish": "Exterior Equip"
         },
         {
           "name": "Hinges",
-          "qty": 3,
-          "qty_source": "divided",
+          "qty": 9,
+          "qty_source": "flagged",
           "qty_total": 9,
-          "qty_door_count": 3,
+          "qty_door_count": 5,
           "manufacturer": "",
           "model": "5BB1 H",
           "finish": "W 4 1/2 x 4 1/"
@@ -938,137 +938,137 @@
           "qty": 2,
           "qty_source": "parsed",
           "qty_total": 2,
-          "qty_door_count": 3,
+          "qty_door_count": 5,
           "manufacturer": "",
           "model": "98L x 9",
           "finish": "96L-R&V 06"
         },
         {
           "name": "Elec. Exit M",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 3,
+          "qty_source": "parsed",
           "qty_total": 3,
-          "qty_door_count": 3,
+          "qty_door_count": 5,
           "manufacturer": "odification",
           "model": "RE-157",
           "finish": "0-996L-R&V-2"
         },
         {
           "name": "Rim Cylinde",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 3,
+          "qty_source": "parsed",
           "qty_total": 3,
-          "qty_door_count": 3,
+          "qty_door_count": 5,
           "manufacturer": "r Housing",
           "model": "80-129",
           "finish": ""
         },
         {
           "name": "Temporary",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 3,
+          "qty_source": "parsed",
           "qty_total": 3,
-          "qty_door_count": 3,
+          "qty_door_count": 5,
           "manufacturer": "IC Core",
           "model": "80-033",
           "finish": ""
         },
         {
           "name": "Permanent",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 3,
+          "qty_source": "parsed",
           "qty_total": 3,
-          "qty_door_count": 3,
+          "qty_door_count": 5,
           "manufacturer": "Core",
           "model": "1CM-7",
           "finish": "MJ11"
         },
         {
           "name": "Wire Harne",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 3,
+          "qty_source": "parsed",
           "qty_total": 3,
-          "qty_door_count": 3,
+          "qty_door_count": 5,
           "manufacturer": "ss",
           "model": "CON-12",
           "finish": ""
         },
         {
           "name": "Wire Harne",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 3,
+          "qty_source": "parsed",
           "qty_total": 3,
-          "qty_door_count": 3,
+          "qty_door_count": 5,
           "manufacturer": "ss",
           "model": "CON-6P",
           "finish": ""
         },
         {
           "name": "Closer",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 3,
+          "qty_source": "parsed",
           "qty_total": 3,
-          "qty_door_count": 3,
+          "qty_door_count": 5,
           "manufacturer": "",
           "model": "4040XP",
           "finish": "CUSH"
         },
         {
           "name": "Kickplate",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 3,
+          "qty_source": "parsed",
           "qty_total": 3,
-          "qty_door_count": 3,
+          "qty_door_count": 5,
           "manufacturer": "",
           "model": "8400 1",
           "finish": "0\" X 34\" B-CS"
         },
         {
           "name": "Threshold",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 3,
+          "qty_source": "parsed",
           "qty_total": 3,
-          "qty_door_count": 3,
+          "qty_door_count": 5,
           "manufacturer": "",
           "model": "65A 36",
           "finish": "\""
         },
         {
           "name": "Door Sweep",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 3,
+          "qty_source": "parsed",
           "qty_total": 3,
-          "qty_door_count": 3,
+          "qty_door_count": 5,
           "manufacturer": "",
           "model": "39A 36",
           "finish": "\""
         },
         {
           "name": "Gasket",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 3,
+          "qty_source": "parsed",
           "qty_total": 3,
-          "qty_door_count": 3,
+          "qty_door_count": 5,
           "manufacturer": "",
           "model": "429AA",
           "finish": "1 x 36\" 2 x 96\""
         },
         {
           "name": "Length of R",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 3,
+          "qty_source": "parsed",
           "qty_total": 3,
-          "qty_door_count": 3,
+          "qty_door_count": 5,
           "manufacturer": "ain Drip",
           "model": "142AA",
           "finish": "40\""
         },
         {
           "name": "Hardware b",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 3,
+          "qty_source": "parsed",
           "qty_total": 3,
-          "qty_door_count": 3,
+          "qty_door_count": 5,
           "manufacturer": "y Others(By",
           "model": "DOOR",
           "finish": "POSITION SWIT"
@@ -1078,7 +1078,7 @@
           "qty": 1,
           "qty_source": "parsed",
           "qty_total": 1,
-          "qty_door_count": 3,
+          "qty_door_count": 5,
           "manufacturer": "",
           "model": "CONTR",
           "finish": "ACTOR"
@@ -1088,7 +1088,7 @@
           "qty": 1,
           "qty_source": "parsed",
           "qty_total": 1,
-          "qty_door_count": 3,
+          "qty_door_count": 5,
           "manufacturer": "d Reader unlocks",
           "model": "Rim Ex",
           "finish": "it Device trim ("
@@ -1098,17 +1098,17 @@
           "qty": 1,
           "qty_source": "parsed",
           "qty_total": 1,
-          "qty_door_count": 3,
+          "qty_door_count": 5,
           "manufacturer": "h side.",
           "model": "",
           "finish": ""
         },
         {
           "name": "of 44",
-          "qty": 4,
-          "qty_source": "divided",
+          "qty": 12,
+          "qty_source": "flagged",
           "qty_total": 12,
-          "qty_door_count": 3,
+          "qty_door_count": 5,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -1116,7 +1116,7 @@
       ]
     },
     {
-      "set_id": "EX3.2",
+      "set_id": "EX3-NR-9",
       "heading": "Heading #EX3.2 (9)",
       "item_count": 21,
       "items": [
@@ -1333,164 +1333,7 @@
       ]
     },
     {
-      "set_id": "EX3.3",
-      "heading": "Heading #EX3.3 (NR)",
-      "item_count": 15,
-      "items": [
-        {
-          "name": "Single Door",
-          "qty": 1,
-          "qty_source": "parsed",
-          "qty_total": 1,
-          "qty_door_count": 2,
-          "manufacturer": "#1201C",
-          "model": "",
-          "finish": "Exterior"
-        },
-        {
-          "name": "Hinges",
-          "qty": 4,
-          "qty_source": "divided",
-          "qty_total": 8,
-          "qty_door_count": 2,
-          "manufacturer": "",
-          "model": "5BB1 H",
-          "finish": "W 4 1/2 x"
-        },
-        {
-          "name": "Exit Device",
-          "qty": 1,
-          "qty_source": "parsed",
-          "qty_total": 1,
-          "qty_door_count": 2,
-          "manufacturer": "",
-          "model": "98L x 9",
-          "finish": "96L-R&V"
-        },
-        {
-          "name": "Rim Cylinde",
-          "qty": 1,
-          "qty_source": "divided",
-          "qty_total": 2,
-          "qty_door_count": 2,
-          "manufacturer": "r Housing",
-          "model": "80-129",
-          "finish": ""
-        },
-        {
-          "name": "Temporary",
-          "qty": 1,
-          "qty_source": "divided",
-          "qty_total": 2,
-          "qty_door_count": 2,
-          "manufacturer": "IC Core",
-          "model": "80-033",
-          "finish": ""
-        },
-        {
-          "name": "Permanent",
-          "qty": 1,
-          "qty_source": "divided",
-          "qty_total": 2,
-          "qty_door_count": 2,
-          "manufacturer": "Core",
-          "model": "1CM-7",
-          "finish": "MJ11"
-        },
-        {
-          "name": "Closer",
-          "qty": 1,
-          "qty_source": "divided",
-          "qty_total": 2,
-          "qty_door_count": 2,
-          "manufacturer": "",
-          "model": "4040XP",
-          "finish": "CUSH"
-        },
-        {
-          "name": "Kickplate",
-          "qty": 1,
-          "qty_source": "divided",
-          "qty_total": 2,
-          "qty_door_count": 2,
-          "manufacturer": "",
-          "model": "8400 1",
-          "finish": "0\" X 34\" B"
-        },
-        {
-          "name": "Threshold",
-          "qty": 1,
-          "qty_source": "divided",
-          "qty_total": 2,
-          "qty_door_count": 2,
-          "manufacturer": "",
-          "model": "65A 36",
-          "finish": "\""
-        },
-        {
-          "name": "Door Sweep",
-          "qty": 1,
-          "qty_source": "divided",
-          "qty_total": 2,
-          "qty_door_count": 2,
-          "manufacturer": "",
-          "model": "39A 36",
-          "finish": "\""
-        },
-        {
-          "name": "Gasket",
-          "qty": 1,
-          "qty_source": "divided",
-          "qty_total": 2,
-          "qty_door_count": 2,
-          "manufacturer": "",
-          "model": "429AA",
-          "finish": "1 x 36\" 2"
-        },
-        {
-          "name": "Length of R",
-          "qty": 1,
-          "qty_source": "divided",
-          "qty_total": 2,
-          "qty_door_count": 2,
-          "manufacturer": "ain Drip",
-          "model": "142AA",
-          "finish": "40\""
-        },
-        {
-          "name": "Hardware b",
-          "qty": 1,
-          "qty_source": "divided",
-          "qty_total": 2,
-          "qty_door_count": 2,
-          "manufacturer": "y Others(By",
-          "model": "DOOR",
-          "finish": "POSITION"
-        },
-        {
-          "name": "Others)",
-          "qty": 1,
-          "qty_source": "parsed",
-          "qty_total": 1,
-          "qty_door_count": 2,
-          "manufacturer": "",
-          "model": "CONTR",
-          "finish": "ACTOR"
-        },
-        {
-          "name": "of 44",
-          "qty": 7,
-          "qty_source": "flagged",
-          "qty_total": 14,
-          "qty_door_count": 2,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        }
-      ]
-    },
-    {
-      "set_id": "EX4.0",
+      "set_id": "EX4",
       "heading": "Heading #EX4.0",
       "item_count": 22,
       "items": [
@@ -1717,7 +1560,7 @@
       ]
     },
     {
-      "set_id": "EX6.0",
+      "set_id": "EX6",
       "heading": "Heading #EX6.0",
       "item_count": 18,
       "items": [
@@ -1904,7 +1747,7 @@
       ]
     },
     {
-      "set_id": "EX10.0",
+      "set_id": "EX10",
       "heading": "Heading #EX10.0",
       "item_count": 23,
       "items": [
@@ -2141,7 +1984,7 @@
       ]
     },
     {
-      "set_id": "DH1.0",
+      "set_id": "DH1-9",
       "heading": "Heading #DH1.0 (9)",
       "item_count": 22,
       "items": [
@@ -2368,453 +2211,226 @@
       ]
     },
     {
-      "set_id": "DH1.01",
+      "set_id": "DH1-10",
       "heading": "Heading #DH1.01 (10)",
       "item_count": 22,
       "items": [
         {
           "name": "Hinges 5BB1 HW 4 1/2 x 4 1/2 NRP 652 IV",
-          "qty": 7,
+          "qty": 42,
           "qty_source": "flagged",
           "qty_total": 42,
-          "qty_door_count": 6,
+          "qty_door_count": 16,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "Hinges 5BB1 HW 4 1/2 x 4 1/2 CON TW8 652 IV",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 6,
+          "qty_source": "parsed",
           "qty_total": 6,
-          "qty_door_count": 6,
+          "qty_door_count": 16,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "Flush Bolt Kit FB32 US32D IV",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 6,
+          "qty_source": "parsed",
           "qty_total": 6,
-          "qty_door_count": 6,
+          "qty_door_count": 16,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "Exit Device 9875L-F x 996L-M 06 576A-US32D RHR US26D VO",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 6,
+          "qty_source": "parsed",
           "qty_total": 6,
-          "qty_door_count": 6,
+          "qty_door_count": 16,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "Elec. Exit Modification ME-1520-9875-24VDC-AE-QC3 RHR AC",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 6,
+          "qty_source": "parsed",
           "qty_total": 6,
-          "qty_door_count": 6,
+          "qty_door_count": 16,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "Cylinder Housing 80-102 626 SC",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 6,
+          "qty_source": "parsed",
           "qty_total": 6,
-          "qty_door_count": 6,
+          "qty_door_count": 16,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "Temporary IC Core 80-033 626 SC",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 6,
+          "qty_source": "parsed",
           "qty_total": 6,
-          "qty_door_count": 6,
+          "qty_door_count": 16,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "Permanent Core 1CM-7MJ11 626 BE",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 6,
+          "qty_source": "parsed",
           "qty_total": 6,
-          "qty_door_count": 6,
+          "qty_door_count": 16,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "Wire Harness CON-12 SC",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 6,
+          "qty_source": "parsed",
           "qty_total": 6,
-          "qty_door_count": 6,
+          "qty_door_count": 16,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "Wire Harness CON-6P SC",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 6,
+          "qty_source": "parsed",
           "qty_total": 6,
-          "qty_door_count": 6,
+          "qty_door_count": 16,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "Closer 4040XP EDA 689 LC",
-          "qty": 1,
-          "qty_source": "divided",
-          "qty_total": 12,
-          "qty_door_count": 12,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Protection Plate 8400 10\" X 35\" B-CS US32D IV",
-          "qty": 1,
-          "qty_source": "divided",
-          "qty_total": 12,
-          "qty_door_count": 12,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Wall Stop WS406/407CCV US32D IV",
-          "qty": 1,
-          "qty_source": "divided",
-          "qty_total": 12,
-          "qty_door_count": 12,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Gasket 429AA 1 x 72\" 2 x 120\" ZE",
-          "qty": 1,
-          "qty_source": "divided",
-          "qty_total": 6,
-          "qty_door_count": 6,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Threshold 65A 72\" ZE",
-          "qty": 1,
-          "qty_source": "divided",
-          "qty_total": 6,
-          "qty_door_count": 6,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Hardware by Others(By DOOR POSITION SWITCH BY SECURITY BO",
-          "qty": 1,
-          "qty_source": "divided",
-          "qty_total": 12,
-          "qty_door_count": 12,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Coordinator 3780 US28 AB",
-          "qty": 1,
-          "qty_source": "divided",
-          "qty_total": 6,
-          "qty_door_count": 6,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Smoke Seal 5075 C 25' NA",
-          "qty": 1,
-          "qty_source": "divided",
-          "qty_total": 12,
-          "qty_door_count": 12,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Gasketing 5060 C-21 21' NA",
-          "qty": 1,
-          "qty_source": "divided",
-          "qty_total": 12,
-          "qty_door_count": 12,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Acoustic Seal 60FP NA",
-          "qty": 1,
-          "qty_source": "divided",
-          "qty_total": 12,
-          "qty_door_count": 12,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Weatherstrip 326AA 119\" ZE",
-          "qty": 1,
-          "qty_source": "divided",
-          "qty_total": 12,
-          "qty_door_count": 12,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Auto Door Bottom 355AA 36\" ZE",
-          "qty": 1,
-          "qty_source": "divided",
-          "qty_total": 12,
-          "qty_door_count": 12,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        }
-      ]
-    },
-    {
-      "set_id": "DH1.02",
-      "heading": "Heading #DH1.02 (10)",
-      "item_count": 22,
-      "items": [
-        {
-          "name": "Hinges 5BB1 HW 4 1/2 x 4 1/2 NRP 652 IV",
-          "qty": 7,
+          "qty": 12,
           "qty_source": "flagged",
-          "qty_total": 14,
-          "qty_door_count": 2,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Hinges 5BB1 HW 4 1/2 x 4 1/2 CON TW8 652 IV",
-          "qty": 1,
-          "qty_source": "divided",
-          "qty_total": 2,
-          "qty_door_count": 2,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Flush Bolt Kit FB32 US32D IV",
-          "qty": 1,
-          "qty_source": "divided",
-          "qty_total": 2,
-          "qty_door_count": 2,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Exit Device 9875L-F x 996L-M 06 576A-US32D RHR US26D VO",
-          "qty": 1,
-          "qty_source": "divided",
-          "qty_total": 2,
-          "qty_door_count": 2,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Elec. Exit Modification ME-1520-9875-24VDC-AE-QC3 RHR AC",
-          "qty": 1,
-          "qty_source": "divided",
-          "qty_total": 2,
-          "qty_door_count": 2,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Cylinder Housing 80-102 626 SC",
-          "qty": 1,
-          "qty_source": "divided",
-          "qty_total": 2,
-          "qty_door_count": 2,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Temporary IC Core 80-033 626 SC",
-          "qty": 1,
-          "qty_source": "divided",
-          "qty_total": 2,
-          "qty_door_count": 2,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Permanent Core 1CM-7MJ11 626 BE",
-          "qty": 1,
-          "qty_source": "divided",
-          "qty_total": 2,
-          "qty_door_count": 2,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Wire Harness CON-12 SC",
-          "qty": 1,
-          "qty_source": "divided",
-          "qty_total": 2,
-          "qty_door_count": 2,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Wire Harness CON-6P SC",
-          "qty": 1,
-          "qty_source": "divided",
-          "qty_total": 2,
-          "qty_door_count": 2,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Closer 4040XP EDA 689 LC",
-          "qty": 1,
-          "qty_source": "divided",
-          "qty_total": 4,
-          "qty_door_count": 4,
+          "qty_total": 12,
+          "qty_door_count": 16,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "Protection Plate 8400 10\" X 35\" B-CS US32D IV",
-          "qty": 1,
-          "qty_source": "divided",
-          "qty_total": 4,
-          "qty_door_count": 4,
+          "qty": 12,
+          "qty_source": "flagged",
+          "qty_total": 12,
+          "qty_door_count": 16,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "Wall Stop WS406/407CCV US32D IV",
-          "qty": 1,
-          "qty_source": "divided",
-          "qty_total": 4,
-          "qty_door_count": 4,
+          "qty": 12,
+          "qty_source": "flagged",
+          "qty_total": 12,
+          "qty_door_count": 16,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "Gasket 429AA 1 x 72\" 2 x 120\" ZE",
-          "qty": 1,
-          "qty_source": "divided",
-          "qty_total": 2,
-          "qty_door_count": 2,
+          "qty": 6,
+          "qty_source": "parsed",
+          "qty_total": 6,
+          "qty_door_count": 16,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "Threshold 65A 72\" ZE",
-          "qty": 1,
-          "qty_source": "divided",
-          "qty_total": 2,
-          "qty_door_count": 2,
+          "qty": 6,
+          "qty_source": "parsed",
+          "qty_total": 6,
+          "qty_door_count": 16,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "Hardware by Others(By DOOR POSITION SWITCH BY SECURITY BO",
-          "qty": 1,
-          "qty_source": "divided",
-          "qty_total": 4,
-          "qty_door_count": 4,
+          "qty": 12,
+          "qty_source": "flagged",
+          "qty_total": 12,
+          "qty_door_count": 16,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "Coordinator 3780 US28 AB",
-          "qty": 1,
-          "qty_source": "divided",
-          "qty_total": 2,
-          "qty_door_count": 2,
+          "qty": 6,
+          "qty_source": "parsed",
+          "qty_total": 6,
+          "qty_door_count": 16,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "Smoke Seal 5075 C 25' NA",
-          "qty": 1,
-          "qty_source": "divided",
-          "qty_total": 4,
-          "qty_door_count": 4,
+          "qty": 12,
+          "qty_source": "flagged",
+          "qty_total": 12,
+          "qty_door_count": 16,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "Gasketing 5060 C-21 21' NA",
-          "qty": 1,
-          "qty_source": "divided",
-          "qty_total": 4,
-          "qty_door_count": 4,
+          "qty": 12,
+          "qty_source": "flagged",
+          "qty_total": 12,
+          "qty_door_count": 16,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "Acoustic Seal 60FP NA",
-          "qty": 1,
-          "qty_source": "divided",
-          "qty_total": 4,
-          "qty_door_count": 4,
+          "qty": 12,
+          "qty_source": "flagged",
+          "qty_total": 12,
+          "qty_door_count": 16,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "Weatherstrip 326AA 119\" ZE",
-          "qty": 1,
-          "qty_source": "divided",
-          "qty_total": 4,
-          "qty_door_count": 4,
+          "qty": 12,
+          "qty_source": "flagged",
+          "qty_total": 12,
+          "qty_door_count": 16,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "Auto Door Bottom 355AA 36\" ZE",
-          "qty": 1,
-          "qty_source": "divided",
-          "qty_total": 4,
-          "qty_door_count": 4,
+          "qty": 12,
+          "qty_source": "flagged",
+          "qty_total": 12,
+          "qty_door_count": 16,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -2822,7 +2438,7 @@
       ]
     },
     {
-      "set_id": "DH2.0",
+      "set_id": "DH2",
       "heading": "Heading #DH2.0",
       "item_count": 21,
       "items": [
@@ -3039,7 +2655,7 @@
       ]
     },
     {
-      "set_id": "DH3.0",
+      "set_id": "DH3",
       "heading": "Heading #DH3.0",
       "item_count": 20,
       "items": [
@@ -3246,7 +2862,7 @@
       ]
     },
     {
-      "set_id": "DH4.1",
+      "set_id": "DH4-R-NOCR",
       "heading": "Heading #DH4.1 (NOCR)",
       "item_count": 11,
       "items": [
@@ -3363,36 +2979,36 @@
       ]
     },
     {
-      "set_id": "DH4A.0",
+      "set_id": "DH4A",
       "heading": "Heading #DH4A.0",
-      "item_count": 23,
+      "item_count": 24,
       "items": [
         {
           "name": "Hinges 5BB1 HW 4 1/2 x 4 1/2 NRP 652 IV",
-          "qty": 7,
-          "qty_source": "flagged",
+          "qty": 3,
+          "qty_source": "divided",
           "qty_total": 42,
-          "qty_door_count": 6,
+          "qty_door_count": 14,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "Hinges 5BB1 HW 4 1/2 x 4 1/2 CON TW8 652 IV",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 6,
+          "qty_source": "parsed",
           "qty_total": 6,
-          "qty_door_count": 6,
+          "qty_door_count": 28,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "Flush Bolt Kit FB32 US32D IV",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 6,
+          "qty_source": "parsed",
           "qty_total": 6,
-          "qty_door_count": 6,
+          "qty_door_count": 28,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -3402,7 +3018,7 @@
           "qty": 5,
           "qty_source": "parsed",
           "qty_total": 5,
-          "qty_door_count": 12,
+          "qty_door_count": 28,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -3412,7 +3028,7 @@
           "qty": 1,
           "qty_source": "parsed",
           "qty_total": 1,
-          "qty_door_count": 12,
+          "qty_door_count": 28,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -3422,7 +3038,7 @@
           "qty": 5,
           "qty_source": "parsed",
           "qty_total": 5,
-          "qty_door_count": 12,
+          "qty_door_count": 28,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -3432,384 +3048,177 @@
           "qty": 1,
           "qty_source": "parsed",
           "qty_total": 1,
-          "qty_door_count": 12,
+          "qty_door_count": 28,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "Cylinder Housing 80-102 626 SC",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 6,
+          "qty_source": "parsed",
           "qty_total": 6,
-          "qty_door_count": 6,
+          "qty_door_count": 28,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "Temporary IC Core 80-033 626 SC",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 6,
+          "qty_source": "parsed",
           "qty_total": 6,
-          "qty_door_count": 6,
+          "qty_door_count": 28,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "Permanent Core 1CM-7MJ11 626 BE",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 6,
+          "qty_source": "parsed",
           "qty_total": 6,
-          "qty_door_count": 6,
+          "qty_door_count": 28,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "Closer 4040XP EDA 689 LC",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 12,
+          "qty_source": "parsed",
           "qty_total": 12,
-          "qty_door_count": 12,
+          "qty_door_count": 28,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "Protection Plate 8400 10\" X 35\" B-CS US32D IV",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 12,
+          "qty_source": "parsed",
           "qty_total": 12,
-          "qty_door_count": 12,
+          "qty_door_count": 28,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "Wall Stop WS406/407CCV US32D IV",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 12,
+          "qty_source": "parsed",
           "qty_total": 12,
-          "qty_door_count": 12,
+          "qty_door_count": 28,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "Hardware by Others(By DOOR POSITION SWITCH BY SECURITY BO",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 12,
+          "qty_source": "parsed",
           "qty_total": 12,
-          "qty_door_count": 12,
+          "qty_door_count": 28,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "Wire Harness CON-12 SC",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 6,
+          "qty_source": "parsed",
           "qty_total": 6,
-          "qty_door_count": 6,
+          "qty_door_count": 28,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "Wire Harness CON-6P SC",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 6,
+          "qty_source": "parsed",
           "qty_total": 6,
-          "qty_door_count": 6,
+          "qty_door_count": 28,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "Coordinator 3780 US28 AB",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 6,
+          "qty_source": "parsed",
           "qty_total": 6,
-          "qty_door_count": 6,
+          "qty_door_count": 28,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "Gasket 429AA 1 x 72\" 2 x 120\" ZE",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 6,
+          "qty_source": "parsed",
           "qty_total": 6,
-          "qty_door_count": 6,
+          "qty_door_count": 28,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "Smoke Seal 5075 C 25' NA",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 12,
+          "qty_source": "parsed",
           "qty_total": 12,
-          "qty_door_count": 12,
+          "qty_door_count": 28,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "Gasketing 5060 C-21 21' NA",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 12,
+          "qty_source": "parsed",
           "qty_total": 12,
-          "qty_door_count": 12,
+          "qty_door_count": 28,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "Acoustic Seal 60FP NA",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 12,
+          "qty_source": "parsed",
           "qty_total": 12,
-          "qty_door_count": 12,
+          "qty_door_count": 28,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "Weatherstrip 326AA 119\" ZE",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 12,
+          "qty_source": "parsed",
           "qty_total": 12,
-          "qty_door_count": 12,
+          "qty_door_count": 28,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "Auto Door Bottom 355AA 36\" ZE",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 12,
+          "qty_source": "parsed",
           "qty_total": 12,
-          "qty_door_count": 12,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        }
-      ]
-    },
-    {
-      "set_id": "DH4A.1",
-      "heading": "Heading #DH4A.1",
-      "item_count": 21,
-      "items": [
-        {
-          "name": "Hinges 5BB1 HW 4 1/2 x 4 1/2 NRP 652 IV",
-          "qty": 7,
-          "qty_source": "flagged",
-          "qty_total": 56,
-          "qty_door_count": 8,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Hinges 5BB1 HW 4 1/2 x 4 1/2 CON TW8 652 IV",
-          "qty": 1,
-          "qty_source": "divided",
-          "qty_total": 8,
-          "qty_door_count": 8,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Flush Bolt Kit FB32 US32D IV",
-          "qty": 1,
-          "qty_source": "divided",
-          "qty_total": 8,
-          "qty_door_count": 8,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Exit Device 9875L-F x 996L-M 06 576A-US32D RHR US26D VO",
-          "qty": 1,
-          "qty_source": "divided",
-          "qty_total": 8,
-          "qty_door_count": 8,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Elec. Exit Modification ME-1520-9875-24VDC-AE-QC3 RHR AC",
-          "qty": 1,
-          "qty_source": "divided",
-          "qty_total": 8,
-          "qty_door_count": 8,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Cylinder Housing 80-102 626 SC",
-          "qty": 1,
-          "qty_source": "divided",
-          "qty_total": 8,
-          "qty_door_count": 8,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Temporary IC Core 80-033 626 SC",
-          "qty": 1,
-          "qty_source": "divided",
-          "qty_total": 8,
-          "qty_door_count": 8,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Permanent Core 1CM-7MJ11 626 BE",
-          "qty": 1,
-          "qty_source": "divided",
-          "qty_total": 8,
-          "qty_door_count": 8,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Closer 4040XP EDA 689 LC",
-          "qty": 1,
-          "qty_source": "divided",
-          "qty_total": 16,
-          "qty_door_count": 16,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Protection Plate 8400 10\" X 35\" B-CS US32D IV",
-          "qty": 1,
-          "qty_source": "divided",
-          "qty_total": 16,
-          "qty_door_count": 16,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Wall Stop WS406/407CCV US32D IV",
-          "qty": 1,
-          "qty_source": "divided",
-          "qty_total": 16,
-          "qty_door_count": 16,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Hardware by Others(By DOOR POSITION SWITCH BY SECURITY BO",
-          "qty": 1,
-          "qty_source": "divided",
-          "qty_total": 16,
-          "qty_door_count": 16,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Wire Harness CON-12 SC",
-          "qty": 1,
-          "qty_source": "divided",
-          "qty_total": 8,
-          "qty_door_count": 8,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Wire Harness CON-6P SC",
-          "qty": 1,
-          "qty_source": "divided",
-          "qty_total": 8,
-          "qty_door_count": 8,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Coordinator 3780 US28 AB",
-          "qty": 1,
-          "qty_source": "divided",
-          "qty_total": 8,
-          "qty_door_count": 8,
+          "qty_door_count": 28,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "Gasket 429AA 1 x 72\" 2 x 108\" ZE",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 8,
+          "qty_source": "parsed",
           "qty_total": 8,
-          "qty_door_count": 8,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Smoke Seal 5075 C 25' NA",
-          "qty": 1,
-          "qty_source": "divided",
-          "qty_total": 16,
-          "qty_door_count": 16,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Gasketing 5060 C-21 21' NA",
-          "qty": 1,
-          "qty_source": "divided",
-          "qty_total": 16,
-          "qty_door_count": 16,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Acoustic Seal 60FP NA",
-          "qty": 1,
-          "qty_source": "divided",
-          "qty_total": 16,
-          "qty_door_count": 16,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Weatherstrip 326AA 119\" ZE",
-          "qty": 1,
-          "qty_source": "divided",
-          "qty_total": 16,
-          "qty_door_count": 16,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Auto Door Bottom 355AA 36\" ZE",
-          "qty": 1,
-          "qty_source": "divided",
-          "qty_total": 16,
-          "qty_door_count": 16,
+          "qty_door_count": 28,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -3817,7 +3226,7 @@
       ]
     },
     {
-      "set_id": "DH5.0",
+      "set_id": "DH5",
       "heading": "Heading #DH5.0",
       "item_count": 22,
       "items": [
@@ -4044,16 +3453,16 @@
       ]
     },
     {
-      "set_id": "DH9.0",
+      "set_id": "DH9",
       "heading": "Heading #DH9.0",
-      "item_count": 17,
+      "item_count": 38,
       "items": [
         {
           "name": "Hinges",
-          "qty": 4,
+          "qty": 2,
           "qty_source": "divided",
           "qty_total": 8,
-          "qty_door_count": 2,
+          "qty_door_count": 4,
           "manufacturer": "5BB1 HW 4 1/2 x",
           "model": "",
           "finish": "4 1/2"
@@ -4061,9 +3470,9 @@
         {
           "name": "Flush Bolt Kit",
           "qty": 1,
-          "qty_source": "flagged",
+          "qty_source": "parsed",
           "qty_total": 1,
-          "qty_door_count": 2,
+          "qty_door_count": 4,
           "manufacturer": "FB32",
           "model": "",
           "finish": ""
@@ -4071,9 +3480,9 @@
         {
           "name": "Mortise Storeroom Lockset",
           "qty": 1,
-          "qty_source": "flagged",
+          "qty_source": "parsed",
           "qty_total": 1,
-          "qty_door_count": 2,
+          "qty_door_count": 4,
           "manufacturer": "L9080B 06A",
           "model": "",
           "finish": ""
@@ -4081,9 +3490,9 @@
         {
           "name": "Temporary IC Core",
           "qty": 1,
-          "qty_source": "flagged",
+          "qty_source": "parsed",
           "qty_total": 1,
-          "qty_door_count": 2,
+          "qty_door_count": 4,
           "manufacturer": "80-033",
           "model": "",
           "finish": ""
@@ -4091,9 +3500,9 @@
         {
           "name": "Permanent Core",
           "qty": 1,
-          "qty_source": "flagged",
+          "qty_source": "parsed",
           "qty_total": 1,
-          "qty_door_count": 2,
+          "qty_door_count": 4,
           "manufacturer": "1CM-7MJ11",
           "model": "",
           "finish": ""
@@ -4131,9 +3540,9 @@
         {
           "name": "Threshold",
           "qty": 1,
-          "qty_source": "flagged",
+          "qty_source": "parsed",
           "qty_total": 1,
-          "qty_door_count": 2,
+          "qty_door_count": 4,
           "manufacturer": "8655A 72\"",
           "model": "",
           "finish": ""
@@ -4141,9 +3550,9 @@
         {
           "name": "Coordinator",
           "qty": 1,
-          "qty_source": "flagged",
+          "qty_source": "parsed",
           "qty_total": 1,
-          "qty_door_count": 2,
+          "qty_door_count": 4,
           "manufacturer": "3780",
           "model": "",
           "finish": ""
@@ -4151,9 +3560,9 @@
         {
           "name": "Gasket",
           "qty": 1,
-          "qty_source": "flagged",
+          "qty_source": "parsed",
           "qty_total": 1,
-          "qty_door_count": 2,
+          "qty_door_count": 4,
           "manufacturer": "429AA 1 x 72\" 2",
           "model": "x",
           "finish": "108\""
@@ -4213,24 +3622,17 @@
           "qty": 27,
           "qty_source": "flagged",
           "qty_total": 27,
-          "qty_door_count": 2,
+          "qty_door_count": 4,
           "manufacturer": "",
           "model": "",
           "finish": ""
-        }
-      ]
-    },
-    {
-      "set_id": "DH9.1",
-      "heading": "Heading #DH9.1",
-      "item_count": 21,
-      "items": [
+        },
         {
           "name": "Hinges 5BB1 HW 4 1/2 x 4 1/2 NRP 652 IV",
           "qty": 7,
           "qty_source": "flagged",
           "qty_total": 7,
-          "qty_door_count": 2,
+          "qty_door_count": 4,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -4238,9 +3640,9 @@
         {
           "name": "Hinges 5BB1 HW 4 1/2 x 4 1/2 CON TW8 652 IV",
           "qty": 1,
-          "qty_source": "flagged",
+          "qty_source": "parsed",
           "qty_total": 1,
-          "qty_door_count": 2,
+          "qty_door_count": 4,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -4248,9 +3650,9 @@
         {
           "name": "Flush Bolt Kit FB32 US32D IV",
           "qty": 1,
-          "qty_source": "flagged",
+          "qty_source": "parsed",
           "qty_total": 1,
-          "qty_door_count": 2,
+          "qty_door_count": 4,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -4258,9 +3660,9 @@
         {
           "name": "Mortise Storeroom Lockset L9080B 06A RHR 626 SC",
           "qty": 1,
-          "qty_source": "flagged",
+          "qty_source": "parsed",
           "qty_total": 1,
-          "qty_door_count": 2,
+          "qty_door_count": 4,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -4268,9 +3670,9 @@
         {
           "name": "Elec. Lock Modification M-1520-AE-1-L9080-24VDC-QC3 RHR AC",
           "qty": 1,
-          "qty_source": "flagged",
+          "qty_source": "parsed",
           "qty_total": 1,
-          "qty_door_count": 2,
+          "qty_door_count": 4,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -4278,9 +3680,9 @@
         {
           "name": "Temporary IC Core 80-033 626 SC",
           "qty": 1,
-          "qty_source": "flagged",
+          "qty_source": "parsed",
           "qty_total": 1,
-          "qty_door_count": 2,
+          "qty_door_count": 4,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -4288,9 +3690,9 @@
         {
           "name": "Permanent Core 1CM-7MJ11 626 BE",
           "qty": 1,
-          "qty_source": "flagged",
+          "qty_source": "parsed",
           "qty_total": 1,
-          "qty_door_count": 2,
+          "qty_door_count": 4,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -4328,9 +3730,9 @@
         {
           "name": "Threshold 8655A 72\" ZE",
           "qty": 1,
-          "qty_source": "flagged",
+          "qty_source": "parsed",
           "qty_total": 1,
-          "qty_door_count": 2,
+          "qty_door_count": 4,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -4348,9 +3750,9 @@
         {
           "name": "Wire Harness CON-38 SC",
           "qty": 1,
-          "qty_source": "flagged",
+          "qty_source": "parsed",
           "qty_total": 1,
-          "qty_door_count": 2,
+          "qty_door_count": 4,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -4358,9 +3760,9 @@
         {
           "name": "Wire Harness CON-6P SC",
           "qty": 1,
-          "qty_source": "flagged",
+          "qty_source": "parsed",
           "qty_total": 1,
-          "qty_door_count": 2,
+          "qty_door_count": 4,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -4368,9 +3770,9 @@
         {
           "name": "Coordinator 3780 US28 AB",
           "qty": 1,
-          "qty_source": "flagged",
+          "qty_source": "parsed",
           "qty_total": 1,
-          "qty_door_count": 2,
+          "qty_door_count": 4,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -4378,9 +3780,9 @@
         {
           "name": "Gasket 429AA 1 x 72\" 2 x 108\" ZE",
           "qty": 1,
-          "qty_source": "flagged",
+          "qty_source": "parsed",
           "qty_total": 1,
-          "qty_door_count": 2,
+          "qty_door_count": 4,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -4438,7 +3840,7 @@
       ]
     },
     {
-      "set_id": "AD2.0",
+      "set_id": "AD2",
       "heading": "Heading #AD2.0",
       "item_count": 3,
       "items": [
@@ -4475,7 +3877,7 @@
       ]
     },
     {
-      "set_id": "AD3.0",
+      "set_id": "AD3",
       "heading": "Heading #AD3.0",
       "item_count": 19,
       "items": [
@@ -4483,8 +3885,8 @@
           "name": "Single Door",
           "qty": 1,
           "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
+          "qty_total": 1,
+          "qty_door_count": 2,
           "manufacturer": "#1901",
           "model": "",
           "finish": "Corridor 1204 from Electric"
@@ -4492,9 +3894,9 @@
         {
           "name": "Hinges",
           "qty": 3,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
+          "qty_source": "flagged",
+          "qty_total": 3,
+          "qty_door_count": 2,
           "manufacturer": "",
           "model": "",
           "finish": "5BB1 HW 4 1/2 x 4 1/2 NRP"
@@ -4503,8 +3905,8 @@
           "name": "Mortise Cla",
           "qty": 1,
           "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
+          "qty_total": 1,
+          "qty_door_count": 2,
           "manufacturer": "ssroom",
           "model": "Lockset",
           "finish": "L9070B 06A"
@@ -4513,8 +3915,8 @@
           "name": "Elec. Lock M",
           "qty": 1,
           "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
+          "qty_total": 1,
+          "qty_door_count": 2,
           "manufacturer": "odifica",
           "model": "tion",
           "finish": "M-1520-AE-1-L9070-24VDC-QC3"
@@ -4523,8 +3925,8 @@
           "name": "Temporary",
           "qty": 1,
           "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
+          "qty_total": 1,
+          "qty_door_count": 2,
           "manufacturer": "IC Core",
           "model": "",
           "finish": "80-033"
@@ -4533,8 +3935,8 @@
           "name": "Permanent",
           "qty": 1,
           "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
+          "qty_total": 1,
+          "qty_door_count": 2,
           "manufacturer": "Core",
           "model": "",
           "finish": "1CM-7MJ11"
@@ -4543,8 +3945,8 @@
           "name": "Wire Harne",
           "qty": 1,
           "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
+          "qty_total": 1,
+          "qty_door_count": 2,
           "manufacturer": "ss",
           "model": "",
           "finish": "CON-38"
@@ -4553,8 +3955,8 @@
           "name": "Closer",
           "qty": 1,
           "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
+          "qty_total": 1,
+          "qty_door_count": 2,
           "manufacturer": "",
           "model": "",
           "finish": "4040XP CUSH"
@@ -4563,8 +3965,8 @@
           "name": "Kickplate",
           "qty": 1,
           "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
+          "qty_total": 1,
+          "qty_door_count": 2,
           "manufacturer": "",
           "model": "",
           "finish": "8400 10\" X 34\" B-CS"
@@ -4573,8 +3975,8 @@
           "name": "Hardware b",
           "qty": 1,
           "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
+          "qty_total": 1,
+          "qty_door_count": 2,
           "manufacturer": "y Other",
           "model": "s(By",
           "finish": "DOOR POSITION SWITCH BY SECUR"
@@ -4583,8 +3985,8 @@
           "name": "Others)",
           "qty": 1,
           "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
+          "qty_total": 1,
+          "qty_door_count": 2,
           "manufacturer": "",
           "model": "",
           "finish": "CONTRACTOR"
@@ -4593,8 +3995,8 @@
           "name": "Gasket",
           "qty": 1,
           "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
+          "qty_total": 1,
+          "qty_door_count": 2,
           "manufacturer": "",
           "model": "",
           "finish": "429AA 1 x 36\" 2 x 108\""
@@ -4603,8 +4005,8 @@
           "name": "Smoke Seal",
           "qty": 1,
           "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
+          "qty_total": 1,
+          "qty_door_count": 2,
           "manufacturer": "",
           "model": "",
           "finish": "5075 C 25'"
@@ -4613,18 +4015,18 @@
           "name": "Gasketing",
           "qty": 1,
           "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
+          "qty_total": 1,
+          "qty_door_count": 2,
           "manufacturer": "",
           "model": "",
           "finish": "5060 C-21 21'"
         },
         {
           "name": "Acoustic Se",
-          "qty": 2,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
+          "qty": 1,
+          "qty_source": "divided",
+          "qty_total": 2,
+          "qty_door_count": 2,
           "manufacturer": "al",
           "model": "",
           "finish": "60FP"
@@ -4633,8 +4035,8 @@
           "name": "Auto Door B",
           "qty": 1,
           "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
+          "qty_total": 1,
+          "qty_door_count": 2,
           "manufacturer": "ottom",
           "model": "",
           "finish": "355AA 36\""
@@ -4643,8 +4045,8 @@
           "name": "Car",
           "qty": 1,
           "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
+          "qty_total": 1,
+          "qty_door_count": 2,
           "manufacturer": "d Reade",
           "model": "r unlocks",
           "finish": "lockset trim (fail secure). Lockset h"
@@ -4653,18 +4055,18 @@
           "name": "sid",
           "qty": 1,
           "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
+          "qty_total": 1,
+          "qty_door_count": 2,
           "manufacturer": "e.",
           "model": "",
           "finish": ""
         },
         {
           "name": "of 44",
-          "qty": 4,
-          "qty_source": "capped",
+          "qty": 29,
+          "qty_source": "flagged",
           "qty_total": 29,
-          "qty_door_count": null,
+          "qty_door_count": 2,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -4672,213 +4074,16 @@
       ]
     },
     {
-      "set_id": "AD3.1",
-      "heading": "Heading #AD3.1",
-      "item_count": 19,
-      "items": [
-        {
-          "name": "Single Door",
-          "qty": 1,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
-          "manufacturer": "#1707",
-          "model": "",
-          "finish": "Future Tenant Space 1703"
-        },
-        {
-          "name": "Hinges",
-          "qty": 3,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
-          "manufacturer": "",
-          "model": "",
-          "finish": "5BB1 HW 4 1/2 x 4 1/2 NRP"
-        },
-        {
-          "name": "Mortise Cla",
-          "qty": 1,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
-          "manufacturer": "ssroom",
-          "model": "Lockset",
-          "finish": "L9070B 06A"
-        },
-        {
-          "name": "Elec. Lock M",
-          "qty": 1,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
-          "manufacturer": "odifica",
-          "model": "tion",
-          "finish": "M-1520-AE-1-L9070-24VDC-QC3"
-        },
-        {
-          "name": "Temporary",
-          "qty": 1,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
-          "manufacturer": "IC Core",
-          "model": "",
-          "finish": "80-033"
-        },
-        {
-          "name": "Permanent",
-          "qty": 1,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
-          "manufacturer": "Core",
-          "model": "",
-          "finish": "1CM-7MJ11"
-        },
-        {
-          "name": "Wire Harne",
-          "qty": 1,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
-          "manufacturer": "ss",
-          "model": "",
-          "finish": "CON-38"
-        },
-        {
-          "name": "Closer",
-          "qty": 1,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
-          "manufacturer": "",
-          "model": "",
-          "finish": "4040XP CUSH"
-        },
-        {
-          "name": "Kickplate",
-          "qty": 1,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
-          "manufacturer": "",
-          "model": "",
-          "finish": "8400 10\" X 34\" B-CS"
-        },
-        {
-          "name": "Hardware b",
-          "qty": 1,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
-          "manufacturer": "y Other",
-          "model": "s(By",
-          "finish": "DOOR POSITION SWITCH BY SECU"
-        },
-        {
-          "name": "Others)",
-          "qty": 1,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
-          "manufacturer": "",
-          "model": "",
-          "finish": "CONTRACTOR"
-        },
-        {
-          "name": "Gasket",
-          "qty": 1,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
-          "manufacturer": "",
-          "model": "",
-          "finish": "429AA 1 x 36\" 2 x 108\""
-        },
-        {
-          "name": "Smoke Seal",
-          "qty": 1,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
-          "manufacturer": "",
-          "model": "",
-          "finish": "5075 C 25'"
-        },
-        {
-          "name": "Gasketing",
-          "qty": 1,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
-          "manufacturer": "",
-          "model": "",
-          "finish": "5060 C-21 21'"
-        },
-        {
-          "name": "Acoustic Se",
-          "qty": 2,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
-          "manufacturer": "al",
-          "model": "",
-          "finish": "60FP"
-        },
-        {
-          "name": "Auto Door B",
-          "qty": 1,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
-          "manufacturer": "ottom",
-          "model": "",
-          "finish": "355AA 36\""
-        },
-        {
-          "name": "Car",
-          "qty": 1,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
-          "manufacturer": "d Reade",
-          "model": "r unlocks",
-          "finish": "lockset trim (fail secure). Lockset"
-        },
-        {
-          "name": "sid",
-          "qty": 1,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
-          "manufacturer": "e.",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "of 44",
-          "qty": 4,
-          "qty_source": "capped",
-          "qty_total": 30,
-          "qty_door_count": null,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        }
-      ]
-    },
-    {
-      "set_id": "AD4.0",
+      "set_id": "AD4",
       "heading": "Heading #AD4.0",
-      "item_count": 20,
+      "item_count": 21,
       "items": [
         {
           "name": "Hinges 5BB1 HW 4 1/2 x 4 1/2 NRP 652 IV",
           "qty": 7,
           "qty_source": "flagged",
           "qty_total": 7,
-          "qty_door_count": 2,
+          "qty_door_count": 4,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -4886,9 +4091,9 @@
         {
           "name": "Hinges 5BB1 HW 4 1/2 x 4 1/2 CON TW8 652 IV",
           "qty": 1,
-          "qty_source": "flagged",
+          "qty_source": "parsed",
           "qty_total": 1,
-          "qty_door_count": 2,
+          "qty_door_count": 4,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -4896,9 +4101,9 @@
         {
           "name": "Flush Bolt Kit FB32 US32D IV",
           "qty": 1,
-          "qty_source": "flagged",
+          "qty_source": "parsed",
           "qty_total": 1,
-          "qty_door_count": 2,
+          "qty_door_count": 4,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -4906,9 +4111,9 @@
         {
           "name": "Mortise Storeroom Lockset L9080B 06A RHR 626 SC",
           "qty": 1,
-          "qty_source": "flagged",
+          "qty_source": "parsed",
           "qty_total": 1,
-          "qty_door_count": 2,
+          "qty_door_count": 4,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -4916,9 +4121,9 @@
         {
           "name": "Elec. Lock Modification M-1520-AE-1-L9080-24VDC-QC3 RHR AC",
           "qty": 1,
-          "qty_source": "flagged",
+          "qty_source": "parsed",
           "qty_total": 1,
-          "qty_door_count": 2,
+          "qty_door_count": 4,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -4926,9 +4131,9 @@
         {
           "name": "Temporary IC Core 80-033 626 SC",
           "qty": 1,
-          "qty_source": "flagged",
+          "qty_source": "parsed",
           "qty_total": 1,
-          "qty_door_count": 2,
+          "qty_door_count": 4,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -4936,9 +4141,9 @@
         {
           "name": "Permanent Core 1CM-7MJ11 626 BE",
           "qty": 1,
-          "qty_source": "flagged",
+          "qty_source": "parsed",
           "qty_total": 1,
-          "qty_door_count": 2,
+          "qty_door_count": 4,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -4986,9 +4191,9 @@
         {
           "name": "Wire Harness CON-38 SC",
           "qty": 1,
-          "qty_source": "flagged",
+          "qty_source": "parsed",
           "qty_total": 1,
-          "qty_door_count": 2,
+          "qty_door_count": 4,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -4996,9 +4201,9 @@
         {
           "name": "Wire Harness CON-6P SC",
           "qty": 1,
-          "qty_source": "flagged",
+          "qty_source": "parsed",
           "qty_total": 1,
-          "qty_door_count": 2,
+          "qty_door_count": 4,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -5006,9 +4211,9 @@
         {
           "name": "Coordinator 3780 US28 AB",
           "qty": 1,
-          "qty_source": "flagged",
+          "qty_source": "parsed",
           "qty_total": 1,
-          "qty_door_count": 2,
+          "qty_door_count": 4,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -5016,9 +4221,9 @@
         {
           "name": "Gasket 429AA 1 x 72\" 2 x 108\" ZE",
           "qty": 1,
-          "qty_source": "flagged",
+          "qty_source": "parsed",
           "qty_total": 1,
-          "qty_door_count": 2,
+          "qty_door_count": 4,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -5068,33 +4273,6 @@
           "qty": 1,
           "qty_source": "divided",
           "qty_total": 2,
-          "qty_door_count": 2,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        }
-      ]
-    },
-    {
-      "set_id": "AD4.1",
-      "heading": "Heading #AD4.1",
-      "item_count": 19,
-      "items": [
-        {
-          "name": "Hinges 5BB1 HW 4 1/2 x 4 1/2 NRP 652 IV",
-          "qty": 7,
-          "qty_source": "flagged",
-          "qty_total": 7,
-          "qty_door_count": 2,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Hinges 5BB1 HW 4 1/2 x 4 1/2 CON TW8 652 IV",
-          "qty": 1,
-          "qty_source": "flagged",
-          "qty_total": 1,
           "qty_door_count": 2,
           "manufacturer": "",
           "model": "",
@@ -5109,171 +4287,11 @@
           "manufacturer": "",
           "model": "",
           "finish": ""
-        },
-        {
-          "name": "Mortise Storeroom Lockset L9080B 06A RHR 626 SC",
-          "qty": 1,
-          "qty_source": "flagged",
-          "qty_total": 1,
-          "qty_door_count": 2,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Elec. Lock Modification M-1520-AE-1-L9080-24VDC-QC3 RHR AC",
-          "qty": 1,
-          "qty_source": "flagged",
-          "qty_total": 1,
-          "qty_door_count": 2,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Temporary IC Core 80-033 626 SC",
-          "qty": 1,
-          "qty_source": "flagged",
-          "qty_total": 1,
-          "qty_door_count": 2,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Permanent Core 1CM-7MJ11 626 BE",
-          "qty": 1,
-          "qty_source": "flagged",
-          "qty_total": 1,
-          "qty_door_count": 2,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Closer 4040XP CUSH 689 LC",
-          "qty": 1,
-          "qty_source": "flagged",
-          "qty_total": 1,
-          "qty_door_count": 2,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Protection Plate 8400 10\" X 35\" B-CS US32D IV",
-          "qty": 1,
-          "qty_source": "divided",
-          "qty_total": 2,
-          "qty_door_count": 2,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Door Silencer SR64 GRY IV",
-          "qty": 1,
-          "qty_source": "divided",
-          "qty_total": 2,
-          "qty_door_count": 2,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Hardware by Others(By DOOR POSITION SWITCH BY SECURITY BO",
-          "qty": 1,
-          "qty_source": "divided",
-          "qty_total": 2,
-          "qty_door_count": 2,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Wire Harness CON-38 SC",
-          "qty": 1,
-          "qty_source": "flagged",
-          "qty_total": 1,
-          "qty_door_count": 2,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Wire Harness CON-6P SC",
-          "qty": 1,
-          "qty_source": "flagged",
-          "qty_total": 1,
-          "qty_door_count": 2,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Gasket 429AA 1 x 72\" 2 x 108\" ZE",
-          "qty": 1,
-          "qty_source": "flagged",
-          "qty_total": 1,
-          "qty_door_count": 2,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Smoke Seal 5075 C 25' NA",
-          "qty": 1,
-          "qty_source": "divided",
-          "qty_total": 2,
-          "qty_door_count": 2,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Gasketing 5060 C-21 21' NA",
-          "qty": 1,
-          "qty_source": "divided",
-          "qty_total": 2,
-          "qty_door_count": 2,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Acoustic Seal 60FP NA",
-          "qty": 1,
-          "qty_source": "divided",
-          "qty_total": 2,
-          "qty_door_count": 2,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Weatherstrip 326AA 119\" ZE",
-          "qty": 1,
-          "qty_source": "divided",
-          "qty_total": 2,
-          "qty_door_count": 2,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Auto Door Bottom 355AA 36\" ZE",
-          "qty": 1,
-          "qty_source": "divided",
-          "qty_total": 2,
-          "qty_door_count": 2,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
         }
       ]
     },
     {
-      "set_id": "AD5.0",
+      "set_id": "AD5-8-IS",
       "heading": "Heading #AD5.0 (IS)",
       "item_count": 12,
       "items": [
@@ -5400,16 +4418,16 @@
       ]
     },
     {
-      "set_id": "AD5.1",
+      "set_id": "AD5-9-OS",
       "heading": "Heading #AD5.1 (OS)",
-      "item_count": 16,
+      "item_count": 17,
       "items": [
         {
           "name": "Hinges 5BB1 HW 4 1/2 x 4 1/2 NRP 652 IV",
           "qty": 3,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
+          "qty_source": "flagged",
+          "qty_total": 3,
+          "qty_door_count": 2,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -5418,8 +4436,8 @@
           "name": "Hinges 5BB1 HW 4 1/2 x 4 1/2 CON TW8 652 IV",
           "qty": 1,
           "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
+          "qty_total": 1,
+          "qty_door_count": 2,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -5428,8 +4446,8 @@
           "name": "Mortise Storeroom Lockset L9080B 06A LHR 626 SC",
           "qty": 1,
           "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
+          "qty_total": 1,
+          "qty_door_count": 2,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -5438,8 +4456,8 @@
           "name": "Elec. Lock Modification M-1520-AE-1-L9080-24VDC-QC3 LHR AC",
           "qty": 1,
           "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
+          "qty_total": 1,
+          "qty_door_count": 2,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -5448,8 +4466,8 @@
           "name": "Temporary IC Core 80-033 626 SC",
           "qty": 1,
           "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
+          "qty_total": 1,
+          "qty_door_count": 2,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -5458,8 +4476,8 @@
           "name": "Permanent Core 1CM-7MJ11 626 BE",
           "qty": 1,
           "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
+          "qty_total": 1,
+          "qty_door_count": 2,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -5468,8 +4486,8 @@
           "name": "Closer 4040XP CUSH 689 LC",
           "qty": 1,
           "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
+          "qty_total": 1,
+          "qty_door_count": 2,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -5478,8 +4496,8 @@
           "name": "Kickplate 8400 10\" X 34\" B-CS US32D IV",
           "qty": 1,
           "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
+          "qty_total": 1,
+          "qty_door_count": 2,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -5488,8 +4506,8 @@
           "name": "Wire Harness CON-38 SC",
           "qty": 1,
           "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
+          "qty_total": 1,
+          "qty_door_count": 2,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -5498,8 +4516,8 @@
           "name": "Wire Harness CON-6P SC",
           "qty": 1,
           "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
+          "qty_total": 1,
+          "qty_door_count": 2,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -5508,8 +4526,8 @@
           "name": "Hardware by Others(By DOOR POSITION SWITCH BY SECURITY BO",
           "qty": 1,
           "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
+          "qty_total": 1,
+          "qty_door_count": 2,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -5518,8 +4536,8 @@
           "name": "Gasket 429AA 1 x 36\" 2 x 108\" ZE",
           "qty": 1,
           "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
+          "qty_total": 1,
+          "qty_door_count": 2,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -5528,8 +4546,8 @@
           "name": "Smoke Seal 5075 C 25' NA",
           "qty": 1,
           "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
+          "qty_total": 1,
+          "qty_door_count": 2,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -5538,18 +4556,18 @@
           "name": "Gasketing 5060 C-21 21' NA",
           "qty": 1,
           "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
+          "qty_total": 1,
+          "qty_door_count": 2,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "Acoustic Seal 60FP NA",
-          "qty": 2,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
+          "qty": 1,
+          "qty_source": "divided",
+          "qty_total": 2,
+          "qty_door_count": 2,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -5558,25 +4576,8 @@
           "name": "Auto Door Bottom 355AA 36\" ZE",
           "qty": 1,
           "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        }
-      ]
-    },
-    {
-      "set_id": "AD5.2",
-      "heading": "Heading #AD5.2 (OS)",
-      "item_count": 11,
-      "items": [
-        {
-          "name": "Hinges 5BB1 HW 4 1/2 x 4 1/2 NRP 652 IV",
-          "qty": 4,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
+          "qty_total": 1,
+          "qty_door_count": 2,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -5585,98 +4586,8 @@
           "name": "Mortise Storeroom Lockset L9080B 06A RHR 626 SC",
           "qty": 1,
           "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Temporary IC Core 80-033 626 SC",
-          "qty": 1,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Permanent Core 1CM-7MJ11 626 BE",
-          "qty": 1,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Closer 4040XP CUSH 689 LC",
-          "qty": 1,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Kickplate 8400 10\" X 34\" B-CS US32D IV",
-          "qty": 1,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Gasket 429AA 1 x 36\" 2 x 108\" ZE",
-          "qty": 1,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Smoke Seal 5075 C 25' NA",
-          "qty": 1,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Gasketing 5060 C-21 21' NA",
-          "qty": 1,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Acoustic Seal 60FP NA",
-          "qty": 2,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Auto Door Bottom 355AA 36\" ZE",
-          "qty": 1,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
+          "qty_total": 1,
+          "qty_door_count": 2,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -5684,7 +4595,7 @@
       ]
     },
     {
-      "set_id": "AD7.0",
+      "set_id": "AD7",
       "heading": "Heading #AD7.0",
       "item_count": 20,
       "items": [
@@ -5693,7 +4604,7 @@
           "qty": 7,
           "qty_source": "flagged",
           "qty_total": 7,
-          "qty_door_count": 2,
+          "qty_door_count": 6,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -5701,9 +4612,9 @@
         {
           "name": "Hinges 5BB1 HW 4 1/2 x 4 1/2 CON TW8 652 IV",
           "qty": 1,
-          "qty_source": "flagged",
+          "qty_source": "parsed",
           "qty_total": 1,
-          "qty_door_count": 2,
+          "qty_door_count": 6,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -5711,9 +4622,9 @@
         {
           "name": "Flush Bolt Kit FB32 US32D IV",
           "qty": 1,
-          "qty_source": "flagged",
+          "qty_source": "parsed",
           "qty_total": 1,
-          "qty_door_count": 2,
+          "qty_door_count": 6,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -5721,9 +4632,9 @@
         {
           "name": "Exit Device 9875L x 996L-M 06 576A-US32D RHR US26D VO",
           "qty": 1,
-          "qty_source": "flagged",
+          "qty_source": "parsed",
           "qty_total": 1,
-          "qty_door_count": 2,
+          "qty_door_count": 6,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -5731,9 +4642,9 @@
         {
           "name": "Elec. Exit Modification ME-1520-9875-24VDC-AE-QC3 RHR AC",
           "qty": 1,
-          "qty_source": "flagged",
+          "qty_source": "parsed",
           "qty_total": 1,
-          "qty_door_count": 2,
+          "qty_door_count": 6,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -5741,9 +4652,9 @@
         {
           "name": "Temporary IC Core 80-033 626 SC",
           "qty": 1,
-          "qty_source": "flagged",
+          "qty_source": "parsed",
           "qty_total": 1,
-          "qty_door_count": 2,
+          "qty_door_count": 6,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -5751,9 +4662,9 @@
         {
           "name": "Cylinder Housing 80-102 626 SC",
           "qty": 1,
-          "qty_source": "flagged",
+          "qty_source": "parsed",
           "qty_total": 1,
-          "qty_door_count": 2,
+          "qty_door_count": 6,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -5761,9 +4672,9 @@
         {
           "name": "Permanent Core 1CM-7MJ11 626 BE",
           "qty": 1,
-          "qty_source": "flagged",
+          "qty_source": "parsed",
           "qty_total": 1,
-          "qty_door_count": 2,
+          "qty_door_count": 6,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -5771,9 +4682,9 @@
         {
           "name": "Wire Harness CON-12 SC",
           "qty": 1,
-          "qty_source": "flagged",
+          "qty_source": "parsed",
           "qty_total": 1,
-          "qty_door_count": 2,
+          "qty_door_count": 6,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -5781,39 +4692,39 @@
         {
           "name": "Wire Harness CON-6P SC",
           "qty": 1,
-          "qty_source": "flagged",
+          "qty_source": "parsed",
           "qty_total": 1,
-          "qty_door_count": 2,
+          "qty_door_count": 6,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "Closer 4040XP CUSH 689 LC",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 2,
+          "qty_source": "parsed",
           "qty_total": 2,
-          "qty_door_count": 2,
+          "qty_door_count": 6,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "Protection Plate 8400 10\" X 35\" B-CS US32D IV",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 2,
+          "qty_source": "parsed",
           "qty_total": 2,
-          "qty_door_count": 2,
+          "qty_door_count": 6,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "Hardware by Others(By DOOR POSITION SWITCH BY SECURITY BO",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 2,
+          "qty_source": "parsed",
           "qty_total": 2,
-          "qty_door_count": 2,
+          "qty_door_count": 6,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -5821,9 +4732,9 @@
         {
           "name": "Coordinator 3780 US28 AB",
           "qty": 1,
-          "qty_source": "flagged",
+          "qty_source": "parsed",
           "qty_total": 1,
-          "qty_door_count": 2,
+          "qty_door_count": 6,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -5831,59 +4742,59 @@
         {
           "name": "Gasket 429AA 1 x 72\" 2 x 108\" ZE",
           "qty": 1,
-          "qty_source": "flagged",
+          "qty_source": "parsed",
           "qty_total": 1,
-          "qty_door_count": 2,
+          "qty_door_count": 6,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "Smoke Seal 5075 C 25' NA",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 2,
+          "qty_source": "parsed",
           "qty_total": 2,
-          "qty_door_count": 2,
+          "qty_door_count": 6,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "Gasketing 5060 C-21 21' NA",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 2,
+          "qty_source": "parsed",
           "qty_total": 2,
-          "qty_door_count": 2,
+          "qty_door_count": 6,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "Acoustic Seal 60FP NA",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 2,
+          "qty_source": "parsed",
           "qty_total": 2,
-          "qty_door_count": 2,
+          "qty_door_count": 6,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "Weatherstrip 326AA 119\" ZE",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 2,
+          "qty_source": "parsed",
           "qty_total": 2,
-          "qty_door_count": 2,
+          "qty_door_count": 6,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "Auto Door Bottom 355AA 36\" ZE",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 2,
+          "qty_source": "parsed",
           "qty_total": 2,
-          "qty_door_count": 2,
+          "qty_door_count": 6,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -5891,223 +4802,16 @@
       ]
     },
     {
-      "set_id": "AD7.1",
-      "heading": "Heading #AD7.1",
-      "item_count": 20,
-      "items": [
-        {
-          "name": "Hinges 5BB1 HW 4 1/2 x 4 1/2 NRP 652 IV",
-          "qty": 7,
-          "qty_source": "flagged",
-          "qty_total": 14,
-          "qty_door_count": 2,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Hinges 5BB1 HW 4 1/2 x 4 1/2 CON TW8 652 IV",
-          "qty": 1,
-          "qty_source": "divided",
-          "qty_total": 2,
-          "qty_door_count": 2,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Flush Bolt Kit FB32 US32D IV",
-          "qty": 1,
-          "qty_source": "divided",
-          "qty_total": 2,
-          "qty_door_count": 2,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Exit Device 9875L x 996L-M 06 576A-US32D RHR US26D VO",
-          "qty": 1,
-          "qty_source": "divided",
-          "qty_total": 2,
-          "qty_door_count": 2,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Elec. Exit Modification ME-1520-9875-24VDC-AE-QC3 RHR AC",
-          "qty": 1,
-          "qty_source": "divided",
-          "qty_total": 2,
-          "qty_door_count": 2,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Temporary IC Core 80-033 626 SC",
-          "qty": 1,
-          "qty_source": "divided",
-          "qty_total": 2,
-          "qty_door_count": 2,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Cylinder Housing 80-102 626 SC",
-          "qty": 1,
-          "qty_source": "divided",
-          "qty_total": 2,
-          "qty_door_count": 2,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Permanent Core 1CM-7MJ11 626 BE",
-          "qty": 1,
-          "qty_source": "divided",
-          "qty_total": 2,
-          "qty_door_count": 2,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Wire Harness CON-12 SC",
-          "qty": 1,
-          "qty_source": "divided",
-          "qty_total": 2,
-          "qty_door_count": 2,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Wire Harness CON-6P SC",
-          "qty": 1,
-          "qty_source": "divided",
-          "qty_total": 2,
-          "qty_door_count": 2,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Closer 4040XP CUSH 689 LC",
-          "qty": 1,
-          "qty_source": "divided",
-          "qty_total": 4,
-          "qty_door_count": 4,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Protection Plate 8400 10\" X 35\" B-CS US32D IV",
-          "qty": 1,
-          "qty_source": "divided",
-          "qty_total": 4,
-          "qty_door_count": 4,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Hardware by Others(By DOOR POSITION SWITCH BY SECURITY BO",
-          "qty": 1,
-          "qty_source": "divided",
-          "qty_total": 4,
-          "qty_door_count": 4,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Coordinator 3780 US28 AB",
-          "qty": 1,
-          "qty_source": "divided",
-          "qty_total": 2,
-          "qty_door_count": 2,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Gasket 429AA 1 x 72\" 2 x 108\" ZE",
-          "qty": 1,
-          "qty_source": "divided",
-          "qty_total": 2,
-          "qty_door_count": 2,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Smoke Seal 5075 C 25' NA",
-          "qty": 1,
-          "qty_source": "divided",
-          "qty_total": 4,
-          "qty_door_count": 4,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Gasketing 5060 C-21 21' NA",
-          "qty": 1,
-          "qty_source": "divided",
-          "qty_total": 4,
-          "qty_door_count": 4,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Acoustic Seal 60FP NA",
-          "qty": 1,
-          "qty_source": "divided",
-          "qty_total": 4,
-          "qty_door_count": 4,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Weatherstrip 326AA 119\" ZE",
-          "qty": 1,
-          "qty_source": "divided",
-          "qty_total": 4,
-          "qty_door_count": 4,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Auto Door Bottom 355AA 36\" ZE",
-          "qty": 1,
-          "qty_source": "divided",
-          "qty_total": 4,
-          "qty_door_count": 4,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        }
-      ]
-    },
-    {
-      "set_id": "AD10.0",
+      "set_id": "AD10-PRIV",
       "heading": "Heading #AD10.0 (PRIV)",
       "item_count": 11,
       "items": [
         {
           "name": "Hinges 5BB1 HW 4 1/2 x 4 1/2 652 IV",
-          "qty": 4,
-          "qty_source": "divided",
+          "qty": 20,
+          "qty_source": "flagged",
           "qty_total": 20,
-          "qty_door_count": 5,
+          "qty_door_count": 6,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -6117,7 +4821,7 @@
           "qty": 2,
           "qty_source": "parsed",
           "qty_total": 2,
-          "qty_door_count": 5,
+          "qty_door_count": 6,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -6127,87 +4831,87 @@
           "qty": 3,
           "qty_source": "parsed",
           "qty_total": 3,
-          "qty_door_count": 5,
+          "qty_door_count": 6,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "Closer 4040XP RWPA 689 LC",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 5,
+          "qty_source": "parsed",
           "qty_total": 5,
-          "qty_door_count": 5,
+          "qty_door_count": 6,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "Kickplate 8400 10\" X 34\" B-CS US32D IV",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 5,
+          "qty_source": "parsed",
           "qty_total": 5,
-          "qty_door_count": 5,
+          "qty_door_count": 6,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "Wall Stop WS406/407CCV US32D IV",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 5,
+          "qty_source": "parsed",
           "qty_total": 5,
-          "qty_door_count": 5,
+          "qty_door_count": 6,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "Gasket 429AA 1 x 36\" 2 x 96\" ZE",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 5,
+          "qty_source": "parsed",
           "qty_total": 5,
-          "qty_door_count": 5,
+          "qty_door_count": 6,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "Smoke Seal 5075 C 25' NA",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 5,
+          "qty_source": "parsed",
           "qty_total": 5,
-          "qty_door_count": 5,
+          "qty_door_count": 6,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "Gasketing 5060 C-21 21' NA",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 5,
+          "qty_source": "parsed",
           "qty_total": 5,
-          "qty_door_count": 5,
+          "qty_door_count": 6,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "Acoustic Seal 60FP NA",
-          "qty": 2,
-          "qty_source": "divided",
+          "qty": 10,
+          "qty_source": "flagged",
           "qty_total": 10,
-          "qty_door_count": 5,
+          "qty_door_count": 6,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "Auto Door Bottom 355AA 36\" ZE",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 5,
+          "qty_source": "parsed",
           "qty_total": 5,
-          "qty_door_count": 5,
+          "qty_door_count": 6,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -6215,114 +4919,7 @@
       ]
     },
     {
-      "set_id": "AD10.1",
-      "heading": "Heading #AD10.1 (PRIV)",
-      "item_count": 10,
-      "items": [
-        {
-          "name": "Hinges 5BB1 HW 4 1/2 x 4 1/2 652 IV",
-          "qty": 4,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Mortise Privacy Set L9040 06A RH 626 SC",
-          "qty": 1,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Closer 4040XP RWPA 689 LC",
-          "qty": 1,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Kickplate 8400 10\" X 34\" B-CS US32D IV",
-          "qty": 1,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Wall Stop WS406/407CCV US32D IV",
-          "qty": 1,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Gasket 429AA 1 x 36\" 2 x 96\" ZE",
-          "qty": 1,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Smoke Seal 5075 C 25' NA",
-          "qty": 1,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Gasketing 5060 C-21 21' NA",
-          "qty": 1,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Acoustic Seal 60FP NA",
-          "qty": 2,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Auto Door Bottom 355AA 36\" ZE",
-          "qty": 1,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        }
-      ]
-    },
-    {
-      "set_id": "AD10.2",
+      "set_id": "AD10-PASS",
       "heading": "Heading #AD10.2 (PASS)",
       "item_count": 11,
       "items": [
@@ -6439,16 +5036,16 @@
       ]
     },
     {
-      "set_id": "AD11.0",
+      "set_id": "AD11-IS",
       "heading": "Heading #AD11.0 (IS)",
-      "item_count": 17,
+      "item_count": 23,
       "items": [
         {
           "name": "Single Door #1704 SOC 1700 to SOC Private Office 1704 LH",
           "qty": 1,
           "qty_source": "parsed",
           "qty_total": 1,
-          "qty_door_count": 7,
+          "qty_door_count": 8,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -6458,7 +5055,7 @@
           "qty": 1,
           "qty_source": "parsed",
           "qty_total": 1,
-          "qty_door_count": 7,
+          "qty_door_count": 8,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -6468,27 +5065,27 @@
           "qty": 1,
           "qty_source": "parsed",
           "qty_total": 1,
-          "qty_door_count": 7,
+          "qty_door_count": 8,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "Hinges 5BB1 HW 4 1/2 x 4 1/2 652 IV",
-          "qty": 3,
-          "qty_source": "divided",
+          "qty": 21,
+          "qty_source": "flagged",
           "qty_total": 21,
-          "qty_door_count": 7,
+          "qty_door_count": 8,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "Hinges 5BB1 HW 4 1/2 x 4 1/2 CON TW8 652 IV",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 7,
+          "qty_source": "parsed",
           "qty_total": 7,
-          "qty_door_count": 7,
+          "qty_door_count": 8,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -6498,7 +5095,7 @@
           "qty": 6,
           "qty_source": "parsed",
           "qty_total": 6,
-          "qty_door_count": 7,
+          "qty_door_count": 8,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -6508,7 +5105,7 @@
           "qty": 1,
           "qty_source": "parsed",
           "qty_total": 1,
-          "qty_door_count": 7,
+          "qty_door_count": 8,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -6518,7 +5115,7 @@
           "qty": 6,
           "qty_source": "parsed",
           "qty_total": 6,
-          "qty_door_count": 7,
+          "qty_door_count": 8,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -6528,214 +5125,87 @@
           "qty": 1,
           "qty_source": "parsed",
           "qty_total": 1,
-          "qty_door_count": 7,
+          "qty_door_count": 8,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "Temporary IC Core 80-033 626 SC",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 7,
+          "qty_source": "parsed",
           "qty_total": 7,
-          "qty_door_count": 7,
+          "qty_door_count": 8,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "Permanent Core 1CM-7MJ11 626 BE",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 7,
+          "qty_source": "parsed",
           "qty_total": 7,
-          "qty_door_count": 7,
+          "qty_door_count": 8,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "Wire Harness CON-38 SC",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 7,
+          "qty_source": "parsed",
           "qty_total": 7,
-          "qty_door_count": 7,
+          "qty_door_count": 8,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "Wire Harness CON-6P SC",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 7,
+          "qty_source": "parsed",
           "qty_total": 7,
-          "qty_door_count": 7,
+          "qty_door_count": 8,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "Closer 4040XP RWPA 689 LC",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 7,
+          "qty_source": "parsed",
           "qty_total": 7,
-          "qty_door_count": 7,
+          "qty_door_count": 8,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "Kickplate 8400 10\" X 34\" B-CS US32D IV",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 7,
+          "qty_source": "parsed",
           "qty_total": 7,
-          "qty_door_count": 7,
+          "qty_door_count": 8,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "Wall Stop WS406/407CCV US32D IV",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 7,
+          "qty_source": "parsed",
           "qty_total": 7,
-          "qty_door_count": 7,
+          "qty_door_count": 8,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "Hardware by Others(By DOOR POSITION SWITCH BY SECURITY BO",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 7,
+          "qty_source": "parsed",
           "qty_total": 7,
-          "qty_door_count": 7,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        }
-      ]
-    },
-    {
-      "set_id": "AD11.1",
-      "heading": "Heading #AD11.1 (IS)",
-      "item_count": 18,
-      "items": [
-        {
-          "name": "Hinges 5BB1 HW 4 1/2 x 4 1/2 652 IV",
-          "qty": 3,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Hinges 5BB1 HW 4 1/2 x 4 1/2 CON TW8 652 IV",
-          "qty": 1,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Mortise Classroom Lockset L9070B 06A RH 626 SC",
-          "qty": 1,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Elec. Lock Modification M-1520-AE-1-L9070-24VDC-QC3 RH AC",
-          "qty": 1,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Temporary IC Core 80-033 626 SC",
-          "qty": 1,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Permanent Core 1CM-7MJ11 626 BE",
-          "qty": 1,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Wire Harness CON-38 SC",
-          "qty": 1,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Wire Harness CON-6P SC",
-          "qty": 1,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Closer 4040XP RWPA 689 LC",
-          "qty": 1,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Kickplate 8400 10\" X 34\" B-CS US32D IV",
-          "qty": 1,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Wall Stop WS406/407CCV US32D IV",
-          "qty": 1,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Hardware by Others(By DOOR POSITION SWITCH BY SECURITY BO",
-          "qty": 1,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
+          "qty_door_count": 8,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -6744,8 +5214,8 @@
           "name": "Gasket 429AA 1 x 36\" 2 x 96\" ZE",
           "qty": 1,
           "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
+          "qty_total": 1,
+          "qty_door_count": 8,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -6754,8 +5224,8 @@
           "name": "Smoke Seal 5075 C 25' NA",
           "qty": 1,
           "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
+          "qty_total": 1,
+          "qty_door_count": 8,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -6764,8 +5234,8 @@
           "name": "Gasketing 5060 C-21 21' NA",
           "qty": 1,
           "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
+          "qty_total": 1,
+          "qty_door_count": 8,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -6774,8 +5244,8 @@
           "name": "Acoustic Seal 60FP NA",
           "qty": 2,
           "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
+          "qty_total": 2,
+          "qty_door_count": 8,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -6784,8 +5254,8 @@
           "name": "Weatherstrip 326AA 119\" ZE",
           "qty": 1,
           "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
+          "qty_total": 1,
+          "qty_door_count": 8,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -6794,8 +5264,8 @@
           "name": "Auto Door Bottom 355AA 36\" ZE",
           "qty": 1,
           "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
+          "qty_total": 1,
+          "qty_door_count": 8,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -6803,16 +5273,16 @@
       ]
     },
     {
-      "set_id": "AD11.2",
+      "set_id": "AD11-OS",
       "heading": "Heading #AD11.2 (OS)",
-      "item_count": 6,
+      "item_count": 26,
       "items": [
         {
           "name": "Hinges 5BB1 HW 4 1/2 x 4 1/2 NRP 652 IV",
-          "qty": 4,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
+          "qty": 2,
+          "qty_source": "divided",
+          "qty_total": 4,
+          "qty_door_count": 2,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -6821,8 +5291,8 @@
           "name": "Mortise Classroom Lockset L9070B 06A LHR 626 SC",
           "qty": 1,
           "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
+          "qty_total": 1,
+          "qty_door_count": 2,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -6831,8 +5301,8 @@
           "name": "Temporary IC Core 80-033 626 SC",
           "qty": 1,
           "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
+          "qty_total": 1,
+          "qty_door_count": 2,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -6841,8 +5311,8 @@
           "name": "Permanent Core 1CM-7MJ11 626 BE",
           "qty": 1,
           "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
+          "qty_total": 1,
+          "qty_door_count": 2,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -6851,8 +5321,8 @@
           "name": "Closer 4040XP CUSH 689 LC",
           "qty": 1,
           "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
+          "qty_total": 1,
+          "qty_door_count": 2,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -6861,25 +5331,18 @@
           "name": "Kickplate 8400 10\" X 34\" B-CS US32D IV",
           "qty": 1,
           "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
+          "qty_total": 1,
+          "qty_door_count": 2,
           "manufacturer": "",
           "model": "",
           "finish": ""
-        }
-      ]
-    },
-    {
-      "set_id": "AD11.3",
-      "heading": "Heading #AD11.3 (OS)",
-      "item_count": 20,
-      "items": [
+        },
         {
           "name": "Single Door #1",
           "qty": 1,
           "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
+          "qty_total": 1,
+          "qty_door_count": 2,
           "manufacturer": "700",
           "model": "",
           "finish": "Admin East Corridor 1209"
@@ -6887,9 +5350,9 @@
         {
           "name": "Hinges",
           "qty": 3,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
+          "qty_source": "flagged",
+          "qty_total": 3,
+          "qty_door_count": 2,
           "manufacturer": "",
           "model": "",
           "finish": "5BB1 HW 4 1/2 x 4 1/2 NRP"
@@ -6898,8 +5361,8 @@
           "name": "Mortise Classr",
           "qty": 1,
           "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
+          "qty_total": 1,
+          "qty_door_count": 2,
           "manufacturer": "oom",
           "model": "Lockset",
           "finish": "L9070B 06A"
@@ -6908,8 +5371,8 @@
           "name": "Elec. Lock Mo",
           "qty": 1,
           "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
+          "qty_total": 1,
+          "qty_door_count": 2,
           "manufacturer": "difica",
           "model": "tion",
           "finish": "M-1520-AE-1-L9070-24VDC-QC3"
@@ -6918,8 +5381,8 @@
           "name": "Temporary IC",
           "qty": 1,
           "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
+          "qty_total": 1,
+          "qty_door_count": 2,
           "manufacturer": "Core",
           "model": "",
           "finish": "80-033"
@@ -6928,8 +5391,8 @@
           "name": "Permanent Co",
           "qty": 1,
           "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
+          "qty_total": 1,
+          "qty_door_count": 2,
           "manufacturer": "re",
           "model": "",
           "finish": "1CM-7MJ11"
@@ -6938,8 +5401,8 @@
           "name": "Wire Harness",
           "qty": 1,
           "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
+          "qty_total": 1,
+          "qty_door_count": 2,
           "manufacturer": "",
           "model": "",
           "finish": "CON-38"
@@ -6948,8 +5411,8 @@
           "name": "Closer",
           "qty": 1,
           "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
+          "qty_total": 1,
+          "qty_door_count": 2,
           "manufacturer": "",
           "model": "",
           "finish": "4040XP CUSH"
@@ -6958,8 +5421,8 @@
           "name": "Kickplate",
           "qty": 1,
           "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
+          "qty_total": 1,
+          "qty_door_count": 2,
           "manufacturer": "",
           "model": "",
           "finish": "8400 10\" X 34\" B-CS"
@@ -6968,8 +5431,8 @@
           "name": "Hardware by",
           "qty": 1,
           "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
+          "qty_total": 1,
+          "qty_door_count": 2,
           "manufacturer": "Other",
           "model": "s(By",
           "finish": "DOOR POSITION SWITCH BY SECU"
@@ -6978,8 +5441,8 @@
           "name": "Others)",
           "qty": 1,
           "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
+          "qty_total": 1,
+          "qty_door_count": 2,
           "manufacturer": "",
           "model": "",
           "finish": "CONTRACTOR"
@@ -6988,8 +5451,8 @@
           "name": "Gasket",
           "qty": 1,
           "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
+          "qty_total": 1,
+          "qty_door_count": 2,
           "manufacturer": "",
           "model": "",
           "finish": "429AA 1 x 36\" 2 x 96\""
@@ -6998,8 +5461,8 @@
           "name": "Smoke Seal",
           "qty": 1,
           "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
+          "qty_total": 1,
+          "qty_door_count": 2,
           "manufacturer": "",
           "model": "",
           "finish": "5075 C 25'"
@@ -7008,18 +5471,18 @@
           "name": "Gasketing",
           "qty": 1,
           "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
+          "qty_total": 1,
+          "qty_door_count": 2,
           "manufacturer": "",
           "model": "",
           "finish": "5060 C-21 21'"
         },
         {
           "name": "Acoustic Seal",
-          "qty": 2,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
+          "qty": 1,
+          "qty_source": "divided",
+          "qty_total": 2,
+          "qty_door_count": 2,
           "manufacturer": "",
           "model": "",
           "finish": "60FP"
@@ -7028,8 +5491,8 @@
           "name": "Weatherstrip",
           "qty": 1,
           "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
+          "qty_total": 1,
+          "qty_door_count": 2,
           "manufacturer": "",
           "model": "",
           "finish": "326AA 119\""
@@ -7038,8 +5501,8 @@
           "name": "Auto Door Bot",
           "qty": 1,
           "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
+          "qty_total": 1,
+          "qty_door_count": 2,
           "manufacturer": "tom",
           "model": "",
           "finish": "355AA 36\""
@@ -7048,8 +5511,8 @@
           "name": "Card",
           "qty": 1,
           "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
+          "qty_total": 1,
+          "qty_door_count": 2,
           "manufacturer": "Reade",
           "model": "r unlocks",
           "finish": "lockset trim (fail secure). Lockset"
@@ -7058,18 +5521,18 @@
           "name": "side.",
           "qty": 1,
           "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
+          "qty_total": 1,
+          "qty_door_count": 2,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "of 44",
-          "qty": 4,
-          "qty_source": "capped",
+          "qty": 39,
+          "qty_source": "flagged",
           "qty_total": 39,
-          "qty_door_count": null,
+          "qty_door_count": 2,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -7077,7 +5540,7 @@
       ]
     },
     {
-      "set_id": "AD12.0",
+      "set_id": "AD12",
       "heading": "Heading #AD12.0",
       "item_count": 18,
       "items": [
@@ -7264,16 +5727,16 @@
       ]
     },
     {
-      "set_id": "AD13.0",
+      "set_id": "AD13",
       "heading": "Heading #AD13.0",
-      "item_count": 12,
+      "item_count": 18,
       "items": [
         {
           "name": "Single Door #1401 FOC 1400 to Office 1401 LH",
           "qty": 1,
           "qty_source": "parsed",
           "qty_total": 1,
-          "qty_door_count": 4,
+          "qty_door_count": 5,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -7283,7 +5746,7 @@
           "qty": 1,
           "qty_source": "parsed",
           "qty_total": 1,
-          "qty_door_count": 4,
+          "qty_door_count": 5,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -7293,7 +5756,7 @@
           "qty": 1,
           "qty_source": "parsed",
           "qty_total": 1,
-          "qty_door_count": 4,
+          "qty_door_count": 5,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -7303,17 +5766,17 @@
           "qty": 1,
           "qty_source": "parsed",
           "qty_total": 1,
-          "qty_door_count": 4,
+          "qty_door_count": 5,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "Hinges 5BB1 HW 4 1/2 x 4 1/2 652 IV",
-          "qty": 4,
-          "qty_source": "divided",
+          "qty": 16,
+          "qty_source": "flagged",
           "qty_total": 16,
-          "qty_door_count": 4,
+          "qty_door_count": 5,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -7323,7 +5786,7 @@
           "qty": 1,
           "qty_source": "parsed",
           "qty_total": 1,
-          "qty_door_count": 4,
+          "qty_door_count": 5,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -7333,134 +5796,57 @@
           "qty": 3,
           "qty_source": "parsed",
           "qty_total": 3,
-          "qty_door_count": 4,
+          "qty_door_count": 5,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "Temporary IC Core 80-033 626 SC",
-          "qty": 1,
-          "qty_source": "divided",
-          "qty_total": 4,
-          "qty_door_count": 4,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Permanent Core 1CM-7MJ11 626 BE",
-          "qty": 1,
-          "qty_source": "divided",
-          "qty_total": 4,
-          "qty_door_count": 4,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Closer 4040XP RWPA 689 LC",
-          "qty": 1,
-          "qty_source": "divided",
-          "qty_total": 4,
-          "qty_door_count": 4,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Kickplate 8400 10\" X 34\" B-CS US32D IV",
-          "qty": 1,
-          "qty_source": "divided",
-          "qty_total": 4,
-          "qty_door_count": 4,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Wall Stop WS406/407CCV US32D IV",
-          "qty": 1,
-          "qty_source": "divided",
-          "qty_total": 4,
-          "qty_door_count": 4,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        }
-      ]
-    },
-    {
-      "set_id": "AD13.1",
-      "heading": "Heading #AD13.1",
-      "item_count": 13,
-      "items": [
-        {
-          "name": "Hinges 5BB1 HW 4 1/2 x 4 1/2 652 IV",
           "qty": 4,
           "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Mortise Storeroom Lockset L9080B 06A LH 626 SC",
-          "qty": 1,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
-          "manufacturer": "",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Temporary IC Core 80-033 626 SC",
-          "qty": 1,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
+          "qty_total": 4,
+          "qty_door_count": 5,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "Permanent Core 1CM-7MJ11 626 BE",
-          "qty": 1,
+          "qty": 4,
           "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
+          "qty_total": 4,
+          "qty_door_count": 5,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "Closer 4040XP RWPA 689 LC",
-          "qty": 1,
+          "qty": 4,
           "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
+          "qty_total": 4,
+          "qty_door_count": 5,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "Kickplate 8400 10\" X 34\" B-CS US32D IV",
-          "qty": 1,
+          "qty": 4,
           "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
+          "qty_total": 4,
+          "qty_door_count": 5,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "Wall Stop WS406/407CCV US32D IV",
-          "qty": 1,
+          "qty": 4,
           "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
+          "qty_total": 4,
+          "qty_door_count": 5,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -7469,8 +5855,8 @@
           "name": "Gasket 429AA 1 x 36\" 2 x 96\" ZE",
           "qty": 1,
           "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
+          "qty_total": 1,
+          "qty_door_count": 5,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -7479,8 +5865,8 @@
           "name": "Smoke Seal 5075 C 25' NA",
           "qty": 1,
           "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
+          "qty_total": 1,
+          "qty_door_count": 5,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -7489,8 +5875,8 @@
           "name": "Gasketing 5060 C-21 21' NA",
           "qty": 1,
           "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
+          "qty_total": 1,
+          "qty_door_count": 5,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -7499,8 +5885,8 @@
           "name": "Acoustic Seal 60FP NA",
           "qty": 2,
           "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
+          "qty_total": 2,
+          "qty_door_count": 5,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -7509,8 +5895,8 @@
           "name": "Weatherstrip 326AA 119\" ZE",
           "qty": 1,
           "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
+          "qty_total": 1,
+          "qty_door_count": 5,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -7519,8 +5905,8 @@
           "name": "Auto Door Bottom 355AA 36\" ZE",
           "qty": 1,
           "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
+          "qty_total": 1,
+          "qty_door_count": 5,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -7528,7 +5914,7 @@
       ]
     },
     {
-      "set_id": "AD13.2",
+      "set_id": "AD13-AL",
       "heading": "Heading #AD13.2 (AL)",
       "item_count": 3,
       "items": [
@@ -7565,7 +5951,7 @@
       ]
     },
     {
-      "set_id": "AD17.0",
+      "set_id": "AD17-IS",
       "heading": "Heading #AD17.0 (IS)",
       "item_count": 11,
       "items": [
@@ -7682,7 +6068,7 @@
       ]
     },
     {
-      "set_id": "AD17.1",
+      "set_id": "AD17-OS",
       "heading": "Heading #AD17.1 (OS)",
       "item_count": 11,
       "items": [
@@ -7799,7 +6185,7 @@
       ]
     },
     {
-      "set_id": "AD21.0",
+      "set_id": "AD21-9",
       "heading": "Heading #AD21.0 (9)",
       "item_count": 12,
       "items": [
@@ -7926,7 +6312,7 @@
       ]
     },
     {
-      "set_id": "AD21.1",
+      "set_id": "AD21-10",
       "heading": "Heading #AD21.1 (10)",
       "item_count": 12,
       "items": [
@@ -8053,7 +6439,7 @@
       ]
     },
     {
-      "set_id": "XGA0.0",
+      "set_id": "XGA0",
       "heading": "Heading #XGA0.0",
       "item_count": 6,
       "items": [
@@ -8120,7 +6506,7 @@
       ]
     },
     {
-      "set_id": "XGM0.0",
+      "set_id": "XGM0",
       "heading": "Heading #XGM0.0",
       "item_count": 3,
       "items": [

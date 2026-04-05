@@ -271,3 +271,52 @@ class TestRPL10Baseline:
                     f"Set {hs.set_id}, '{item.name[:40]}': qty_source changed from "
                     f"'{expected_item['qty_source']}' to '{item.qty_source}'"
                 )
+
+
+class TestCAANashvilleBaseline:
+    """CAA Nashville Yards PDF (107 pages, pilot customer) regression tests."""
+
+    def test_door_count(self, extract_tables, caa_pdf_path):
+        baseline = _load_baseline("caa-nashville-baseline.json")
+        hw_sets, openings, confirmed, flagged, refs, tf = _run_full_pipeline(extract_tables, caa_pdf_path)
+        actual = len(confirmed) + len(flagged)
+        assert actual == baseline["door_count"], (
+            f"Door count changed: expected {baseline['door_count']}, got {actual}"
+        )
+
+    def test_hw_set_count(self, extract_tables, caa_pdf_path):
+        baseline = _load_baseline("caa-nashville-baseline.json")
+        hw_sets, *_ = _run_full_pipeline(extract_tables, caa_pdf_path)
+        assert len(hw_sets) == baseline["hw_set_count"], (
+            f"HW set count changed: expected {baseline['hw_set_count']}, got {len(hw_sets)}"
+        )
+
+    def test_25_hardware_sets(self, extract_tables, caa_pdf_path):
+        """CAA Nashville must extract exactly 25 hardware sets."""
+        hw_sets, *_ = _run_full_pipeline(extract_tables, caa_pdf_path)
+        assert len(hw_sets) == 25, f"CAA set count: expected 25, got {len(hw_sets)}"
+
+    def test_set_ids_match(self, extract_tables, caa_pdf_path):
+        baseline = _load_baseline("caa-nashville-baseline.json")
+        hw_sets, *_ = _run_full_pipeline(extract_tables, caa_pdf_path)
+        expected_ids = [s["set_id"] for s in baseline["hardware_sets"]]
+        actual_ids = [s.set_id for s in hw_sets]
+        assert actual_ids == expected_ids, (
+            f"Set IDs changed:\n  expected: {expected_ids}\n  actual:   {actual_ids}"
+        )
+
+    def test_item_quantities(self, extract_tables, caa_pdf_path):
+        baseline = _load_baseline("caa-nashville-baseline.json")
+        hw_sets, *_ = _run_full_pipeline(extract_tables, caa_pdf_path)
+        for hs, expected_set in zip(hw_sets, baseline["hardware_sets"]):
+            assert len(hs.items) == expected_set["item_count"], (
+                f"Set {hs.set_id}: item count changed from {expected_set['item_count']} to {len(hs.items)}"
+            )
+            for item, expected_item in zip(hs.items, expected_set["items"]):
+                assert item.qty == expected_item["qty"], (
+                    f"Set {hs.set_id}, '{item.name[:40]}': qty changed from {expected_item['qty']} to {item.qty}"
+                )
+                assert item.qty_source == expected_item["qty_source"], (
+                    f"Set {hs.set_id}, '{item.name[:40]}': qty_source changed from "
+                    f"'{expected_item['qty_source']}' to '{item.qty_source}'"
+                )
