@@ -52,8 +52,8 @@ const REQUIRED_FIELDS = ["door_number"];
 
 const DEFAULT_FIELD_LABELS: Record<string, string> = {
   door_number: "Door Number",
-  hw_set: "Hardware Set",
-  hw_heading: "Hardware Heading",
+  hw_set: "Hardware Heading",
+  hw_heading: "Hardware Subheading",
   location: "Location",
   door_type: "Door Type",
   frame_type: "Frame Type",
@@ -573,7 +573,10 @@ function Step3Confirm({
       </div>
 
       {/* Summary table showing all assignments */}
-      <div className="glow-card p-6">
+      <div
+        className="rounded-lg border border-[rgba(255,255,255,0.08)] p-6"
+        style={{ backgroundColor: "rgba(10,10,14,0.95)" }}
+      >
         <div className="mb-4">
           <h3 className="font-semibold text-sm text-[#e8e8ed] mb-3">
             Field Assignments
@@ -586,27 +589,27 @@ function Step3Confirm({
               return (
                 <div
                   key={field}
-                  className="flex items-center justify-between p-3 rounded border"
+                  className="flex items-center justify-between p-3 rounded-lg"
                   style={{
-                    backgroundColor: `${color}08`,
-                    borderColor: `${color}20`,
+                    backgroundColor: `${color}10`,
+                    border: `1px solid ${color}25`,
                   }}
                 >
                   <div className="flex-1">
                     <div className="font-semibold text-sm" style={{ color }}>
                       {fieldLabels[field]}
                     </div>
-                    <div className="text-xs text-[#8e8e93] mt-1">
-                      Column {colIdx + 1}: <strong>{data.headers[colIdx]}</strong>
+                    <div className="text-xs text-[#a1a1a6] mt-1">
+                      Column {colIdx + 1}: <strong className="text-[#d1d1d6]">{data.headers[colIdx]}</strong>
                     </div>
                     {confidence !== undefined && (
-                      <div className="text-xs text-[#8e8e93] mt-0.5">
+                      <div className="text-xs text-[#636366] mt-0.5">
                         Confidence: {Math.round(confidence * 100)}%
                       </div>
                     )}
                   </div>
                   {data.sample_rows.length > 0 && (
-                    <div className="text-right text-xs text-[#636366] max-w-[150px] truncate">
+                    <div className="text-right text-xs text-[#a1a1a6] max-w-[150px] truncate">
                       Sample: &quot;{data.sample_rows[0][colIdx]}&quot;
                     </div>
                   )}
@@ -619,7 +622,10 @@ function Step3Confirm({
 
       {/* Sample data preview table */}
       {data.sample_rows.length > 0 && (
-        <div className="glow-card p-4">
+        <div
+          className="rounded-lg border border-[rgba(255,255,255,0.08)] p-4"
+          style={{ backgroundColor: "rgba(10,10,14,0.95)" }}
+        >
           <div className="text-xs uppercase tracking-widest text-[#636366] font-semibold mb-3">
             Preview with Extracted Data
           </div>
@@ -627,7 +633,7 @@ function Step3Confirm({
             <table className="w-full text-xs">
               <thead>
                 <tr>
-                  {Object.entries(mapping).map(([field, colIdx]) => {
+                  {Object.entries(mapping).map(([field]) => {
                     const color = FIELD_COLORS[field];
                     return (
                       <th
@@ -635,7 +641,7 @@ function Step3Confirm({
                         className="px-2 py-2 text-left font-semibold whitespace-nowrap"
                         style={{
                           color,
-                          backgroundColor: `${color}08`,
+                          backgroundColor: "rgba(10,10,14,0.98)",
                           borderBottom: `2px solid ${color}30`,
                         }}
                       >

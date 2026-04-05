@@ -59,8 +59,8 @@ STANDARD_COLUMN_ORDER = [
 
 FIELD_LABELS = {
     "door_number": "Door Number",
-    "hw_set": "Hardware Set",
-    "hw_heading": "Hardware Heading",
+    "hw_set": "Hardware Heading",
+    "hw_heading": "Hardware Subheading",
     "location": "Location",
     "door_type": "Door Type",
     "frame_type": "Frame Type",
