@@ -189,9 +189,9 @@ ${getTaxonomyPromptText()}`
 
   try {
     const response = await client.messages.create({
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-haiku-4-5-20251001',
       max_tokens: 8192,
-      system: systemPrompt,
+      system: [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }],
       messages: [
         {
           role: 'user',
@@ -199,6 +199,7 @@ ${getTaxonomyPromptText()}`
             {
               type: 'document',
               source: { type: 'base64', media_type: 'application/pdf', data: base64 },
+              cache_control: { type: 'ephemeral' },
             },
             {
               type: 'text',

@@ -178,9 +178,9 @@ ${getTaxonomyPromptText()}`
 
   try {
     const response = await client.messages.create({
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-haiku-4-5-20251001',
       max_tokens: 16384,
-      system: systemPrompt,
+      system: [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }],
       messages: [
         {
           role: 'user',
@@ -188,6 +188,7 @@ ${getTaxonomyPromptText()}`
             {
               type: 'document',
               source: { type: 'base64', media_type: 'application/pdf', data: base64 },
+              cache_control: { type: 'ephemeral' },
             },
             {
               type: 'text',
@@ -291,7 +292,7 @@ function applyCorrections(
 
 // --- Core extraction logic (shared by streaming and parse-only modes) ---
 
-async function extractFromPDF(base64: string): Promise<{
+async function extractFromPDF(base64: string, filteredPdfBase64?: string): Promise<{
   hardwareSets: HardwareSet[]
   doors: DoorEntry[]
   corrections: LLMCorrections
@@ -330,7 +331,9 @@ async function extractFromPDF(base64: string): Promise<{
   let allDoors: DoorEntry[] = pdfplumberResult?.openings || []
 
   const client = new Anthropic()
-  const corrections = await callLLMReview(client, base64, pdfplumberResult || {
+  // Use filtered PDF for LLM review if available (fewer pages = cheaper + faster)
+  const reviewPdf = filteredPdfBase64 ?? base64
+  const corrections = await callLLMReview(client, reviewPdf, pdfplumberResult || {
     success: false,
     openings: [],
     hardware_sets: [],
@@ -445,7 +448,11 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Missing pdfBase64' }, { status: 400 })
       }
 
-      const { hardwareSets, doors, corrections, stats } = await extractFromPDF(base64)
+      // Client may send a filtered PDF (opening list + hardware schedule pages only)
+      // for cheaper LLM review. pdfplumber still gets the full PDF.
+      const filteredPdfBase64: string | undefined = body.filteredPdfBase64 ?? undefined
+
+      const { hardwareSets, doors, corrections, stats } = await extractFromPDF(base64, filteredPdfBase64)
 
       return NextResponse.json({
         success: true,
