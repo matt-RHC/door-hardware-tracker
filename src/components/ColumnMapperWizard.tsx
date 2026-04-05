@@ -236,7 +236,6 @@ function Step2MapColumns({
   onReset,
   onConfirm,
   onBack,
-  onSkip,
   fieldLabels,
 }: {
   data: DetectMappingResponse;
@@ -247,7 +246,6 @@ function Step2MapColumns({
   onReset: () => void;
   onConfirm: () => void;
   onBack: () => void;
-  onSkip: () => void;
   fieldLabels: Record<string, string>;
 }) {
   // Reverse mapping: column index → field name
@@ -446,10 +444,16 @@ function Step2MapColumns({
       </div>
 
       {/* Status message */}
-      {activeField && (
+      {activeField ? (
         <div className="p-3 rounded-lg bg-[rgba(90,200,250,0.1)] border border-[rgba(90,200,250,0.2)]">
           <p className="text-sm text-[#5ac8fa]">
-            Assigning <strong>{fieldLabels[activeField]}</strong> — click a column header on the right
+            Assigning <strong>{fieldLabels[activeField]}</strong> — click a column on the right to assign it
+          </p>
+        </div>
+      ) : (
+        <div className="p-3 rounded-lg bg-[rgba(255,255,255,0.03)] border border-[rgba(255,255,255,0.08)]">
+          <p className="text-sm text-[#636366]">
+            Select a field on the left to begin mapping
           </p>
         </div>
       )}
@@ -467,24 +471,19 @@ function Step2MapColumns({
       <div className="flex items-center justify-between pt-4 gap-4 border-t border-[rgba(255,255,255,0.06)] pt-6">
         <div className="flex gap-2">
           <button onClick={onReset} className="glow-btn glow-btn--ghost text-xs">
-            Reset to Auto
+            Reset Mappings
           </button>
           <button onClick={onBack} className="glow-btn glow-btn--ghost">
             Back
           </button>
         </div>
-        <div className="flex gap-2">
-          <button onClick={onSkip} className="glow-btn glow-btn--ghost">
-            Skip
-          </button>
-          <button
-            onClick={onConfirm}
-            disabled={!canConfirm}
-            className="glow-btn glow-btn--primary disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            Continue
-          </button>
-        </div>
+        <button
+          onClick={onConfirm}
+          disabled={!canConfirm}
+          className="glow-btn glow-btn--primary disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          Continue
+        </button>
       </div>
     </div>
   );
@@ -520,10 +519,13 @@ function Step3Confirm({
         <h2 className="font-display text-2xl font-bold text-white mb-2">
           CONFIRM & EXTRACT
         </h2>
-        <p className="text-sm text-[#8e8e93]">
+        <p className="text-sm text-[#a1a1a6] leading-relaxed">
           Review the mapping below. The preview shows how your data will be read.
-          When everything looks right, hit <span className="text-[#e8e8ed]">Confirm &amp; Extract</span> to
+          When everything looks right, hit <span className="text-[#e8e8ed] font-medium">Confirm &amp; Extract</span> to
           start parsing your submittal.
+        </p>
+        <p className="text-xs text-[#636366] mt-2">
+          You&apos;ll review all extracted data before anything is saved to your project.
         </p>
       </div>
 
@@ -652,7 +654,10 @@ export default function ColumnMapperWizard({
   // Step 1 handlers
   const handleStep1Confirm = useCallback(() => {
     setStep(2);
-  }, []);
+    // Auto-select the first required field so the right side is immediately interactive
+    const firstUnmapped = REQUIRED_FIELDS.find((f) => !(f in mapping));
+    setActiveField(firstUnmapped ?? REQUIRED_FIELDS[0] ?? null);
+  }, [mapping]);
 
   const handleStep1Skip = useCallback(() => {
     onSkipProp();
@@ -698,10 +703,6 @@ export default function ColumnMapperWizard({
     setStep(1);
   }, []);
 
-  const handleStep2Skip = useCallback(() => {
-    onSkipProp();
-  }, [onSkipProp]);
-
   // Step 3 handlers
   const handleStep3Confirm = useCallback(() => {
     onConfirmProp(mapping);
@@ -742,7 +743,6 @@ export default function ColumnMapperWizard({
               onReset={handleReset}
               onConfirm={handleStep2Confirm}
               onBack={handleStep2Back}
-              onSkip={handleStep2Skip}
               fieldLabels={fieldLabels}
             />
           )}
