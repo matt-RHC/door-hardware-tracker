@@ -426,14 +426,23 @@ OPTION_HEADER = re.compile(
 
 # --- Hardware Set Page Detection ---
 
-# Pattern to match hardware set heading lines like:
-# "Heading #DH4.1 (Set #DH4-R-NOCR)" or "Hardware Set DH1" or "SET: DH2"
+# Pattern to match hardware set heading lines — all 6 known real-world formats:
+# 1. "SET #04" / "SET 04"              — bare set ID
+# 2. "HARDWARE SET #04" / "HW SET #04" — explicit prefix
+# 3. "Heading #04 (Set #04)"           — Himmel's format (with optional .PR4/:1 suffix)
+# 4. "SET: I1S-7B" / "Set: AD2"        — colon-separated
+# 5. "HARDWARE GROUP 04" / "HW GROUP 04" — group keyword
+# 6. "04 - Hardware Set"               — ID-first format
 HW_SET_HEADING_PATTERN = re.compile(
     r"(?i)"
     r"(?:"
-    r"heading\s*#?\s*([A-Z0-9][A-Z0-9.\-:]*)\s*\(set\s*#?\s*([A-Z0-9][A-Z0-9.\-]*)\)"  # Heading #X (Set #Y)
+    r"heading\s*#?\s*([A-Z0-9][A-Z0-9.\-:]*)\s*\(set\s*#?\s*([A-Z0-9][A-Z0-9.\-:]*)\)"  # Format 3: Heading #X (Set #Y)
     r"|"
-    r"(?:hardware\s+)?set\s*[:# ]\s*([A-Z0-9][A-Z0-9.\-]*)"  # Hardware Set DH1 / SET: DH2
+    r"(?:hardware\s+|hw\s+)(?:set|group)\s*[:# ]\s*([A-Z0-9][A-Z0-9.\-]{0,14})\b"  # Format 2/5: HARDWARE SET/GROUP #X
+    r"|"
+    r"([A-Z0-9][A-Z0-9.\-]{0,14})\s+[-–—]\s+(?:hardware\s+)?set\b"  # Format 6: ID - Hardware Set
+    r"|"
+    r"(?<![\w.])set\s*[:#]\s*([A-Z0-9][A-Z0-9.\-]{0,14})\b"  # Format 1/4: SET #X / SET: X (require : or #)
     r")"
 )
 
@@ -922,6 +931,9 @@ HARDWARE_SET_PATTERNS = [
 HARDWARE_SET_PREFIXES = frozenset({
     'DH', 'DCB', 'HM', 'HMS', 'HW', 'HS', 'HD', 'FH', 'AH',
     'SET', 'TYPE', 'GRP', 'GROUP', 'STYLE',
+    'PT', 'GF', 'LCN', 'VON',  # Product code prefixes from cut sheets
+    'L',  # Schlage lockset models (L9175, L9460, L464, etc.)
+    'C0',  # Catalog/product prefix codes (C01511, C01541)
 })
 
 # Location prefixes that ARE valid door number prefixes (Task 3 / S-045)
@@ -968,6 +980,14 @@ def is_valid_door_number(val: str, log_rejections: bool = False) -> bool:
     if clean.startswith("NOTE:") or clean.startswith("*") or clean.startswith("#"):
         return False
 
+    # Reject measurements, decimals, and product code markers
+    if clean.startswith(".") or clean.startswith("-"):
+        return False
+    if any(c in clean for c in ('"', "'", '*', '(', ')', '/')):
+        return False
+    if re.search(r'(?:MM|CM|IN)\b', clean):
+        return False
+
     # Door numbers never contain spaces
     if " " in clean:
         if log_rejections:
@@ -984,8 +1004,8 @@ def is_valid_door_number(val: str, log_rejections: bool = False) -> bool:
     if clean.endswith("-"):
         return False
 
-    # Reject phone number patterns
-    if re.match(r'^\d{3}-\d{3}-\d{4}$', clean):
+    # Reject phone number patterns and multi-dash numeric strings
+    if re.match(r'^\d+-\d+-\d+$', clean):
         return False
 
     # Accept location-prefix door numbers BEFORE hardware set rejection.
@@ -1006,7 +1026,7 @@ def is_valid_door_number(val: str, log_rejections: bool = False) -> bool:
 
     # Reject known hardware set prefixes (short codes only)
     for prefix in HARDWARE_SET_PREFIXES:
-        if clean.startswith(prefix) and len(clean) <= len(prefix) + 2:
+        if clean.startswith(prefix) and len(clean) <= len(prefix) + 4:
             if log_rejections:
                 print(f"[DOOR_VALIDATION] Rejected '{val}': HW set prefix {prefix}")
             return False
@@ -1149,9 +1169,11 @@ def parse_hw_set_id_from_text(text: str) -> tuple[str, str, str]:
     if not m:
         return ("", "", "")
 
-    # Group 1 = heading ID (from "Heading #X (Set #Y)" format, includes :suffix)
-    # Group 2 = generic set ID (from same format)
-    # Group 3 = set ID (from "Hardware Set X" / "SET: X" format)
+    # Group 1 = heading ID from "Heading #X (Set #Y)" (includes :1/.PR4 suffix)
+    # Group 2 = generic set ID from same format (from parenthetical)
+    # Group 3 = set ID from "HARDWARE SET/GROUP #X" format
+    # Group 4 = set ID from "ID - Hardware Set" format (ID-first)
+    # Group 5 = set ID from "SET #X" / "SET: X" format (bare set)
     heading_id = ""
     generic_set_id = ""
 
@@ -1160,9 +1182,17 @@ def parse_hw_set_id_from_text(text: str) -> tuple[str, str, str]:
         heading_id = m.group(1).strip()
         generic_set_id = m.group(2).strip()
     elif m.group(3):
-        # "Hardware Set DH1" → both are the same
+        # "HARDWARE SET DH1" / "HW GROUP 04"
         heading_id = m.group(3).strip()
         generic_set_id = m.group(3).strip()
+    elif m.group(4):
+        # "04 - Hardware Set" (ID-first format)
+        heading_id = m.group(4).strip()
+        generic_set_id = m.group(4).strip()
+    elif m.group(5):
+        # "SET #04" / "SET: AD2"
+        heading_id = m.group(5).strip()
+        generic_set_id = m.group(5).strip()
     elif m.group(1):
         # Heading number only (fallback)
         heading_id = m.group(1).strip()
@@ -1220,11 +1250,18 @@ def count_heading_doors(page_text: str) -> tuple[int, int]:
     return (opening_count, leaf_count)
 
 
-# Strict pattern for splitting: only "Heading #X" at start of line.
-# The broader HW_SET_HEADING_PATTERN also matches "Set X" / "Hardware Set X"
-# inside item descriptions, which causes false splits.
+# Strict pattern for splitting: heading keywords at start of line only.
+# The broader HW_SET_HEADING_PATTERN also matches inside item descriptions,
+# which causes false splits. This pattern is deliberately stricter.
 _HEADING_LINE_PATTERN = re.compile(
-    r"(?i)^heading\s+#([A-Z0-9][A-Z0-9.\-:]*)"
+    r"(?i)^(?:"
+    r"heading\s+#([A-Z0-9][A-Z0-9.\-:]*)"
+    r"|"
+    r"(?:hardware\s+|hw\s+)(?:set|group)\s*[:#\s]\s*([A-Z0-9][A-Z0-9.\-:]*)"
+    r"|"
+    r"set\s*[:#]\s*([A-Z0-9][A-Z0-9.\-:]*)"
+    r")",
+    re.MULTILINE
 )
 
 
@@ -1528,9 +1565,13 @@ def extract_all_hardware_sets(pdf: pdfplumber.PDF) -> list[HardwareSetDef]:
     """
     Extract all hardware set definitions from the entire PDF.
     Scans each page for hardware set headings and extracts items.
+
+    Sub-headings (.PR4 pair variants, :1 continuations) are merged into
+    their parent set using generic_set_id. The resulting set_id is the
+    generic_set_id (e.g., "04" not "04.PR4").
     """
     all_sets: list[HardwareSetDef] = []
-    seen_set_ids: set[str] = set()
+    seen_generic_ids: dict[str, int] = {}  # generic_set_id → index in all_sets
 
     for page_num, page in enumerate(pdf.pages):
         text = page.extract_text() or ""
@@ -1538,27 +1579,42 @@ def extract_all_hardware_sets(pdf: pdfplumber.PDF) -> list[HardwareSetDef]:
         if not is_hardware_set_page(text):
             continue
 
-        # A single page might have multiple sets (less common but possible)
-        # For now, extract per-page (most submittals = 1 set per page)
         page_sets = extract_hardware_sets_from_page(page, text)
 
         for hw_set in page_sets:
-            if hw_set.set_id in seen_set_ids:
-                # Merge items if same set appears on multiple pages (continuation)
-                for existing in all_sets:
-                    if existing.set_id == hw_set.set_id:
-                        existing.items.extend(hw_set.items)
-                        # Dedup after merge to catch cross-page duplicates
-                        existing.items = deduplicate_hardware_items(existing.items)
-                        break
+            merge_key = hw_set.generic_set_id or hw_set.set_id
+            if merge_key in seen_generic_ids:
+                # Merge items into existing set (continuation or sub-heading)
+                existing = all_sets[seen_generic_ids[merge_key]]
+                existing.items.extend(hw_set.items)
+                existing.items = deduplicate_hardware_items(existing.items)
+                # Accumulate door/leaf counts from sub-headings
+                existing.heading_door_count += hw_set.heading_door_count
+                existing.heading_leaf_count += hw_set.heading_leaf_count
             else:
-                seen_set_ids.add(hw_set.set_id)
+                # First occurrence — normalize set_id to generic_set_id
+                hw_set.set_id = merge_key
+                seen_generic_ids[merge_key] = len(all_sets)
                 all_sets.append(hw_set)
 
     return all_sets
 
 
 # --- Opening List Extraction ---
+
+def _identify_hw_set_pages(pdf: pdfplumber.PDF) -> set[int]:
+    """Identify page indices that contain hardware set definitions.
+
+    Used to exclude hardware schedule and cut sheet pages from opening
+    list extraction — opening list pages always precede these.
+    """
+    hw_pages: set[int] = set()
+    for i, page in enumerate(pdf.pages):
+        text = page.extract_text() or ""
+        if is_hardware_set_page(text):
+            hw_pages.add(i)
+    return hw_pages
+
 
 def extract_opening_list(
     pdf: pdfplumber.PDF,
@@ -1568,6 +1624,7 @@ def extract_opening_list(
     Extract the Opening List / Door Schedule from a PDF.
     If user_column_mapping is provided, it overrides auto-detection.
     Returns (list of door entries, number of tables found).
+
     """
     all_doors: list[DoorEntry] = []
     tables_found = 0

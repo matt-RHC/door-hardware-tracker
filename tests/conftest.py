@@ -72,3 +72,12 @@ def rpl10_pdf_path():
     if not p.exists():
         pytest.skip(f"RPL10 PDF not found at {p}. Copy it from Downloads.")
     return p
+
+
+@pytest.fixture(scope="session")
+def caa_pdf_path():
+    """Path to the CAA Nashville Yards golden test PDF (107 pages, 60 doors)."""
+    p = FIXTURES_DIR / "CAA_Nashville_Yards.pdf"
+    if not p.exists():
+        pytest.skip(f"CAA PDF not found at {p}. Copy it from Downloads.")
+    return p
