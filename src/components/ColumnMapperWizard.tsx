@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useCallback } from "react";
+import PDFPageBrowser from "./PDFPageBrowser";
 
 // ─── Types ───
 
@@ -23,10 +24,15 @@ export interface DetectMappingResponse {
   error?: string;
 }
 
+type WizardPhase = "step1" | "pageBrowser" | "step2" | "step3";
+
 interface ColumnMapperWizardProps {
   data: DetectMappingResponse;
+  pdfBuffer?: ArrayBuffer;
+  pageCount?: number;
   onConfirm: (mapping: ColumnMapping) => void;
   onSkip: () => void;
+  onRedetect?: (pageIndex: number) => Promise<DetectMappingResponse | null>;
 }
 
 // ─── Field metadata ───
@@ -330,7 +336,10 @@ function Step2MapColumns({
                 >
                   <div className="space-y-1">
                     <div className="flex items-baseline justify-between gap-2">
-                      <span className="font-semibold text-sm text-[#e8e8ed]">
+                      <span
+                        className="font-semibold text-sm"
+                        style={{ color: "#f5f5f7", textShadow: "0 1px 4px rgba(0,0,0,0.6)" }}
+                      >
                         {fieldLabels[field]}
                       </span>
                       {isRequired && <span className="text-[#ff453a]">*</span>}
@@ -641,27 +650,70 @@ function Step3Confirm({
 
 export default function ColumnMapperWizard({
   data,
+  pdfBuffer,
+  pageCount: pageCountProp,
   onConfirm: onConfirmProp,
   onSkip: onSkipProp,
+  onRedetect,
 }: ColumnMapperWizardProps) {
-  const fieldLabels = { ...DEFAULT_FIELD_LABELS, ...(data.field_labels || {}) };
+  // Frontend labels take priority over backend's (which may have abbreviations)
+  const fieldLabels = { ...(data.field_labels || {}), ...DEFAULT_FIELD_LABELS };
 
-  // Wizard state
-  const [step, setStep] = useState(1);
+  // Wizard state — phase-based instead of numeric steps
+  const [phase, setPhase] = useState<WizardPhase>("step1");
+  const [currentData, setCurrentData] = useState<DetectMappingResponse>(data);
   const [mapping, setMapping] = useState<ColumnMapping>(() => ({ ...data.auto_mapping }));
   const [activeField, setActiveField] = useState<string | null>(null);
+  const [redetecting, setRedetecting] = useState(false);
+  const [redetectError, setRedetectError] = useState<string | null>(null);
+
+  // Step indicator position
+  const stepIndex = phase === "step1" || phase === "pageBrowser" ? 0 : phase === "step2" ? 1 : 2;
 
   // Step 1 handlers
   const handleStep1Confirm = useCallback(() => {
-    setStep(2);
-    // Auto-select the first required field so the right side is immediately interactive
+    setPhase("step2");
     const firstUnmapped = REQUIRED_FIELDS.find((f) => !(f in mapping));
     setActiveField(firstUnmapped ?? REQUIRED_FIELDS[0] ?? null);
   }, [mapping]);
 
   const handleStep1Skip = useCallback(() => {
-    onSkipProp();
-  }, [onSkipProp]);
+    // If page browser is available, go there instead of skipping entirely
+    if (pdfBuffer && onRedetect) {
+      setPhase("pageBrowser");
+    } else {
+      onSkipProp();
+    }
+  }, [pdfBuffer, onRedetect, onSkipProp]);
+
+  // Page browser handler
+  const handlePageSelect = useCallback(async (pageIndex: number) => {
+    if (!onRedetect) return;
+    setRedetecting(true);
+    setRedetectError(null);
+    try {
+      const result = await onRedetect(pageIndex);
+      if (result?.success && (result.headers?.length ?? 0) > 0) {
+        setCurrentData(result);
+        setMapping({ ...result.auto_mapping });
+        setActiveField(null);
+        setPhase("step1");
+      } else {
+        setRedetectError(
+          `No door schedule found on page ${pageIndex + 1}. Try selecting a different page.`
+        );
+      }
+    } catch {
+      setRedetectError("Detection failed. Try a different page.");
+    } finally {
+      setRedetecting(false);
+    }
+  }, [onRedetect]);
+
+  const handlePageBrowserCancel = useCallback(() => {
+    setRedetectError(null);
+    setPhase("step1");
+  }, []);
 
   // Step 2 handlers
   const handleFieldClick = useCallback((field: string | null) => {
@@ -677,13 +729,11 @@ export default function ColumnMapperWizard({
 
     setMapping((prev) => {
       const next = { ...prev };
-      // Remove any existing assignment for this column
       for (const [field, idx] of Object.entries(next)) {
         if (idx === colIdx) {
           delete next[field];
         }
       }
-      // Assign the active field to this column
       next[activeField] = colIdx;
       return next;
     });
@@ -691,16 +741,16 @@ export default function ColumnMapperWizard({
   }, [activeField]);
 
   const handleReset = useCallback(() => {
-    setMapping({ ...data.auto_mapping });
+    setMapping({ ...currentData.auto_mapping });
     setActiveField(null);
-  }, [data.auto_mapping]);
+  }, [currentData.auto_mapping]);
 
   const handleStep2Confirm = useCallback(() => {
-    setStep(3);
+    setPhase("step3");
   }, []);
 
   const handleStep2Back = useCallback(() => {
-    setStep(1);
+    setPhase("step1");
   }, []);
 
   // Step 3 handlers
@@ -709,7 +759,7 @@ export default function ColumnMapperWizard({
   }, [mapping, onConfirmProp]);
 
   const handleStep3Back = useCallback(() => {
-    setStep(2);
+    setPhase("step2");
   }, []);
 
   return (
@@ -722,20 +772,36 @@ export default function ColumnMapperWizard({
         }}
       >
         {/* Step indicator */}
-        <StepIndicator currentStep={step - 1} totalSteps={3} />
+        <StepIndicator currentStep={stepIndex} totalSteps={3} />
 
-        {/* Step content */}
+        {/* Phase content */}
         <div className="relative">
-          {step === 1 && (
+          {phase === "step1" && (
             <Step1IdentifyTable
-              data={data}
+              data={currentData}
               onConfirm={handleStep1Confirm}
               onSkip={handleStep1Skip}
             />
           )}
-          {step === 2 && (
+          {phase === "pageBrowser" && pdfBuffer && (
+            <>
+              <PDFPageBrowser
+                pdfBuffer={pdfBuffer}
+                pageCount={pageCountProp ?? currentData.total_pages}
+                onSelectPage={handlePageSelect}
+                onCancel={handlePageBrowserCancel}
+                loading={redetecting}
+              />
+              {redetectError && (
+                <div className="mt-4 p-3 rounded-lg bg-[rgba(255,69,58,0.1)] border border-[rgba(255,69,58,0.2)]">
+                  <p className="text-sm text-[#ff453a]">{redetectError}</p>
+                </div>
+              )}
+            </>
+          )}
+          {phase === "step2" && (
             <Step2MapColumns
-              data={data}
+              data={currentData}
               mapping={mapping}
               activeField={activeField}
               onFieldClick={handleFieldClick}
@@ -746,9 +812,9 @@ export default function ColumnMapperWizard({
               fieldLabels={fieldLabels}
             />
           )}
-          {step === 3 && (
+          {phase === "step3" && (
             <Step3Confirm
-              data={data}
+              data={currentData}
               mapping={mapping}
               onConfirm={handleStep3Confirm}
               onBack={handleStep3Back}

@@ -925,6 +925,7 @@ export default function PDFUploadModal({
   const [confirmedMapping, setConfirmedMapping] = useState<ColumnMapping | null>(null);
   const [mappingSummary, setMappingSummary] = useState<string | null>(null);
   const mapperDoneRef = useRef(false); // true after user confirms or skips
+  const pdfBase64Ref = useRef<string | null>(null); // for re-detection from page browser
   // Store buffer/pageCount/parseOnly so we can resume after mapping confirmation
   const pendingUploadRef = useRef<{
     buffer: ArrayBuffer;
@@ -1027,6 +1028,7 @@ export default function PDFUploadModal({
     const fullBase64 = btoa(
       new Uint8Array(buffer).reduce((data, byte) => data + String.fromCharCode(byte), "")
     );
+    pdfBase64Ref.current = fullBase64;
 
     // ── Primary path: full pdfplumber + LLM review pipeline ──
     // Sends entire PDF to the server-side Python pipeline (pdfplumber extracts
@@ -1467,14 +1469,31 @@ export default function PDFUploadModal({
         <div className="bg-[#1c1c1e] rounded-2xl border border-white/[0.08] p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto relative">
           <ColumnMapperWizard
             data={mapperData}
+            pdfBuffer={pendingUploadRef.current?.buffer}
+            pageCount={pendingUploadRef.current?.pageCount}
+            onRedetect={async (pageIndex: number) => {
+              const b64 = pdfBase64Ref.current;
+              if (!b64) return null;
+              try {
+                const resp = await fetch("/api/detect-mapping", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ pdf_base64: b64, page_index: pageIndex }),
+                });
+                if (!resp.ok) return null;
+                return await resp.json();
+              } catch {
+                return null;
+              }
+            }}
             onConfirm={(mapping) => {
               setConfirmedMapping(mapping);
               // Build human-readable summary of confirmed column mapping
               const headers = mapperData?.headers ?? [];
               const FIELD_LABELS: Record<string, string> = {
-                door_number: "Door #", hw_set: "HW Set", hw_heading: "Heading",
+                door_number: "Door Number", hw_set: "Hardware Set", hw_heading: "Hardware Heading",
                 location: "Location", door_type: "Door Type", frame_type: "Frame Type",
-                fire_rating: "Fire Rating", hand: "Hand",
+                fire_rating: "Fire Rating", hand: "Hand / Swing",
               };
               const parts = Object.entries(mapping)
                 .map(([field, colIdx]) => {
