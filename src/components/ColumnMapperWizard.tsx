@@ -402,19 +402,41 @@ function Step2MapColumns({
                         <strong>→ {fieldLabels[assignedField]}</strong>
                       </div>
                     )}
-                    {data.sample_rows.length > 0 && (
-                      <div className="mt-1 space-y-0.5">
-                        {data.sample_rows.map((row, rIdx) => {
-                          const val = row[colIdx];
-                          return (
-                            <p key={rIdx} className="text-[11px] text-[#8e8e93] truncate">
-                              <span className="text-[#4a4a4e] mr-1">r{rIdx + 1}</span>
-                              {val || <span className="italic text-[#3a3a3e]">(empty)</span>}
+                    {data.sample_rows.length > 0 && (() => {
+                      const nonEmpty = data.sample_rows
+                        .map((row, rIdx) => ({ val: row[colIdx]?.trim(), rIdx }))
+                        .filter((r) => r.val);
+                      const total = data.sample_rows.length;
+
+                      if (nonEmpty.length === 0) {
+                        return (
+                          <div className="mt-1.5 p-2 rounded bg-[rgba(255,69,58,0.08)] border border-[rgba(255,69,58,0.2)]">
+                            <p className="text-[11px] text-[#ff453a] font-medium">
+                              All {total} sample rows are empty
                             </p>
-                          );
-                        })}
-                      </div>
-                    )}
+                            <p className="text-[10px] text-[#636366] mt-0.5">
+                              This column may not have data in your PDF
+                            </p>
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <div className="mt-1">
+                          <p className="text-[10px] text-[#4a4a4e] mb-1">
+                            {nonEmpty.length} of {total} rows have data
+                          </p>
+                          <div className="space-y-0.5">
+                            {nonEmpty.map(({ val, rIdx }) => (
+                              <p key={rIdx} className="text-[11px] text-[#8e8e93] truncate">
+                                <span className="text-[#4a4a4e] mr-1">r{rIdx + 1}</span>
+                                {val}
+                              </p>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </div>
                 </button>
               );
