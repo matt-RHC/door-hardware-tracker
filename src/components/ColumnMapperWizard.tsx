@@ -46,13 +46,13 @@ const REQUIRED_FIELDS = ["door_number"];
 
 const DEFAULT_FIELD_LABELS: Record<string, string> = {
   door_number: "Door Number",
-  hw_set: "HW Set",
-  hw_heading: "HW Heading",
+  hw_set: "Hardware Set",
+  hw_heading: "Hardware Heading",
   location: "Location",
   door_type: "Door Type",
   frame_type: "Frame Type",
   fire_rating: "Fire Rating",
-  hand: "Hand/Swing",
+  hand: "Hand / Swing",
 };
 
 // ─── Color for field badges ───
@@ -115,48 +115,63 @@ function Step1IdentifyTable({
     <div className="space-y-6 animate-fade-in-up">
       <div>
         <h2 className="font-display text-2xl font-bold text-white mb-2">
-          IS THIS YOUR OPENING LIST?
+          VERIFY YOUR DOOR SCHEDULE
         </h2>
-        <p className="text-sm text-[#8e8e93]">
-          We found a table that looks like a door schedule or opening list. It should have
-          columns like <span className="text-[#e8e8ed]">Door No.</span>,{" "}
-          <span className="text-[#e8e8ed]">HW Set</span>,{" "}
-          <span className="text-[#e8e8ed]">Location</span>, and{" "}
-          <span className="text-[#e8e8ed]">Door Type</span>.
-          {data.page_index !== undefined && (
-            <span className="block mt-1">
-              <span className="text-[#636366]">Detected on page {data.page_index + 1} of {data.total_pages}</span>
-            </span>
-          )}
+        <p className="text-sm text-[#a1a1a6] leading-relaxed">
+          We found a table in your submittal that looks like the master door list.
+          Check that the preview below shows <span className="text-[#e8e8ed] font-medium">door numbers</span>,{" "}
+          <span className="text-[#e8e8ed] font-medium">hardware sets</span>, and other door info
+          — not a hardware set detail page or cover sheet.
+        </p>
+        {data.page_index !== undefined && (
+          <p className="text-xs text-[#636366] mt-2">
+            Found on page {data.page_index + 1} of {data.total_pages}
+          </p>
+        )}
+      </div>
+
+      {/* What happens next */}
+      <div className="p-3 rounded-lg bg-[rgba(90,200,250,0.06)] border border-[rgba(90,200,250,0.15)]">
+        <p className="text-xs text-[#5ac8fa]">
+          <strong>Next step:</strong> After you confirm, you&apos;ll be able to tell us which column is
+          which (Door Number, Fire Rating, etc.) so we parse everything correctly.
         </p>
       </div>
 
       {/* Low confidence warning */}
       {data.low_confidence && (
-        <div className="glow-card glow-card--orange p-4">
+        <div className="p-4 rounded-lg bg-[rgba(255,159,10,0.08)] border border-[rgba(255,159,10,0.25)]">
           <p className="text-[#ff9f0a] font-semibold text-sm mb-1">
             Low Confidence Detection
           </p>
           <p className="text-xs text-[#a1a1a6]">
-            The system is not very confident about this table. Please review it carefully, or click
-            &quot;Skip&quot; to let the system auto-detect per chunk.
+            We&apos;re not very confident this is the right table. Review it carefully,
+            or click &quot;Not the right table&quot; to skip.
           </p>
         </div>
       )}
 
-      {/* Sample table - large and readable */}
-      <div className="glow-card p-4 overflow-hidden flex flex-col max-h-96">
-        <div className="overflow-x-auto flex-1">
-          <table className="w-full text-sm">
-            <thead>
+      {/* Sample table - dark theme, scrollable */}
+      <div
+        className="rounded-lg border border-[rgba(255,255,255,0.08)] overflow-hidden flex flex-col"
+        style={{ maxHeight: "420px", backgroundColor: "rgba(10,10,14,0.95)" }}
+      >
+        <div className="overflow-auto flex-1">
+          <table className="w-full text-sm border-collapse">
+            <thead className="sticky top-0 z-10">
               <tr>
                 {data.headers.map((header, idx) => (
                   <th
                     key={idx}
-                    className="px-3 py-3 text-left font-semibold text-[#5ac8fa] whitespace-nowrap bg-[rgba(90,200,250,0.08)] border-b border-[rgba(90,200,250,0.2)]"
+                    className="px-3 py-3 text-left font-semibold whitespace-nowrap border-b"
+                    style={{
+                      color: "#5ac8fa",
+                      backgroundColor: "rgba(10,10,14,0.98)",
+                      borderBottomColor: "rgba(90,200,250,0.25)",
+                    }}
                   >
-                    <div className="flex flex-col gap-1">
-                      <span className="text-[10px] uppercase tracking-widest text-[#636366]">
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-[10px] uppercase tracking-widest text-[#4a4a4e]">
                         Col {idx + 1}
                       </span>
                       <span className="text-sm">{header || "(empty)"}</span>
@@ -169,14 +184,18 @@ function Step1IdentifyTable({
               {data.sample_rows.map((row, rowIdx) => (
                 <tr
                   key={rowIdx}
-                  className={`border-b border-[rgba(255,255,255,0.04)] ${
-                    rowIdx % 2 === 0 ? "bg-[rgba(255,255,255,0.01)]" : ""
-                  }`}
+                  style={{
+                    backgroundColor: rowIdx % 2 === 0
+                      ? "rgba(255,255,255,0.02)"
+                      : "rgba(0,0,0,0.15)",
+                    borderBottom: "1px solid rgba(255,255,255,0.05)",
+                  }}
                 >
                   {data.headers.map((_, colIdx) => (
                     <td
                       key={colIdx}
-                      className="px-3 py-2.5 text-[#e8e8ed] text-sm max-w-[200px] truncate"
+                      className="px-3 py-2.5 text-sm max-w-[200px] truncate"
+                      style={{ color: "#d1d1d6" }}
                     >
                       {row[colIdx] || "—"}
                     </td>
@@ -192,14 +211,14 @@ function Step1IdentifyTable({
       <div className="flex items-center justify-between pt-4 gap-4">
         <div className="flex flex-col items-start gap-1">
           <button onClick={onSkip} className="glow-btn glow-btn--ghost">
-            This isn&apos;t the right table
+            Not the right table
           </button>
-          <span className="text-[10px] text-[#636366] ml-1">
-            We&apos;ll skip mapping and auto-detect per page
+          <span className="text-[10px] text-[#4a4a4e] ml-1">
+            Skip to auto-detect per page
           </span>
         </div>
         <button onClick={onConfirm} className="glow-btn glow-btn--primary">
-          Looks Good, Next
+          Looks Good, Map Columns
         </button>
       </div>
     </div>
@@ -268,14 +287,16 @@ function Step2MapColumns({
         <h2 className="font-display text-2xl font-bold text-white mb-2">
           MAP YOUR COLUMNS
         </h2>
-        <p className="text-sm text-[#8e8e93]">
-          Tell us which column contains each field. We pre-filled our best guesses below
-          — adjust any that look wrong.
+        <p className="text-sm text-[#a1a1a6] leading-relaxed">
+          We pre-filled our best guesses below — fix any that look wrong.
+          Only <span className="text-[#ff453a] font-medium">Door Number</span> is required.
+          Map as many other fields as your PDF has.
         </p>
-        <div className="mt-2 p-2.5 rounded bg-[rgba(90,200,250,0.06)] border border-[rgba(90,200,250,0.12)]">
-          <p className="text-xs text-[#5ac8fa]">
-            <strong>How:</strong> Click a field on the left, then click the matching column on the right.
-            Only <span className="text-[#ff453a]">Door Number</span> is required — map as many others as your PDF has.
+        <div className="mt-3 p-3 rounded-lg bg-[rgba(90,200,250,0.06)] border border-[rgba(90,200,250,0.15)]">
+          <p className="text-xs text-[#5ac8fa] leading-relaxed">
+            <strong>1.</strong> Click a field on the left to select it.{" "}
+            <strong>2.</strong> Click the matching column on the right to assign it.
+            Already-assigned fields show their column number — click them again to reassign.
           </p>
         </div>
       </div>
@@ -284,7 +305,7 @@ function Step2MapColumns({
         {/* Left: Field cards */}
         <div className="space-y-3">
           <div className="text-xs uppercase tracking-widest text-[#636366] font-semibold mb-3 ml-1">
-            Fields to Assign
+            1. Pick a Field
           </div>
           <div className="stagger-children space-y-2">
             {ALL_FIELDS.map((field) => {
@@ -337,7 +358,7 @@ function Step2MapColumns({
         {/* Right: Column headers */}
         <div className="space-y-3">
           <div className="text-xs uppercase tracking-widest text-[#636366] font-semibold mb-3 ml-1">
-            Available Columns
+            2. Assign to a Column
           </div>
           <div className="stagger-children space-y-2 max-h-[600px] overflow-y-auto">
             {data.headers.map((header, colIdx) => {
