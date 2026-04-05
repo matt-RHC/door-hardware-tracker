@@ -923,6 +923,7 @@ export default function PDFUploadModal({
   // Column mapper: shown between classification and extraction
   const [mapperData, setMapperData] = useState<DetectMappingResponse | null>(null);
   const [confirmedMapping, setConfirmedMapping] = useState<ColumnMapping | null>(null);
+  const confirmedMappingRef = useRef<ColumnMapping | null>(null);
   const [mappingSummary, setMappingSummary] = useState<string | null>(null);
   const mapperDoneRef = useRef(false); // true after user confirms or skips
   const pdfBase64Ref = useRef<string | null>(null); // for re-detection from page browser
@@ -1077,7 +1078,7 @@ export default function PDFUploadModal({
       try {
         const parseBody: Record<string, unknown> = {
           pdfBase64: fullBase64,
-          userColumnMapping: confirmedMapping || null,
+          userColumnMapping: confirmedMappingRef.current ?? null,
         };
         // Send filtered PDF for cheaper LLM review (server still extracts from full PDF)
         if (filteredPdfBase64) {
@@ -1199,7 +1200,7 @@ export default function PDFUploadModal({
     }
 
     // ── Use confirmed mapping for extraction ──
-    const userMapping = confirmedMapping || null;
+    const userMapping = confirmedMappingRef.current ?? null;
 
     const totalChunks = chunks.length;
 
@@ -1488,6 +1489,7 @@ export default function PDFUploadModal({
             }}
             onConfirm={(mapping) => {
               setConfirmedMapping(mapping);
+              confirmedMappingRef.current = mapping;
               // Build human-readable summary of confirmed column mapping
               const headers = mapperData?.headers ?? [];
               const FIELD_LABELS: Record<string, string> = {
@@ -1517,6 +1519,7 @@ export default function PDFUploadModal({
             }}
             onSkip={() => {
               setConfirmedMapping(null);
+              confirmedMappingRef.current = null;
               setMappingSummary(null);
               setMapperData(null);
               mapperDoneRef.current = true;
