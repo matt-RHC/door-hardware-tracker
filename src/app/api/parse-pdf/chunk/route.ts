@@ -393,9 +393,18 @@ export async function POST(request: NextRequest) {
 
     // --- Post-LLM qty re-normalization ---
     // LLM may revert normalized quantities back to PDF totals.
+    // Build doorsPerSet from Opening List as fallback (parity with route.ts)
+    const doorsPerSet = new Map<string, number>()
+    for (const door of doors) {
+      if (door.hw_set) {
+        doorsPerSet.set(door.hw_set.toUpperCase(), (doorsPerSet.get(door.hw_set.toUpperCase()) ?? 0) + 1)
+      }
+    }
     for (const set of hardwareSets) {
       const leafCount = (set.heading_leaf_count ?? 0) > 1 ? (set.heading_leaf_count ?? 0) : 0
-      const doorCount = (set.heading_door_count ?? 0) > 1 ? (set.heading_door_count ?? 0) : 0
+      const doorCount = (set.heading_door_count ?? 0) > 1
+        ? (set.heading_door_count ?? 0)
+        : (doorsPerSet.get((set.generic_set_id ?? set.set_id).toUpperCase()) ?? 0)
       if (leafCount <= 1 && doorCount <= 1) continue
 
       for (const item of set.items) {

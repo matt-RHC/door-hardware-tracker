@@ -39,6 +39,18 @@ def extract_tables():
 
 
 @pytest.fixture(scope="session")
+def classify_pages():
+    """Return the pre-imported classify_pages module."""
+    return sys.modules["classify_pages"]
+
+
+@pytest.fixture(scope="session")
+def detect_mapping():
+    """Return the pre-imported detect_mapping module."""
+    return sys.modules["detect_mapping"]
+
+
+@pytest.fixture(scope="session")
 def small_pdf_path():
     """Path to the SMALL golden test PDF (CAA Nashville Yards, ~12 pages)."""
     p = FIXTURES_DIR / "SMALL_081113.pdf"
@@ -80,4 +92,13 @@ def caa_pdf_path():
     p = FIXTURES_DIR / "CAA_Nashville_Yards.pdf"
     if not p.exists():
         pytest.skip(f"CAA PDF not found at {p}. Copy it from Downloads.")
+    return p
+
+
+@pytest.fixture(scope="session")
+def akn_pdf_path():
+    """Path to the AKN golden test PDF (ESC/Comsense, 45 pages, no opening list)."""
+    p = FIXTURES_DIR / "AKN_ESC.pdf"
+    if not p.exists():
+        pytest.skip(f"AKN PDF not found at {p}. Copy it from Downloads.")
     return p

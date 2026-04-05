@@ -84,6 +84,117 @@ class TestScanDetection:
         assert classify_pages.CID_GARBAGE_PATTERNS.search("\x01\x02\x03")
 
 
+class TestClassificationOnRealPDFs:
+    """Full-pipeline tests: run classify_page() on real golden PDFs.
+
+    These tests require golden PDF fixtures in tests/fixtures/.
+    They verify that the classification stage correctly identifies
+    door_schedule, hardware_set, and other page types — closing the
+    gap between unit tests (synthetic text) and production pipeline.
+    """
+
+    def test_medium_306169_has_door_schedule_pages(self, classify_pages, medium_pdf_path):
+        """BUG-8: 306169 pages 5-7 (0-indexed) must be classified as door_schedule."""
+        import pdfplumber
+        with pdfplumber.open(str(medium_pdf_path)) as pdf:
+            door_schedule_pages = []
+            for i, page in enumerate(pdf.pages[:15]):
+                result = classify_pages.classify_page(page, i)
+                if result["type"] == "door_schedule":
+                    door_schedule_pages.append(i)
+            assert len(door_schedule_pages) >= 1, (
+                f"306169: no door_schedule pages found in first 15 pages. "
+                f"This causes total pipeline failure (BUG-8)."
+            )
+
+    def test_medium_306169_opening_list_not_hardware_set(self, classify_pages, medium_pdf_path):
+        """BUG-8: 306169 pages 5-7 (opening list) must NOT be classified as hardware_set."""
+        import pdfplumber
+        with pdfplumber.open(str(medium_pdf_path)) as pdf:
+            misclassified = []
+            for i in [5, 6, 7]:
+                result = classify_pages.classify_page(pdf.pages[i], i)
+                if result["type"] != "door_schedule":
+                    misclassified.append((i, result["type"]))
+            assert len(misclassified) == 0, (
+                f"306169: opening list pages misclassified: {misclassified}. "
+                f"Expected door_schedule. This causes total pipeline failure (BUG-8)."
+            )
+
+    def test_large_mca_has_door_schedule_pages(self, classify_pages, large_pdf_path):
+        """MCA must have at least 1 door_schedule page."""
+        import pdfplumber
+        with pdfplumber.open(str(large_pdf_path)) as pdf:
+            door_schedule_pages = []
+            for i, page in enumerate(pdf.pages[:15]):
+                result = classify_pages.classify_page(page, i)
+                if result["type"] == "door_schedule":
+                    door_schedule_pages.append(i)
+            assert len(door_schedule_pages) >= 1, (
+                f"MCA: no door_schedule pages found in first 15 pages."
+            )
+
+    def test_small_081113_has_door_schedule_pages(self, classify_pages, small_pdf_path):
+        """SMALL PDF must have at least 1 door_schedule page."""
+        import pdfplumber
+        with pdfplumber.open(str(small_pdf_path)) as pdf:
+            door_schedule_pages = []
+            for i, page in enumerate(pdf.pages[:10]):
+                result = classify_pages.classify_page(page, i)
+                if result["type"] == "door_schedule":
+                    door_schedule_pages.append(i)
+            assert len(door_schedule_pages) >= 1, (
+                f"SMALL: no door_schedule pages found in first 10 pages."
+            )
+
+
+class TestDetectMappingOnRealPDFs:
+    """Full-pipeline tests: run find_door_schedule_table() on real golden PDFs.
+
+    Verifies that detect-mapping.py can find a valid column mapping
+    from the door schedule pages of each golden PDF.
+    """
+
+    def test_medium_306169_finds_table(self, detect_mapping, medium_pdf_path):
+        """BUG-8: detect-mapping must find a table with door_number on 306169."""
+        import pdfplumber
+        with pdfplumber.open(str(medium_pdf_path)) as pdf:
+            found = False
+            for page in pdf.pages[:15]:
+                headers, rows, method = detect_mapping.find_door_schedule_table(page)
+                if headers and rows:
+                    mapping = detect_mapping.detect_column_mapping(headers)
+                    if "door_number" in mapping:
+                        found = True
+                        break
+            assert found, (
+                "306169: detect-mapping could not find a table with door_number "
+                "in first 15 pages. This causes the column mapper to fail (BUG-8)."
+            )
+
+    def test_306169_door_numbers_pass_validation(self, detect_mapping):
+        """BUG-8: 306169 door number formats must pass looks_like_door_number()."""
+        sample_numbers = ["110A-04A", "110A-04B", "EY-001", "ST-1A", "1400-BL", "110B-07A"]
+        for dn in sample_numbers:
+            assert detect_mapping.looks_like_door_number(dn), (
+                f"306169 door number '{dn}' rejected by looks_like_door_number()"
+            )
+
+    def test_large_mca_finds_table(self, detect_mapping, large_pdf_path):
+        """MCA must have a detectable door schedule table."""
+        import pdfplumber
+        with pdfplumber.open(str(large_pdf_path)) as pdf:
+            found = False
+            for page in pdf.pages[:15]:
+                headers, rows, method = detect_mapping.find_door_schedule_table(page)
+                if headers and rows:
+                    mapping = detect_mapping.detect_column_mapping(headers)
+                    if "door_number" in mapping:
+                        found = True
+                        break
+            assert found, "MCA: detect-mapping could not find a door schedule table."
+
+
 class TestBoundaryDetection:
     """Test chunk boundary detection logic."""
 

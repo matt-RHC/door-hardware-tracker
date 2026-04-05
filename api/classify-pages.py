@@ -33,14 +33,17 @@ PAGE_TYPE_OTHER = "other"
 # Door schedule indicators
 DOOR_SCHEDULE_HEADERS = re.compile(
     r"(?i)(door\s*(schedule|list)|opening\s*(list|schedule)|"
-    r"(door|opening)\s*(no\.?|num|#|tag).*?(h\.?w\.?\s*set|hardware\s*set|location))"
+    r"(door|opening)\s*(no\.?|num|#|tag).*?(h\.?w\.?\s*set|hardware\s*set|location)|"
+    r"(door|opening)\s+(hdw|h\.?w\.?|hardware)\s*(set|group))"
 )
 DOOR_NUMBER_COLUMN = re.compile(
     r"(?i)^(open(ing)?|door)\s*(no\.?|num(ber)?|#|tag)|^#$|^no\.?$|^tag$"
 )
-# Multiple door-number-like values on one page (e.g. "101-01", "A-201B", "10.E1.03")
+# Multiple door-number-like values on one page (e.g. "101-01", "A-201B", "10.E1.03",
+# "1313B", "EY-003", "ST-1A")
 DOOR_NUMBER_VALUES = re.compile(
-    r"\b(\d{2,4}[-\.]\d{1,3}[A-Z]?|[A-Z]\d{3,4}[A-Z]?|"
+    r"\b(\d{2,4}[-\.]\d{1,3}[A-Z]?|[A-Z]{1,2}[-]\d{2,4}[A-Z]?|"
+    r"[A-Z]\d{3,4}[A-Z]?|\d{3,4}[A-Z]\b|"
     r"\d{1,3}\.[A-Z]\d{1,3}\.\d{2,4}[A-Z]?)\b"
 )
 
@@ -220,6 +223,26 @@ def classify_page(page, page_index: int) -> dict:
         result["section_labels"] = [m[0] if isinstance(m, tuple) else m for m in ref_matches[:3]]
         return result
 
+    # Check for door schedule pages BEFORE hardware set —
+    # Opening list pages often contain "Set" in column headers (e.g. "Hdw Set")
+    # which falsely triggers HW_SET_HEADING. Door schedule headers are more
+    # specific and should take priority.
+    has_door_schedule_header = bool(DOOR_SCHEDULE_HEADERS.search(text))
+    door_nums = DOOR_NUMBER_VALUES.findall(text)
+
+    if has_door_schedule_header:
+        result["type"] = PAGE_TYPE_DOOR_SCHEDULE
+        result["confidence"] = 0.9
+        result["has_door_numbers"] = True
+        return result
+
+    # Door number values without explicit headers (schedule data pages)
+    if len(door_nums) >= 5:
+        result["type"] = PAGE_TYPE_DOOR_SCHEDULE
+        result["confidence"] = 0.6
+        result["has_door_numbers"] = True
+        return result
+
     # Check for hardware set pages
     hw_matches = list(HW_SET_HEADING.finditer(text))
     hw_item_matches = HARDWARE_ITEM_NAMES.findall(text)
@@ -244,18 +267,10 @@ def classify_page(page, page_index: int) -> dict:
         result["section_labels"] = ["continuation"]
         return result
 
-    # Check for door schedule pages
-    if DOOR_SCHEDULE_HEADERS.search(text):
-        result["type"] = PAGE_TYPE_DOOR_SCHEDULE
-        result["confidence"] = 0.9
-        result["has_door_numbers"] = True
-        return result
-
-    # Check for door number values (schedule data pages without explicit headers)
-    door_nums = DOOR_NUMBER_VALUES.findall(text)
+    # Pages with 3-4 door numbers but no header — weaker signal
     if len(door_nums) >= 3:
         result["type"] = PAGE_TYPE_DOOR_SCHEDULE
-        result["confidence"] = 0.6
+        result["confidence"] = 0.5
         result["has_door_numbers"] = True
         return result
 
