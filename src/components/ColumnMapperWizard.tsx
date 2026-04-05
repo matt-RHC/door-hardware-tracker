@@ -24,7 +24,7 @@ export interface DetectMappingResponse {
   error?: string;
 }
 
-type WizardPhase = "step1" | "pageBrowser" | "step2" | "step3";
+type WizardPhase = "pageBrowser" | "step2" | "step3";
 
 interface ColumnMapperWizardProps {
   data: DetectMappingResponse;
@@ -659,61 +659,47 @@ export default function ColumnMapperWizard({
   // Frontend labels take priority over backend's (which may have abbreviations)
   const fieldLabels = { ...(data.field_labels || {}), ...DEFAULT_FIELD_LABELS };
 
-  // Wizard state — phase-based instead of numeric steps
-  const [phase, setPhase] = useState<WizardPhase>("step1");
+  // Wizard state — page browser is always Step 1
+  const initialPhase: WizardPhase = pdfBuffer ? "pageBrowser" : "step2";
+  const [phase, setPhase] = useState<WizardPhase>(initialPhase);
   const [currentData, setCurrentData] = useState<DetectMappingResponse>(data);
   const [mapping, setMapping] = useState<ColumnMapping>(() => ({ ...data.auto_mapping }));
   const [activeField, setActiveField] = useState<string | null>(null);
   const [redetecting, setRedetecting] = useState(false);
   const [redetectError, setRedetectError] = useState<string | null>(null);
 
-  // Step indicator position
-  const stepIndex = phase === "step1" || phase === "pageBrowser" ? 0 : phase === "step2" ? 1 : 2;
+  // Step indicator: pageBrowser=0, step2=1, step3=2
+  const stepIndex = phase === "pageBrowser" ? 0 : phase === "step2" ? 1 : 2;
 
-  // Step 1 handlers
-  const handleStep1Confirm = useCallback(() => {
-    setPhase("step2");
-    const firstUnmapped = REQUIRED_FIELDS.find((f) => !(f in mapping));
-    setActiveField(firstUnmapped ?? REQUIRED_FIELDS[0] ?? null);
-  }, [mapping]);
-
-  const handleStep1Skip = useCallback(() => {
-    // If page browser is available, go there instead of skipping entirely
-    if (pdfBuffer && onRedetect) {
-      setPhase("pageBrowser");
-    } else {
-      onSkipProp();
-    }
-  }, [pdfBuffer, onRedetect, onSkipProp]);
-
-  // Page browser handler
-  const handlePageSelect = useCallback(async (pageIndex: number) => {
-    if (!onRedetect) return;
+  // Page browser handler — accepts multiple pages, detects on the first one
+  const handlePageSelect = useCallback(async (pageIndices: number[]) => {
+    if (!onRedetect || pageIndices.length === 0) return;
     setRedetecting(true);
     setRedetectError(null);
     try {
-      const result = await onRedetect(pageIndex);
+      // Detect columns from the first selected page
+      const result = await onRedetect(pageIndices[0]);
       if (result?.success && (result.headers?.length ?? 0) > 0) {
         setCurrentData(result);
         setMapping({ ...result.auto_mapping });
-        setActiveField(null);
-        setPhase("step1");
+        const firstUnmapped = REQUIRED_FIELDS.find((f) => !(f in (result.auto_mapping ?? {})));
+        setActiveField(firstUnmapped ?? REQUIRED_FIELDS[0] ?? null);
+        setPhase("step2");
       } else {
         setRedetectError(
-          `No door schedule found on page ${pageIndex + 1}. Try selecting a different page.`
+          `No door schedule found on page ${pageIndices[0] + 1}. Try selecting different pages.`
         );
       }
     } catch {
-      setRedetectError("Detection failed. Try a different page.");
+      setRedetectError("Detection failed. Try different pages.");
     } finally {
       setRedetecting(false);
     }
   }, [onRedetect]);
 
   const handlePageBrowserCancel = useCallback(() => {
-    setRedetectError(null);
-    setPhase("step1");
-  }, []);
+    onSkipProp();
+  }, [onSkipProp]);
 
   // Step 2 handlers
   const handleFieldClick = useCallback((field: string | null) => {
@@ -750,8 +736,8 @@ export default function ColumnMapperWizard({
   }, []);
 
   const handleStep2Back = useCallback(() => {
-    setPhase("step1");
-  }, []);
+    setPhase(pdfBuffer ? "pageBrowser" : "step2");
+  }, [pdfBuffer]);
 
   // Step 3 handlers
   const handleStep3Confirm = useCallback(() => {
@@ -776,19 +762,12 @@ export default function ColumnMapperWizard({
 
         {/* Phase content */}
         <div className="relative">
-          {phase === "step1" && (
-            <Step1IdentifyTable
-              data={currentData}
-              onConfirm={handleStep1Confirm}
-              onSkip={handleStep1Skip}
-            />
-          )}
           {phase === "pageBrowser" && pdfBuffer && (
             <>
               <PDFPageBrowser
                 pdfBuffer={pdfBuffer}
                 pageCount={pageCountProp ?? currentData.total_pages}
-                onSelectPage={handlePageSelect}
+                onSelectPages={handlePageSelect}
                 onCancel={handlePageBrowserCancel}
                 loading={redetecting}
               />

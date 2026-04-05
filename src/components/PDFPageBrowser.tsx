@@ -5,7 +5,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 interface PDFPageBrowserProps {
   pdfBuffer: ArrayBuffer;
   pageCount: number;
-  onSelectPage: (pageIndex: number) => void;
+  onSelectPages: (pageIndices: number[]) => void;
   onCancel: () => void;
   loading?: boolean;
 }
@@ -13,12 +13,12 @@ interface PDFPageBrowserProps {
 export default function PDFPageBrowser({
   pdfBuffer,
   pageCount,
-  onSelectPage,
+  onSelectPages,
   onCancel,
   loading = false,
 }: PDFPageBrowserProps) {
   const [thumbnails, setThumbnails] = useState<Map<number, string>>(new Map());
-  const [selectedPage, setSelectedPage] = useState<number | null>(null);
+  const [selectedPages, setSelectedPages] = useState<Set<number>>(new Set());
   const [renderingPages, setRenderingPages] = useState<Set<number>>(new Set());
   const pdfDocRef = useRef<ReturnType<Awaited<typeof import("pdfjs-dist")>["getDocument"]> extends { promise: Promise<infer T> } ? T : never>(null);
   const observerRef = useRef<IntersectionObserver | null>(null);
@@ -133,17 +133,30 @@ export default function PDFPageBrowser({
     <div className="space-y-6 animate-fade-in-up">
       <div>
         <h2 className="font-display text-2xl font-bold text-white mb-2">
-          SELECT THE RIGHT PAGE
+          SELECT YOUR DOOR SCHEDULE
         </h2>
         <p className="text-sm text-[#a1a1a6] leading-relaxed">
-          Browse your PDF and click the page that contains the opening list
-          (master door schedule). Look for the page with a table of door numbers,
-          hardware sets, and door types.
+          Click the page(s) that contain your opening list (master door schedule).
+          Look for pages with a table of door numbers, hardware sets, and door types.
         </p>
-        <p className="text-xs text-[#636366] mt-2">
-          {pageCount} pages total. Select the starting page — continuation pages
-          will be picked up automatically.
-        </p>
+        <div className="flex items-center gap-3 mt-2">
+          <p className="text-xs text-[#636366]">
+            {pageCount} pages total
+          </p>
+          {selectedPages.size > 0 && (
+            <p className="text-xs text-[#5ac8fa] font-medium">
+              {selectedPages.size} page{selectedPages.size > 1 ? "s" : ""} selected
+            </p>
+          )}
+        </div>
+        {selectedPages.size > 1 && (
+          <div className="mt-2 p-2.5 rounded-lg bg-[rgba(90,200,250,0.06)] border border-[rgba(90,200,250,0.15)]">
+            <p className="text-xs text-[#5ac8fa]">
+              We&apos;ll detect columns from your first selected page and read
+              door data from all selected pages.
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Thumbnail grid */}
@@ -156,14 +169,25 @@ export default function PDFPageBrowser({
       >
         {Array.from({ length: pageCount }).map((_, pageIdx) => {
           const thumb = thumbnails.get(pageIdx);
-          const isSelected = selectedPage === pageIdx;
+          const isSelected = selectedPages.has(pageIdx);
 
           return (
             <div
               key={pageIdx}
               ref={(el) => setThumbRef(pageIdx, el)}
               data-page-index={pageIdx}
-              onClick={() => !loading && setSelectedPage(pageIdx)}
+              onClick={() => {
+                if (loading) return;
+                setSelectedPages((prev) => {
+                  const next = new Set(prev);
+                  if (next.has(pageIdx)) {
+                    next.delete(pageIdx);
+                  } else {
+                    next.add(pageIdx);
+                  }
+                  return next;
+                });
+              }}
               className="relative cursor-pointer rounded-lg overflow-hidden transition-all"
               style={{
                 border: isSelected
@@ -215,7 +239,7 @@ export default function PDFPageBrowser({
         <div className="p-3 rounded-lg bg-[rgba(90,200,250,0.08)] border border-[rgba(90,200,250,0.2)]">
           <p className="text-sm text-[#5ac8fa] flex items-center gap-2">
             <span className="w-4 h-4 border-2 border-[#5ac8fa] border-t-transparent rounded-full animate-spin" />
-            Scanning page {(selectedPage ?? 0) + 1} for a door schedule...
+            Scanning selected pages for a door schedule...
           </p>
         </div>
       )}
@@ -223,14 +247,16 @@ export default function PDFPageBrowser({
       {/* Actions */}
       <div className="flex items-center justify-between pt-4 border-t border-[rgba(255,255,255,0.06)]">
         <button onClick={onCancel} className="glow-btn glow-btn--ghost">
-          Cancel
+          Skip Column Mapping
         </button>
         <button
-          onClick={() => selectedPage !== null && onSelectPage(selectedPage)}
-          disabled={selectedPage === null || loading}
+          onClick={() => selectedPages.size > 0 && onSelectPages(Array.from(selectedPages).sort((a, b) => a - b))}
+          disabled={selectedPages.size === 0 || loading}
           className="glow-btn glow-btn--primary disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          Use This Page
+          {selectedPages.size > 1
+            ? `Use These ${selectedPages.size} Pages`
+            : "Use This Page"}
         </button>
       </div>
     </div>
