@@ -312,6 +312,55 @@ def find_door_schedule_table(page) -> tuple[list[str], list[list[str]], str]:
 
     if best_candidate:
         return best_candidate
+
+    # --- Fallback: text-line header detection ---
+    # Some PDFs have text-aligned tables without visible rules or consistent
+    # column widths. pdfplumber's extract_tables() fails on these. Scan the
+    # raw text for a line that looks like column headers.
+    text = page.extract_text() or ""
+    lines = text.split("\n")
+    for line_idx, line in enumerate(lines[:20]):
+        tokens = line.split()
+        if len(tokens) < 3:
+            continue
+        # Score the whole line as potential headers
+        field_scores: dict[str, float] = {}
+        for field in COLUMN_KEYWORDS:
+            best_s = 0.0
+            for token in tokens:
+                best_s = max(best_s, score_header_for_field(token, field))
+            if best_s >= 0.4:
+                field_scores[field] = best_s
+        if "door_number" not in field_scores:
+            continue
+        other = {k for k in field_scores if k != "door_number"}
+        if len(other) < 2:
+            continue
+        # Found a plausible header line — extract data rows below it
+        headers = tokens
+        sample_rows = []
+        for data_line in lines[line_idx + 1: line_idx + 6]:
+            row_tokens = data_line.split()
+            if row_tokens and len(row_tokens) >= 2:
+                sample_rows.append(row_tokens)
+        if len(sample_rows) < 3:
+            continue
+        # Validate door numbers in first column
+        mapping = detect_column_mapping(headers)
+        door_col = mapping.get("door_number")
+        if door_col is not None:
+            door_values = [
+                r[door_col] for r in sample_rows
+                if door_col < len(r) and r[door_col].strip()
+            ]
+            if door_values:
+                valid_count = sum(
+                    1 for v in door_values if looks_like_door_number(v)
+                )
+                if valid_count / len(door_values) < 0.3:
+                    continue
+        return headers, sample_rows, "text_line"
+
     return [], [], ""
 
 
