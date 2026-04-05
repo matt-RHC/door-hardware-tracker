@@ -292,7 +292,7 @@ function applyCorrections(
 
 // --- Core extraction logic (shared by streaming and parse-only modes) ---
 
-async function extractFromPDF(base64: string, filteredPdfBase64?: string): Promise<{
+async function extractFromPDF(base64: string, filteredPdfBase64?: string, userColumnMapping?: Record<string, number> | null): Promise<{
   hardwareSets: HardwareSet[]
   doors: DoorEntry[]
   corrections: LLMCorrections
@@ -300,7 +300,7 @@ async function extractFromPDF(base64: string, filteredPdfBase64?: string): Promi
 }> {
   let pdfplumberResult: PdfplumberResult | null = null
   try {
-    pdfplumberResult = await callPdfplumber(base64)
+    pdfplumberResult = await callPdfplumber(base64, userColumnMapping)
     console.log(
       `Pdfplumber: ${pdfplumberResult.hw_sets_found} hardware sets, ` +
       `${pdfplumberResult.openings.length} doors, ` +
@@ -452,7 +452,8 @@ export async function POST(request: NextRequest) {
       // for cheaper LLM review. pdfplumber still gets the full PDF.
       const filteredPdfBase64: string | undefined = body.filteredPdfBase64 ?? undefined
 
-      const { hardwareSets, doors, corrections, stats } = await extractFromPDF(base64, filteredPdfBase64)
+      const userColumnMapping = body.userColumnMapping ?? null
+      const { hardwareSets, doors, corrections, stats } = await extractFromPDF(base64, filteredPdfBase64, userColumnMapping)
 
       return NextResponse.json({
         success: true,
