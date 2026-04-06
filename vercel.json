@@ -4,6 +4,10 @@
     {
       "path": "/api/cron/sync-smartsheet",
       "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/cron/cleanup-staging",
+      "schedule": "0 3 * * *"
     }
   ],
   "functions": {
