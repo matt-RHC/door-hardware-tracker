@@ -1,3 +1,4 @@
+from __future__ import annotations
 """
 Phase 2: Deterministic table extraction via pdfplumber.
 
@@ -1741,6 +1742,10 @@ def extract_hardware_sets_from_page(page, page_text: str) -> list[HardwareSetDef
     if not heading_id:
         return sets
 
+    # Extract door counts from the FULL page text BEFORE splitting so that
+    # door listing lines are not lost when they appear between headings.
+    full_page_door_count, full_page_leaf_count = count_heading_doors(page_text)
+
     # Check for multiple headings on this page
     sections = _split_page_at_headings(page_text)
 
@@ -1750,11 +1755,35 @@ def extract_hardware_sets_from_page(page, page_text: str) -> list[HardwareSetDef
             f"Multi-heading page detected ({len(sections)} headings), "
             f"splitting for independent extraction"
         )
+        # Build per-section door counts; fall back to full-page counts
+        # distributed to the first section that has no counts of its own.
+        section_counts: dict[str, tuple[int, int]] = {}
+        for section_text in sections:
+            sid, sgen, _ = parse_hw_set_id_from_text(section_text)
+            key = sgen or sid or ""
+            section_counts[key] = count_heading_doors(section_text)
+
+        # If total section counts are lower than full-page counts, the
+        # difference was lost during splitting.  Attribute unaccounted
+        # counts to sections that reported zero.
+        accounted_doors = sum(v[0] for v in section_counts.values())
+        accounted_leaves = sum(v[1] for v in section_counts.values())
+        extra_doors = full_page_door_count - accounted_doors
+        extra_leaves = full_page_leaf_count - accounted_leaves
+        if extra_doors > 0 or extra_leaves > 0:
+            for key, (d, l) in section_counts.items():
+                if d == 0 and l == 0:
+                    section_counts[key] = (d + extra_doors, l + extra_leaves)
+                    extra_doors = 0
+                    extra_leaves = 0
+                    break
+
         for section_text in sections:
             sec_id, sec_generic, sec_heading = parse_hw_set_id_from_text(section_text)
             if not sec_id:
                 continue
-            sec_door_count, sec_leaf_count = count_heading_doors(section_text)
+            key = sec_generic or sec_id
+            sec_door_count, sec_leaf_count = section_counts.get(key, (0, 0))
             sec_items = extract_hw_items_from_text(section_text)
             if sec_items:
                 sec_items = deduplicate_hardware_items(sec_items)
@@ -1770,8 +1799,8 @@ def extract_hardware_sets_from_page(page, page_text: str) -> list[HardwareSetDef
 
     # Single heading: use full table-based extraction (richer column parsing)
 
-    # Count doors from the heading block (e.g., "1 Pair Doors #1.01.B.03A")
-    heading_door_count, heading_leaf_count = count_heading_doors(page_text)
+    # Use pre-computed door counts from full page text
+    heading_door_count, heading_leaf_count = full_page_door_count, full_page_leaf_count
 
     # Try text-based table extraction first (for transparent grid lines)
     tables = page.extract_tables(
@@ -2526,6 +2555,36 @@ def extract_reference_tables(pdf: pdfplumber.PDF) -> list[ReferenceCode]:
     return codes
 
 
+_PAIR_RE = re.compile(r"(?i)\bpair\b|\bPR\b")
+
+
+def _leaf_count_from_openings(
+    openings: list[DoorEntry],
+    match_field: str,
+    match_value: str,
+    door_count: int,
+) -> int:
+    """Compute leaf count from Opening List entries for a hardware set.
+
+    Checks door_type for "pair" / "PR" indicators. Each pair opening has
+    2 leaves; each single opening has 1.  Falls back to door_count (all
+    singles) when no matching entries are found.
+    """
+    if door_count <= 0:
+        return door_count
+    leaf_count = 0
+    matched = False
+    for door in openings:
+        field_val = getattr(door, match_field, "").strip().upper()
+        if field_val == match_value:
+            matched = True
+            if _PAIR_RE.search(door.door_type):
+                leaf_count += 2
+            else:
+                leaf_count += 1
+    return leaf_count if matched else door_count
+
+
 def normalize_quantities(
     hardware_sets: list[HardwareSetDef],
     openings: list[DoorEntry],
@@ -2575,17 +2634,21 @@ def normalize_quantities(
             # Fallback 1: Opening List hw_heading match
             norm_heading = hw_set.set_id.strip().upper()
             door_count = doors_per_heading.get(norm_heading, 0)
-            leaf_count = door_count  # assume single if unknown from heading
+            leaf_count = _leaf_count_from_openings(
+                openings, "hw_heading", norm_heading, door_count
+            )
             if door_count > 0:
                 logger.info(
                     f"[qty-norm] {hw_set.set_id}: fallback to Opening List "
-                    f"heading match ({door_count} doors)"
+                    f"heading match ({door_count} doors, {leaf_count} leaves)"
                 )
             else:
                 # Fallback 2: Opening List hw_set (generic) match
                 norm_set = hw_set.generic_set_id.strip().upper() if hw_set.generic_set_id else norm_heading
                 door_count = doors_per_set.get(norm_set, 0)
-                leaf_count = door_count
+                leaf_count = _leaf_count_from_openings(
+                    openings, "hw_set", norm_set, door_count
+                )
                 if door_count > 0:
                     logger.info(
                         f"[qty-norm] {hw_set.set_id}: fallback to Opening List "
@@ -2617,9 +2680,9 @@ def normalize_quantities(
 
             # Try 1: divide by leaf count (per-leaf items: hinges, closers, etc.)
             if leaf_count > 1 and raw_qty >= leaf_count:
-                per_leaf = raw_qty / leaf_count
-                if per_leaf == int(per_leaf):
-                    item.qty = int(per_leaf)
+                if raw_qty % leaf_count == 0:
+                    per_leaf = raw_qty // leaf_count
+                    item.qty = per_leaf
                     item.qty_door_count = leaf_count
                     item.qty_source = "divided"
                     divided = True
@@ -2630,9 +2693,9 @@ def normalize_quantities(
 
             # Try 2: divide by opening count (per-opening items: coordinator, etc.)
             if not divided and door_count > 1 and door_count != leaf_count and raw_qty >= door_count:
-                per_opening = raw_qty / door_count
-                if per_opening == int(per_opening):
-                    item.qty = int(per_opening)
+                if raw_qty % door_count == 0:
+                    per_opening = raw_qty // door_count
+                    item.qty = per_opening
                     item.qty_door_count = door_count
                     item.qty_source = "divided"
                     divided = True
