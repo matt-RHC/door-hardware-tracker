@@ -28,36 +28,42 @@ function buildPerOpeningItems(
 
     const base = { [fkColumn]: opening.id, ...extraFields }
 
-    // Add door(s) as checkable items
-    if (isPair) {
+    // Add door(s) as checkable items — only when door_type is known
+    const doorModel = doorInfo?.door_type?.trim() || null
+    if (doorModel) {
+      if (isPair) {
+        rows.push({
+          ...base,
+          name: 'Door (Active Leaf)',
+          qty: 1, manufacturer: null, model: doorModel,
+          finish: null, sort_order: sortOrder++,
+        })
+        rows.push({
+          ...base,
+          name: 'Door (Inactive Leaf)',
+          qty: 1, manufacturer: null, model: doorModel,
+          finish: null, sort_order: sortOrder++,
+        })
+      } else {
+        rows.push({
+          ...base,
+          name: 'Door',
+          qty: 1, manufacturer: null, model: doorModel,
+          finish: null, sort_order: sortOrder++,
+        })
+      }
+    }
+
+    // Frame — only when frame_type is known
+    const frameModel = doorInfo?.frame_type?.trim() || null
+    if (frameModel) {
       rows.push({
         ...base,
-        name: 'Door (Active Leaf)',
-        qty: 1, manufacturer: null, model: doorInfo?.door_type ?? null,
-        finish: null, sort_order: sortOrder++,
-      })
-      rows.push({
-        ...base,
-        name: 'Door (Inactive Leaf)',
-        qty: 1, manufacturer: null, model: doorInfo?.door_type ?? null,
-        finish: null, sort_order: sortOrder++,
-      })
-    } else {
-      rows.push({
-        ...base,
-        name: 'Door',
-        qty: 1, manufacturer: null, model: doorInfo?.door_type ?? null,
+        name: 'Frame',
+        qty: 1, manufacturer: null, model: frameModel,
         finish: null, sort_order: sortOrder++,
       })
     }
-
-    // Frame
-    rows.push({
-      ...base,
-      name: 'Frame',
-      qty: 1, manufacturer: null, model: doorInfo?.frame_type ?? null,
-      finish: null, sort_order: sortOrder++,
-    })
 
     // Hardware set items
     if ((hwSet?.items?.length ?? 0) > 0) {

@@ -121,10 +121,14 @@ const NAME_ABBREVIATIONS: Record<string, string> = {
 
 export function normalizeItemName(name: string): string {
   let n = name.toLowerCase().trim()
-  for (const [abbr, full] of Object.entries(NAME_ABBREVIATIONS)) {
+  // Sort abbreviations longest-first so "w/o" matches before "w/"
+  const sorted = Object.entries(NAME_ABBREVIATIONS).sort(
+    (a, b) => b[0].length - a[0].length,
+  )
+  for (const [abbr, full] of sorted) {
+    // Use whitespace/start/end boundaries instead of \b which treats '.' as a boundary
     const escaped = abbr.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-    n = n.replace(new RegExp(`\\b${escaped}\\b`, 'g'), full)
-    if (abbr === 'w/') n = n.replace(/\bw\//g, 'with ')
+    n = n.replace(new RegExp(`(?<=\\s|^)${escaped}(?=\\s|$)`, 'g'), full)
   }
   return n.replace(/[()]/g, '').replace(/\s+/g, ' ').replace(/[,;.]+$/, '').trim()
 }
