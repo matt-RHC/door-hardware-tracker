@@ -411,8 +411,23 @@ class handler(BaseHTTPRequestHandler):
     def do_POST(self):
         try:
             content_length = int(self.headers.get("Content-Length", 0))
-            body = self.rfile.read(content_length)
-            data = json.loads(body)
+            raw_body = self.rfile.read(content_length)
+            try:
+                body_str = raw_body.decode("utf-8")
+            except UnicodeDecodeError as ue:
+                self._send_json(400, {
+                    "success": False,
+                    "error": f"Request body is not valid UTF-8: {ue}"
+                })
+                return
+            try:
+                data = json.loads(body_str)
+            except json.JSONDecodeError as je:
+                self._send_json(400, {
+                    "success": False,
+                    "error": f"Request body is not valid JSON: {je}"
+                })
+                return
 
             pdf_base64 = data.get("pdf_base64", "")
             page_index = data.get("page_index", 0)
