@@ -130,9 +130,20 @@ export async function POST(request: NextRequest) {
     // --- Final qty normalization safety net ---
     // Python does primary normalization. Only re-divide items the LLM may
     // have reverted. Use heading-based counts from Python when available.
+    // S-064: Build doorsPerSet fallback from opening list (matches route.ts logic)
+    const doorsPerSet = new Map<string, number>()
+    for (const door of doors) {
+      const setKey = (door.hw_set ?? '').toUpperCase()
+      if (setKey) doorsPerSet.set(setKey, (doorsPerSet.get(setKey) ?? 0) + 1)
+    }
+
     for (const [setId, set] of setMap) {
       const leafCount = (set.heading_leaf_count ?? 0) > 1 ? (set.heading_leaf_count ?? 0) : 0
-      const doorCount = (set.heading_door_count ?? 0) > 1 ? (set.heading_door_count ?? 0) : 0
+      // S-064: Fall back to doorsPerSet when heading_door_count is missing
+      const headingDoorCount = (set.heading_door_count ?? 0) > 1 ? (set.heading_door_count ?? 0) : 0
+      const doorCount = headingDoorCount > 1
+        ? headingDoorCount
+        : (doorsPerSet.get((set.generic_set_id ?? set.set_id ?? setId).toUpperCase()) ?? 0)
       if (leafCount <= 1 && doorCount <= 1) continue
 
       for (const item of set.items) {

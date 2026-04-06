@@ -264,8 +264,9 @@ def looks_like_door_number(val: str) -> bool:
     # Reject phone numbers
     if re.match(r"^\d{3}[-.]?\d{3}[-.]?\d{4}$", s):
         return False
-    # Reject bare numbers (quantities, page refs)
-    if re.match(r"^\d{1,3}$", s):
+    # Reject bare 1-2 digit numbers (quantities, page refs) but accept 3+ digits
+    # S-064: 3-digit numbers (101-999) are valid door numbers in most buildings
+    if re.match(r"^\d{1,2}$", s):
         return False
     # Reject years (e.g., 2024, 1999)
     if re.match(r"^(19|20)\d{2}$", s):

@@ -240,6 +240,8 @@ function applyCorrections(
             const val = fix.new_value
             if (fix.field === 'qty') {
               (item as any)[fix.field] = parseInt(val, 10) || 1
+              // S-064: Reset qty_source so post-LLM re-normalization catches this
+              ;(item as any).qty_source = 'llm_override'
             } else {
               (item as any)[fix.field] = val
             }

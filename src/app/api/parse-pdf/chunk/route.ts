@@ -68,26 +68,44 @@ async function callPdfplumber(
   base64: string,
   userColumnMapping?: Record<string, number> | null,
 ): Promise<PdfplumberResult> {
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.VERCEL_URL
+  // S-064: Fix operator precedence bug (was missing parens around ternary)
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || (process.env.VERCEL_URL
     ? `https://${process.env.VERCEL_URL}`
-    : 'http://localhost:3000'
+    : 'http://localhost:3000')
 
   const payload: Record<string, unknown> = { pdf_base64: base64 }
   if (userColumnMapping) {
     payload.user_column_mapping = userColumnMapping
   }
 
-  const response = await fetch(`${baseUrl}/api/extract-tables`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  })
+  // S-064: Add 280s timeout matching route.ts (was missing entirely)
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), 280_000)
 
-  if (!response.ok) {
-    throw new Error(`Pdfplumber extraction failed: ${response.status} ${response.statusText}`)
+  try {
+    const response = await fetch(`${baseUrl}/api/extract-tables`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    })
+
+    if (!response.ok) {
+      // Read raw text for diagnostics before throwing
+      const rawText = await response.text()
+      console.error('[chunk/callPdfplumber] Non-OK response:', response.status, rawText.slice(0, 500))
+      throw new Error(`Pdfplumber extraction failed: ${response.status} ${response.statusText}`)
+    }
+
+    return response.json()
+  } catch (err: unknown) {
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      throw new Error('Python endpoint timed out after 280s (chunk route)')
+    }
+    throw err
+  } finally {
+    clearTimeout(timeout)
   }
-
-  return response.json()
 }
 
 async function callLLMReview(
@@ -219,6 +237,8 @@ function applyCorrections(
             const val = fix.new_value
             if (fix.field === 'qty') {
               (item as any)[fix.field] = parseInt(val, 10) || 1
+              // S-064: Reset qty_source so post-LLM re-normalization catches this
+              ;(item as any).qty_source = 'llm_override'
             } else {
               (item as any)[fix.field] = val
             }
