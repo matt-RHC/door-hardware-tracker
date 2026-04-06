@@ -3,6 +3,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { getTaxonomyPromptText } from '@/lib/hardware-taxonomy'
 import { extractFireRatings, type DoorEntry } from '@/lib/fire-rating'
+import { extractJSON } from '@/lib/extractJSON'
 
 // Vercel Fluid Compute: 300s timeout (Pro plan supports up to 800s)
 export const maxDuration = 300
