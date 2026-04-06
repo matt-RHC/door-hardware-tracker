@@ -789,11 +789,11 @@ HW_SET_HEADING_PATTERN = re.compile(
     r"(?:"
     r"heading\s*#?\s*([A-Z0-9][A-Z0-9.\-:]*)\s*\(set\s*#?\s*([A-Z0-9][A-Z0-9.\-:]*)\)"  # Format 3: Heading #X (Set #Y)
     r"|"
-    r"(?:hardware\s+|hw\s+)(?:set|group)\s*[:# ]\s*([A-Z0-9][A-Z0-9.\-]{0,14})\b"  # Format 2/5: HARDWARE SET/GROUP #X
+    r"(?:hardware\s+|hw\s+)(?:set|group)\s*[:# ]\s*(?!for|that|numbers|should|shall|must|will|with|each|from|into|this|which|their|these|have|been|were|they|also|such|only|when|more|than|some|other|does|both|same|very|much|just|like|make|many|most|made|over|upon|after|being|under|where)([A-Z0-9][A-Z0-9.\-]{0,14})\b"  # Format 2/5: HARDWARE SET/GROUP #X (with spec-language blocklist)
     r"|"
     r"([A-Z0-9][A-Z0-9.\-]{0,14})\s+[-–—]\s+(?:hardware\s+)?set\b"  # Format 6: ID - Hardware Set
     r"|"
-    r"(?<![\w.])set\s*[:#]\s*([A-Z0-9][A-Z0-9.\-]{0,14})\b"  # Format 1/4: SET #X / SET: X (require : or #)
+    r"(?<![\w.])set\s*[:#]\s*(?!up|aside|point|down|out|off|back|about|and|the|has|trim|in|on|to|of|at|it|is|as|or|an|no|so|do|if|for|are|was|not|but|all|can|had|her|one|our|new|now|way|may|any|its|let|old|see|how|two|got|use|per|too|did|get|low|run|add|own|say|she|big|end|put|top|try|ask|men|ran|set)([A-Z0-9][A-Z0-9.\-]{1,14})\b"  # Format 1/4: SET #X / SET: X (require : or #, min 2 chars, blocklist)
     r")"
 )
 
@@ -1489,11 +1489,15 @@ def is_valid_door_number(val: str, log_rejections: bool = False) -> bool:
             return False
 
     # Reject known hardware set prefixes (short codes only)
+    # S-064: For single-char prefixes like 'L', only reject when followed by
+    # 1-2 digits (Schlage lockset models like L9175), not 3+ digits (L101 = valid door)
     for prefix in HARDWARE_SET_PREFIXES:
-        if clean.startswith(prefix) and len(clean) <= len(prefix) + 4:
-            if log_rejections:
-                print(f"[DOOR_VALIDATION] Rejected '{val}': HW set prefix {prefix}")
-            return False
+        if clean.startswith(prefix):
+            max_suffix = 2 if len(prefix) == 1 else 4
+            if len(clean) <= len(prefix) + max_suffix:
+                if log_rejections:
+                    print(f"[DOOR_VALIDATION] Rejected '{val}': HW set prefix {prefix}")
+                return False
 
     # Must match at least one positive door number pattern
     for pattern in DOOR_NUMBER_PATTERNS:
@@ -1727,6 +1731,8 @@ _HEADING_LINE_PATTERN = re.compile(
     r"(?:hardware\s+|hw\s+)(?:set|group)\s*[:#\s]\s*([A-Z0-9][A-Z0-9.\-:]*)"
     r"|"
     r"set\s*[:#]\s*([A-Z0-9][A-Z0-9.\-:]*)"
+    r"|"
+    r"([A-Z0-9][A-Z0-9.\-]{0,14})\s+[-\u2013\u2014]\s+(?:hardware\s+)?set\b"  # S-064: Format 6 (ID-first)
     r")",
     re.MULTILINE
 )
@@ -2125,7 +2131,15 @@ def extract_opening_list(
     tables_found = 0
     seen_door_numbers: set[str] = set()
 
+    # S-064: Skip hardware set pages to prevent phantom door entries from
+    # heading blocks that list assigned door numbers
+    hw_set_page_indices = _identify_hw_set_pages(pdf)
+    if hw_set_page_indices:
+        logger.info(f"Skipping {len(hw_set_page_indices)} hardware set pages in opening list extraction")
+
     for page_num, page in enumerate(pdf.pages):
+        if page_num in hw_set_page_indices:
+            continue
         tables = page.extract_tables(
             table_settings={
                 "vertical_strategy": "lines",
@@ -2204,7 +2218,8 @@ def extract_opening_list(
                 all_doors.append(entry)
 
     # Merge results from text-alignment strategy (may find doors on pages without grid lines)
-    text_align_doors, ta_tables = extract_opening_list_text_align(pdf, user_column_mapping)
+    # S-064: Pass hw_set_page_indices to skip hardware set pages
+    text_align_doors, ta_tables = extract_opening_list_text_align(pdf, user_column_mapping, hw_set_page_indices)
     existing_nums = {d.door_number for d in all_doors}
     for d in text_align_doors:
         if d.door_number not in existing_nums:
@@ -2213,7 +2228,8 @@ def extract_opening_list(
     tables_found += ta_tables
 
     # Merge results from word-position fallback (catches remaining stragglers)
-    word_doors, w_tables = extract_opening_list_text(pdf)
+    # S-064: Pass hw_set_page_indices to skip hardware set pages
+    word_doors, w_tables = extract_opening_list_text(pdf, hw_set_page_indices)
     for d in word_doors:
         if d.door_number not in existing_nums:
             all_doors.append(d)
@@ -2226,6 +2242,7 @@ def extract_opening_list(
 def extract_opening_list_text_align(
     pdf: pdfplumber.PDF,
     user_column_mapping: dict[str, int] | None = None,
+    skip_pages: set[int] | None = None,
 ) -> tuple[list[DoorEntry], int]:
     """
     Try text-alignment based table extraction for Opening List.
@@ -2234,8 +2251,11 @@ def extract_opening_list_text_align(
     all_doors: list[DoorEntry] = []
     tables_found = 0
     seen_door_numbers: set[str] = set()
+    _skip = skip_pages or set()
 
-    for page in pdf.pages:
+    for page_idx, page in enumerate(pdf.pages):
+        if page_idx in _skip:
+            continue
         tables = page.extract_tables(
             table_settings={
                 "vertical_strategy": "text",
@@ -2413,7 +2433,7 @@ def _assign_words_to_columns(
     return {f: " ".join(words).strip() for f, words in col_values.items()}
 
 
-def extract_opening_list_text(pdf: pdfplumber.PDF) -> tuple[list[DoorEntry], int]:
+def extract_opening_list_text(pdf: pdfplumber.PDF, skip_pages: set[int] | None = None) -> tuple[list[DoorEntry], int]:
     """
     Fallback extraction using word-level x-position alignment.
     Uses pdfplumber's word extraction to get exact x-coordinates, then
@@ -2426,10 +2446,13 @@ def extract_opening_list_text(pdf: pdfplumber.PDF) -> tuple[list[DoorEntry], int
     col_positions: list[float] = []
     field_order: list[str] = []
     header_y: float | None = None
+    _skip = skip_pages or set()
 
     pages_since_header = 0  # Track how many pages since last header seen
 
-    for page in pdf.pages:
+    for page_idx, page in enumerate(pdf.pages):
+        if page_idx in _skip:
+            continue
         words = page.extract_words(
             keep_blank_chars=False,
             x_tolerance=3,
@@ -2541,6 +2564,21 @@ def extract_reference_tables(pdf: pdfplumber.PDF) -> list[ReferenceCode]:
             }
         )
 
+        # S-064: Detect code_type per-page as fallback (used when header-based
+        # detection fails for a specific table)
+        page_code_type = None
+        page_text_lines = text.split("\n")
+        for line in page_text_lines:
+            if MANUFACTURER_HEADER.search(line):
+                page_code_type = "manufacturer"
+                break
+            elif FINISH_HEADER.search(line):
+                page_code_type = "finish"
+                break
+            elif OPTION_HEADER.search(line):
+                page_code_type = "option"
+                break
+
         for table in tables:
             if not table or len(table) < 2:
                 continue
@@ -2548,6 +2586,7 @@ def extract_reference_tables(pdf: pdfplumber.PDF) -> list[ReferenceCode]:
             headers = [clean_cell(c) for c in table[0]]
             header_text = " ".join(headers)
 
+            # S-064: Detect code_type per-table from headers first (takes priority)
             code_type = None
             if MANUFACTURER_HEADER.search(header_text):
                 code_type = "manufacturer"
@@ -2556,18 +2595,9 @@ def extract_reference_tables(pdf: pdfplumber.PDF) -> list[ReferenceCode]:
             elif OPTION_HEADER.search(header_text):
                 code_type = "option"
 
+            # Fall back to page-level detection only if header didn't match
             if not code_type:
-                page_text_lines = text.split("\n")
-                for line in page_text_lines:
-                    if MANUFACTURER_HEADER.search(line):
-                        code_type = "manufacturer"
-                        break
-                    elif FINISH_HEADER.search(line):
-                        code_type = "finish"
-                        break
-                    elif OPTION_HEADER.search(line):
-                        code_type = "option"
-                        break
+                code_type = page_code_type
 
             if not code_type:
                 continue

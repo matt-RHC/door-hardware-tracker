@@ -27,7 +27,7 @@ class TestBaseline:
     def test_small_pdf_extracts_openings(self, extract_tables, small_pdf_path):
         """SMALL PDF returns at least 1 opening."""
         with pdfplumber.open(str(small_pdf_path)) as pdf:
-            openings = extract_tables.extract_opening_list(pdf, None)
+            openings, _tables_found = extract_tables.extract_opening_list(pdf, None)
         assert len(openings) >= 1, f"Expected ≥1 opening, got {len(openings)}"
 
 
@@ -39,7 +39,7 @@ class TestBug1FullPDFExtraction:
     def test_full_pdf_finds_doors(self, extract_tables, small_pdf_path):
         """Processing all pages at once returns doors (no chunk boundary issues)."""
         with pdfplumber.open(str(small_pdf_path)) as pdf:
-            openings = extract_tables.extract_opening_list(pdf, None)
+            openings, _tables_found = extract_tables.extract_opening_list(pdf, None)
             sets = extract_tables.extract_all_hardware_sets(pdf)
         total = len(openings) + len(sets)
         assert total >= 1, "Full PDF extraction found nothing — BUG-1 regression"

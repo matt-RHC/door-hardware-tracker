@@ -41,20 +41,28 @@ DOOR_NUMBER_COLUMN = re.compile(
     r"(?i)^(open(ing)?|door)\s*(no\.?|num(ber)?|#|tag)|^#$|^no\.?$|^tag$"
 )
 # Multiple door-number-like values on one page (e.g. "101-01", "A-201B", "10.E1.03",
-# "1313B", "EY-003", "ST-1A")
+# "1313B", "EY-003", "ST-1A", "101", "2145")
+# S-064: Added bare 3-4 digit pattern for simple numbering schemes (101, 102, 103A)
 DOOR_NUMBER_VALUES = re.compile(
     r"\b(\d{2,4}[-\.]\d{1,3}[A-Z]?|[A-Z]{1,2}[-]\d{2,4}[A-Z]?|"
-    r"[A-Z]\d{3,4}[A-Z]?|\d{3,4}[A-Z]\b|"
+    r"[A-Z]\d{3,4}[A-Z]?|\d{3,4}[A-Z]?\b|"
     r"\d{1,3}\.[A-Z]\d{1,3}\.\d{2,4}[A-Z]?)\b"
 )
 
 # Hardware set indicators
+# BUG-22 fix: tighten bare-set regex to reject English words (set up, set point, etc.)
+# BUG-22/S-064: bare-set requires colon/hash (not bare space), and set ID must be
+# >=2 chars or start with a digit to reject single-letter false positives.
+# Also added colon to character class to match extract-tables.py (S-064 divergence fix).
+_SET_ID_BLOCKLIST = r"(?!up|aside|point|down|out|off|back|about|and|the|has|trim|in|on|to|of|at|it|is|as|or|an|no|so|do|if|for|are|was|not|but|all|can|had|her|one|our|new|now|way|may|any|its|let|old|see|how|two|got|use|per|too|did|get|low|run|add|own|say|she|big|end|put|top|try|ask|men|ran|set)"
 HW_SET_HEADING = re.compile(
     r"(?i)"
     r"(?:"
-    r"heading\s*#?\s*([A-Z0-9][A-Z0-9.\-]*)\s*\(set\s*#?\s*([A-Z0-9][A-Z0-9.\-]*)\)"
+    r"heading\s*#?\s*([A-Z0-9][A-Z0-9.\-:]*)\s*\(set\s*#?\s*([A-Z0-9][A-Z0-9.\-:]*)\)"
     r"|"
-    r"(?:hardware\s+)?set\s*[:# ]\s*([A-Z0-9][A-Z0-9.\-]*)"
+    r"(?:hardware\s+|hw\s+)(?:set|group)\s*[:# ]\s*([A-Z0-9][A-Z0-9.\-:]{0,14})\b"
+    r"|"
+    r"(?<![\w.])set\s*[:#]\s*" + _SET_ID_BLOCKLIST + r"([A-Z0-9][A-Z0-9.\-:]{1,14})\b"
     r")"
 )
 HARDWARE_ITEM_NAMES = re.compile(
@@ -148,8 +156,13 @@ def detect_pdf_source(metadata: dict) -> str:
     Returns one of: 'comsense', 's4h', 'word_excel', 'allegion',
     'assa_abloy', 'bluebeam', 'unknown'
     """
-    creator = (metadata.get("Creator") or metadata.get("creator") or "").lower()
-    producer = (metadata.get("Producer") or metadata.get("producer") or "").lower()
+    raw_creator = metadata.get("Creator") or metadata.get("creator") or ""
+    raw_producer = metadata.get("Producer") or metadata.get("producer") or ""
+    # Strip trademark/copyright symbols that prevent substring matching
+    # e.g. "Microsoft(R) Word" or "Microsoft\u00ae Word"
+    _TM_RE = re.compile(r'[\u00ae\u00a9\u2122]|\((?:R|C|TM)\)', re.IGNORECASE)
+    creator = _TM_RE.sub('', raw_creator).lower()
+    producer = _TM_RE.sub('', raw_producer).lower()
     combined = f"{creator} {producer}"
 
     # Bluebeam is very distinctive
@@ -540,7 +553,8 @@ def build_profile(pages: list, source: str) -> dict:
     door_number_formats = []
     table_strategies = []
 
-    hw_set_count = 0
+    unique_set_ids: set = set()  # BUG-23: track unique set IDs, not cumulative
+    hw_set_count_raw = 0  # Keep raw cumulative for debugging
     door_schedule_pages = 0
     has_reference_tables = False
 
@@ -560,7 +574,8 @@ def build_profile(pages: list, source: str) -> dict:
             table_strategies.append(ts)
 
         if p["type"] == PAGE_TYPE_HARDWARE_SET and p.get("hw_set_ids"):
-            hw_set_count += len(p["hw_set_ids"])
+            hw_set_count_raw += len(p["hw_set_ids"])
+            unique_set_ids.update(p["hw_set_ids"])
         if p["type"] == PAGE_TYPE_DOOR_SCHEDULE:
             door_schedule_pages += 1
         if p["type"] == PAGE_TYPE_REFERENCE:
@@ -576,7 +591,8 @@ def build_profile(pages: list, source: str) -> dict:
         "heading_format": _most_common(heading_formats),
         "door_number_format": _most_common(door_number_formats),
         "table_strategy": _most_common(table_strategies),
-        "hw_set_count": hw_set_count,
+        "hw_set_count": len(unique_set_ids),  # BUG-23: unique, not cumulative
+        "hw_set_count_raw": hw_set_count_raw,  # BUG-23: raw cumulative for debugging
         "door_schedule_pages": door_schedule_pages,
         "has_reference_tables": has_reference_tables,
     }
