@@ -33,6 +33,8 @@ interface TriageResponse {
     by_others: number
     rejected: number
   }
+  triage_error?: boolean
+  triage_error_message?: string
 }
 
 // --- System prompt ---
@@ -160,6 +162,7 @@ ${candidateSummary}`
       }
     } catch (llmError) {
       // Fail-open: if Claude call fails, return all candidates as 'door'
+      // but signal the error so the frontend can warn the user
       console.error('Triage LLM call failed, returning all as door:', llmError)
       classifications = candidates.map((c) => ({
         door_number: c.door_number,
@@ -167,6 +170,21 @@ ${candidateSummary}`
         confidence: 'low' as const,
         reason: 'triage_failed',
       }))
+
+      // Build response early with error fields and return
+      const errorStats = {
+        total: candidates.length,
+        doors: candidates.length,
+        by_others: 0,
+        rejected: 0,
+      }
+      const errorResponse: TriageResponse = {
+        classifications,
+        stats: errorStats,
+        triage_error: true,
+        triage_error_message: `AI triage failed: ${llmError instanceof Error ? llmError.message : 'Unknown error'}. All candidates auto-accepted as doors — review carefully.`,
+      }
+      return NextResponse.json(errorResponse)
     }
 
     // Ensure every candidate has a classification (fill gaps with 'door')

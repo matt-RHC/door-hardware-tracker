@@ -32,6 +32,15 @@ export interface ClassifyPagesResponse {
     submittal_pages: number[];
     other_pages: number[];
   };
+  profile?: {
+    source: string;
+    heading_format: string;
+    door_number_format: string;
+    table_strategy: string;
+    hw_set_count: number;
+    door_schedule_pages: number;
+    has_reference_tables: boolean;
+  };
 }
 
 /** Response from /api/detect-mapping */
@@ -61,6 +70,8 @@ export interface TriageResult {
   rejected: number;
   accepted: DoorEntry[];
   flagged: FlaggedDoor[];
+  triage_error?: boolean;
+  triage_error_message?: string;
 }
 
 // ─── Staging / extraction run types ───
@@ -80,6 +91,7 @@ export interface WizardState {
   // Step 1: Upload
   file: File | null;
   classifyResult: ClassifyPagesResponse | null;
+  profile?: ClassifyPagesResponse['profile'];
   hasExistingData: boolean;
 
   // Step 2: Map Columns
