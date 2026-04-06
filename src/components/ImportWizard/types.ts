@@ -1,5 +1,16 @@
 // ─── Shared types for ImportWizard ───
 
+// Domain types imported from canonical source
+import type {
+  DoorEntry,
+  HardwareItem,
+  HardwareSet,
+  FlaggedDoor,
+  PageClassification,
+} from '@/lib/types';
+
+export type { DoorEntry, HardwareItem, HardwareSet, FlaggedDoor, PageClassification };
+
 /** The five steps the wizard progresses through. */
 export enum WizardStep {
   Upload = 0,
@@ -7,39 +18,6 @@ export enum WizardStep {
   Triage = 2,
   Review = 3,
   Confirm = 4,
-}
-
-// ─── Domain types (reused from PDFUploadModal / parse-pdf) ───
-
-export interface HardwareItem {
-  qty: number;
-  name: string;
-  model: string;
-  finish: string;
-  manufacturer: string;
-}
-
-export interface HardwareSet {
-  set_id: string;
-  heading: string;
-  items: HardwareItem[];
-}
-
-export interface DoorEntry {
-  door_number: string;
-  hw_set: string;
-  location: string;
-  door_type: string;
-  frame_type: string;
-  fire_rating: string;
-  hand: string;
-  field_confidence?: Record<string, number>;
-}
-
-export interface FlaggedDoor {
-  door_number: string;
-  reason: string;
-  confidence: number;
 }
 
 // ─── API response types ───
@@ -54,12 +32,6 @@ export interface ClassifyPagesResponse {
     submittal_pages: number[];
     other_pages: number[];
   };
-}
-
-export interface PageClassification {
-  page_number: number;
-  page_type: "door_schedule" | "hardware_sets" | "submittal" | "cover" | "other";
-  confidence: number;
 }
 
 /** Response from /api/detect-mapping */

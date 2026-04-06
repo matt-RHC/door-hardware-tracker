@@ -6,16 +6,9 @@
  * Used by both the main parse-pdf route and the chunk handler.
  */
 
-export interface DoorEntry {
-  door_number: string
-  hw_set: string
-  hw_heading: string
-  location: string
-  door_type: string
-  frame_type: string
-  fire_rating: string
-  hand: string
-}
+import type { DoorEntry } from '@/lib/types'
+
+export type { DoorEntry }
 
 const FIRE_RATING_PATTERN = /\b(\d{1,3}\s*[Mm]in|[123]\s*[Hh]r)\b/
 

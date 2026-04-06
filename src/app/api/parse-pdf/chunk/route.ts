@@ -2,42 +2,12 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { getTaxonomyPromptText } from '@/lib/hardware-taxonomy'
-import { extractFireRatings, type DoorEntry } from '@/lib/fire-rating'
+import { extractFireRatings } from '@/lib/fire-rating'
+import type { DoorEntry, HardwareItem, HardwareSet, PdfplumberFlaggedDoor } from '@/lib/types'
 import { extractJSON } from '@/lib/extractJSON'
 
 // Vercel Fluid Compute: 800s timeout (Pro plan max)
 export const maxDuration = 800
-
-// --- Types ---
-
-interface HardwareItem {
-  qty: number              // per-opening (normalized)
-  qty_total?: number       // raw total from PDF
-  qty_door_count?: number  // openings in this set
-  qty_source?: string      // "parsed" | "divided" | "flagged" | "capped"
-  name: string
-  model: string
-  finish: string
-  manufacturer: string
-}
-
-interface HardwareSet {
-  set_id: string
-  generic_set_id?: string
-  heading: string
-  heading_door_count?: number
-  heading_leaf_count?: number
-  items: HardwareItem[]
-}
-
-// DoorEntry imported from @/lib/fire-rating
-
-interface FlaggedDoor {
-  door: DoorEntry
-  reason: string
-  pattern: string
-  dominant_pattern: string
-}
 
 interface PdfplumberResult {
   success: boolean
@@ -61,7 +31,7 @@ interface PdfplumberResult {
     code: string
     full_name: string
   }>
-  flagged_doors: FlaggedDoor[]
+  flagged_doors: PdfplumberFlaggedDoor[]
   expected_door_count: number
   tables_found: number
   hw_sets_found: number
@@ -361,7 +331,7 @@ export async function POST(request: NextRequest) {
     }))
 
     let doors: DoorEntry[] = pdfplumberResult?.openings || []
-    const flaggedDoors: FlaggedDoor[] = pdfplumberResult?.flagged_doors || []
+    const flaggedDoors: PdfplumberFlaggedDoor[] = pdfplumberResult?.flagged_doors || []
 
     // ==========================================
     // Step 2: LLM review pass (always)

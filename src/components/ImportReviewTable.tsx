@@ -2,43 +2,8 @@
 
 import { useState, useCallback, useRef, useEffect } from "react";
 
-/* ─── Types (shared with PDFUploadModal) ─── */
-interface HardwareItem {
-  qty: number;
-  qty_total?: number;
-  qty_door_count?: number;
-  qty_source?: string;
-  name: string;
-  model: string;
-  finish: string;
-  manufacturer: string;
-}
-
-interface HardwareSet {
-  set_id: string;
-  generic_set_id?: string;
-  heading: string;
-  heading_door_count?: number;
-  heading_leaf_count?: number;
-  items: HardwareItem[];
-}
-
-interface DoorEntry {
-  door_number: string;
-  hw_set: string;
-  location: string;
-  door_type: string;
-  frame_type: string;
-  fire_rating: string;
-  hand: string;
-}
-
-interface FlaggedDoor {
-  door: DoorEntry;
-  reason: string;
-  pattern: string;
-  dominant_pattern: string;
-}
+/* ─── Types ─── */
+import type { DoorEntry, HardwareSet, PdfplumberFlaggedDoor } from '@/lib/types';
 
 /* ─── Editable Cell ─── */
 function EditableCell({
@@ -105,7 +70,7 @@ interface ImportReviewTableProps {
   projectId: string;
   doors: DoorEntry[];
   sets: HardwareSet[];
-  flaggedDoors?: FlaggedDoor[];
+  flaggedDoors?: PdfplumberFlaggedDoor[];
   byOthersFromTriage?: Set<number>;
   onClose: () => void;
   onComplete: () => void;
@@ -135,7 +100,7 @@ export default function ImportReviewTable({
 
   // Flagged doors: user decides which to include
   const [approvedFlagged, setApprovedFlagged] = useState<Set<number>>(new Set());
-  const hasFlaggedDoors = flaggedDoors.length > 0;
+  const hasPdfplumberFlaggedDoors = flaggedDoors.length > 0;
 
   // Auto-detect likely "By Others" candidates: N/A hw_set, OH/Gate door types
   const isByOthersCandidate = useCallback((door: DoorEntry): boolean => {
@@ -354,7 +319,8 @@ export default function ImportReviewTable({
     }
   };
 
-  const columns: { key: keyof DoorEntry; label: string; width: string }[] = [
+  type DoorStringKey = 'door_number' | 'hw_set' | 'hw_heading' | 'location' | 'door_type' | 'frame_type' | 'fire_rating' | 'hand';
+  const columns: { key: DoorStringKey; label: string; width: string }[] = [
     { key: "door_number", label: "Door #", width: "w-[100px]" },
     { key: "hw_set", label: "HW Set", width: "w-[90px]" },
     { key: "location", label: "Location", width: "w-[180px]" },
@@ -594,7 +560,7 @@ export default function ImportReviewTable({
                         </span>
                       ) : (
                         <EditableCell
-                          value={door[col.key]}
+                          value={door[col.key] ?? ''}
                           onChange={(v) => updateDoor(idx, col.key, v)}
                           warning={warnings[col.key]}
                         />
@@ -635,7 +601,7 @@ export default function ImportReviewTable({
       </div>
 
       {/* ── Flagged Doors Review ── */}
-      {hasFlaggedDoors && (
+      {hasPdfplumberFlaggedDoors && (
         <div className="mx-6 mb-4 border border-[rgba(255,159,10,0.3)] rounded-lg overflow-hidden">
           <div className="px-4 py-3 bg-[rgba(255,159,10,0.06)] flex items-center justify-between">
             <div>
@@ -726,7 +692,7 @@ export default function ImportReviewTable({
               {" "}&middot; {approvedFlagged.size} restored from flagged
             </span>
           )}
-          {hasFlaggedDoors && flaggedDoors.length - approvedFlagged.size > 0 && (
+          {hasPdfplumberFlaggedDoors && flaggedDoors.length - approvedFlagged.size > 0 && (
             <span className="text-[#ff9f0a]">
               {" "}&middot; {flaggedDoors.length - approvedFlagged.size} flagged (excluded)
             </span>

@@ -1,29 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
-
-// --- Types ---
-
-interface ParsedDoor {
-  door_number: string
-  hw_set: string
-  location: string
-  door_type: string
-  frame_type: string
-  fire_rating: string
-  hand: string
-}
-
-interface ParsedHardwareSet {
-  set_id: string
-  heading: string
-  items: Array<{
-    qty: number
-    name: string
-    model: string
-    finish: string
-    manufacturer: string
-  }>
-}
+import type { DoorEntry, HardwareSet } from '@/lib/types'
 
 interface ExistingOpening {
   id: string
@@ -70,8 +47,8 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { projectId, hardwareSets, doors } = body as {
       projectId: string
-      hardwareSets: ParsedHardwareSet[]
-      doors: ParsedDoor[]
+      hardwareSets: HardwareSet[]
+      doors: DoorEntry[]
     }
 
     if (!projectId || !doors) {
@@ -109,12 +86,12 @@ export async function POST(request: NextRequest) {
       existingMap.set(normalizeDoorNumber(op.door_number), op)
     }
 
-    const newMap = new Map<string, ParsedDoor>()
+    const newMap = new Map<string, DoorEntry>()
     for (const door of doors) {
       newMap.set(normalizeDoorNumber(door.door_number), door)
     }
 
-    const setMap = new Map<string, ParsedHardwareSet>()
+    const setMap = new Map<string, HardwareSet>()
     for (const set of hardwareSets) {
       setMap.set(set.set_id, set)
     }
@@ -123,19 +100,19 @@ export async function POST(request: NextRequest) {
     const matched: Array<{
       door_number: string
       existing: ExistingOpening
-      parsed: ParsedDoor
+      parsed: DoorEntry
     }> = []
 
     const changed: Array<{
       door_number: string
       existing: ExistingOpening
-      parsed: ParsedDoor
+      parsed: DoorEntry
       changes: FieldChange[]
       hw_set_changed: boolean
       progress_count: { total: number; checked: number }
     }> = []
 
-    const added: ParsedDoor[] = []
+    const added: DoorEntry[] = []
 
     const removed: Array<{
       door_number: string

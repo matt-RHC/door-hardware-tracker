@@ -5,6 +5,9 @@
  * both code paths use the same chunking/merging logic.
  */
 import { PDFDocument } from 'pdf-lib'
+import type { DoorEntry, HardwareItem, HardwareSet } from '@/lib/types'
+
+export type { DoorEntry, HardwareItem, HardwareSet }
 
 // ── Constants ──────────────────────────────────────────────────────
 
@@ -14,33 +17,6 @@ export const CHUNK_SIZE_THRESHOLD = 3 * 1024 * 1024
 
 /** Fallback max pages per chunk if classifier fails */
 export const FALLBACK_PAGES_PER_CHUNK = 35
-
-// ── Types ──────────────────────────────────────────────────────────
-
-export interface HardwareItem {
-  qty: number
-  name: string
-  model: string
-  finish: string
-  manufacturer: string
-}
-
-export interface HardwareSet {
-  set_id: string
-  heading: string
-  items: HardwareItem[]
-}
-
-export interface DoorEntry {
-  door_number: string
-  hw_set: string
-  location: string
-  door_type: string
-  frame_type: string
-  fire_rating: string
-  hand: string
-  field_confidence?: Record<string, number>
-}
 
 // ── Base64 encoding ────────────────────────────────────────────────
 
