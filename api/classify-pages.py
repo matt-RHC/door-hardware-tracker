@@ -41,10 +41,15 @@ DOOR_NUMBER_COLUMN = re.compile(
     r"(?i)^(open(ing)?|door)\s*(no\.?|num(ber)?|#|tag)|^#$|^no\.?$|^tag$"
 )
 # Multiple door-number-like values on one page (e.g. "101-01", "A-201B", "10.E1.03",
-# "1313B", "EY-003", "ST-1A", "101", "2145")
+# "1313B", "EY-003", "ST-1A", "101", "2145", "10-03AB", "10-82A.R1M")
 # S-064: Added bare 3-4 digit pattern for simple numbering schemes (101, 102, 103A)
+# S-066B: Added multi-letter suffix, revision suffix, REV-embedded patterns
 DOOR_NUMBER_VALUES = re.compile(
-    r"\b(\d{2,4}[-\.]\d{1,3}[A-Z]?|[A-Z]{1,2}[-]\d{2,4}[A-Z]?|"
+    r"\b(\d{2,4}[-\.]\d{1,3}[A-Z]?|"                  # standard: 10-03A
+    r"\d{2,3}[-]\d{2,4}[A-Z]{2,3}|"                   # multi-letter: 10-03AB
+    r"\d{2,4}[-]\d{2,4}[A-Z]\.[A-Z]\d[A-Z]|"         # revision: 10-82A.R1M
+    r"\d{2,4}[-]\d{2,4}[A-Z]{0,3}REV\d?|"            # REV: 09-15AREV1
+    r"[A-Z]{1,2}[-]\d{2,4}[A-Z]?|"
     r"[A-Z]\d{3,4}[A-Z]?|\d{3,4}[A-Z]?\b|"
     r"\d{1,3}\.[A-Z]\d{1,3}\.\d{2,4}[A-Z]?)\b"
 )

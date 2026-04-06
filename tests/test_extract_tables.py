@@ -174,10 +174,37 @@ class TestBug5DoorValidation:
         "10.E1.03", "10.N2.01A", "10.S1.05B", "10.E2.06A",
         # Location-prefix door numbers (Task 3 / S-045)
         "ST-1", "ST-1A", "EL-1", "EX-1", "EY-001", "CORR-5",
+        # MCN grid multi-letter suffix (S-066B)
+        "10-03AB",
+        # MCN revision suffix (S-066B)
+        "10-82A.R1M", "10-82B.R1M",
+        # MCN REV-embedded (S-066B, after space normalization)
+        "09-15AREV1",
     ])
     def test_accepts_valid_doors(self, extract_tables, val):
         assert extract_tables.is_valid_door_number(val), (
             f"'{val}' should be accepted as a valid door number"
+        )
+
+    # S-066B: REV space normalization — pdfplumber may insert a space before REV
+    def test_accepts_rev_with_space(self, extract_tables):
+        """pdfplumber may extract '09-15A REV1' — space before REV should be normalized."""
+        assert extract_tables.is_valid_door_number("09-15A REV1"), (
+            "'09-15A REV1' should be accepted after REV space normalization"
+        )
+
+    # S-066B: BHMA finish code ranges should be REJECTED
+    @pytest.mark.parametrize("val", ["615-622", "626-630", "600-699"])
+    def test_rejects_bhma_finish_ranges(self, extract_tables, val):
+        assert not extract_tables.is_valid_door_number(val), (
+            f"'{val}' should be rejected as BHMA finish code range"
+        )
+
+    # S-066B: Leading-zero product codes should be REJECTED
+    @pytest.mark.parametrize("val", ["0468", "0123", "0999"])
+    def test_rejects_leading_zero_product_codes(self, extract_tables, val):
+        assert not extract_tables.is_valid_door_number(val), (
+            f"'{val}' should be rejected as leading-zero product code"
         )
 
     # Edge cases
