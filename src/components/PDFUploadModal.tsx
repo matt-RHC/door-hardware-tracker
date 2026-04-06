@@ -663,6 +663,137 @@ async function splitPDFFixed(buffer: ArrayBuffer, pagesPerChunk: number): Promis
   return chunks;
 }
 
+/**
+ * Build a filtered PDF containing only pages of specified types.
+ * Used to reduce token cost: triage and LLM review only need
+ * opening list + hardware schedule pages, not cut sheets or reference tables.
+ */
+async function buildFilteredPDF(
+  buffer: ArrayBuffer,
+  classifications: PageClassification[],
+  allowedTypes: string[] = ["door_schedule", "hardware_set"]
+): Promise<string | null> {
+  try {
+    const relevantPages = classifications
+      .filter((p) => allowedTypes.includes(p.type))
+      .map((p) => p.index);
+
+    if (relevantPages.length === 0) return null;
+
+    const srcDoc = await PDFDocument.load(buffer);
+    const totalPages = srcDoc.getPageCount();
+
+    // Filter out any page indices beyond the PDF's actual page count
+    const validPages = relevantPages.filter((p) => p < totalPages);
+    if (validPages.length === 0) return null;
+
+    const filteredDoc = await PDFDocument.create();
+    const copiedPages = await filteredDoc.copyPages(srcDoc, validPages);
+    for (const page of copiedPages) {
+      filteredDoc.addPage(page);
+    }
+
+    const filteredBytes = await filteredDoc.save();
+    const filteredBase64 = btoa(
+      new Uint8Array(filteredBytes).reduce((data, byte) => data + String.fromCharCode(byte), "")
+    );
+
+    console.log(`Page filter: ${totalPages} pages → ${validPages.length} relevant pages (${Math.round((1 - validPages.length / totalPages) * 100)}% reduction)`);
+    return filteredBase64;
+  } catch (err) {
+    console.warn("Failed to build filtered PDF, will use full PDF:", err);
+    return null;
+  }
+}
+
+/**
+ * Call the AI triage endpoint to classify door candidates.
+ * Returns null if triage fails (caller should proceed with all candidates).
+ */
+interface TriageClassification {
+  door_number: string;
+  class: "door" | "by_others" | "reject";
+  confidence: "high" | "medium" | "low";
+  reason: string;
+}
+
+interface TriageResult {
+  classifications: TriageClassification[];
+  stats: { total: number; doors: number; by_others: number; rejected: number };
+}
+
+async function runTriage(
+  candidates: DoorEntry[],
+  filteredPdfBase64?: string | null
+): Promise<TriageResult | null> {
+  try {
+    const body: Record<string, unknown> = {
+      candidates: candidates.map((c) => ({
+        door_number: c.door_number,
+        hw_set: c.hw_set || null,
+        door_type: c.door_type || null,
+        frame_type: c.frame_type || null,
+        fire_rating: c.fire_rating || null,
+        hand: c.hand || null,
+        location: c.location || null,
+        page_number: null,
+      })),
+    };
+    if (filteredPdfBase64) {
+      body.filteredPdfBase64 = filteredPdfBase64;
+    }
+
+    const resp = await fetch("/api/parse-pdf/triage", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+
+    if (!resp.ok) {
+      console.warn("Triage endpoint failed:", resp.status);
+      return null;
+    }
+
+    return await resp.json();
+  } catch (err) {
+    console.warn("Triage call failed, proceeding without classification:", err);
+    return null;
+  }
+}
+
+/**
+ * Apply triage results: filter out rejected doors, identify by_others indices.
+ * Returns the filtered door array and a Set of by_others indices in the filtered array.
+ */
+function applyTriageResults(
+  doors: DoorEntry[],
+  triage: TriageResult
+): { filteredDoors: DoorEntry[]; byOthersIndices: Set<number> } {
+  const classMap = new Map<string, TriageClassification>();
+  for (const c of triage.classifications) {
+    classMap.set(c.door_number, c);
+  }
+
+  const filteredDoors: DoorEntry[] = [];
+  const byOthersIndices = new Set<number>();
+
+  for (const door of doors) {
+    const classification = classMap.get(door.door_number);
+    if (classification?.class === "reject") {
+      console.log(`[triage-reject] ${door.door_number}: ${classification.reason} (${classification.confidence})`);
+      continue; // Filter out
+    }
+    const idx = filteredDoors.length;
+    filteredDoors.push(door);
+    if (classification?.class === "by_others") {
+      byOthersIndices.add(idx);
+      console.log(`[triage-by-others] ${door.door_number}: ${classification.reason}`);
+    }
+  }
+
+  return { filteredDoors, byOthersIndices };
+}
+
 // --- Hardware item dedup helpers (Level 2: cross-chunk, Level 3: pre-save) ---
 
 const NAME_ABBREVIATIONS: Record<string, string> = {
@@ -786,13 +917,16 @@ export default function PDFUploadModal({
     doors: DoorEntry[];
     sets: HardwareSet[];
     flaggedDoors?: FlaggedDoor[];
+    byOthersFromTriage?: Set<number>;
   } | null>(null);
 
   // Column mapper: shown between classification and extraction
   const [mapperData, setMapperData] = useState<DetectMappingResponse | null>(null);
   const [confirmedMapping, setConfirmedMapping] = useState<ColumnMapping | null>(null);
+  const confirmedMappingRef = useRef<ColumnMapping | null>(null);
   const [mappingSummary, setMappingSummary] = useState<string | null>(null);
   const mapperDoneRef = useRef(false); // true after user confirms or skips
+  const pdfBase64Ref = useRef<string | null>(null); // for re-detection from page browser
   // Store buffer/pageCount/parseOnly so we can resume after mapping confirmation
   const pendingUploadRef = useRef<{
     buffer: ArrayBuffer;
@@ -889,12 +1023,14 @@ export default function PDFUploadModal({
   const processLargePDF = async (
     buffer: ArrayBuffer,
     pageCount: number,
-    parseOnly = false
-  ): Promise<{ doors: DoorEntry[]; sets: HardwareSet[]; flaggedDoors?: FlaggedDoor[] } | void> => {
+    parseOnly = false,
+    explicitMapping?: ColumnMapping | null,
+  ): Promise<{ doors: DoorEntry[]; sets: HardwareSet[]; flaggedDoors?: FlaggedDoor[]; filteredPdfBase64?: string } | void> => {
     // Convert buffer to base64 (needed by both paths)
     const fullBase64 = btoa(
       new Uint8Array(buffer).reduce((data, byte) => data + String.fromCharCode(byte), "")
     );
+    pdfBase64Ref.current = fullBase64;
 
     // ── Primary path: full pdfplumber + LLM review pipeline ──
     // Sends entire PDF to the server-side Python pipeline (pdfplumber extracts
@@ -928,33 +1064,51 @@ export default function PDFUploadModal({
         }
       }
 
+      // Classify pages to build a filtered PDF for cheaper LLM review + triage
+      setStatus("Classifying pages...");
+      setProgress(10);
+      const pageClassResult = await classifyPages(fullBase64);
+      let filteredPdfBase64: string | null = null;
+      if (pageClassResult?.page_classifications) {
+        filteredPdfBase64 = await buildFilteredPDF(buffer, pageClassResult.page_classifications);
+      }
+
       setStatus("Extracting tables and running AI review...");
       setProgress(15);
 
       try {
+        const mappingToSend = explicitMapping ?? confirmedMappingRef.current ?? null;
+        console.log('[PDFUploadModal] Sending userColumnMapping:', mappingToSend);
+        const parseBody: Record<string, unknown> = {
+          pdfBase64: fullBase64,
+          userColumnMapping: mappingToSend,
+        };
+        // Send filtered PDF for cheaper LLM review (server still extracts from full PDF)
+        if (filteredPdfBase64) {
+          parseBody.filteredPdfBase64 = filteredPdfBase64;
+        }
+
         const resp = await fetch("/api/parse-pdf?parseOnly=true", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            pdfBase64: fullBase64,
-            userColumnMapping: confirmedMapping || null,
-          }),
+          body: JSON.stringify(parseBody),
         });
 
         if (resp.ok) {
           const result = await resp.json();
           if (result.doors?.length > 0 || result.sets?.length > 0) {
-            setProgress(95);
+            setProgress(90);
             setStatus("Deduplicating hardware items...");
             // Apply the same dedup that the chunked path uses
             const dedupedSets = mergeHardwareSets(result.sets || []);
-            setProgress(100);
+            setProgress(92);
             console.log(`Parsed ${dedupedSets.length} hardware sets, ${result.doors?.length ?? 0} doors`);
             setStatus("Extraction complete. Ready for review.");
             return {
               doors: result.doors || [],
               sets: dedupedSets,
               flaggedDoors: result.flaggedDoors || [],
+              filteredPdfBase64: filteredPdfBase64 ?? undefined,
             };
           }
           // If pdfplumber returned zero results, report clearly instead of
@@ -1049,7 +1203,7 @@ export default function PDFUploadModal({
     }
 
     // ── Use confirmed mapping for extraction ──
-    const userMapping = confirmedMapping || null;
+    const userMapping = explicitMapping ?? confirmedMappingRef.current ?? null;
 
     const totalChunks = chunks.length;
 
@@ -1253,7 +1407,18 @@ export default function PDFUploadModal({
           if (result.doors.length === 0) {
             throw new Error("No doors found in the document.");
           }
-          setWizardData({ doors: result.doors, sets: result.sets });
+
+          // Run AI triage to filter false positives (fail-open)
+          setStatus("Validating door candidates...");
+          const triage = await runTriage(result.doors, result.filteredPdfBase64);
+          let wizardDoors = result.doors;
+          if (triage) {
+            const { filteredDoors } = applyTriageResults(result.doors, triage);
+            wizardDoors = filteredDoors;
+            console.log(`Triage: ${result.doors.length} → ${filteredDoors.length} doors (${triage.stats.rejected} rejected, ${triage.stats.by_others} by_others)`);
+          }
+
+          setWizardData({ doors: wizardDoors, sets: result.sets });
         }
         // Don't close â wizard will render
         setLoading(false);
@@ -1268,10 +1433,25 @@ export default function PDFUploadModal({
         if (freshResult.doors.length === 0) {
           throw new Error("No doors found in the document.");
         }
+
+        // Run AI triage to filter false positives and identify by_others (fail-open)
+        setStatus("Validating door candidates...");
+        const triage = await runTriage(freshResult.doors, freshResult.filteredPdfBase64);
+        let reviewDoors = freshResult.doors;
+        let triageByOthers: Set<number> | undefined;
+        if (triage) {
+          const { filteredDoors, byOthersIndices } = applyTriageResults(freshResult.doors, triage);
+          reviewDoors = filteredDoors;
+          triageByOthers = byOthersIndices.size > 0 ? byOthersIndices : undefined;
+          console.log(`Triage: ${freshResult.doors.length} → ${filteredDoors.length} doors (${triage.stats.rejected} rejected, ${triage.stats.by_others} by_others)`);
+        }
+
+        setProgress(100);
         setReviewData({
-          doors: freshResult.doors,
+          doors: reviewDoors,
           sets: freshResult.sets,
           flaggedDoors: freshResult.flaggedDoors,
+          byOthersFromTriage: triageByOthers,
         });
       }
       // Don't close - review table will render
@@ -1293,14 +1473,32 @@ export default function PDFUploadModal({
         <div className="bg-[#1c1c1e] rounded-2xl border border-white/[0.08] p-6 max-w-4xl w-full max-h-[90vh] overflow-y-auto relative">
           <ColumnMapperWizard
             data={mapperData}
+            pdfBuffer={pendingUploadRef.current?.buffer}
+            pageCount={pendingUploadRef.current?.pageCount}
+            onRedetect={async (pageIndex: number) => {
+              const b64 = pdfBase64Ref.current;
+              if (!b64) return null;
+              try {
+                const resp = await fetch("/api/detect-mapping", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ pdf_base64: b64, page_index: pageIndex }),
+                });
+                if (!resp.ok) return null;
+                return await resp.json();
+              } catch {
+                return null;
+              }
+            }}
             onConfirm={(mapping) => {
               setConfirmedMapping(mapping);
+              confirmedMappingRef.current = mapping;
               // Build human-readable summary of confirmed column mapping
               const headers = mapperData?.headers ?? [];
               const FIELD_LABELS: Record<string, string> = {
-                door_number: "Door #", hw_set: "HW Set", hw_heading: "Heading",
+                door_number: "Door Number", hw_set: "Hardware Heading", hw_heading: "Hardware Subheading",
                 location: "Location", door_type: "Door Type", frame_type: "Frame Type",
-                fire_rating: "Fire Rating", hand: "Hand",
+                fire_rating: "Fire Rating", hand: "Hand / Swing",
               };
               const parts = Object.entries(mapping)
                 .map(([field, colIdx]) => {
@@ -1311,19 +1509,20 @@ export default function PDFUploadModal({
               setMappingSummary(parts.length > 0 ? parts.join(" \u00b7 ") : null);
               setMapperData(null);
               mapperDoneRef.current = true;
-              // Resume the upload with confirmed mapping
+              // Resume the upload with confirmed mapping — pass mapping directly
               const pending = pendingUploadRef.current;
               if (pending) {
                 pendingUploadRef.current = null;
                 setLoading(true);
                 setError(null);
-                processLargePDF(pending.buffer, pending.pageCount, pending.parseOnly)
+                processLargePDF(pending.buffer, pending.pageCount, pending.parseOnly, mapping)
                   .catch((err) => setError(err instanceof Error ? err.message : "Upload failed"))
                   .finally(() => setLoading(false));
               }
             }}
             onSkip={() => {
               setConfirmedMapping(null);
+              confirmedMappingRef.current = null;
               setMappingSummary(null);
               setMapperData(null);
               mapperDoneRef.current = true;
@@ -1352,6 +1551,7 @@ export default function PDFUploadModal({
         doors={reviewData.doors}
         sets={reviewData.sets}
         flaggedDoors={reviewData.flaggedDoors}
+        byOthersFromTriage={reviewData.byOthersFromTriage}
         onClose={onClose}
         onComplete={onSuccess}
       />

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useCallback } from "react";
+import PDFPageBrowser from "./PDFPageBrowser";
 
 // ─── Types ───
 
@@ -23,10 +24,15 @@ export interface DetectMappingResponse {
   error?: string;
 }
 
+type WizardPhase = "pageBrowser" | "step2" | "step3";
+
 interface ColumnMapperWizardProps {
   data: DetectMappingResponse;
+  pdfBuffer?: ArrayBuffer;
+  pageCount?: number;
   onConfirm: (mapping: ColumnMapping) => void;
   onSkip: () => void;
+  onRedetect?: (pageIndex: number) => Promise<DetectMappingResponse | null>;
 }
 
 // ─── Field metadata ───
@@ -46,13 +52,13 @@ const REQUIRED_FIELDS = ["door_number"];
 
 const DEFAULT_FIELD_LABELS: Record<string, string> = {
   door_number: "Door Number",
-  hw_set: "HW Set",
-  hw_heading: "HW Heading",
+  hw_set: "Hardware Heading",
+  hw_heading: "Hardware Subheading",
   location: "Location",
   door_type: "Door Type",
   frame_type: "Frame Type",
   fire_rating: "Fire Rating",
-  hand: "Hand/Swing",
+  hand: "Hand / Swing",
 };
 
 // ─── Color for field badges ───
@@ -115,45 +121,63 @@ function Step1IdentifyTable({
     <div className="space-y-6 animate-fade-in-up">
       <div>
         <h2 className="font-display text-2xl font-bold text-white mb-2">
-          IDENTIFY YOUR TABLE
+          VERIFY YOUR DOOR SCHEDULE
         </h2>
-        <p className="text-sm text-[#8e8e93]">
-          Verify this is the correct table. We detected {data.headers.length} columns and{" "}
-          {data.sample_rows.length} sample rows.
-          {data.page_index !== undefined && (
-            <span className="block mt-1">
-              <span className="text-[#636366]">Detected on page {data.page_index + 1} of {data.total_pages}</span>
-            </span>
-          )}
+        <p className="text-sm text-[#a1a1a6] leading-relaxed">
+          We found a table in your submittal that looks like the master door list.
+          Check that the preview below shows <span className="text-[#e8e8ed] font-medium">door numbers</span>,{" "}
+          <span className="text-[#e8e8ed] font-medium">hardware sets</span>, and other door info
+          — not a hardware set detail page or cover sheet.
+        </p>
+        {data.page_index !== undefined && (
+          <p className="text-xs text-[#636366] mt-2">
+            Found on page {data.page_index + 1} of {data.total_pages}
+          </p>
+        )}
+      </div>
+
+      {/* What happens next */}
+      <div className="p-3 rounded-lg bg-[rgba(90,200,250,0.06)] border border-[rgba(90,200,250,0.15)]">
+        <p className="text-xs text-[#5ac8fa]">
+          <strong>Next step:</strong> After you confirm, you&apos;ll be able to tell us which column is
+          which (Door Number, Fire Rating, etc.) so we parse everything correctly.
         </p>
       </div>
 
       {/* Low confidence warning */}
       {data.low_confidence && (
-        <div className="glow-card glow-card--orange p-4">
+        <div className="p-4 rounded-lg bg-[rgba(255,159,10,0.08)] border border-[rgba(255,159,10,0.25)]">
           <p className="text-[#ff9f0a] font-semibold text-sm mb-1">
             Low Confidence Detection
           </p>
           <p className="text-xs text-[#a1a1a6]">
-            The system is not very confident about this table. Please review it carefully, or click
-            &quot;Skip&quot; to let the system auto-detect per chunk.
+            We&apos;re not very confident this is the right table. Review it carefully,
+            or click &quot;Not the right table&quot; to skip.
           </p>
         </div>
       )}
 
-      {/* Sample table - large and readable */}
-      <div className="glow-card p-4 overflow-hidden flex flex-col max-h-96">
-        <div className="overflow-x-auto flex-1">
-          <table className="w-full text-sm">
-            <thead>
+      {/* Sample table - dark theme, scrollable */}
+      <div
+        className="rounded-lg border border-[rgba(255,255,255,0.08)] overflow-hidden flex flex-col"
+        style={{ maxHeight: "420px", backgroundColor: "rgba(10,10,14,0.95)" }}
+      >
+        <div className="overflow-auto flex-1">
+          <table className="w-full text-sm border-collapse">
+            <thead className="sticky top-0 z-10">
               <tr>
                 {data.headers.map((header, idx) => (
                   <th
                     key={idx}
-                    className="px-3 py-3 text-left font-semibold text-[#5ac8fa] whitespace-nowrap bg-[rgba(90,200,250,0.08)] border-b border-[rgba(90,200,250,0.2)]"
+                    className="px-3 py-3 text-left font-semibold whitespace-nowrap border-b"
+                    style={{
+                      color: "#5ac8fa",
+                      backgroundColor: "rgba(10,10,14,0.98)",
+                      borderBottomColor: "rgba(90,200,250,0.25)",
+                    }}
                   >
-                    <div className="flex flex-col gap-1">
-                      <span className="text-[10px] uppercase tracking-widest text-[#636366]">
+                    <div className="flex flex-col gap-0.5">
+                      <span className="text-[10px] uppercase tracking-widest text-[#4a4a4e]">
                         Col {idx + 1}
                       </span>
                       <span className="text-sm">{header || "(empty)"}</span>
@@ -166,14 +190,18 @@ function Step1IdentifyTable({
               {data.sample_rows.map((row, rowIdx) => (
                 <tr
                   key={rowIdx}
-                  className={`border-b border-[rgba(255,255,255,0.04)] ${
-                    rowIdx % 2 === 0 ? "bg-[rgba(255,255,255,0.01)]" : ""
-                  }`}
+                  style={{
+                    backgroundColor: rowIdx % 2 === 0
+                      ? "rgba(255,255,255,0.02)"
+                      : "rgba(0,0,0,0.15)",
+                    borderBottom: "1px solid rgba(255,255,255,0.05)",
+                  }}
                 >
                   {data.headers.map((_, colIdx) => (
                     <td
                       key={colIdx}
-                      className="px-3 py-2.5 text-[#e8e8ed] text-sm max-w-[200px] truncate"
+                      className="px-3 py-2.5 text-sm max-w-[200px] truncate"
+                      style={{ color: "#d1d1d6" }}
                     >
                       {row[colIdx] || "—"}
                     </td>
@@ -187,11 +215,16 @@ function Step1IdentifyTable({
 
       {/* Actions */}
       <div className="flex items-center justify-between pt-4 gap-4">
-        <button onClick={onSkip} className="glow-btn glow-btn--ghost">
-          This isn't the right table
-        </button>
+        <div className="flex flex-col items-start gap-1">
+          <button onClick={onSkip} className="glow-btn glow-btn--ghost">
+            Not the right table
+          </button>
+          <span className="text-[10px] text-[#4a4a4e] ml-1">
+            Skip to auto-detect per page
+          </span>
+        </div>
         <button onClick={onConfirm} className="glow-btn glow-btn--primary">
-          Looks Good, Next
+          Looks Good, Map Columns
         </button>
       </div>
     </div>
@@ -209,8 +242,9 @@ function Step2MapColumns({
   onReset,
   onConfirm,
   onBack,
-  onSkip,
   fieldLabels,
+  skippedFields,
+  onToggleSkip,
 }: {
   data: DetectMappingResponse;
   mapping: ColumnMapping;
@@ -220,8 +254,9 @@ function Step2MapColumns({
   onReset: () => void;
   onConfirm: () => void;
   onBack: () => void;
-  onSkip: () => void;
   fieldLabels: Record<string, string>;
+  skippedFields: Set<string>;
+  onToggleSkip: (field: string) => void;
 }) {
   // Reverse mapping: column index → field name
   const reverseMapping = useMemo(() => {
@@ -260,61 +295,102 @@ function Step2MapColumns({
         <h2 className="font-display text-2xl font-bold text-white mb-2">
           MAP YOUR COLUMNS
         </h2>
-        <p className="text-sm text-[#8e8e93]">
-          Click a field on the left, then click a column header to assign it. Fields marked with{" "}
-          <span className="text-[#ff453a]">*</span> are required.
+        <p className="text-sm text-[#a1a1a6] leading-relaxed">
+          We pre-filled our best guesses below — fix any that look wrong.
+          Only <span className="text-[#ff453a] font-medium">Door Number</span> is required.
+          Map as many other fields as your PDF has.
         </p>
+        <div className="mt-3 p-3 rounded-lg bg-[rgba(90,200,250,0.06)] border border-[rgba(90,200,250,0.15)]">
+          <p className="text-xs text-[#5ac8fa] leading-relaxed">
+            <strong>1.</strong> Click a field on the left to select it.{" "}
+            <strong>2.</strong> Click the matching column on the right to assign it.
+            Already-assigned fields show their column number — click them again to reassign.
+          </p>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-6 min-h-[500px]">
         {/* Left: Field cards */}
         <div className="space-y-3">
           <div className="text-xs uppercase tracking-widest text-[#636366] font-semibold mb-3 ml-1">
-            Fields to Assign
+            1. Pick a Field
           </div>
           <div className="stagger-children space-y-2">
             {ALL_FIELDS.map((field) => {
               const isMapped = field in mapping;
+              const isSkipped = skippedFields.has(field);
               const isActive = activeField === field;
               const isRequired = REQUIRED_FIELDS.includes(field);
               const confidence = data.confidence_scores[field];
               const color = FIELD_COLORS[field];
-              const glowClass = getFieldGlowClass(field);
 
               return (
-                <button
-                  key={field}
-                  onClick={() => onFieldClick(isActive ? null : field)}
-                  className={`glow-card ${glowClass} w-full p-4 text-left transition-all ${
-                    isActive ? "ring-2 ring-offset-2 ring-offset-[#050508] scale-105" : ""
-                  }`}
-                  style={{
-                    minHeight: "56px",
-                    boxShadow: isActive
-                      ? `0 0 20px ${color}40, inset 0 0 12px ${color}08`
-                      : "none",
-                  }}
-                >
-                  <div className="space-y-1">
-                    <div className="flex items-baseline justify-between gap-2">
-                      <span className="font-semibold text-sm text-[#e8e8ed]">
-                        {fieldLabels[field]}
-                      </span>
-                      {isRequired && <span className="text-[#ff453a]">*</span>}
-                    </div>
-                    {isMapped && (
-                      <div className="text-xs" style={{ color }}>
-                        <strong>→ Column {mapping[field] + 1}</strong>
-                        {confidence !== undefined && (
-                          <span className="ml-1 opacity-60">({Math.round(confidence * 100)}%)</span>
+                <div key={field} className="flex gap-1.5">
+                  <button
+                    onClick={() => {
+                      if (isSkipped) return;
+                      onFieldClick(isActive ? null : field);
+                    }}
+                    className={`flex-1 rounded-lg p-3 text-left transition-all ${
+                      isActive ? "ring-2 ring-[#5ac8fa] scale-[1.02]" : ""
+                    }`}
+                    style={{
+                      backgroundColor: isSkipped
+                        ? "rgba(255,255,255,0.02)"
+                        : `${color}10`,
+                      border: `1px solid ${isSkipped ? "rgba(255,255,255,0.06)" : `${color}25`}`,
+                      opacity: isSkipped ? 0.5 : 1,
+                    }}
+                    disabled={isSkipped}
+                  >
+                    <div className="space-y-0.5">
+                      <div className="flex items-baseline justify-between gap-2">
+                        <span
+                          className="font-semibold text-sm"
+                          style={{
+                            color: isSkipped ? "#636366" : color,
+                            textDecoration: isSkipped ? "line-through" : "none",
+                          }}
+                        >
+                          {fieldLabels[field]}
+                        </span>
+                        {isRequired && !isSkipped && (
+                          <span className="text-[#ff453a] text-xs">required</span>
                         )}
                       </div>
-                    )}
-                    {!isMapped && (
-                      <p className="text-xs text-[#8e8e93]">Click to assign column</p>
-                    )}
-                  </div>
-                </button>
+                      {isSkipped && (
+                        <p className="text-xs text-[#636366] italic">Not in this table</p>
+                      )}
+                      {!isSkipped && isMapped && (
+                        <div className="text-xs" style={{ color }}>
+                          <strong>→ Column {mapping[field] + 1}</strong>
+                          {confidence !== undefined && (
+                            <span className="ml-1 opacity-60">({Math.round(confidence * 100)}%)</span>
+                          )}
+                        </div>
+                      )}
+                      {!isSkipped && !isMapped && (
+                        <p className="text-xs text-[#8e8e93]">Click to assign</p>
+                      )}
+                    </div>
+                  </button>
+                  {!isRequired && (
+                    <button
+                      onClick={() => onToggleSkip(field)}
+                      className="flex-shrink-0 w-8 rounded-lg flex items-center justify-center text-xs transition-all"
+                      style={{
+                        backgroundColor: isSkipped
+                          ? "rgba(90,200,250,0.1)"
+                          : "rgba(255,255,255,0.03)",
+                        border: "1px solid rgba(255,255,255,0.08)",
+                        color: isSkipped ? "#5ac8fa" : "#636366",
+                      }}
+                      title={isSkipped ? "Re-enable this field" : "Not in this table"}
+                    >
+                      {isSkipped ? "↩" : "✕"}
+                    </button>
+                  )}
+                </div>
               );
             })}
           </div>
@@ -323,7 +399,7 @@ function Step2MapColumns({
         {/* Right: Column headers */}
         <div className="space-y-3">
           <div className="text-xs uppercase tracking-widest text-[#636366] font-semibold mb-3 ml-1">
-            Available Columns
+            2. Assign to a Column
           </div>
           <div className="stagger-children space-y-2 max-h-[600px] overflow-y-auto">
             {data.headers.map((header, colIdx) => {
@@ -367,11 +443,41 @@ function Step2MapColumns({
                         <strong>→ {fieldLabels[assignedField]}</strong>
                       </div>
                     )}
-                    {data.sample_rows.length > 0 && (
-                      <p className="text-xs text-[#8e8e93] truncate">
-                        e.g. &quot;{data.sample_rows[0][colIdx]}&quot;
-                      </p>
-                    )}
+                    {data.sample_rows.length > 0 && (() => {
+                      const nonEmpty = data.sample_rows
+                        .map((row, rIdx) => ({ val: row[colIdx]?.trim(), rIdx }))
+                        .filter((r) => r.val);
+                      const total = data.sample_rows.length;
+
+                      if (nonEmpty.length === 0) {
+                        return (
+                          <div className="mt-1.5 p-2 rounded bg-[rgba(255,69,58,0.08)] border border-[rgba(255,69,58,0.2)]">
+                            <p className="text-[11px] text-[#ff453a] font-medium">
+                              All {total} sample rows are empty
+                            </p>
+                            <p className="text-[10px] text-[#636366] mt-0.5">
+                              This column may not have data in your PDF
+                            </p>
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <div className="mt-1">
+                          <p className="text-[10px] text-[#4a4a4e] mb-1">
+                            {nonEmpty.length} of {total} rows have data
+                          </p>
+                          <div className="space-y-0.5">
+                            {nonEmpty.map(({ val, rIdx }) => (
+                              <p key={rIdx} className="text-[11px] text-[#8e8e93] truncate">
+                                <span className="text-[#4a4a4e] mr-1">r{rIdx + 1}</span>
+                                {val}
+                              </p>
+                            ))}
+                          </div>
+                        </div>
+                      );
+                    })()}
                   </div>
                 </button>
               );
@@ -381,10 +487,16 @@ function Step2MapColumns({
       </div>
 
       {/* Status message */}
-      {activeField && (
+      {activeField ? (
         <div className="p-3 rounded-lg bg-[rgba(90,200,250,0.1)] border border-[rgba(90,200,250,0.2)]">
           <p className="text-sm text-[#5ac8fa]">
-            Assigning <strong>{fieldLabels[activeField]}</strong> — click a column header on the right
+            Assigning <strong>{fieldLabels[activeField]}</strong> — click a column on the right to assign it
+          </p>
+        </div>
+      ) : (
+        <div className="p-3 rounded-lg bg-[rgba(255,255,255,0.03)] border border-[rgba(255,255,255,0.08)]">
+          <p className="text-sm text-[#636366]">
+            Select a field on the left to begin mapping
           </p>
         </div>
       )}
@@ -402,24 +514,19 @@ function Step2MapColumns({
       <div className="flex items-center justify-between pt-4 gap-4 border-t border-[rgba(255,255,255,0.06)] pt-6">
         <div className="flex gap-2">
           <button onClick={onReset} className="glow-btn glow-btn--ghost text-xs">
-            Reset to Auto
+            Reset Mappings
           </button>
           <button onClick={onBack} className="glow-btn glow-btn--ghost">
             Back
           </button>
         </div>
-        <div className="flex gap-2">
-          <button onClick={onSkip} className="glow-btn glow-btn--ghost">
-            Skip
-          </button>
-          <button
-            onClick={onConfirm}
-            disabled={!canConfirm}
-            className="glow-btn glow-btn--primary disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            Continue
-          </button>
-        </div>
+        <button
+          onClick={onConfirm}
+          disabled={!canConfirm}
+          className="glow-btn glow-btn--primary disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          Continue
+        </button>
       </div>
     </div>
   );
@@ -453,15 +560,23 @@ function Step3Confirm({
     <div className="space-y-6 animate-fade-in-up">
       <div>
         <h2 className="font-display text-2xl font-bold text-white mb-2">
-          CONFIRM MAPPING
+          CONFIRM & EXTRACT
         </h2>
-        <p className="text-sm text-[#8e8e93]">
-          Review your column assignments. Click Confirm to proceed with extraction.
+        <p className="text-sm text-[#a1a1a6] leading-relaxed">
+          Review the mapping below. The preview shows how your data will be read.
+          When everything looks right, hit <span className="text-[#e8e8ed] font-medium">Confirm &amp; Extract</span> to
+          start parsing your submittal.
+        </p>
+        <p className="text-xs text-[#636366] mt-2">
+          You&apos;ll review all extracted data before anything is saved to your project.
         </p>
       </div>
 
       {/* Summary table showing all assignments */}
-      <div className="glow-card p-6">
+      <div
+        className="rounded-lg border border-[rgba(255,255,255,0.08)] p-6"
+        style={{ backgroundColor: "rgba(10,10,14,0.95)" }}
+      >
         <div className="mb-4">
           <h3 className="font-semibold text-sm text-[#e8e8ed] mb-3">
             Field Assignments
@@ -474,27 +589,27 @@ function Step3Confirm({
               return (
                 <div
                   key={field}
-                  className="flex items-center justify-between p-3 rounded border"
+                  className="flex items-center justify-between p-3 rounded-lg"
                   style={{
-                    backgroundColor: `${color}08`,
-                    borderColor: `${color}20`,
+                    backgroundColor: `${color}10`,
+                    border: `1px solid ${color}25`,
                   }}
                 >
                   <div className="flex-1">
                     <div className="font-semibold text-sm" style={{ color }}>
                       {fieldLabels[field]}
                     </div>
-                    <div className="text-xs text-[#8e8e93] mt-1">
-                      Column {colIdx + 1}: <strong>{data.headers[colIdx]}</strong>
+                    <div className="text-xs text-[#a1a1a6] mt-1">
+                      Column {colIdx + 1}: <strong className="text-[#d1d1d6]">{data.headers[colIdx]}</strong>
                     </div>
                     {confidence !== undefined && (
-                      <div className="text-xs text-[#8e8e93] mt-0.5">
+                      <div className="text-xs text-[#636366] mt-0.5">
                         Confidence: {Math.round(confidence * 100)}%
                       </div>
                     )}
                   </div>
                   {data.sample_rows.length > 0 && (
-                    <div className="text-right text-xs text-[#636366] max-w-[150px] truncate">
+                    <div className="text-right text-xs text-[#a1a1a6] max-w-[150px] truncate">
                       Sample: &quot;{data.sample_rows[0][colIdx]}&quot;
                     </div>
                   )}
@@ -507,7 +622,10 @@ function Step3Confirm({
 
       {/* Sample data preview table */}
       {data.sample_rows.length > 0 && (
-        <div className="glow-card p-4">
+        <div
+          className="rounded-lg border border-[rgba(255,255,255,0.08)] p-4"
+          style={{ backgroundColor: "rgba(10,10,14,0.95)" }}
+        >
           <div className="text-xs uppercase tracking-widest text-[#636366] font-semibold mb-3">
             Preview with Extracted Data
           </div>
@@ -515,7 +633,7 @@ function Step3Confirm({
             <table className="w-full text-xs">
               <thead>
                 <tr>
-                  {Object.entries(mapping).map(([field, colIdx]) => {
+                  {Object.entries(mapping).map(([field]) => {
                     const color = FIELD_COLORS[field];
                     return (
                       <th
@@ -523,7 +641,7 @@ function Step3Confirm({
                         className="px-2 py-2 text-left font-semibold whitespace-nowrap"
                         style={{
                           color,
-                          backgroundColor: `${color}08`,
+                          backgroundColor: "rgba(10,10,14,0.98)",
                           borderBottom: `2px solid ${color}30`,
                         }}
                       >
@@ -572,22 +690,55 @@ function Step3Confirm({
 
 export default function ColumnMapperWizard({
   data,
+  pdfBuffer,
+  pageCount: pageCountProp,
   onConfirm: onConfirmProp,
   onSkip: onSkipProp,
+  onRedetect,
 }: ColumnMapperWizardProps) {
-  const fieldLabels = { ...DEFAULT_FIELD_LABELS, ...(data.field_labels || {}) };
+  // Frontend labels take priority over backend's (which may have abbreviations)
+  const fieldLabels = { ...(data.field_labels || {}), ...DEFAULT_FIELD_LABELS };
 
-  // Wizard state
-  const [step, setStep] = useState(1);
+  // Wizard state — page browser is always Step 1
+  const initialPhase: WizardPhase = pdfBuffer ? "pageBrowser" : "step2";
+  const [phase, setPhase] = useState<WizardPhase>(initialPhase);
+  const [currentData, setCurrentData] = useState<DetectMappingResponse>(data);
   const [mapping, setMapping] = useState<ColumnMapping>(() => ({ ...data.auto_mapping }));
+  const [skippedFields, setSkippedFields] = useState<Set<string>>(new Set());
   const [activeField, setActiveField] = useState<string | null>(null);
+  const [redetecting, setRedetecting] = useState(false);
+  const [redetectError, setRedetectError] = useState<string | null>(null);
 
-  // Step 1 handlers
-  const handleStep1Confirm = useCallback(() => {
-    setStep(2);
-  }, []);
+  // Step indicator: pageBrowser=0, step2=1, step3=2
+  const stepIndex = phase === "pageBrowser" ? 0 : phase === "step2" ? 1 : 2;
 
-  const handleStep1Skip = useCallback(() => {
+  // Page browser handler — accepts multiple pages, detects on the first one
+  const handlePageSelect = useCallback(async (pageIndices: number[]) => {
+    if (!onRedetect || pageIndices.length === 0) return;
+    setRedetecting(true);
+    setRedetectError(null);
+    try {
+      // Detect columns from the first selected page
+      const result = await onRedetect(pageIndices[0]);
+      if (result?.success && (result.headers?.length ?? 0) > 0) {
+        setCurrentData(result);
+        setMapping({ ...result.auto_mapping });
+        const firstUnmapped = REQUIRED_FIELDS.find((f) => !(f in (result.auto_mapping ?? {})));
+        setActiveField(firstUnmapped ?? REQUIRED_FIELDS[0] ?? null);
+        setPhase("step2");
+      } else {
+        setRedetectError(
+          `No door schedule found on page ${pageIndices[0] + 1}. Try selecting different pages.`
+        );
+      }
+    } catch {
+      setRedetectError("Detection failed. Try different pages.");
+    } finally {
+      setRedetecting(false);
+    }
+  }, [onRedetect]);
+
+  const handlePageBrowserCancel = useCallback(() => {
     onSkipProp();
   }, [onSkipProp]);
 
@@ -605,35 +756,49 @@ export default function ColumnMapperWizard({
 
     setMapping((prev) => {
       const next = { ...prev };
-      // Remove any existing assignment for this column
       for (const [field, idx] of Object.entries(next)) {
         if (idx === colIdx) {
           delete next[field];
         }
       }
-      // Assign the active field to this column
       next[activeField] = colIdx;
       return next;
     });
     setActiveField(null);
   }, [activeField]);
 
+  const handleToggleSkip = useCallback((field: string) => {
+    setSkippedFields((prev) => {
+      const next = new Set(prev);
+      if (next.has(field)) {
+        next.delete(field);
+      } else {
+        next.add(field);
+        // Also remove from mapping when skipping
+        setMapping((m) => {
+          const updated = { ...m };
+          delete updated[field];
+          return updated;
+        });
+        if (activeField === field) setActiveField(null);
+      }
+      return next;
+    });
+  }, [activeField]);
+
   const handleReset = useCallback(() => {
-    setMapping({ ...data.auto_mapping });
+    setMapping({ ...currentData.auto_mapping });
+    setSkippedFields(new Set());
     setActiveField(null);
-  }, [data.auto_mapping]);
+  }, [currentData.auto_mapping]);
 
   const handleStep2Confirm = useCallback(() => {
-    setStep(3);
+    setPhase("step3");
   }, []);
 
   const handleStep2Back = useCallback(() => {
-    setStep(1);
-  }, []);
-
-  const handleStep2Skip = useCallback(() => {
-    onSkipProp();
-  }, [onSkipProp]);
+    setPhase(pdfBuffer ? "pageBrowser" : "step2");
+  }, [pdfBuffer]);
 
   // Step 3 handlers
   const handleStep3Confirm = useCallback(() => {
@@ -641,7 +806,7 @@ export default function ColumnMapperWizard({
   }, [mapping, onConfirmProp]);
 
   const handleStep3Back = useCallback(() => {
-    setStep(2);
+    setPhase("step2");
   }, []);
 
   return (
@@ -654,20 +819,29 @@ export default function ColumnMapperWizard({
         }}
       >
         {/* Step indicator */}
-        <StepIndicator currentStep={step - 1} totalSteps={3} />
+        <StepIndicator currentStep={stepIndex} totalSteps={3} />
 
-        {/* Step content */}
+        {/* Phase content */}
         <div className="relative">
-          {step === 1 && (
-            <Step1IdentifyTable
-              data={data}
-              onConfirm={handleStep1Confirm}
-              onSkip={handleStep1Skip}
-            />
+          {phase === "pageBrowser" && pdfBuffer && (
+            <>
+              <PDFPageBrowser
+                pdfBuffer={pdfBuffer}
+                pageCount={pageCountProp ?? currentData.total_pages}
+                onSelectPages={handlePageSelect}
+                onCancel={handlePageBrowserCancel}
+                loading={redetecting}
+              />
+              {redetectError && (
+                <div className="mt-4 p-3 rounded-lg bg-[rgba(255,69,58,0.1)] border border-[rgba(255,69,58,0.2)]">
+                  <p className="text-sm text-[#ff453a]">{redetectError}</p>
+                </div>
+              )}
+            </>
           )}
-          {step === 2 && (
+          {phase === "step2" && (
             <Step2MapColumns
-              data={data}
+              data={currentData}
               mapping={mapping}
               activeField={activeField}
               onFieldClick={handleFieldClick}
@@ -675,13 +849,14 @@ export default function ColumnMapperWizard({
               onReset={handleReset}
               onConfirm={handleStep2Confirm}
               onBack={handleStep2Back}
-              onSkip={handleStep2Skip}
               fieldLabels={fieldLabels}
+              skippedFields={skippedFields}
+              onToggleSkip={handleToggleSkip}
             />
           )}
-          {step === 3 && (
+          {phase === "step3" && (
             <Step3Confirm
-              data={data}
+              data={currentData}
               mapping={mapping}
               onConfirm={handleStep3Confirm}
               onBack={handleStep3Back}

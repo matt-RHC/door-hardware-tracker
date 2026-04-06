@@ -59,13 +59,13 @@ STANDARD_COLUMN_ORDER = [
 
 FIELD_LABELS = {
     "door_number": "Door Number",
-    "hw_set": "HW Set",
-    "hw_heading": "HW Heading",
+    "hw_set": "Hardware Heading",
+    "hw_heading": "Hardware Subheading",
     "location": "Location",
     "door_type": "Door Type",
     "frame_type": "Frame Type",
     "fire_rating": "Fire Rating",
-    "hand": "Hand/Swing",
+    "hand": "Hand / Swing",
 }
 
 
@@ -312,6 +312,98 @@ def find_door_schedule_table(page) -> tuple[list[str], list[list[str]], str]:
 
     if best_candidate:
         return best_candidate
+
+    # --- Fallback: text-line header detection ---
+    # Some PDFs have text-aligned tables without visible rules or consistent
+    # column widths. pdfplumber's extract_tables() fails on these. Scan the
+    # raw text for a line that looks like column headers.
+
+    # Known multi-word column headers that should NOT be split
+    MERGE_PAIRS = {
+        ("door", "type"), ("frame", "type"), ("door", "no"),
+        ("door", "number"), ("door", "no."), ("hdw", "set"),
+        ("hdw", "heading"), ("hw", "set"), ("hw", "heading"),
+        ("hardware", "set"), ("hardware", "heading"),
+        ("fire", "rating"), ("opening", "label"), ("opening", "no"),
+        ("opening", "no."), ("opening", "number"),
+    }
+
+    def merge_header_tokens(tokens: list[str]) -> list[str]:
+        """Merge adjacent tokens that form known multi-word headers."""
+        merged: list[str] = []
+        i = 0
+        while i < len(tokens):
+            if i + 1 < len(tokens):
+                pair = (tokens[i].lower(), tokens[i + 1].lower())
+                if pair in MERGE_PAIRS:
+                    merged.append(f"{tokens[i]} {tokens[i + 1]}")
+                    i += 2
+                    continue
+            merged.append(tokens[i])
+            i += 1
+        return merged
+
+    text = page.extract_text() or ""
+    lines = text.split("\n")
+    for line_idx, line in enumerate(lines[:20]):
+        tokens = line.split()
+        if len(tokens) < 3:
+            continue
+        # Reject prose/sentence lines: real column headers don't have
+        # trailing commas or common English stop-words
+        punct_count = sum(1 for t in tokens if t.endswith(",") or t.endswith(";"))
+        if punct_count >= 2:
+            continue
+        stop_words = {"and", "the", "for", "with", "from", "that", "this", "are", "has", "been"}
+        stop_count = sum(1 for t in tokens if t.lower() in stop_words)
+        if stop_count >= 2:
+            continue
+        # Merge known multi-word headers before scoring
+        merged_tokens = merge_header_tokens(tokens)
+        # Score the whole line as potential headers
+        field_scores: dict[str, float] = {}
+        for field in COLUMN_KEYWORDS:
+            best_s = 0.0
+            for token in merged_tokens:
+                best_s = max(best_s, score_header_for_field(token, field))
+            if best_s >= 0.4:
+                field_scores[field] = best_s
+        if "door_number" not in field_scores:
+            continue
+        other = {k for k in field_scores if k != "door_number"}
+        if len(other) < 2:
+            continue
+        # Found a plausible header line — extract data rows below it
+        headers = merged_tokens
+        num_cols = len(headers)
+        sample_rows = []
+        for data_line in lines[line_idx + 1: line_idx + 6]:
+            row_tokens = data_line.split()
+            if row_tokens and len(row_tokens) >= 2:
+                # Align data row to header count — pad or truncate
+                if len(row_tokens) < num_cols:
+                    row_tokens.extend([""] * (num_cols - len(row_tokens)))
+                elif len(row_tokens) > num_cols:
+                    row_tokens = row_tokens[:num_cols]
+                sample_rows.append(row_tokens)
+        if len(sample_rows) < 3:
+            continue
+        # Validate door numbers in first column
+        mapping = detect_column_mapping(headers)
+        door_col = mapping.get("door_number")
+        if door_col is not None:
+            door_values = [
+                r[door_col] for r in sample_rows
+                if door_col < len(r) and r[door_col].strip()
+            ]
+            if door_values:
+                valid_count = sum(
+                    1 for v in door_values if looks_like_door_number(v)
+                )
+                if valid_count / len(door_values) < 0.3:
+                    continue
+        return headers, sample_rows, "text_line"
+
     return [], [], ""
 
 

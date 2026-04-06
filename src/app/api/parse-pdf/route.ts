@@ -104,6 +104,9 @@ async function callPdfplumber(
   const payload: Record<string, unknown> = { pdf_base64: base64 }
   if (userColumnMapping) {
     payload.user_column_mapping = userColumnMapping
+    console.log('[parse-pdf] Sending user_column_mapping to extract-tables:', JSON.stringify(userColumnMapping))
+  } else {
+    console.log('[parse-pdf] No user_column_mapping — extract-tables will auto-detect')
   }
 
   const response = await fetch(`${baseUrl}/api/extract-tables`, {
@@ -112,11 +115,21 @@ async function callPdfplumber(
     body: JSON.stringify(payload),
   })
 
+  // Read raw text first — if the Python function crashes, response.json()
+  // throws "Unexpected end of JSON input" with no diagnostic info
+  const responseText = await response.text()
+
   if (!response.ok) {
-    throw new Error(`Pdfplumber extraction failed: ${response.status} ${response.statusText}`)
+    console.error(`[parse-pdf] extract-tables returned ${response.status}:`, responseText.slice(0, 500))
+    throw new Error(`Pdfplumber extraction failed: ${response.status} — ${responseText.slice(0, 200)}`)
   }
 
-  return response.json()
+  try {
+    return JSON.parse(responseText) as PdfplumberResult
+  } catch {
+    console.error(`[parse-pdf] extract-tables returned invalid JSON (${responseText.length} bytes):`, responseText.slice(0, 500))
+    throw new Error(`extract-tables returned invalid JSON (${responseText.length} bytes): ${responseText.slice(0, 200)}`)
+  }
 }
 
 async function callLLMReview(
@@ -178,9 +191,9 @@ ${getTaxonomyPromptText()}`
 
   try {
     const response = await client.messages.create({
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-haiku-4-5-20251001',
       max_tokens: 16384,
-      system: systemPrompt,
+      system: [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }],
       messages: [
         {
           role: 'user',
@@ -188,6 +201,7 @@ ${getTaxonomyPromptText()}`
             {
               type: 'document',
               source: { type: 'base64', media_type: 'application/pdf', data: base64 },
+              cache_control: { type: 'ephemeral' },
             },
             {
               type: 'text',
@@ -291,7 +305,7 @@ function applyCorrections(
 
 // --- Core extraction logic (shared by streaming and parse-only modes) ---
 
-async function extractFromPDF(base64: string): Promise<{
+async function extractFromPDF(base64: string, filteredPdfBase64?: string, userColumnMapping?: Record<string, number> | null): Promise<{
   hardwareSets: HardwareSet[]
   doors: DoorEntry[]
   corrections: LLMCorrections
@@ -299,7 +313,7 @@ async function extractFromPDF(base64: string): Promise<{
 }> {
   let pdfplumberResult: PdfplumberResult | null = null
   try {
-    pdfplumberResult = await callPdfplumber(base64)
+    pdfplumberResult = await callPdfplumber(base64, userColumnMapping)
     console.log(
       `Pdfplumber: ${pdfplumberResult.hw_sets_found} hardware sets, ` +
       `${pdfplumberResult.openings.length} doors, ` +
@@ -330,7 +344,9 @@ async function extractFromPDF(base64: string): Promise<{
   let allDoors: DoorEntry[] = pdfplumberResult?.openings || []
 
   const client = new Anthropic()
-  const corrections = await callLLMReview(client, base64, pdfplumberResult || {
+  // Use filtered PDF for LLM review if available (fewer pages = cheaper + faster)
+  const reviewPdf = filteredPdfBase64 ?? base64
+  const corrections = await callLLMReview(client, reviewPdf, pdfplumberResult || {
     success: false,
     openings: [],
     hardware_sets: [],
@@ -445,7 +461,13 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Missing pdfBase64' }, { status: 400 })
       }
 
-      const { hardwareSets, doors, corrections, stats } = await extractFromPDF(base64)
+      // Client may send a filtered PDF (opening list + hardware schedule pages only)
+      // for cheaper LLM review. pdfplumber still gets the full PDF.
+      const filteredPdfBase64: string | undefined = body.filteredPdfBase64 ?? undefined
+
+      const userColumnMapping = body.userColumnMapping ?? null
+      console.log('[parse-pdf] Route handler received userColumnMapping:', userColumnMapping ? JSON.stringify(userColumnMapping) : 'null')
+      const { hardwareSets, doors, corrections, stats } = await extractFromPDF(base64, filteredPdfBase64, userColumnMapping)
 
       return NextResponse.json({
         success: true,
