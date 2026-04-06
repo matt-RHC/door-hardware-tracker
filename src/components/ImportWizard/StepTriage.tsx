@@ -222,8 +222,11 @@ export default function StepTriage({
           );
           return !c || c.class === "door";
         });
+        // Flag by_others doors and low-confidence non-door classifications.
+        // Don't flag class="door" items — if triage failed, all doors come back
+        // as class="door" + confidence="low" and flagging them all is useless.
         const flagged = classifications
-          .filter((c) => c.class === "by_others" || c.confidence === "low")
+          .filter((c) => c.class === "by_others" || (c.confidence === "low" && c.class !== "door"))
           .map((c) => ({
             door_number: c.door_number,
             reason: c.reason,
@@ -255,9 +258,10 @@ export default function StepTriage({
   }, [runTriage]);
 
   // ─── Advance ───
+  // Pass only triage-accepted doors to the next step, not all extracted doors.
   const handleNext = () => {
     if (!triageResult) return;
-    onComplete(triageResult, doors, hardwareSets);
+    onComplete(triageResult, triageResult.accepted, hardwareSets);
   };
 
   return (

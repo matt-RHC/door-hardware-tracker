@@ -17,6 +17,9 @@
     "src/app/api/parse-pdf/chunk/route.ts": {
       "maxDuration": 800
     },
+    "src/app/api/parse-pdf/triage/route.ts": {
+      "maxDuration": 800
+    },
     "src/app/api/parse-pdf/save/route.ts": {
       "maxDuration": 120
     },
