@@ -459,7 +459,7 @@ class handler(BaseHTTPRequestHandler):
             pdf_bytes = base64.b64decode(pdf_base64)
             pdf_file = io.BytesIO(pdf_bytes)
 
-            with pdfplumber.open(pdf_file, unicode_norm="NFC") as pdf:
+            with pdfplumber.open(pdf_file, unicode_norm="NFKC") as pdf:
                 total_pages = len(pdf.pages)
 
                 # Phase 0: Detect PDF source from metadata

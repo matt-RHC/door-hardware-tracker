@@ -69,30 +69,113 @@ FIELD_LABELS = {
 }
 
 
+# ── Comprehensive Mojibake Replacement Map ──────────────────────────────
+# Must stay in sync with extract-tables.py MOJIBAKE_MAP.
+# Covers Latin-1/UTF-8 confusion, Windows-1252 artifacts, CIDFont encoding
+# failures, double-encoding, and ligatures from Comsense/Openings Studio PDFs.
+# Sorted longest-first at runtime to avoid partial replacements.
+MOJIBAKE_MAP = {
+    # === Latin-1 interpreted as UTF-8 (most common in construction PDFs) ===
+    "\u00c2\u00b7": "\u00b7",       # middle dot (Â· → ·)
+    "\u00c3\u0097": "\u00d7",       # multiplication sign (Ã— → ×)
+    "\u00c3\u00b7": "\u00f7",       # division sign
+    "\u00c2\u00bd": "\u00bd",       # one half (Â½ → ½)
+    "\u00c2\u00bc": "\u00bc",       # one quarter (Â¼ → ¼)
+    "\u00c2\u00be": "\u00be",       # three quarters (Â¾ → ¾)
+    "\u00c2\u00ae": "\u00ae",       # registered (Â® → ®)
+    "\u00c2\u00a9": "\u00a9",       # copyright (Â© → ©)
+    "\u00c2\u00b0": "\u00b0",       # degree (Â° → °)
+    "\u00e2\u0080\u0093": "\u2013", # en dash (â€" → –)
+    "\u00e2\u0080\u0094": "\u2014", # em dash (â€" → —)
+    "\u00e2\u0080\u0099": "\u2019", # right single quote (â€™ → ')
+    "\u00e2\u0080\u0098": "\u2018", # left single quote (â€˜ → ')
+    "\u00e2\u0080\u009c": "\u201c", # left double quote (â€œ → ")
+    "\u00e2\u0080\u009d": "\u201d", # right double quote (â€ → ")
+    "\u00e2\u0080\u00a2": "\u2022", # bullet (â€¢ → •)
+    "\u00e2\u0080\u00a6": "\u2026", # ellipsis (â€¦ → …)
+    "\u00e2\u0080": "\u2014",       # partial em dash (truncated â€ → —)
+    "\u00c3\u00a0": "\u00e0",       # à
+    "\u00c3\u00a4": "\u00e4",       # ä
+    "\u00c3\u00a8": "\u00e8",       # è
+    "\u00c3\u00a9": "\u00e9",       # é
+    "\u00c3\u00ad": "\u00ed",       # í
+    "\u00c3\u00b3": "\u00f3",       # ó
+    "\u00c3\u00b6": "\u00f6",       # ö
+    "\u00c3\u00ba": "\u00fa",       # ú
+    "\u00c3\u00bc": "\u00fc",       # ü
+    "\u00c3\u00b1": "\u00f1",       # ñ
+    "\u00c3\u00a7": "\u00e7",       # ç (c-cedilla)
+    "\u00c2\u00a0": " ",            # NBSP artifact (Â  → space)
+
+    # === Windows-1252 specific ===
+    "\x91": "\u2018",   # left single quote
+    "\x92": "\u2019",   # right single quote
+    "\x93": "\u201c",   # left double quote
+    "\x94": "\u201d",   # right double quote
+    "\x95": "\u2022",   # bullet
+    "\x96": "\u2013",   # en dash
+    "\x97": "\u2014",   # em dash
+    "\x85": "\u2026",   # ellipsis
+    "\x99": "\u2122",   # trademark
+    "\xa0": " ",         # NBSP
+
+    # === Double-encoding artifacts ===
+    "\u00c3\u00a2\u00e2\u201a\u00ac\u00e2\u20ac\u0153": "\u2013", # double-encoded en dash
+    "\u00c3\u00a2\u00e2\u201a\u00ac\u00e2\u20ac":       "\u2014", # double-encoded em dash
+    "\u00c3\u00a2\u00e2\u201a\u00ac\u00c2\u00a2":       "\u2022", # double-encoded bullet
+    "\u00c3\u00a2\u00e2\u201a\u00ac\u00c5\u201c":       "\u201c", # double-encoded left quote
+    "\u00c3\u00a2\u00e2\u201a\u00ac\u0178":              "\u201d", # double-encoded right quote
+
+    # === CIDFont encoding artifacts (Comsense / Openings Studio) ===
+    "\u00e0\u2016": "\u2013",  # CID en dash
+    "\u00e0\u00a1": "!",
+    "\u00e0\u00a2": "\"",
+    "\u00e0\u00a8": "(",
+    "\u00e0\u00a9": ")",
+    "\u00e0\u00ab": "+",
+    "\u00e0\u00ac": ",",
+    "\u00e0\u00ad": "-",
+    "\u00e0\u00ae": ".",
+    "\u00e0\u00af": "/",
+    "\u00e0\u00ba": ":",
+
+    # === PDF ligature codepoints ===
+    "\ufb01": "fi",
+    "\ufb02": "fl",
+    "\ufb00": "ff",
+    "\ufb03": "ffi",
+    "\ufb04": "ffl",
+}
+# Pre-sort keys longest-first so longer sequences match before their prefixes
+_MOJIBAKE_SORTED = sorted(MOJIBAKE_MAP.keys(), key=len, reverse=True)
+
+
 def clean_cell(val) -> str:
+    """Clean a cell value, handling None, whitespace, and mojibake characters."""
     if val is None:
         return ""
     s = str(val).strip()
-    mojibake_map = {
-        "\u00c2\u00b7": "\u00b7",
-        "\u00c3\u0097": "\u00d7",
-        "\u00c3\u00b7": "\u00f7",
-        "\u00c2\u00bd": "\u00bd",
-        "\u00c2\u00bc": "\u00bc",
-        "\u00c2\u00be": "\u00be",
-        "\u00c2\u00ae": "\u00ae",
-        "\u00c2\u00a9": "\u00a9",
-        "\u00e2\u0080\u0093": "\u2013",
-        "\u00e2\u0080\u0094": "\u2014",
-        "\u00e2\u0080\u0099": "\u2019",
-        "\u00e2\u0080\u0098": "\u2018",
-        "\u00e2\u0080\u009c": "\u201c",
-        "\u00e2\u0080\u009d": "\u201d",
-    }
-    for bad, good in mojibake_map.items():
+    if not s:
+        return ""
+
+    # Apply mojibake map (longest match first to avoid partial replacements)
+    for bad in _MOJIBAKE_SORTED:
         if bad in s:
-            s = s.replace(bad, good)
-    s = unicodedata.normalize("NFC", s)
+            s = s.replace(bad, MOJIBAKE_MAP[bad])
+
+    # Normalize Unicode to NFKC form (compatibility decomposition + canonical composition)
+    # Catches ligatures (fi→fi), width variants, superscripts, fractions at source
+    s = unicodedata.normalize("NFKC", s)
+    # Strip non-printable control characters (keep newline/tab)
+    s = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]", "", s)
+    # Remove (cid:XX) artifacts from CIDFont failures
+    s = re.sub(r"\(cid:\d+\)", "", s)
+    # Strip double vertical bar (‖) that appears in garbled headings
+    s = s.replace("\u2016", " ").replace("\u2551", " ")
+    # Collapse multiple spaces from replacements
+    s = re.sub(r"  +", " ", s).strip()
+    # Strip trailing em-dashes, en-dashes, and regular dashes that are
+    # artifacts of table-cell extraction (e.g. "1.01.A.06A—" → "1.01.A.06A")
     s = s.rstrip("\u2014\u2013\u2012-")
     return s
 
@@ -442,7 +525,7 @@ class handler(BaseHTTPRequestHandler):
             pdf_bytes = base64.b64decode(pdf_base64)
             pdf_file = io.BytesIO(pdf_bytes)
 
-            with pdfplumber.open(pdf_file, unicode_norm="NFC") as pdf:
+            with pdfplumber.open(pdf_file, unicode_norm="NFKC") as pdf:
                 # Try the requested page first, then scan all pages
                 pages_to_try = [page_index] + [
                     i for i in range(len(pdf.pages)) if i != page_index
