@@ -45,7 +45,7 @@ Turbopack's type checker in Next.js 16.2 is significantly stricter than `tsc --n
 
 Git operations run directly in the working directory — no `/tmp/` clone needed.
 
-1. Set git identity before first commit: `git config user.email "m.feagin1@icloud.com" && git config user.name "Matthew Feagin"`
+1. Set git identity before first commit: `git config user.email "matt@rabbitholeconsultants.com" && git config user.name "Matthew Feagin"`
 2. Default branch is `main`. There is no `master` branch.
 3. Use PRs for all changes — enable **"Automatically delete head branches"** in GitHub repo settings to prevent branch buildup.
 
@@ -115,6 +115,25 @@ classify-pages.py → detect-mapping.py → ColumnMapperWizard (user) → extrac
 - Always test extraction changes against all three
 - Python endpoint health check: `/api/extract-tables.py` has text-layer detection
 - Known limitation: pdfplumber does not work on image-based/scanned PDFs
+
+## Session Protocol
+
+Every session must follow this protocol. These rules are non-negotiable and should not require user reminders.
+
+### Session Start
+1. **Read Smartsheet.** Check project plan (4722023373688708), session log (1895373728599940), and metrics log (2206493777547140) for current state before doing anything.
+2. **Confirm boilerplate.** First response must list all tracked rules from this file so the user can verify they're loaded. Quick numbered list, no elaboration needed.
+3. **Check for unmerged work.** If there's an active plan or open PR from the last session, work on THAT first.
+
+### During Session
+4. **Track extraction metrics.** Any pipeline change must be tested against golden PDFs. Log results to the metrics sheet (2206493777547140).
+5. **Datestamp everything.** Memory files, session entries, project plan updates, and commit messages include dates (YYYY-MM-DD).
+6. **Preserve data.** Never delete from memory files, docs, or Smartsheet rows without asking. Append and datestamp instead of overwriting.
+
+### Session End
+7. **Update Smartsheet session log.** Add or update session row with: topics, decisions, tasks completed, pending items, status.
+8. **Update project plan.** Mark resolved items Done with date. Add new findings as Open rows.
+9. **Update memory.** If anything was learned about the user, project, or workflow that future sessions need, save it.
 
 ## Output Transparency (MANDATORY)
 
