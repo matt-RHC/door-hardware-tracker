@@ -377,6 +377,7 @@ export default function ImportWizard({
                 hasExistingData={state.hasExistingData}
                 onComplete={onReviewComplete}
                 onBack={() => goToStep(WizardStep.Triage)}
+                onRemapColumns={() => goToStep(WizardStep.MapColumns)}
               />
             )}
 

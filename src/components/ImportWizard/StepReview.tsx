@@ -71,6 +71,7 @@ interface StepReviewProps {
   hasExistingData: boolean;
   onComplete: (doors: DoorEntry[], hardwareSets: HardwareSet[]) => void;
   onBack: () => void;
+  onRemapColumns?: () => void;
 }
 
 export default function StepReview({
@@ -79,6 +80,7 @@ export default function StepReview({
   hasExistingData,
   onComplete,
   onBack,
+  onRemapColumns,
 }: StepReviewProps) {
   const { registerRef } = usePunchHighlight();
   const [doors, setDoors] = useState<DoorEntry[]>(initialDoors);
@@ -92,7 +94,7 @@ export default function StepReview({
   const startEdit = useCallback(
     (rowIndex: number, field: DoorStringField) => {
       setEditingCell({ row: rowIndex, field });
-      setEditValue(doors[rowIndex][field]);
+      setEditValue(doors[rowIndex]?.[field] ?? "");
     },
     [doors]
   );
@@ -243,12 +245,22 @@ export default function StepReview({
 
       {/* Navigation */}
       <div className="flex justify-between mt-6">
-        <button
-          onClick={onBack}
-          className="px-4 py-2 bg-white/[0.04] border border-white/[0.08] hover:bg-white/[0.08] text-[#a1a1a6] rounded-lg transition-colors"
-        >
-          Back
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={onBack}
+            className="px-4 py-2 bg-white/[0.04] border border-white/[0.08] hover:bg-white/[0.08] text-[#a1a1a6] rounded-lg transition-colors"
+          >
+            Back
+          </button>
+          {onRemapColumns && (
+            <button
+              onClick={onRemapColumns}
+              className="px-3 py-2 bg-[rgba(255,149,0,0.15)] border border-[rgba(255,149,0,0.3)] hover:bg-[rgba(255,149,0,0.25)] text-[#ff9500] rounded-lg transition-colors text-sm"
+            >
+              Remap Columns
+            </button>
+          )}
+        </div>
         <button
           onClick={() => onComplete(doors, hardwareSets)}
           className="px-6 py-2 bg-[#0a84ff] hover:bg-[#0975de] text-white rounded-lg transition-colors font-semibold"
