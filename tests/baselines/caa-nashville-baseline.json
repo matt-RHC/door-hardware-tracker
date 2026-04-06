@@ -1,10 +1,10 @@
 {
   "pdf_name": "CAA_Nashville_Yards.pdf",
-  "door_count": 82,
+  "door_count": 76,
   "confirmed_count": 73,
-  "flagged_count": 9,
+  "flagged_count": 3,
   "hw_set_count": 25,
-  "tables_found": 22,
+  "tables_found": 14,
   "reference_code_count": 1,
   "hardware_sets": [
     {
@@ -241,20 +241,20 @@
         },
         {
           "name": "Overhead Stop 1023 S4 AB",
-          "qty": 1,
+          "qty": 2,
           "qty_source": "divided",
           "qty_total": 4,
-          "qty_door_count": 4,
+          "qty_door_count": 2,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "Door Silencer SR64 GRY IV",
-          "qty": 3,
-          "qty_source": "divided",
+          "qty": 6,
+          "qty_source": "flagged",
           "qty_total": 12,
-          "qty_door_count": 4,
+          "qty_door_count": 2,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -2160,8 +2160,8 @@
         },
         {
           "name": "Auto Door Bottom 364AA 36\" Z49 ZE",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 2,
+          "qty_source": "flagged",
           "qty_total": 2,
           "qty_door_count": 2,
           "manufacturer": "",
@@ -2281,50 +2281,50 @@
       "items": [
         {
           "name": "Continuous Hinge A515 83-1/8\" CUT TO CUSTOM LENGTH RH US32D AB",
-          "qty": 2,
-          "qty_source": "parsed",
+          "qty": 1,
+          "qty_source": "divided",
           "qty_total": 2,
-          "qty_door_count": 3,
+          "qty_door_count": 2,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "Mortise Storeroom Lockset L9080H 01A 50-231 LHR 622 SC",
-          "qty": 2,
-          "qty_source": "parsed",
+          "qty": 1,
+          "qty_source": "divided",
           "qty_total": 2,
-          "qty_door_count": 3,
+          "qty_door_count": 2,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "Interchangeable Core 80-037 50-002-VKC GMK 622 SC",
-          "qty": 2,
-          "qty_source": "parsed",
+          "qty": 1,
+          "qty_source": "divided",
           "qty_total": 2,
-          "qty_door_count": 3,
+          "qty_door_count": 2,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "Overhead Stop 1023 S4 AB",
-          "qty": 2,
-          "qty_source": "parsed",
+          "qty": 1,
+          "qty_source": "divided",
           "qty_total": 2,
-          "qty_door_count": 3,
+          "qty_door_count": 2,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "Door Silencer SR64 GRY IV",
-          "qty": 2,
+          "qty": 3,
           "qty_source": "divided",
           "qty_total": 6,
-          "qty_door_count": 3,
+          "qty_door_count": 2,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -2334,7 +2334,7 @@
           "qty": 1,
           "qty_source": "parsed",
           "qty_total": 1,
-          "qty_door_count": 3,
+          "qty_door_count": 2,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -2344,7 +2344,7 @@
           "qty": 1,
           "qty_source": "parsed",
           "qty_total": 1,
-          "qty_door_count": 3,
+          "qty_door_count": 2,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -2493,32 +2493,8 @@
       "reason": "Pattern 'D-D' doesn't match dominant pattern(s) (D, D-DL). May be a hardware set ID, reference code, or extraction artifact."
     },
     {
-      "door_number": "10-76",
-      "reason": "Pattern 'D-D' doesn't match dominant pattern(s) (D, D-DL). May be a hardware set ID, reference code, or extraction artifact."
-    },
-    {
-      "door_number": "10-78",
-      "reason": "Pattern 'D-D' doesn't match dominant pattern(s) (D, D-DL). May be a hardware set ID, reference code, or extraction artifact."
-    },
-    {
-      "door_number": "10-75",
-      "reason": "Pattern 'D-D' doesn't match dominant pattern(s) (D, D-DL). May be a hardware set ID, reference code, or extraction artifact."
-    },
-    {
-      "door_number": "10-77",
-      "reason": "Pattern 'D-D' doesn't match dominant pattern(s) (D, D-DL). May be a hardware set ID, reference code, or extraction artifact."
-    },
-    {
-      "door_number": "3B164",
-      "reason": "Pattern 'DLD' doesn't match dominant pattern(s) (D, D-DL). May be a hardware set ID, reference code, or extraction artifact."
-    },
-    {
       "door_number": "A511",
       "reason": "Pattern 'LD' doesn't match dominant pattern(s) (D, D-DL). May be a hardware set ID, reference code, or extraction artifact."
-    },
-    {
-      "door_number": "1.173",
-      "reason": "Pattern 'D.D' doesn't match dominant pattern(s) (D, D-DL). May be a hardware set ID, reference code, or extraction artifact."
     }
   ]
 }

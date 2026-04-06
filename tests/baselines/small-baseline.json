@@ -4,7 +4,7 @@
   "confirmed_count": 4,
   "flagged_count": 0,
   "hw_set_count": 6,
-  "tables_found": 9,
+  "tables_found": 5,
   "reference_code_count": 0,
   "hardware_sets": [
     {
@@ -579,8 +579,8 @@
         },
         {
           "name": "Auto Door Bottom 364AA 36\" Z49 ZE",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 2,
+          "qty_source": "flagged",
           "qty_total": 2,
           "qty_door_count": 2,
           "manufacturer": "",

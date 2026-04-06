@@ -1,10 +1,10 @@
 {
   "pdf_name": "LARGE_MCA.pdf",
-  "door_count": 331,
+  "door_count": 326,
   "confirmed_count": 320,
-  "flagged_count": 11,
+  "flagged_count": 6,
   "hw_set_count": 43,
-  "tables_found": 42,
+  "tables_found": 9,
   "reference_code_count": 0,
   "hardware_sets": [
     {
@@ -1027,10 +1027,10 @@
         },
         {
           "name": "Protection Pla",
-          "qty": 1,
+          "qty": 2,
           "qty_source": "divided",
           "qty_total": 4,
-          "qty_door_count": 4,
+          "qty_door_count": 2,
           "manufacturer": "te",
           "model": "84",
           "finish": "00 10\" X 47\""
@@ -1047,10 +1047,10 @@
         },
         {
           "name": "Electric Power",
-          "qty": 1,
+          "qty": 2,
           "qty_source": "divided",
           "qty_total": 4,
-          "qty_door_count": 4,
+          "qty_door_count": 2,
           "manufacturer": "Transfer",
           "model": "EP",
           "finish": "T 10 CON"
@@ -1067,10 +1067,10 @@
         },
         {
           "name": "Power Supply",
-          "qty": 1,
+          "qty": 2,
           "qty_source": "divided",
           "qty_total": 4,
-          "qty_door_count": 4,
+          "qty_door_count": 2,
           "manufacturer": "Extension",
           "model": "CO",
           "finish": "N-6W"
@@ -1107,10 +1107,10 @@
         },
         {
           "name": "Meeting Stile",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 2,
+          "qty_source": "flagged",
           "qty_total": 4,
-          "qty_door_count": 4,
+          "qty_door_count": 2,
           "manufacturer": "",
           "model": "32",
           "finish": "8AA 108\""
@@ -1304,50 +1304,50 @@
         },
         {
           "name": "Protection Pla",
-          "qty": 1,
+          "qty": 2,
           "qty_source": "divided",
           "qty_total": 8,
-          "qty_door_count": 8,
+          "qty_door_count": 4,
           "manufacturer": "te",
           "model": "8400 34\" x 47\" 8402 (U",
           "finish": "L) B-CS"
         },
         {
           "name": "Wall Stop",
-          "qty": 1,
+          "qty": 2,
           "qty_source": "divided",
           "qty_total": 8,
-          "qty_door_count": 8,
+          "qty_door_count": 4,
           "manufacturer": "",
           "model": "WS406/407CCV",
           "finish": ""
         },
         {
           "name": "Electric Power",
-          "qty": 1,
+          "qty": 2,
           "qty_source": "divided",
           "qty_total": 8,
-          "qty_door_count": 8,
+          "qty_door_count": 4,
           "manufacturer": "Transfer",
           "model": "EPT 10 CON",
           "finish": ""
         },
         {
           "name": "Actuator",
-          "qty": 1,
+          "qty": 2,
           "qty_source": "divided",
           "qty_total": 8,
-          "qty_door_count": 8,
+          "qty_door_count": 4,
           "manufacturer": "",
           "model": "ACTUATOR BY OTHERS",
           "finish": ""
         },
         {
           "name": "Power Supply",
-          "qty": 1,
+          "qty": 2,
           "qty_source": "divided",
           "qty_total": 8,
-          "qty_door_count": 8,
+          "qty_door_count": 4,
           "manufacturer": "Extension",
           "model": "CON-6W",
           "finish": ""
@@ -1364,10 +1364,10 @@
         },
         {
           "name": "Header Moun",
-          "qty": 1,
+          "qty": 2,
           "qty_source": "divided",
           "qty_total": 8,
-          "qty_door_count": 8,
+          "qty_door_count": 4,
           "manufacturer": "t Safety",
           "model": "8310-877",
           "finish": ""
@@ -1384,20 +1384,20 @@
         },
         {
           "name": "Wire Harness",
-          "qty": 1,
+          "qty": 2,
           "qty_source": "divided",
           "qty_total": 8,
-          "qty_door_count": 8,
+          "qty_door_count": 4,
           "manufacturer": "",
           "model": "CON-6P",
           "finish": ""
         },
         {
           "name": "Door Position",
-          "qty": 1,
+          "qty": 2,
           "qty_source": "divided",
           "qty_total": 8,
-          "qty_door_count": 8,
+          "qty_door_count": 4,
           "manufacturer": "Switch by",
           "model": "DOOR POSITION SWIT",
           "finish": "CH"
@@ -1434,20 +1434,20 @@
         },
         {
           "name": "Meeting Stile",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 2,
+          "qty_source": "flagged",
           "qty_total": 8,
-          "qty_door_count": 8,
+          "qty_door_count": 4,
           "manufacturer": "",
           "model": "328AA 108\"",
           "finish": ""
         },
         {
           "name": "Auto Door Bot",
-          "qty": 1,
+          "qty": 2,
           "qty_source": "divided",
           "qty_total": 8,
-          "qty_door_count": 8,
+          "qty_door_count": 4,
           "manufacturer": "tom",
           "model": "365AA 48\"",
           "finish": ""
@@ -2650,7 +2650,7 @@
           "qty": 1,
           "qty_source": "parsed",
           "qty_total": 1,
-          "qty_door_count": 20,
+          "qty_door_count": 27,
           "manufacturer": "#1.01.A.09",
           "model": "",
           "finish": ""
@@ -2660,7 +2660,7 @@
           "qty": 1,
           "qty_source": "parsed",
           "qty_total": 1,
-          "qty_door_count": 20,
+          "qty_door_count": 27,
           "manufacturer": "ing Description:",
           "model": "3' 0\" x 7' 0\" x 1 3",
           "finish": "/4\" x"
@@ -2670,7 +2670,7 @@
           "qty": 12,
           "qty_source": "parsed",
           "qty_total": 12,
-          "qty_door_count": 20,
+          "qty_door_count": 27,
           "manufacturer": "",
           "model": "5BB1 4 1/2 x 4 1",
           "finish": "/2 CO"
@@ -2680,7 +2680,7 @@
           "qty": 9,
           "qty_source": "parsed",
           "qty_total": 9,
-          "qty_door_count": 20,
+          "qty_door_count": 27,
           "manufacturer": "ortise Lockset",
           "model": "L9092 EU T 03N",
           "finish": "CON"
@@ -2690,7 +2690,7 @@
           "qty": 12,
           "qty_source": "parsed",
           "qty_total": 12,
-          "qty_door_count": 20,
+          "qty_door_count": 27,
           "manufacturer": "",
           "model": "32N2201",
           "finish": ""
@@ -2700,7 +2700,7 @@
           "qty": 12,
           "qty_source": "parsed",
           "qty_total": 12,
-          "qty_door_count": 20,
+          "qty_door_count": 27,
           "manufacturer": "",
           "model": "4040XP RWPA T",
           "finish": "BWM"
@@ -2710,7 +2710,7 @@
           "qty": 12,
           "qty_source": "parsed",
           "qty_total": 12,
-          "qty_door_count": 20,
+          "qty_door_count": 27,
           "manufacturer": "late",
           "model": "8400 10\" X 34\" B",
           "finish": "-CS"
@@ -2720,7 +2720,7 @@
           "qty": 12,
           "qty_source": "parsed",
           "qty_total": 12,
-          "qty_door_count": 20,
+          "qty_door_count": 27,
           "manufacturer": "",
           "model": "WS406/407CCV",
           "finish": ""
@@ -2730,7 +2730,7 @@
           "qty": 12,
           "qty_source": "parsed",
           "qty_total": 12,
-          "qty_door_count": 20,
+          "qty_door_count": 27,
           "manufacturer": "s",
           "model": "CON-38P",
           "finish": ""
@@ -2740,7 +2740,7 @@
           "qty": 12,
           "qty_source": "parsed",
           "qty_total": 12,
-          "qty_door_count": 20,
+          "qty_door_count": 27,
           "manufacturer": "n Switch by",
           "model": "DOOR POSITION",
           "finish": "SWI"
@@ -2750,7 +2750,7 @@
           "qty": 1,
           "qty_source": "parsed",
           "qty_total": 1,
-          "qty_door_count": 20,
+          "qty_door_count": 27,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -2760,7 +2760,7 @@
           "qty": 12,
           "qty_source": "parsed",
           "qty_total": 12,
-          "qty_door_count": 20,
+          "qty_door_count": 27,
           "manufacturer": "ly By Others",
           "model": "POWER SUPPLY",
           "finish": "BY O"
@@ -2770,7 +2770,7 @@
           "qty": 12,
           "qty_source": "parsed",
           "qty_total": 12,
-          "qty_door_count": 20,
+          "qty_door_count": 27,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -2780,7 +2780,7 @@
           "qty": 12,
           "qty_source": "parsed",
           "qty_total": 12,
-          "qty_door_count": 20,
+          "qty_door_count": 27,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -2790,7 +2790,7 @@
           "qty": 7,
           "qty_source": "parsed",
           "qty_total": 7,
-          "qty_door_count": 20,
+          "qty_door_count": 27,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -2800,7 +2800,7 @@
           "qty": 14,
           "qty_source": "parsed",
           "qty_total": 14,
-          "qty_door_count": 20,
+          "qty_door_count": 27,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -2810,7 +2810,7 @@
           "qty": 4,
           "qty_source": "parsed",
           "qty_total": 4,
-          "qty_door_count": 20,
+          "qty_door_count": 27,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -2820,7 +2820,7 @@
           "qty": 3,
           "qty_source": "parsed",
           "qty_total": 3,
-          "qty_door_count": 20,
+          "qty_door_count": 27,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -2830,7 +2830,7 @@
           "qty": 7,
           "qty_source": "parsed",
           "qty_total": 7,
-          "qty_door_count": 20,
+          "qty_door_count": 27,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -2840,7 +2840,7 @@
           "qty": 7,
           "qty_source": "parsed",
           "qty_total": 7,
-          "qty_door_count": 20,
+          "qty_door_count": 27,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -2850,7 +2850,7 @@
           "qty": 7,
           "qty_source": "parsed",
           "qty_total": 7,
-          "qty_door_count": 20,
+          "qty_door_count": 27,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -2860,7 +2860,7 @@
           "qty": 7,
           "qty_source": "parsed",
           "qty_total": 7,
-          "qty_door_count": 20,
+          "qty_door_count": 27,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -2870,7 +2870,7 @@
           "qty": 7,
           "qty_source": "parsed",
           "qty_total": 7,
-          "qty_door_count": 20,
+          "qty_door_count": 27,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -2880,7 +2880,7 @@
           "qty": 7,
           "qty_source": "parsed",
           "qty_total": 7,
-          "qty_door_count": 20,
+          "qty_door_count": 27,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -2890,7 +2890,7 @@
           "qty": 7,
           "qty_source": "parsed",
           "qty_total": 7,
-          "qty_door_count": 20,
+          "qty_door_count": 27,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -2900,7 +2900,7 @@
           "qty": 2,
           "qty_source": "parsed",
           "qty_total": 2,
-          "qty_door_count": 20,
+          "qty_door_count": 27,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -2910,7 +2910,7 @@
           "qty": 1,
           "qty_source": "parsed",
           "qty_total": 1,
-          "qty_door_count": 20,
+          "qty_door_count": 27,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -2920,7 +2920,7 @@
           "qty": 1,
           "qty_source": "parsed",
           "qty_total": 1,
-          "qty_door_count": 20,
+          "qty_door_count": 27,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -2930,7 +2930,7 @@
           "qty": 1,
           "qty_source": "parsed",
           "qty_total": 1,
-          "qty_door_count": 20,
+          "qty_door_count": 27,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -2940,7 +2940,7 @@
           "qty": 1,
           "qty_source": "parsed",
           "qty_total": 1,
-          "qty_door_count": 20,
+          "qty_door_count": 27,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -2950,7 +2950,7 @@
           "qty": 1,
           "qty_source": "parsed",
           "qty_total": 1,
-          "qty_door_count": 20,
+          "qty_door_count": 27,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -3161,30 +3161,30 @@
         },
         {
           "name": "Closer 4040XP RWPA 4040-18TJ TBWMS AL LC",
-          "qty": 1,
+          "qty": 2,
           "qty_source": "divided",
           "qty_total": 4,
-          "qty_door_count": 4,
+          "qty_door_count": 2,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "Overhead Stop 104S US32D GL",
-          "qty": 1,
+          "qty": 2,
           "qty_source": "divided",
           "qty_total": 4,
-          "qty_door_count": 4,
+          "qty_door_count": 2,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "Protection Plate 8400 10\" X 35\" B-CS US32D IV",
-          "qty": 1,
+          "qty": 2,
           "qty_source": "divided",
           "qty_total": 4,
-          "qty_door_count": 4,
+          "qty_door_count": 2,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -3211,10 +3211,10 @@
         },
         {
           "name": "Meeting Stile 328AA 108\" ZE",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 2,
+          "qty_source": "flagged",
           "qty_total": 4,
-          "qty_door_count": 4,
+          "qty_door_count": 2,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -3298,30 +3298,30 @@
         },
         {
           "name": "Closer 4040XP RWPA 4040-18TJ TBWMS AL LC",
-          "qty": 1,
+          "qty": 2,
           "qty_source": "divided",
           "qty_total": 4,
-          "qty_door_count": 4,
+          "qty_door_count": 2,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "Overhead Stop 104S US32D GL",
-          "qty": 1,
+          "qty": 2,
           "qty_source": "divided",
           "qty_total": 4,
-          "qty_door_count": 4,
+          "qty_door_count": 2,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "Protection Plate 8400 34\" X 35\" B-CS US32D IV",
-          "qty": 1,
+          "qty": 2,
           "qty_source": "divided",
           "qty_total": 4,
-          "qty_door_count": 4,
+          "qty_door_count": 2,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -3348,10 +3348,10 @@
         },
         {
           "name": "Meeting Stile 328AA 108\" ZE",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 2,
+          "qty_source": "flagged",
           "qty_total": 4,
-          "qty_door_count": 4,
+          "qty_door_count": 2,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -5847,20 +5847,20 @@
         },
         {
           "name": "Closer 4040XP SCUSH TBWMS AL LC",
-          "qty": 1,
+          "qty": 2,
           "qty_source": "divided",
           "qty_total": 4,
-          "qty_door_count": 4,
+          "qty_door_count": 2,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "Protection Plate 8400 10\" X 35\" B-CS US32D IV",
-          "qty": 1,
+          "qty": 2,
           "qty_source": "divided",
           "qty_total": 4,
-          "qty_door_count": 4,
+          "qty_door_count": 2,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -5907,10 +5907,10 @@
         },
         {
           "name": "Door Sweep 8197AA 36\" ZE",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 2,
+          "qty_source": "flagged",
           "qty_total": 4,
-          "qty_door_count": 4,
+          "qty_door_count": 2,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -6359,26 +6359,6 @@
     {
       "door_number": "652",
       "reason": "Pattern 'D' doesn't match dominant pattern(s) (D.D.L.D, D.D.L.DL). May be a hardware set ID, reference code, or extraction artifact."
-    },
-    {
-      "door_number": "4040-18TJ",
-      "reason": "Pattern 'D-DL' doesn't match dominant pattern(s) (D.D.L.D, D.D.L.DL). May be a hardware set ID, reference code, or extraction artifact."
-    },
-    {
-      "door_number": "900-4RL",
-      "reason": "Pattern 'D-DL' doesn't match dominant pattern(s) (D.D.L.D, D.D.L.DL). May be a hardware set ID, reference code, or extraction artifact."
-    },
-    {
-      "door_number": "900-FA",
-      "reason": "Pattern 'D-L' doesn't match dominant pattern(s) (D.D.L.D, D.D.L.DL). May be a hardware set ID, reference code, or extraction artifact."
-    },
-    {
-      "door_number": "L283-722",
-      "reason": "Pattern 'LD-D' doesn't match dominant pattern(s) (D.D.L.D, D.D.L.DL). May be a hardware set ID, reference code, or extraction artifact."
-    },
-    {
-      "door_number": "L583-363",
-      "reason": "Pattern 'LD-D' doesn't match dominant pattern(s) (D.D.L.D, D.D.L.DL). May be a hardware set ID, reference code, or extraction artifact."
     },
     {
       "door_number": "Z49",

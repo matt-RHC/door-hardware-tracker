@@ -1389,6 +1389,8 @@ HARDWARE_SET_PATTERNS = [
     r'^[A-Z]{3,}\d?$',                   # Pure letter codes: ABC, EXIT, STOR
     r'^\d{1}[A-Z]$',                     # Single digit + letter: 1A, 2B (too short)
     r'^(?:EXIT|STOR|ELEC|MECH)[-]?\d*$', # Zone codes (without location prefixes)
+    r'^L\d{3,5}$',                       # S-065: Schlage lock models (L464, L9175, L9460)
+    r'^[A-Z]{2}[-]\d{3,}$',             # S-065: Core/product codes (CC-993, PC-123)
 ]
 
 # Explicit blocklist for known hardware set prefixes
@@ -1473,11 +1475,12 @@ def is_valid_door_number(val: str, log_rejections: bool = False) -> bool:
         return False
 
     # Accept location-prefix door numbers BEFORE hardware set rejection.
-    # ST-1 (stair door 1), EL-3 (elevator door 3), CORR-5 etc. would
+    # ST-1 (stair door 1), EL-3 (elevator door 3), EX2, CORR-5 etc. would
     # otherwise be rejected by the hardware set patterns below.
+    # S-065: Separator is optional — EX2, EX3 are valid (exterior doors)
     for prefix in DOOR_LOCATION_PREFIXES:
         if clean.startswith(prefix) and re.match(
-            rf'^{re.escape(prefix)}[-]\d{{1,4}}[A-Z]?$', clean
+            rf'^{re.escape(prefix)}[-.]?\d{{1,4}}[A-Z]?$', clean
         ):
             return True
 
@@ -1504,6 +1507,13 @@ def is_valid_door_number(val: str, log_rejections: bool = False) -> bool:
         if re.match(pattern, clean):
             return True
 
+    # S-065: Reject values containing ANSI/BHMA finish codes (US32D, US26D, US10B, etc.)
+    # These appear when table parsing concatenates a value with its finish column
+    if re.search(r'US\d{1,2}[A-Z]?$', clean):
+        if log_rejections:
+            print(f"[DOOR_VALIDATION] Rejected '{val}': contains ANSI finish code suffix")
+        return False
+
     # Fallback: if it has 3+ consecutive digits and isn't a set ID, cautiously accept
     # This catches unconventional numbering we haven't seen yet.
     # Require 3+ digits to avoid matching bare quantities (20, 94, etc.)
@@ -1512,7 +1522,9 @@ def is_valid_door_number(val: str, log_rejections: bool = False) -> bool:
         if log_rejections:
             print(f"[DOOR_VALIDATION] Rejected '{val}': pure numeric > 4 digits (project/doc number)")
         return False
-    if re.search(r'\d{3,}', clean) and len(clean) >= 3 and len(clean) <= 12:
+    # S-065: Tightened — only accept bare 3-4 digit numbers in fallback,
+    # not arbitrary mixed alphanumeric with 3+ embedded digits
+    if re.match(r'^\d{3,4}$', clean):
         return True
 
     if log_rejections:
