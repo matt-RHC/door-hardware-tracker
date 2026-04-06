@@ -122,7 +122,10 @@ export default function ImportWizard({
       }
       case WizardStep.Review: {
         return reviewMessages(
-          state.doors.map((d) => ({ doorNumber: d.door_number }))
+          state.doors.map((d) => ({
+            doorNumber: d.door_number,
+            fieldConfidence: d.field_confidence,
+          }))
         );
       }
       case WizardStep.Confirm: {

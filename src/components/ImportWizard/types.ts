@@ -33,6 +33,7 @@ export interface DoorEntry {
   frame_type: string;
   fire_rating: string;
   hand: string;
+  field_confidence?: Record<string, number>;
 }
 
 export interface FlaggedDoor {

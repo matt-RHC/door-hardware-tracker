@@ -8,6 +8,7 @@ import type {
   DoorEntry,
   HardwareSet,
 } from "./types";
+import { scoreExtraction } from "@/lib/confidence-scoring";
 
 interface StepTriageProps {
   projectId: string;
@@ -123,6 +124,13 @@ export default function StepTriage({
 
       if (extractedDoors.length === 0) {
         throw new Error("No doors found during extraction.");
+      }
+
+      // Attach per-field confidence scores to each door
+      const { perDoor } = scoreExtraction(extractedDoors);
+      for (const door of extractedDoors) {
+        const scores = perDoor.get(door.door_number);
+        if (scores) door.field_confidence = scores;
       }
 
       setDoors(extractedDoors);

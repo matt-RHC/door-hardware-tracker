@@ -42,7 +42,9 @@ function getConfidence(door: DoorEntry): "high" | "medium" | "low" {
   return "low";
 }
 
-const FIELD_KEYS: (keyof DoorEntry)[] = [
+type DoorStringField = "door_number" | "hw_set" | "location" | "door_type" | "frame_type" | "fire_rating" | "hand";
+
+const FIELD_KEYS: DoorStringField[] = [
   "door_number",
   "hw_set",
   "location",
@@ -52,7 +54,7 @@ const FIELD_KEYS: (keyof DoorEntry)[] = [
   "hand",
 ];
 
-const FIELD_LABELS: Record<keyof DoorEntry, string> = {
+const FIELD_LABELS: Record<DoorStringField, string> = {
   door_number: "Door #",
   hw_set: "HW Set",
   location: "Location",
@@ -80,13 +82,13 @@ export default function StepReview({
   const [doors, setDoors] = useState<DoorEntry[]>(initialDoors);
   const [editingCell, setEditingCell] = useState<{
     row: number;
-    field: keyof DoorEntry;
+    field: DoorStringField;
   } | null>(null);
   const [editValue, setEditValue] = useState("");
 
   // ─── Inline editing ───
   const startEdit = useCallback(
-    (rowIndex: number, field: keyof DoorEntry) => {
+    (rowIndex: number, field: DoorStringField) => {
       setEditingCell({ row: rowIndex, field });
       setEditValue(doors[rowIndex][field]);
     },

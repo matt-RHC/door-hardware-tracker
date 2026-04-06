@@ -33,6 +33,7 @@ interface DoorEntry {
   frame_type: string
   fire_rating: string
   hand: string
+  field_confidence?: Record<string, number>
 }
 
 // --- Shared helper: builds Door/Frame auto-items + set items per opening ---
@@ -209,6 +210,7 @@ export async function POST(request: NextRequest) {
           frame_type: d.frame_type || undefined,
           fire_rating: d.fire_rating || undefined,
           hand: d.hand || undefined,
+          field_confidence: d.field_confidence || undefined,
         }))
 
         // 3. Write staging openings (empty hardwareSets — items handled separately)
