@@ -123,7 +123,7 @@ function findUnmatchedSets(doors: DoorEntry[], setMap: Map<string, HardwareSet>)
 
 // --- Save handler: takes merged parse results, writes to DB ---
 
-const useStaging = true
+const useStaging = process.env.USE_STAGING_FLOW !== 'false'
 const CHUNK_SIZE = 50
 
 export async function POST(request: NextRequest) {
@@ -292,83 +292,11 @@ export async function POST(request: NextRequest) {
           promoted: true,
         })
       } catch (stagingError) {
-        console.error('Staging save failed, falling back to direct production save:', stagingError)
-        // Fall through to production path below
+        console.error('Staging save failed:', stagingError)
+        const message = stagingError instanceof Error ? stagingError.message : 'Unknown staging error'
+        return NextResponse.json({ error: 'Staging save failed: ' + message }, { status: 500 })
       }
     }
-
-    // ========== PRODUCTION PATH (fallback) ==========
-
-    // Delete existing openings (cascade deletes children)
-    const { error: deleteError } = await (supabase as any)
-      .from('openings')
-      .delete()
-      .eq('project_id', projectId)
-
-    if (deleteError) {
-      console.error('Error deleting existing openings:', deleteError)
-    }
-
-    // Batch insert all openings
-    const openingRows = doors.map((door) => ({
-      project_id: projectId,
-      door_number: door.door_number,
-      hw_set: door.hw_set || null,
-      hw_heading: setMap.get(door.hw_set)?.heading || null,
-      location: door.location || null,
-      door_type: door.door_type || null,
-      frame_type: door.frame_type || null,
-      fire_rating: door.fire_rating || null,
-      hand: door.hand || null,
-    }))
-
-    const insertedOpenings: Array<{ id: string; door_number: string; hw_set: string }> = []
-
-    for (let i = 0; i < openingRows.length; i += CHUNK_SIZE) {
-      const chunk = openingRows.slice(i, i + CHUNK_SIZE)
-
-      const { data, error } = await (supabase as any)
-        .from('openings')
-        .insert(chunk as any)
-        .select('id, door_number, hw_set')
-
-      if (error) {
-        console.error(`Error inserting openings chunk at ${i}:`, error)
-      } else if (data) {
-        insertedOpenings.push(...data)
-      }
-    }
-
-    // Build hardware item rows via shared helper
-    const allHardwareRows = buildPerOpeningItems(insertedOpenings, doorInfoMap, setMap, 'opening_id')
-
-    let itemsInserted = 0
-    for (let i = 0; i < allHardwareRows.length; i += CHUNK_SIZE) {
-      const chunk = allHardwareRows.slice(i, i + CHUNK_SIZE)
-
-      const { data, error } = await (supabase as any)
-        .from('hardware_items')
-        .insert(chunk as any)
-        .select('id')
-
-      if (error) {
-        console.error(`Error inserting hardware items chunk at ${i}:`, error)
-      } else if (data) {
-        itemsInserted += data.length
-      }
-    }
-
-    const unmatchedSets = findUnmatchedSets(doors, setMap)
-
-    console.debug(`Save complete: ${insertedOpenings.length} openings, ${itemsInserted} hardware items`)
-
-    return NextResponse.json({
-      success: true,
-      openingsCount: insertedOpenings.length,
-      itemsCount: itemsInserted,
-      hardwareSets: hardwareSets.length,
-      unmatchedSets: unmatchedSets.length > 0 ? unmatchedSets : undefined,
-    })
   } catch (error) {
     console.error('Save error:', error)
     const message = error instanceof Error ? error.message : 'Internal server error'
