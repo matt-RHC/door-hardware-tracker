@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import {
   WizardStep,
   WizardState,
@@ -26,6 +26,7 @@ import {
   reviewMessages,
   confirmMessages,
   type PunchMessage,
+  type PunchQuestion,
 } from "@/lib/punch-messages";
 
 // ─── Step indicator ───
@@ -90,6 +91,71 @@ export default function ImportWizard({
     openingsCount?: number;
     itemsCount?: number;
   } | null>(null);
+
+  // ─── Triage validation questions ───
+  const [triageQuestions, setTriageQuestions] = useState<PunchQuestion[]>([]);
+  const [dismissStreak, setDismissStreak] = useState(0);
+  const [questionsSuppressed, setQuestionsSuppressed] = useState(false);
+
+  // Derived: answers keyed by question id
+  const questionAnswers: Record<string, string> = useMemo(() => {
+    const out: Record<string, string> = {};
+    for (const q of triageQuestions) {
+      if (q.answer) out[q.id] = q.answer;
+    }
+    return out;
+  }, [triageQuestions]);
+
+  const handleQuestionsGenerated = useCallback(
+    (questions: PunchQuestion[]) => {
+      if (questionsSuppressed) return;
+      setTriageQuestions(questions);
+      setDismissStreak(0);
+    },
+    [questionsSuppressed]
+  );
+
+  const handleQuestionAnswer = useCallback(
+    (questionId: string, answer: string) => {
+      setTriageQuestions((prev) =>
+        prev.map((q) => (q.id === questionId ? { ...q, answer } : q))
+      );
+      // Answering resets the dismiss streak
+      setDismissStreak(0);
+    },
+    []
+  );
+
+  const handleQuestionDismiss = useCallback(
+    (questionId: string) => {
+      setTriageQuestions((prev) =>
+        prev.map((q) =>
+          q.id === questionId ? { ...q, dismissed: true } : q
+        )
+      );
+      const newStreak = dismissStreak + 1;
+      setDismissStreak(newStreak);
+      if (newStreak >= 3) {
+        // Suppress all remaining unanswered questions
+        setQuestionsSuppressed(true);
+        setTriageQuestions((prev) =>
+          prev.map((q) =>
+            !q.answer && !q.dismissed ? { ...q, dismissed: true } : q
+          )
+        );
+      }
+    },
+    [dismissStreak]
+  );
+
+  // Clear questions when leaving the triage step
+  useEffect(() => {
+    if (state.currentStep !== WizardStep.Triage) {
+      setTriageQuestions([]);
+      setDismissStreak(0);
+      setQuestionsSuppressed(false);
+    }
+  }, [state.currentStep]);
 
   // ─── Punch messages derived from wizard state ───
 
@@ -296,7 +362,9 @@ export default function ImportWizard({
                 file={state.file!}
                 columnMappings={state.columnMappings}
                 classifyResult={state.classifyResult!}
+                questionAnswers={questionAnswers}
                 onComplete={onTriageComplete}
+                onQuestionsGenerated={handleQuestionsGenerated}
                 onBack={() => goToStep(WizardStep.MapColumns)}
                 onError={(err) => patch({ error: err })}
               />
@@ -326,7 +394,12 @@ export default function ImportWizard({
           </div>
 
           {/* Punch assistant sidebar */}
-          <PunchAssistant messages={punchMessages} />
+          <PunchAssistant
+            messages={punchMessages}
+            questions={triageQuestions}
+            onAnswer={handleQuestionAnswer}
+            onDismiss={handleQuestionDismiss}
+          />
         </PunchHighlightProvider>
       </div>
     </div>

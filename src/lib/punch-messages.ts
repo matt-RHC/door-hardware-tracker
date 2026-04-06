@@ -20,6 +20,17 @@ export interface PunchMessage {
   rowId?: string;
 }
 
+/** Interactive validation question surfaced during triage. */
+export interface PunchQuestion {
+  id: string;
+  text: string;
+  options: string[];
+  /** Set after user answers. */
+  answer?: string;
+  /** True if user clicked Skip. */
+  dismissed?: boolean;
+}
+
 // ── Step 1 — Upload & Classify ───────────────────────────────────────
 
 export interface ClassifyPagesData {
@@ -160,6 +171,64 @@ export function triageMessages(data: TriageData): PunchMessage[] {
   }
 
   return msgs;
+}
+
+// ── Step 3 — Triage Questions (interactive validation) ──────────────
+
+/**
+ * Generate validation questions from extracted doors.
+ * Called after extraction completes, before triage classification.
+ */
+export function generateTriageQuestions(
+  doors: Array<{ door_number: string; hw_set: string }>,
+): PunchQuestion[] {
+  const questions: PunchQuestion[] = [];
+
+  // 1. Suspicious door numbers: letter prefix + 3+ digits, no separator.
+  //    Common product-code shapes: L9175, PT200EZ, 4040XP, 6211WF
+  const suspiciousPattern = /^[A-Z]{1,3}\d{3,}[A-Z]{0,3}$/i;
+  const suspicious = doors.filter((d) => suspiciousPattern.test(d.door_number));
+  for (const door of suspicious.slice(0, 3)) {
+    questions.push({
+      id: `suspicious-${door.door_number}`,
+      text: `Does "${door.door_number}" look like a door number or a product code?`,
+      options: ['Door', 'Product Code'],
+    });
+  }
+
+  // 2. Doors with empty hw_set
+  const emptyHwSet = doors.filter((d) => !d.hw_set || d.hw_set.trim() === '');
+  if (emptyHwSet.length > 0 && emptyHwSet.length <= 5) {
+    for (const door of emptyHwSet.slice(0, 2)) {
+      questions.push({
+        id: `empty-hwset-${door.door_number}`,
+        text: `Door ${door.door_number} has no hardware set assigned. Is this expected?`,
+        options: ['Yes, skip it', 'No, flag it'],
+      });
+    }
+  } else if (emptyHwSet.length > 5) {
+    questions.push({
+      id: 'empty-hwset-bulk',
+      text: `${emptyHwSet.length} doors have no hardware set assigned. Should these be skipped?`,
+      options: ['Yes, skip them', 'No, flag them'],
+    });
+  }
+
+  // 3. Common by-others indicators (NH, N/A, GLASS, B/O)
+  const byOthersRe = /^(NH|N\/A|GLASS|B\/O|BY OTHERS|ALBO|B\/O'S)$/i;
+  const byOthersDoors = doors.filter(
+    (d) => d.hw_set && byOthersRe.test(d.hw_set.trim()),
+  );
+  if (byOthersDoors.length > 0) {
+    const indicator = byOthersDoors[0].hw_set.trim();
+    questions.push({
+      id: 'by-others-bulk',
+      text: `${byOthersDoors.length} door${byOthersDoors.length === 1 ? ' is' : 's are'} marked '${indicator}' — should these be 'By Others'?`,
+      options: ['Yes', 'No'],
+    });
+  }
+
+  return questions;
 }
 
 // ── Step 4 — Review ──────────────────────────────────────────────────

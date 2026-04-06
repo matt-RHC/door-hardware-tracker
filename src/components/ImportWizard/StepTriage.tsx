@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import type {
   ClassifyPagesResponse,
   ColumnMapping,
@@ -9,6 +9,7 @@ import type {
   HardwareSet,
 } from "./types";
 import { scoreExtraction } from "@/lib/confidence-scoring";
+import { generateTriageQuestions, type PunchQuestion } from "@/lib/punch-messages";
 import {
   arrayBufferToBase64,
   splitPDFByPages,
@@ -19,16 +20,22 @@ import {
   FALLBACK_PAGES_PER_CHUNK,
 } from "@/lib/pdf-utils";
 
+type TriagePhase = "extracting" | "questions" | "triaging" | "done";
+
 interface StepTriageProps {
   projectId: string;
   file: File;
   columnMappings: ColumnMapping[];
   classifyResult: ClassifyPagesResponse;
+  /** Current question answers (managed by parent). */
+  questionAnswers: Record<string, string>;
   onComplete: (
     triageResult: TriageResult,
     doors: DoorEntry[],
     hardwareSets: HardwareSet[]
   ) => void;
+  /** Surfaces validation questions for the PunchAssistant sidebar. */
+  onQuestionsGenerated: (questions: PunchQuestion[]) => void;
   onBack: () => void;
   onError: (msg: string) => void;
 }
@@ -38,20 +45,27 @@ export default function StepTriage({
   file,
   columnMappings,
   classifyResult,
+  questionAnswers,
   onComplete,
+  onQuestionsGenerated,
   onBack,
   onError,
 }: StepTriageProps) {
-  const [loading, setLoading] = useState(false);
+  const [phase, setPhase] = useState<TriagePhase>("extracting");
   const [status, setStatus] = useState("");
   const [progress, setProgress] = useState(0);
   const [triageResult, setTriageResult] = useState<TriageResult | null>(null);
   const [doors, setDoors] = useState<DoorEntry[]>([]);
   const [hardwareSets, setHardwareSets] = useState<HardwareSet[]>([]);
 
-  // ─── Run extraction + triage on mount ───
-  const runTriage = useCallback(async () => {
-    setLoading(true);
+  // Keep refs to latest answers and generated questions
+  const answersRef = useRef(questionAnswers);
+  answersRef.current = questionAnswers;
+  const generatedQuestionsRef = useRef<PunchQuestion[]>([]);
+
+  // ─── Phase 1: Run extraction on mount ───
+  const runExtraction = useCallback(async () => {
+    setPhase("extracting");
     setStatus("Extracting data with column mapping...");
     setProgress(10);
 
@@ -72,28 +86,30 @@ export default function StepTriage({
       let extractedSets: HardwareSet[];
 
       if (file.size > CHUNK_SIZE_THRESHOLD) {
-        // ── Chunked extraction for large PDFs ──
-        // Split into chunks, send each to /api/parse-pdf?parseOnly=true, merge results
         setProgress(15);
         setStatus("Splitting large PDF into chunks...");
 
-        // Use classify result to build smart chunks if available
         let chunks: string[];
         const schedulePages = classifyResult.summary.door_schedule_pages;
         const hwPages = classifyResult.summary.hardware_set_pages;
-        const allContentPages = [...schedulePages, ...hwPages].sort((a, b) => a - b);
+        const allContentPages = [...schedulePages, ...hwPages].sort(
+          (a, b) => a - b
+        );
 
         if (allContentPages.length > 0) {
-          // Group content pages into chunks of FALLBACK_PAGES_PER_CHUNK
           const chunkSets: number[][] = [];
-          for (let i = 0; i < allContentPages.length; i += FALLBACK_PAGES_PER_CHUNK) {
-            chunkSets.push(allContentPages.slice(i, i + FALLBACK_PAGES_PER_CHUNK));
+          for (
+            let i = 0;
+            i < allContentPages.length;
+            i += FALLBACK_PAGES_PER_CHUNK
+          ) {
+            chunkSets.push(
+              allContentPages.slice(i, i + FALLBACK_PAGES_PER_CHUNK)
+            );
           }
-          // Use submittal/reference pages as context prepended to each chunk
           const refPages = classifyResult.summary.submittal_pages;
           chunks = await splitPDFByPages(arrayBuffer, chunkSets, refPages);
         } else {
-          // No classification data — fall back to fixed splitting
           chunks = await splitPDFFixed(arrayBuffer, FALLBACK_PAGES_PER_CHUNK);
         }
 
@@ -119,7 +135,7 @@ export default function StepTriage({
           if (!chunkResp.ok) {
             const err = await chunkResp.json().catch(() => ({}));
             console.warn(`Chunk ${i + 1} failed:`, err.error);
-            continue; // skip failed chunks, merge what we can
+            continue;
           }
 
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -128,11 +144,9 @@ export default function StepTriage({
           allSets.push(...(chunkResult.sets ?? []));
         }
 
-        // Merge and deduplicate across chunks
         extractedDoors = mergeDoors(allDoors);
         extractedSets = mergeHardwareSets(allSets);
       } else {
-        // ── Single-request extraction for small PDFs ──
         const pdfBase64 = arrayBufferToBase64(arrayBuffer);
 
         setProgress(20);
@@ -164,7 +178,7 @@ export default function StepTriage({
         throw new Error("No doors found during extraction.");
       }
 
-      // Attach per-field confidence scores to each door
+      // Attach per-field confidence scores
       const { perDoor } = scoreExtraction(extractedDoors);
       for (const door of extractedDoors) {
         const scores = perDoor.get(door.door_number);
@@ -173,16 +187,47 @@ export default function StepTriage({
 
       setDoors(extractedDoors);
       setHardwareSets(extractedSets);
-      setProgress(65);
-      setStatus("Running triage...");
+      setProgress(60);
 
-      // Step B: Call /api/parse-pdf/triage to classify candidates
-      // The triage route expects { candidates: TriageCandidate[] }
+      // Generate validation questions
+      const questions = generateTriageQuestions(extractedDoors);
+      generatedQuestionsRef.current = questions;
+      if (questions.length > 0) {
+        onQuestionsGenerated(questions);
+        setPhase("questions");
+        setStatus("Review flagged items in the sidebar, then continue.");
+      } else {
+        // No questions — go straight to triage
+        setPhase("triaging");
+      }
+    } catch (err) {
+      onError(err instanceof Error ? err.message : "Extraction failed");
+    }
+  }, [file, columnMappings, classifyResult, onError, onQuestionsGenerated]);
+
+  // ─── Phase 2: Run triage classification ───
+  const runTriageClassification = useCallback(async () => {
+    setPhase("triaging");
+    setStatus("Running triage...");
+    setProgress(70);
+
+    try {
+      // Build user hints from answered questions
+      const userHints: Array<{ question_id: string; question_text: string; answer: string }> = [];
+      for (const [qId, answer] of Object.entries(answersRef.current)) {
+        const q = generatedQuestionsRef.current.find((gq) => gq.id === qId);
+        userHints.push({
+          question_id: qId,
+          question_text: q?.text ?? qId,
+          answer,
+        });
+      }
+
       const triageResp = await fetch("/api/parse-pdf/triage", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          candidates: extractedDoors.map((d) => ({
+          candidates: doors.map((d) => ({
             door_number: d.door_number,
             hw_set: d.hw_set || null,
             door_type: d.door_type || null,
@@ -192,21 +237,20 @@ export default function StepTriage({
             location: d.location || null,
             page_number: null,
           })),
+          userHints: userHints.length > 0 ? userHints : undefined,
         }),
       });
 
       if (!triageResp.ok) {
-        // If triage fails, skip it — all doors are accepted
         const result: TriageResult = {
-          doors_found: extractedDoors.length,
+          doors_found: doors.length,
           by_others: 0,
           rejected: 0,
-          accepted: extractedDoors,
+          accepted: doors,
           flagged: [],
         };
         setTriageResult(result);
       } else {
-        // Transform triage response: { classifications, stats } → TriageResult
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const raw: any = await triageResp.json();
         const classifications: Array<{
@@ -216,7 +260,7 @@ export default function StepTriage({
           reason: string;
         }> = raw.classifications ?? [];
 
-        const acceptedDoors = extractedDoors.filter((d) => {
+        const acceptedDoors = doors.filter((d) => {
           const c = classifications.find(
             (cl) => cl.door_number === d.door_number
           );
@@ -231,11 +275,15 @@ export default function StepTriage({
             door_number: c.door_number,
             reason: c.reason,
             confidence:
-              c.confidence === "high" ? 0.9 : c.confidence === "medium" ? 0.6 : 0.3,
+              c.confidence === "high"
+                ? 0.9
+                : c.confidence === "medium"
+                ? 0.6
+                : 0.3,
           }));
 
         const result: TriageResult = {
-          doors_found: raw.stats?.total ?? extractedDoors.length,
+          doors_found: raw.stats?.total ?? doors.length,
           by_others: raw.stats?.by_others ?? 0,
           rejected: raw.stats?.rejected ?? 0,
           accepted: acceptedDoors,
@@ -246,36 +294,47 @@ export default function StepTriage({
 
       setProgress(100);
       setStatus("Triage complete.");
+      setPhase("done");
     } catch (err) {
       onError(err instanceof Error ? err.message : "Triage failed");
-    } finally {
-      setLoading(false);
     }
-  }, [file, projectId, columnMappings, classifyResult, onError]);
+  }, [doors, onError]);
 
+  // Start extraction on mount
   useEffect(() => {
-    runTriage();
-  }, [runTriage]);
+    runExtraction();
+  }, [runExtraction]);
+
+  // Auto-start triage when phase transitions to "triaging"
+  useEffect(() => {
+    if (phase === "triaging" && doors.length > 0 && !triageResult) {
+      runTriageClassification();
+    }
+  }, [phase, doors.length, triageResult, runTriageClassification]);
 
   // ─── Advance ───
+  const handleContinueToTriage = () => {
+    setPhase("triaging");
+  };
+
   // Pass only triage-accepted doors to the next step, not all extracted doors.
   const handleNext = () => {
     if (!triageResult) return;
     onComplete(triageResult, triageResult.accepted, hardwareSets);
   };
 
+  const isLoading = phase === "extracting" || phase === "triaging";
+
   return (
     <div className="max-w-2xl mx-auto">
-      <h3 className="text-[#f5f5f7] font-semibold mb-2">
-        Step 3: Triage
-      </h3>
+      <h3 className="text-[#f5f5f7] font-semibold mb-2">Step 3: Triage</h3>
       <p className="text-[#a1a1a6] text-sm mb-4">
         Extracting door schedule data and running triage to identify accepted,
         by-others, and rejected doors.
       </p>
 
       {/* Progress */}
-      {loading && (
+      {isLoading && (
         <div className="mb-4">
           <div className="flex justify-between text-sm mb-1">
             <span className="text-[#a1a1a6]">{status}</span>
@@ -287,6 +346,22 @@ export default function StepTriage({
               style={{ width: `${progress}%` }}
             />
           </div>
+        </div>
+      )}
+
+      {/* Questions phase: prompt user to review sidebar */}
+      {phase === "questions" && (
+        <div className="mb-4 p-4 bg-[rgba(10,132,255,0.08)] border border-[rgba(10,132,255,0.2)] rounded-xl">
+          <p className="text-[#4BA3E3] text-sm mb-3">
+            Extracted {doors.length} doors. Check the sidebar for validation
+            questions, then continue to triage.
+          </p>
+          <button
+            onClick={handleContinueToTriage}
+            className="px-5 py-2 bg-[#0a84ff] hover:bg-[#0975de] text-white rounded-lg transition-colors font-semibold text-sm"
+          >
+            Continue to Triage
+          </button>
         </div>
       )}
 
@@ -374,14 +449,14 @@ export default function StepTriage({
       <div className="flex justify-between mt-6">
         <button
           onClick={onBack}
-          disabled={loading}
+          disabled={isLoading}
           className="px-4 py-2 bg-white/[0.04] border border-white/[0.08] hover:bg-white/[0.08] disabled:opacity-50 text-[#a1a1a6] rounded-lg transition-colors"
         >
           Back
         </button>
         <button
           onClick={handleNext}
-          disabled={loading || !triageResult}
+          disabled={isLoading || !triageResult}
           className="px-6 py-2 bg-[#0a84ff] hover:bg-[#0975de] text-white rounded-lg transition-colors font-semibold disabled:opacity-50"
         >
           Next
