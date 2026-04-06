@@ -25,6 +25,7 @@ export default function StepConfirm({
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState("");
   const [saveComplete, setSaveComplete] = useState(false);
+  const [overrideUnmatched, setOverrideUnmatched] = useState(false);
   const [saveResult, setSaveResult] = useState<{
     openingsCount: number;
     itemsCount: number;
@@ -54,6 +55,13 @@ export default function StepConfirm({
       `${lowConfDoors.length} door(s) missing door number or hardware set assignment.`
     );
   }
+
+  // Count doors that reference non-existent sets (blocks save unless overridden)
+  const doorsWithUnmatchedSets = doors.filter(
+    (d) => d.hw_set && !definedSetIds.has(d.hw_set)
+  );
+  const saveBlocked =
+    doorsWithUnmatchedSets.length > 0 && !overrideUnmatched;
 
   // ─── Save flow: createExtractionRun + writeStagingData + promoteExtraction ───
   const handleSave = async () => {
@@ -182,6 +190,26 @@ export default function StepConfirm({
         )}
       </div>
 
+      {/* Blocking error: unmatched hardware sets */}
+      {doorsWithUnmatchedSets.length > 0 && (
+        <div className="mb-4 p-3 bg-[rgba(255,69,58,0.1)] border border-[rgba(255,69,58,0.25)] rounded-xl">
+          <p className="text-[#ff453a] text-sm font-semibold">
+            Cannot save: {doorsWithUnmatchedSets.length} door(s) reference
+            hardware sets that don&apos;t exist. Go back and fix the hw_set
+            assignments.
+          </p>
+          {!overrideUnmatched && (
+            <button
+              type="button"
+              onClick={() => setOverrideUnmatched(true)}
+              className="mt-1.5 text-[#ff9500] text-xs underline hover:text-[#ffb340] transition-colors"
+            >
+              Save anyway (power user override)
+            </button>
+          )}
+        </div>
+      )}
+
       {/* Warnings */}
       {warnings.length > 0 && (
         <div className="space-y-2 mb-4">
@@ -215,7 +243,7 @@ export default function StepConfirm({
         </button>
         <button
           onClick={handleSave}
-          disabled={loading}
+          disabled={loading || saveBlocked}
           className="px-6 py-2 bg-[#30d158] hover:bg-[#26c14a] text-white rounded-lg transition-colors font-semibold disabled:opacity-50"
         >
           {loading ? "Saving..." : "Save"}
