@@ -31,8 +31,10 @@ Symlink them from `test-pdfs/training/` into this directory.
 - kinship-GTN3.pdf (328pg) + kinship-GTN3-truth.csv (ground truth)
 
 **Mixed format** (combined schedule — doors inline under set headings):
-- mixed-UCO.pdf (26pg) — UCO1-2 Data Center, Adobe Acrobat Pro, 7 sets, 49 doors
-  - Format: "Heading #: S01b" + "Door:1.01.A.01C" inline
+- mixed-UCO.pdf (26pg) — UCO1-2 Data Center, Adobe Acrobat Pro
+  - Ground truth: 7 sets, 46 openings (26 PRA/PRI pairs + 20 SGL), 72 leaves
+  - S02a: 3 by-others (keying only), not counted in 46/72
+  - Format: "Heading #: S01b" + "Door:1.01.A.01C" inline, PRA/PRI=pair, SGL=single
   - Pipeline status: UNSUPPORTED (0/0 extraction, S-066C). Needs regex + format work.
 
 ### Reference files (not submittals, in test-pdfs/reference/)
