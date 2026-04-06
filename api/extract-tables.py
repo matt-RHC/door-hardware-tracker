@@ -1367,6 +1367,13 @@ DOOR_NUMBER_PATTERNS = [
     r'^[A-Z]?\d[A-Z]?[-]\d{2,4}[A-Z]?$',
     # Multi-digit-dash-multi-digit: 110-01, 110-01A, 120-02A, 110A-04A
     r'^\d{2,4}[A-Z]?[-]\d{2,4}[A-Z]?$',
+    # Multi-letter suffix on floor-room doors: 10-03AB, 09-04AA
+    # Prefix limited to 2-3 digits (floor numbers) to avoid matching product models like 4040-18TJ
+    r'^\d{2,3}[-]\d{2,4}[A-Z]{2,3}$',
+    # Revision suffix: 10-82A.R1M, 10-82B.R1M
+    r'^\d{2,4}[-]\d{2,4}[A-Z]\.[A-Z]\d[A-Z]$',
+    # REV-embedded door numbers: 09-15AREV1 (after space normalization)
+    r'^\d{2,4}[-]\d{2,4}[A-Z]{0,3}REV\d?$',
     # Simple numeric: 101, 1001 (3-4 digits, optionally with letter suffix)
     # Bare 2-digit numbers (20, 94) are quantities/page numbers, not doors
     r'^\d{3,4}[A-Z]?$',
@@ -1432,6 +1439,10 @@ def is_valid_door_number(val: str, log_rejections: bool = False) -> bool:
         return False
 
     clean = val.strip().upper()
+
+    # Normalize revision designator: "09-15A REV1" → "09-15AREV1"
+    # pdfplumber sometimes inserts a space before REV in door numbers.
+    clean = re.sub(r'\s+(?=REV\d?$)', '', clean)
 
     # Reject empty or extreme lengths
     if len(clean) < 2 or len(clean) > 15:
@@ -1501,6 +1512,22 @@ def is_valid_door_number(val: str, log_rejections: bool = False) -> bool:
                 if log_rejections:
                     print(f"[DOOR_VALIDATION] Rejected '{val}': HW set prefix {prefix}")
                 return False
+
+    # Reject BHMA finish code ranges: "615-622", "626-630" etc.
+    # Both sides are 3-digit numbers in the 600-699 range (BHMA architectural finishes).
+    _finish_range = re.match(r'^(\d{3})-(\d{3})$', clean)
+    if _finish_range:
+        left, right = int(_finish_range.group(1)), int(_finish_range.group(2))
+        if 600 <= left <= 699 and 600 <= right <= 699:
+            if log_rejections:
+                print(f"[DOOR_VALIDATION] Rejected '{val}': BHMA finish code range")
+            return False
+
+    # Reject leading-zero numeric strings: "0468", "0123" — product/model numbers, not doors
+    if re.match(r'^0\d{2,3}[A-Z]?$', clean):
+        if log_rejections:
+            print(f"[DOOR_VALIDATION] Rejected '{val}': leading-zero numeric (product code)")
+        return False
 
     # Must match at least one positive door number pattern
     for pattern in DOOR_NUMBER_PATTERNS:

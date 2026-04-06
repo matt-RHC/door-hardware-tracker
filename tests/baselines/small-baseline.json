@@ -1,8 +1,8 @@
 {
   "pdf_name": "SMALL_081113.pdf",
-  "door_count": 4,
-  "confirmed_count": 4,
-  "flagged_count": 0,
+  "door_count": 6,
+  "confirmed_count": 3,
+  "flagged_count": 3,
   "hw_set_count": 6,
   "tables_found": 5,
   "reference_code_count": 0,
@@ -600,5 +600,18 @@
       ]
     }
   ],
-  "flagged_doors": []
+  "flagged_doors": [
+    {
+      "door_number": "10-82A.R1M",
+      "reason": "Pattern 'D-DL.LDL' doesn't match dominant pattern(s) (D-DL). May be a hardware set ID, reference code, or extraction artifact."
+    },
+    {
+      "door_number": "10-82B.R1M",
+      "reason": "Pattern 'D-DL.LDL' doesn't match dominant pattern(s) (D-DL). May be a hardware set ID, reference code, or extraction artifact."
+    },
+    {
+      "door_number": "09-15AREV1",
+      "reason": "Pattern 'D-DLD' doesn't match dominant pattern(s) (D-DL). May be a hardware set ID, reference code, or extraction artifact."
+    }
+  ]
 }
