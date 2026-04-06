@@ -104,6 +104,9 @@ async function callPdfplumber(
   const payload: Record<string, unknown> = { pdf_base64: base64 }
   if (userColumnMapping) {
     payload.user_column_mapping = userColumnMapping
+    console.log('[parse-pdf] Sending user_column_mapping to extract-tables:', JSON.stringify(userColumnMapping))
+  } else {
+    console.log('[parse-pdf] No user_column_mapping — extract-tables will auto-detect')
   }
 
   const response = await fetch(`${baseUrl}/api/extract-tables`, {
@@ -453,6 +456,7 @@ export async function POST(request: NextRequest) {
       const filteredPdfBase64: string | undefined = body.filteredPdfBase64 ?? undefined
 
       const userColumnMapping = body.userColumnMapping ?? null
+      console.log('[parse-pdf] Route handler received userColumnMapping:', userColumnMapping ? JSON.stringify(userColumnMapping) : 'null')
       const { hardwareSets, doors, corrections, stats } = await extractFromPDF(base64, filteredPdfBase64, userColumnMapping)
 
       return NextResponse.json({
