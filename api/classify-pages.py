@@ -16,6 +16,7 @@ import io
 import json
 import re
 import traceback
+from collections import Counter
 from http.server import BaseHTTPRequestHandler
 
 import pdfplumber
@@ -182,6 +183,116 @@ def detect_pdf_source(metadata: dict) -> str:
         return "unknown"
 
     return "unknown"
+
+
+# --- Document Fingerprinting Helpers ---
+
+
+def _detect_heading_format(text: str) -> str:
+    """
+    Match text against HW_SET_HEADING pattern groups and return which
+    heading format matched.
+
+    Returns: "himmel" | "hw_prefix" | "colon_sep" | "id_first" | "bare_set" | "unknown"
+    """
+    # Himmel format: "Heading #X (Set #Y)"
+    if re.search(r"(?i)heading\s*#?\s*[A-Z0-9].*?\(set\s*#?\s*[A-Z0-9]", text):
+        return "himmel"
+    # Hardware prefix: "Hardware Set X"
+    if re.search(r"(?i)hardware\s+set\s*[:# ]\s*[A-Z0-9]", text):
+        return "hw_prefix"
+    # Colon-separated: "Set: X"
+    if re.search(r"(?i)\bset\s*:\s*[A-Z0-9]", text):
+        return "colon_sep"
+    # ID first: "A1 - Hardware Set"
+    if re.search(
+        r"(?i)\b[A-Z0-9][A-Z0-9.\-]*\s*[-\u2013\u2014]\s*(?:hardware\s+)?set\b",
+        text,
+    ):
+        return "id_first"
+    # Bare set: "Set X" or "Set #X" (without hardware prefix)
+    if re.search(r"(?i)\bset\s*[# ]\s*[A-Z0-9]", text):
+        return "bare_set"
+    return "unknown"
+
+
+def _detect_door_number_format(text: str) -> str:
+    """
+    Check door number patterns in text and return the dominant format.
+
+    Returns: "dash_numeric" | "alpha_prefix" | "dotted" | "bare_numeric" | "mixed" | "unknown"
+    """
+    counts = {
+        "dash_numeric": len(re.findall(r"\b\d{2,4}-\d{1,3}[A-Z]?\b", text)),
+        "alpha_prefix": len(re.findall(r"\b[A-Z]{1,2}-\d{2,4}[A-Z]?\b", text)),
+        "dotted": len(re.findall(
+            r"\b\d{1,3}\.[A-Z]\d{1,3}\.\d{2,4}[A-Z]?\b", text
+        )),
+        "bare_numeric": len(re.findall(
+            r"\b(?:[A-Z]\d{3,4}[A-Z]?|\d{3,4}[A-Z])\b", text
+        )),
+    }
+    total = sum(counts.values())
+    if total == 0:
+        return "unknown"
+
+    max_format = max(counts, key=counts.get)
+    # If no single format dominates (>60%) across 3+ matches, it's mixed
+    if total >= 3 and counts[max_format] / total < 0.6:
+        return "mixed"
+    return max_format
+
+
+def _detect_table_strategy(page, tables: list) -> str:
+    """
+    Detect if pdfplumber tables have explicit ruled lines or are text-aligned.
+
+    Returns: "lines" | "text" | "none"
+    """
+    if not tables:
+        return "none"
+    lines = page.lines if hasattr(page, "lines") else []
+    rects = page.rects if hasattr(page, "rects") else []
+    rule_count = len(lines) + len(rects)
+    # 4+ ruling elements suggests explicit grid lines
+    if rule_count >= 4:
+        return "lines"
+    return "text"
+
+
+def fingerprint_page(page, page_type: str) -> dict:
+    """
+    Generate structural fingerprint for a single page.
+
+    Called after classify_page() to capture table structure, heading format,
+    and door number format metadata for document profiling.
+    """
+    text = page.extract_text() or ""
+    tables = page.find_tables()
+
+    # Max columns from first row of any table
+    col_count = 0
+    for table in tables:
+        extracted = table.extract()
+        if extracted and extracted[0]:
+            col_count = max(col_count, len(extracted[0]))
+
+    return {
+        "table_count": len(tables),
+        "table_strategy": _detect_table_strategy(page, tables),
+        "col_count": col_count,
+        "heading_format": (
+            _detect_heading_format(text)
+            if page_type == PAGE_TYPE_HARDWARE_SET
+            else None
+        ),
+        "has_qty_column": bool(re.search(r"(?i)\b(qty|quantity)\b", text)),
+        "door_number_format": (
+            _detect_door_number_format(text)
+            if page_type in (PAGE_TYPE_DOOR_SCHEDULE, PAGE_TYPE_HARDWARE_SET)
+            else None
+        ),
+    }
 
 
 def classify_page(page, page_index: int) -> dict:
@@ -417,6 +528,60 @@ def detect_boundaries(pages: list[dict], max_chunk_pages: int = 40) -> list[dict
     return result, reference_page_indices
 
 
+def build_profile(pages: list, source: str) -> dict:
+    """
+    Aggregate per-page fingerprints into a document-level profile.
+
+    This profile characterizes the PDF's structural patterns so downstream
+    extraction can branch logic by document format. Nothing reads this yet —
+    it is returned in the classify-pages response for future use.
+    """
+    heading_formats = []
+    door_number_formats = []
+    table_strategies = []
+
+    hw_set_count = 0
+    door_schedule_pages = 0
+    has_reference_tables = False
+
+    for p in pages:
+        fp = p.get("fingerprint") or {}
+
+        hf = fp.get("heading_format")
+        if hf and hf != "unknown":
+            heading_formats.append(hf)
+
+        dnf = fp.get("door_number_format")
+        if dnf and dnf != "unknown":
+            door_number_formats.append(dnf)
+
+        ts = fp.get("table_strategy")
+        if ts and ts != "none":
+            table_strategies.append(ts)
+
+        if p["type"] == PAGE_TYPE_HARDWARE_SET and p.get("hw_set_ids"):
+            hw_set_count += len(p["hw_set_ids"])
+        if p["type"] == PAGE_TYPE_DOOR_SCHEDULE:
+            door_schedule_pages += 1
+        if p["type"] == PAGE_TYPE_REFERENCE:
+            has_reference_tables = True
+
+    def _most_common(lst, default="unknown"):
+        if not lst:
+            return default
+        return Counter(lst).most_common(1)[0][0]
+
+    return {
+        "source": source,
+        "heading_format": _most_common(heading_formats),
+        "door_number_format": _most_common(door_number_formats),
+        "table_strategy": _most_common(table_strategies),
+        "hw_set_count": hw_set_count,
+        "door_schedule_pages": door_schedule_pages,
+        "has_reference_tables": has_reference_tables,
+    }
+
+
 class handler(BaseHTTPRequestHandler):
     """Vercel serverless handler for page classification."""
 
@@ -469,6 +634,9 @@ class handler(BaseHTTPRequestHandler):
                 page_classifications = []
                 for i, page in enumerate(pdf.pages):
                     classification = classify_page(page, i)
+                    classification["fingerprint"] = fingerprint_page(
+                        page, classification["type"]
+                    )
                     page_classifications.append(classification)
 
                 # Phase 2: Detect optimal chunk boundaries
@@ -489,11 +657,15 @@ class handler(BaseHTTPRequestHandler):
             else:
                 extraction_strategy = "pdfplumber"
 
+            # Build document profile from per-page fingerprints
+            profile = build_profile(page_classifications, pdf_source)
+
             # Build response
             response = {
                 "success": True,
                 "total_pages": total_pages,
                 "pdf_source": pdf_source,
+                "profile": profile,
                 "extraction_strategy": extraction_strategy,
                 "page_classifications": page_classifications,
                 "chunks": chunks,
