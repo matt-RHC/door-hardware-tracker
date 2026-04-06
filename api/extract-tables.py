@@ -120,6 +120,32 @@ EXPECTED_QTY_RANGES: dict[str, tuple[int, int]] = {
     "pull":               (1, 2),
 }
 
+# Division preference by category: which divisor to try first.
+# "leaf"         — per-leaf items (hinges): try leaves first, then openings
+# "opening"      — per-opening items (closers, locksets): try openings first, then leaves
+# "opening_only" — items that exist once per opening, never per-leaf
+DIVISION_PREFERENCE: dict[str, str] = {
+    "hinge":            "leaf",
+    "continuous_hinge": "leaf",
+    "pivot":            "leaf",
+    "closer":           "opening",
+    "lockset":          "opening",
+    "exit_device":      "opening",
+    "stop":             "opening",
+    "holder":           "opening",
+    "kick_plate":       "opening",
+    "cylinder":         "opening",
+    "strike":           "opening",
+    "pull":             "opening",
+    "silencer":         "opening",
+    "threshold":        "opening_only",
+    "sweep":            "opening_only",
+    "astragal":         "opening_only",
+    "seal":             "opening_only",
+    "coordinator":      "opening_only",
+    "flush_bolt":       "opening_only",
+}
+
 # Map item names to categories using keyword matching
 _CATEGORY_PATTERNS: list[tuple[str, re.Pattern]] = [
     ("continuous_hinge", re.compile(r"(?i)continuous\s*hinge|cont\.?\s*hinge")),
@@ -1661,9 +1687,12 @@ def parse_hw_set_id_from_text(text: str) -> tuple[str, str, str]:
     return (heading_id, generic_set_id, heading)
 
 
-# Pattern to count doors listed in heading block: "1 Pair Doors #..." or "1 Single Door #..."
+# Pattern to count doors listed in heading block.
+# Matches: "1 Pair Doors #...", "For 2 Single Doors", "Qty: 3 Pair Door Openings",
+#           "1 - Pair Doors #..."
 HEADING_DOOR_LINE = re.compile(
-    r"(\d+)\s+(Pair|Single)\s+Doors?\s+#",
+    r"(?:For\s+|Qty[:\s]+)?(\d+)\s*[-–]?\s*(Pair|Single)\s+Doors?\s*"
+    r"(?:Opening)?s?\s*(?:#|$)",
     re.IGNORECASE,
 )
 
@@ -2557,6 +2586,42 @@ def extract_reference_tables(pdf: pdfplumber.PDF) -> list[ReferenceCode]:
 
 _PAIR_RE = re.compile(r"(?i)\bpair\b|\bPR\b")
 
+# Suffixes stripped for fuzzy set-ID matching
+_SET_ID_SUFFIX_RE = re.compile(
+    r"(?i)(?::(?:WI|1|2|3|OS|IS)|-(?:NR|OS|IS|PRIV|NOCR)|\.PR\d*)$"
+)
+
+
+def _normalize_set_id(raw_id: str) -> str:
+    """Strip known suffixes for fuzzy matching (e.g. 'I2S-1E:WI' → 'I2S-1E')."""
+    return _SET_ID_SUFFIX_RE.sub("", raw_id.strip().upper())
+
+
+def _fuzzy_lookup(key: str, lookup_dict: dict[str, int]) -> int:
+    """Look up door count with fallback: exact → normalized → prefix match."""
+    # Exact
+    if key in lookup_dict:
+        return lookup_dict[key]
+    # Normalized
+    norm = _normalize_set_id(key)
+    if norm != key and norm in lookup_dict:
+        return lookup_dict[norm]
+    # Prefix: find longest key that is a prefix of norm, or vice versa
+    best_count, best_len = 0, 0
+    for dict_key, count in lookup_dict.items():
+        dict_norm = _normalize_set_id(dict_key)
+        if norm.startswith(dict_norm) or dict_norm.startswith(norm):
+            if len(dict_norm) > best_len:
+                best_count, best_len = count, len(dict_norm)
+    return best_count
+
+
+def _try_divide(raw_qty: int, divisor: int) -> tuple[int, bool]:
+    """Try integer division. Returns (per_unit, success)."""
+    if divisor > 1 and raw_qty >= divisor and raw_qty % divisor == 0:
+        return raw_qty // divisor, True
+    return raw_qty, False
+
 
 def _leaf_count_from_openings(
     openings: list[DoorEntry],
@@ -2631,29 +2696,53 @@ def normalize_quantities(
                 f"({door_count} openings, {leaf_count} leaves)"
             )
         else:
-            # Fallback 1: Opening List hw_heading match
+            # Fallback 1: Opening List hw_heading match (fuzzy)
             norm_heading = hw_set.set_id.strip().upper()
-            door_count = doors_per_heading.get(norm_heading, 0)
-            leaf_count = _leaf_count_from_openings(
-                openings, "hw_heading", norm_heading, door_count
-            )
+            door_count = _fuzzy_lookup(norm_heading, doors_per_heading)
             if door_count > 0:
+                leaf_count = _leaf_count_from_openings(
+                    openings, "hw_heading", norm_heading, door_count
+                )
                 logger.info(
                     f"[qty-norm] {hw_set.set_id}: fallback to Opening List "
                     f"heading match ({door_count} doors, {leaf_count} leaves)"
                 )
             else:
-                # Fallback 2: Opening List hw_set (generic) match
+                # Fallback 2: Opening List hw_set (generic) match (fuzzy)
                 norm_set = hw_set.generic_set_id.strip().upper() if hw_set.generic_set_id else norm_heading
-                door_count = doors_per_set.get(norm_set, 0)
-                leaf_count = _leaf_count_from_openings(
-                    openings, "hw_set", norm_set, door_count
-                )
+                door_count = _fuzzy_lookup(norm_set, doors_per_set)
                 if door_count > 0:
+                    leaf_count = _leaf_count_from_openings(
+                        openings, "hw_set", norm_set, door_count
+                    )
                     logger.info(
                         f"[qty-norm] {hw_set.set_id}: fallback to Opening List "
                         f"generic set match '{norm_set}' ({door_count} doors)"
                     )
+                else:
+                    # Fallback 3: search BOTH fields (catches column-swap errors)
+                    norm_id = _normalize_set_id(norm_heading)
+                    for door in openings:
+                        h = _normalize_set_id(door.hw_heading) if door.hw_heading else ""
+                        s = _normalize_set_id(door.hw_set) if door.hw_set else ""
+                        if norm_id and (norm_id == h or norm_id == s
+                                        or h.startswith(norm_id) or s.startswith(norm_id)):
+                            door_count += 1
+                    if door_count > 0:
+                        leaf_count = _leaf_count_from_openings(
+                            openings, "hw_heading", norm_heading, door_count
+                        )
+                        # Also check hw_set field in case columns were swapped
+                        if leaf_count == door_count:
+                            alt = _leaf_count_from_openings(
+                                openings, "hw_set", norm_heading, door_count
+                            )
+                            if alt != door_count:
+                                leaf_count = alt
+                        logger.info(
+                            f"[qty-norm] {hw_set.set_id}: fallback 3 cross-field "
+                            f"match ({door_count} doors, {leaf_count} leaves)"
+                        )
 
         # --- Single door or unknown: category cap fallback ---
         if door_count <= 1 and leaf_count <= 1:
@@ -2672,36 +2761,46 @@ def normalize_quantities(
                     item.qty_door_count = None
             continue
 
-        # --- Multi-door set: divide quantities ---
+        # --- Multi-door set: divide quantities (category-aware) ---
         for item in hw_set.items:
             raw_qty = item.qty
             item.qty_total = raw_qty
             divided = False
 
-            # Try 1: divide by leaf count (per-leaf items: hinges, closers, etc.)
-            if leaf_count > 1 and raw_qty >= leaf_count:
-                if raw_qty % leaf_count == 0:
-                    per_leaf = raw_qty // leaf_count
-                    item.qty = per_leaf
-                    item.qty_door_count = leaf_count
-                    item.qty_source = "divided"
-                    divided = True
-                    logger.info(
-                        f"[qty-norm] {hw_set.set_id}: '{item.name}' "
-                        f"{raw_qty} ÷ {leaf_count} leaves = {item.qty}"
-                    )
+            category = _classify_hardware_item(item.name)
+            pref = DIVISION_PREFERENCE.get(category, "opening")
 
-            # Try 2: divide by opening count (per-opening items: coordinator, etc.)
-            if not divided and door_count > 1 and door_count != leaf_count and raw_qty >= door_count:
-                if raw_qty % door_count == 0:
-                    per_opening = raw_qty // door_count
-                    item.qty = per_opening
-                    item.qty_door_count = door_count
+            if pref == "leaf":
+                # Per-leaf items (hinges): try leaves first, then openings
+                divisors = [
+                    (leaf_count, "leaves"),
+                    (door_count, "openings"),
+                ]
+            elif pref == "opening_only":
+                # Per-opening-only items: never divide by leaves
+                divisors = [
+                    (door_count, "openings"),
+                ]
+            else:  # "opening"
+                # Per-opening items: try openings first, then leaves
+                divisors = [
+                    (door_count, "openings"),
+                    (leaf_count, "leaves"),
+                ]
+
+            for divisor, label in divisors:
+                if divided:
+                    break
+                per_unit, ok = _try_divide(raw_qty, divisor)
+                if ok:
+                    item.qty = per_unit
+                    item.qty_door_count = divisor
                     item.qty_source = "divided"
                     divided = True
                     logger.info(
                         f"[qty-norm] {hw_set.set_id}: '{item.name}' "
-                        f"{raw_qty} ÷ {door_count} openings = {item.qty}"
+                        f"{raw_qty} ÷ {divisor} {label} = {item.qty} "
+                        f"(category={category}, pref={pref})"
                     )
 
             # Neither worked
@@ -2711,13 +2810,14 @@ def normalize_quantities(
                     item.qty_source = "parsed"
                     item.qty_door_count = leaf_count
                 else:
-                    # Doesn't divide evenly by leaves or openings → flag
+                    # Doesn't divide evenly → flag
                     item.qty_source = "flagged"
                     item.qty_door_count = leaf_count
                     logger.warning(
                         f"[qty-norm] {hw_set.set_id}: '{item.name}' "
                         f"qty {raw_qty} doesn't divide evenly by "
-                        f"{leaf_count} leaves or {door_count} openings, flagged"
+                        f"{leaf_count} leaves or {door_count} openings "
+                        f"(category={category}), flagged"
                     )
 
         # Sanity-check: if divided qty still exceeds category max, flag
