@@ -123,6 +123,8 @@ export default function ImportReviewTable({
   const [doors, setDoors] = useState<DoorEntry[]>(initialDoors);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [extractionRunId, setExtractionRunId] = useState<string | null>(null);
+  const [promoting, setPromoting] = useState(false);
   const [showSets, setShowSets] = useState(false);
   const [deletedRows, setDeletedRows] = useState<Set<number>>(new Set());
   // Pre-populate from AI triage if available, otherwise start empty
@@ -303,13 +305,48 @@ export default function ImportReviewTable({
       const result = await resp.json();
       if (!result.success) throw new Error("Save returned no success");
 
-      // Store PDF hash if available
+      // If staging path returned an extraction_run_id, pause for user confirmation
+      if (result.extraction_run_id) {
+        setExtractionRunId(result.extraction_run_id);
+        return;
+      }
+
+      // Production fallback path — complete immediately
       onComplete();
       onClose();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Save failed");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handlePromote = async () => {
+    if (!extractionRunId) return;
+    setPromoting(true);
+    setError(null);
+
+    try {
+      const resp = await fetch("/api/parse-pdf/promote", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ extractionRunId }),
+      });
+
+      if (!resp.ok) {
+        const errBody = await resp.json().catch(() => ({}));
+        throw new Error(errBody.error ?? `Promote failed (${resp.status})`);
+      }
+
+      const result = await resp.json();
+      if (!result.success) throw new Error("Promote returned no success");
+
+      onComplete();
+      onClose();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Promote failed");
+    } finally {
+      setPromoting(false);
     }
   };
 
@@ -376,20 +413,37 @@ export default function ImportReviewTable({
           </button>
           <button
             onClick={onClose}
-            disabled={saving}
+            disabled={saving || promoting}
             className="px-4 py-1.5 text-sm bg-white/[0.04] border border-white/[0.08] text-[#a1a1a6] rounded-lg hover:bg-white/[0.07] disabled:opacity-50 transition-colors"
           >
             Cancel
           </button>
-          <button
-            onClick={handleConfirmAndSave}
-            disabled={saving || activeDoors.length === 0}
-            className="px-5 py-1.5 text-sm bg-[#30d158] text-black font-semibold rounded-lg hover:opacity-90 disabled:bg-white/[0.06] disabled:text-[#6e6e73] transition-colors"
-          >
-            {saving ? "Saving..." : "Confirm & Save"}
-          </button>
+          {extractionRunId ? (
+            <button
+              onClick={handlePromote}
+              disabled={promoting}
+              className="px-5 py-1.5 text-sm bg-[#5ac8fa] text-black font-semibold rounded-lg hover:opacity-90 disabled:bg-white/[0.06] disabled:text-[#6e6e73] transition-colors"
+            >
+              {promoting ? "Importing..." : "Confirm Import"}
+            </button>
+          ) : (
+            <button
+              onClick={handleConfirmAndSave}
+              disabled={saving || activeDoors.length === 0}
+              className="px-5 py-1.5 text-sm bg-[#30d158] text-black font-semibold rounded-lg hover:opacity-90 disabled:bg-white/[0.06] disabled:text-[#6e6e73] transition-colors"
+            >
+              {saving ? "Saving..." : "Confirm & Save"}
+            </button>
+          )}
         </div>
       </div>
+
+      {/* ── Staging info banner ── */}
+      {extractionRunId && (
+        <div className="mx-6 mt-3 p-3 bg-[rgba(90,200,250,0.08)] border border-[rgba(90,200,250,0.2)] rounded-xl text-[#5ac8fa] text-sm">
+          Data staged for review. Click <strong>Confirm Import</strong> to finalize, or <strong>Cancel</strong> to discard.
+        </div>
+      )}
 
       {/* ── Error banner ── */}
       {error && (

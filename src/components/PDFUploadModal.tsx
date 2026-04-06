@@ -1335,6 +1335,23 @@ export default function PDFUploadModal({
     const saveResult = await saveResp.json();
     if (!saveResult.success) throw new Error("Save completed but no success response received");
 
+    // Auto-promote if staging path was used (legacy save has no second button)
+    if (saveResult.extraction_run_id) {
+      setStatus("Finalizing import...");
+      setProgress(90);
+      const promoteResp = await fetch("/api/parse-pdf/promote", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ extractionRunId: saveResult.extraction_run_id }),
+      });
+      if (!promoteResp.ok) {
+        const errBody = await promoteResp.json().catch(() => ({}));
+        throw new Error(errBody.error || `Import finalization failed (${promoteResp.status})`);
+      }
+      const promoteResult = await promoteResp.json();
+      if (!promoteResult.success) throw new Error("Import finalization returned no success");
+    }
+
     const warnings: string[] = [];
     if (saveResult.unmatchedSets?.length) {
       warnings.push(`${saveResult.unmatchedSets.length} set(s) not found: ${saveResult.unmatchedSets.join(", ")}`);
