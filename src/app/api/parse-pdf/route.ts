@@ -115,11 +115,21 @@ async function callPdfplumber(
     body: JSON.stringify(payload),
   })
 
+  // Read raw text first — if the Python function crashes, response.json()
+  // throws "Unexpected end of JSON input" with no diagnostic info
+  const responseText = await response.text()
+
   if (!response.ok) {
-    throw new Error(`Pdfplumber extraction failed: ${response.status} ${response.statusText}`)
+    console.error(`[parse-pdf] extract-tables returned ${response.status}:`, responseText.slice(0, 500))
+    throw new Error(`Pdfplumber extraction failed: ${response.status} — ${responseText.slice(0, 200)}`)
   }
 
-  return response.json()
+  try {
+    return JSON.parse(responseText) as PdfplumberResult
+  } catch {
+    console.error(`[parse-pdf] extract-tables returned invalid JSON (${responseText.length} bytes):`, responseText.slice(0, 500))
+    throw new Error(`extract-tables returned invalid JSON (${responseText.length} bytes): ${responseText.slice(0, 200)}`)
+  }
 }
 
 async function callLLMReview(
