@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { createExtractionRun, updateExtractionRun, writeStagingData } from '@/lib/extraction-staging'
+import type { StagingOpening } from '@/lib/extraction-staging'
 
 // --- Types ---
 
@@ -33,7 +35,96 @@ interface DoorEntry {
   hand: string
 }
 
+// --- Shared helper: builds Door/Frame auto-items + set items per opening ---
+
+function buildPerOpeningItems(
+  openings: Array<{ id: string; door_number: string; hw_set: string | null }>,
+  doorInfoMap: Map<string, { door_type: string; frame_type: string }>,
+  setMap: Map<string, HardwareSet>,
+  fkColumn: 'opening_id' | 'staging_opening_id',
+  extraFields?: Record<string, unknown>,
+): Array<Record<string, unknown>> {
+  const rows: Array<Record<string, unknown>> = []
+
+  for (const opening of openings) {
+    let sortOrder = 0
+    const doorInfo = doorInfoMap.get(opening.door_number)
+
+    // Determine if pair
+    const hwSet = setMap.get(opening.hw_set ?? '')
+    const heading = (hwSet?.heading ?? '').toLowerCase()
+    const doorType = (doorInfo?.door_type ?? '').toLowerCase()
+    const isPair = heading.includes('pair') || heading.includes('double') ||
+                   doorType.includes('pr') || doorType.includes('pair')
+
+    const base = { [fkColumn]: opening.id, ...extraFields }
+
+    // Add door(s) as checkable items
+    if (isPair) {
+      rows.push({
+        ...base,
+        name: 'Door (Active Leaf)',
+        qty: 1, manufacturer: null, model: doorInfo?.door_type ?? null,
+        finish: null, sort_order: sortOrder++,
+      })
+      rows.push({
+        ...base,
+        name: 'Door (Inactive Leaf)',
+        qty: 1, manufacturer: null, model: doorInfo?.door_type ?? null,
+        finish: null, sort_order: sortOrder++,
+      })
+    } else {
+      rows.push({
+        ...base,
+        name: 'Door',
+        qty: 1, manufacturer: null, model: doorInfo?.door_type ?? null,
+        finish: null, sort_order: sortOrder++,
+      })
+    }
+
+    // Frame
+    rows.push({
+      ...base,
+      name: 'Frame',
+      qty: 1, manufacturer: null, model: doorInfo?.frame_type ?? null,
+      finish: null, sort_order: sortOrder++,
+    })
+
+    // Hardware set items
+    if ((hwSet?.items?.length ?? 0) > 0) {
+      for (const item of hwSet?.items ?? []) {
+        rows.push({
+          ...base,
+          name: item.name,
+          qty: item.qty || 1,
+          manufacturer: item.manufacturer || null,
+          model: item.model || null,
+          finish: item.finish || null,
+          sort_order: sortOrder++,
+        })
+      }
+    }
+  }
+
+  return rows
+}
+
+// --- Shared: check for unmatched sets ---
+
+function findUnmatchedSets(doors: DoorEntry[], setMap: Map<string, HardwareSet>): string[] {
+  const unmatched: string[] = []
+  for (const door of doors) {
+    if (door.hw_set && !setMap.has(door.hw_set) && !unmatched.includes(door.hw_set)) {
+      unmatched.push(door.hw_set)
+    }
+  }
+  return unmatched
+}
+
 // --- Save handler: takes merged parse results, writes to DB ---
+
+const useStaging = true
+const CHUNK_SIZE = 50
 
 export async function POST(request: NextRequest) {
   try {
@@ -90,6 +181,102 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Build doorInfoMap (needed by both staging and production paths)
+    const doorInfoMap = new Map<string, { door_type: string; frame_type: string }>()
+    for (const door of doors) {
+      doorInfoMap.set(door.door_number, {
+        door_type: door.door_type || '',
+        frame_type: door.frame_type || '',
+      })
+    }
+
+    // ========== STAGING PATH ==========
+    if (useStaging) {
+      try {
+        // 1. Create extraction run
+        const runId = await createExtractionRun(supabase, {
+          projectId,
+          userId: user.id,
+          extractionMethod: 'pdfplumber',
+        })
+
+        // 2. Transform doors → StagingOpening[]
+        const stagingOpenings: StagingOpening[] = doors.map(d => ({
+          door_number: d.door_number,
+          hw_set: d.hw_set || undefined,
+          location: d.location || undefined,
+          door_type: d.door_type || undefined,
+          frame_type: d.frame_type || undefined,
+          fire_rating: d.fire_rating || undefined,
+          hand: d.hand || undefined,
+        }))
+
+        // 3. Write staging openings (empty hardwareSets — items handled separately)
+        const stagingResult = await writeStagingData(supabase, runId, projectId, stagingOpenings, [])
+
+        // 4. Query back staging openings to get their IDs for item insertion
+        const { data: stagingOpeningRows, error: fetchError } = await (supabase as any)
+          .from('staging_openings')
+          .select('id, door_number, hw_set')
+          .eq('extraction_run_id', runId)
+
+        if (fetchError) {
+          throw new Error(`Failed to fetch staging openings: ${fetchError.message}`)
+        }
+
+        // 5. Build all items (Door/Frame + set items) via shared helper
+        const allItems = buildPerOpeningItems(
+          stagingOpeningRows ?? [],
+          doorInfoMap,
+          setMap,
+          'staging_opening_id',
+          { extraction_run_id: runId },
+        )
+
+        // 6. Chunk-insert staging hardware items
+        let itemsInserted = 0
+        for (let i = 0; i < allItems.length; i += CHUNK_SIZE) {
+          const chunk = allItems.slice(i, i + CHUNK_SIZE)
+          const { data, error } = await (supabase as any)
+            .from('staging_hardware_items')
+            .insert(chunk as any)
+            .select('id')
+
+          if (error) {
+            console.error(`Error inserting staging hw items chunk at ${i}:`, error)
+          } else if (data) {
+            itemsInserted += data.length
+          }
+        }
+
+        // 7. Update extraction run status
+        await updateExtractionRun(supabase, runId, {
+          status: 'reviewing',
+          doorsExtracted: stagingResult.openingsCount,
+          hwSetsExtracted: hardwareSets.length,
+          completedAt: new Date().toISOString(),
+        })
+
+        const unmatchedSets = findUnmatchedSets(doors, setMap)
+
+        console.log(`Staging save complete: ${stagingResult.openingsCount} openings, ${itemsInserted} items, run=${runId}`)
+
+        return NextResponse.json({
+          success: true,
+          openingsCount: stagingResult.openingsCount,
+          itemsCount: itemsInserted,
+          hardwareSets: hardwareSets.length,
+          unmatchedSets: unmatchedSets.length > 0 ? unmatchedSets : undefined,
+          extraction_run_id: runId,
+        })
+      } catch (stagingError) {
+        console.error('Staging save failed, falling back to direct production save:', stagingError)
+        // Fall through to production path below
+      }
+    }
+
+    // ========== PRODUCTION PATH (fallback) ==========
+
     // Delete existing openings (cascade deletes children)
     const { error: deleteError } = await (supabase as any)
       .from('openings')
@@ -113,7 +300,6 @@ export async function POST(request: NextRequest) {
       hand: door.hand || null,
     }))
 
-    const CHUNK_SIZE = 50
     const insertedOpenings: Array<{ id: string; door_number: string; hw_set: string }> = []
 
     for (let i = 0; i < openingRows.length; i += CHUNK_SIZE) {
@@ -131,74 +317,8 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Build hardware item rows
-    const allHardwareRows: Array<Record<string, unknown>> = []
-
-    const doorInfoMap = new Map<string, { door_type: string; frame_type: string }>()
-    for (const door of doors) {
-      doorInfoMap.set(door.door_number, {
-        door_type: door.door_type || '',
-        frame_type: door.frame_type || '',
-      })
-    }
-
-    for (const opening of insertedOpenings) {
-      let sortOrder = 0
-      const doorInfo = doorInfoMap.get(opening.door_number)
-
-      // Determine if pair
-      const hwSet = setMap.get(opening.hw_set)
-      const heading = (hwSet?.heading || '').toLowerCase()
-      const doorType = (doorInfo?.door_type || '').toLowerCase()
-      const isPair = heading.includes('pair') || heading.includes('double') ||
-                     doorType.includes('pr') || doorType.includes('pair')
-
-      // Add door(s) as checkable items
-      if (isPair) {
-        allHardwareRows.push({
-          opening_id: opening.id,
-          name: `Door (Active Leaf)`,
-          qty: 1, manufacturer: null, model: doorInfo?.door_type || null,
-          finish: null, sort_order: sortOrder++,
-        })
-        allHardwareRows.push({
-          opening_id: opening.id,
-          name: `Door (Inactive Leaf)`,
-          qty: 1, manufacturer: null, model: doorInfo?.door_type || null,
-          finish: null, sort_order: sortOrder++,
-        })
-      } else {
-        allHardwareRows.push({
-          opening_id: opening.id,
-          name: `Door`,
-          qty: 1, manufacturer: null, model: doorInfo?.door_type || null,
-          finish: null, sort_order: sortOrder++,
-        })
-      }
-
-      // Frame
-      allHardwareRows.push({
-        opening_id: opening.id,
-        name: `Frame`,
-        qty: 1, manufacturer: null, model: doorInfo?.frame_type || null,
-        finish: null, sort_order: sortOrder++,
-      })
-
-      // Hardware set items
-      if (hwSet?.items?.length) {
-        for (const item of hwSet.items) {
-          allHardwareRows.push({
-            opening_id: opening.id,
-            name: item.name,
-            qty: item.qty || 1,
-            manufacturer: item.manufacturer || null,
-            model: item.model || null,
-            finish: item.finish || null,
-            sort_order: sortOrder++,
-          })
-        }
-      }
-    }
+    // Build hardware item rows via shared helper
+    const allHardwareRows = buildPerOpeningItems(insertedOpenings, doorInfoMap, setMap, 'opening_id')
 
     let itemsInserted = 0
     for (let i = 0; i < allHardwareRows.length; i += CHUNK_SIZE) {
@@ -216,13 +336,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Check for unmatched sets
-    const unmatchedSets: string[] = []
-    for (const door of doors) {
-      if (door.hw_set && !setMap.has(door.hw_set) && !unmatchedSets.includes(door.hw_set)) {
-        unmatchedSets.push(door.hw_set)
-      }
-    }
+    const unmatchedSets = findUnmatchedSets(doors, setMap)
 
     console.log(`Save complete: ${insertedOpenings.length} openings, ${itemsInserted} hardware items`)
 
