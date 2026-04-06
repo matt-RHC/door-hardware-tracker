@@ -82,8 +82,11 @@ function transformTriageResponse(
     const c = classifications.find((cl) => cl.door_number === d.door_number)
     return !c || c.class === 'door'
   })
+  // Flag by_others doors and low-confidence non-door classifications.
+  // Don't flag class="door" items — if triage failed, all doors come back
+  // as class="door" + confidence="low" and flagging them all is useless.
   const flagged = classifications
-    .filter((c) => c.class === 'by_others' || c.confidence === 'low')
+    .filter((c) => c.class === 'by_others' || (c.confidence === 'low' && c.class !== 'door'))
     .map((c) => ({
       door_number: c.door_number,
       reason: c.reason,
@@ -219,19 +222,23 @@ describe('transformTriageResponse', () => {
     expect(result.accepted.map((d) => d.door_number)).toEqual(['101', '102'])
   })
 
-  it('flags by_others and low-confidence items', () => {
+  it('flags by_others and low-confidence non-door items', () => {
     const raw = {
       classifications: [
         { door_number: '101', class: 'door', confidence: 'high', reason: 'valid' },
         { door_number: '102', class: 'by_others', confidence: 'high', reason: 'ALBO' },
         { door_number: '103', class: 'door', confidence: 'low', reason: 'uncertain' },
+        { door_number: 'L9175', class: 'reject', confidence: 'low', reason: 'product code' },
       ],
     }
-    const result = transformTriageResponse(raw, doors.slice(0, 3))
+    const result = transformTriageResponse(raw, doors)
 
-    expect(result.flagged).toHaveLength(2) // 102 (by_others) + 103 (low confidence)
+    // 102 (by_others) + L9175 (low-confidence reject). Door 103 is NOT flagged
+    // because class="door" + confidence="low" should not flag (triage fail-open).
+    expect(result.flagged).toHaveLength(2)
     expect(result.flagged[0].door_number).toBe('102')
     expect(result.flagged[0].confidence).toBe(0.9) // high → 0.9
+    expect(result.flagged[1].door_number).toBe('L9175')
     expect(result.flagged[1].confidence).toBe(0.3) // low → 0.3
   })
 

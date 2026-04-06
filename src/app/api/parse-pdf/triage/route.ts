@@ -73,9 +73,10 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { candidates, filteredPdfBase64 } = body as {
+    const { candidates, filteredPdfBase64, userHints } = body as {
       candidates: TriageCandidate[]
       filteredPdfBase64?: string
+      userHints?: Array<{ question_id: string; question_text: string; answer: string }>
     }
 
     if (!candidates || candidates.length === 0) {
@@ -97,7 +98,14 @@ export async function POST(request: NextRequest) {
       2
     )
 
-    const userPrompt = `Classify each candidate as "door", "by_others", or "reject". Return a JSON array of objects with: door_number, class, confidence ("high"/"medium"/"low"), reason (brief).
+    // Build user hints section if the operator answered validation questions
+    let hintsSection = ''
+    if (userHints && userHints.length > 0) {
+      const lines = userHints.map((h) => `- ${h.question_text}: ${h.answer}`)
+      hintsSection = `\n\nThe user (a door hardware professional) provided the following ground-truth answers during validation. Treat these as authoritative:\n${lines.join('\n')}\n`
+    }
+
+    const userPrompt = `Classify each candidate as "door", "by_others", or "reject". Return a JSON array of objects with: door_number, class, confidence ("high"/"medium"/"low"), reason (brief).${hintsSection}
 
 Candidates:
 ${candidateSummary}`
