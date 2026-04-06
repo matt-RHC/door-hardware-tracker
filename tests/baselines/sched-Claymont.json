@@ -1,0 +1,2545 @@
+{
+  "pdf_name": "sched-Claymont.pdf",
+  "door_count": 0,
+  "confirmed_count": 0,
+  "flagged_count": 0,
+  "hw_set_count": 29,
+  "tables_found": 3,
+  "reference_code_count": 0,
+  "hardware_sets": [
+    {
+      "set_id": "1A",
+      "heading": "Set #1A Classrooms \u2013 Learning Labs Out Swing with OH stop",
+      "item_count": 6,
+      "items": [
+        {
+          "name": "ea. Hinges BB1279 4.5\u201d x 4.5\u201d NRP US26D HAG",
+          "qty": 3,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Classroom Intruder Lock L9071R 06A US26D SCH",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Core Match Existing System US26D SCH",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. O.H. Holder 7017 SRF US26D HAG",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Kick Plate 190S 10\u201d x 2\u201d LDW US32D HAG",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Gasket 726 head and jambs Char HAG",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "3A",
+      "heading": "Set #3A Band Room",
+      "item_count": 12,
+      "items": [
+        {
+          "name": "ea. Hinges BB1279 4.5\u201d x 4.5\u201d NRP US26D HAG",
+          "qty": 5,
+          "qty_source": "capped",
+          "qty_total": 6,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Surface Bolt 275D US26D HAG",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Classroom Intruder Lock L9071R 06A US26D SCH",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Core Match Existing System US26D SCH",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Closer 4111 CUSH (Active leaf) ALM LCN",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. O.H. Holder 7016 SRF (Inactive leaf) US26D HAG",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Kick Plate 190S 10\u201d x 1\u201d LDW US32D HAG",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Threshold 412S door opening width MIL HAG",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Sound Gasket 726 head and jambs Char HAG",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Sound Gasket 722 Meeting stiles at astragal Char HAG",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Concealed Auto. Door Bottoms 730S N door width MIL HAG",
+          "qty": 1,
+          "qty_source": "capped",
+          "qty_total": 2,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Astragal 835S door height MIL HAG",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "3B",
+      "heading": "Set #3B Choral Room, Music Room",
+      "item_count": 9,
+      "items": [
+        {
+          "name": "ea. Hinges BB1279 4.5\u201d x 4.5\u201d NRP US26D HAG",
+          "qty": 3,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Classroom Intruder Lock L9071R 06A US26D SCH",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Core Match Existing System US26D SCH",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Closer 4000 ALM LCN",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Kick Plate 190S 10\u201d x 2\u201d LDW US32D HAG",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Wall Stop 236W US32D HAG",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Threshold 412S door opening width MIL HAG",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Sound Gasket 726 head and jambs Char HAG",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Concealed Auto. Door Bottom 730S N door width MIL HAG",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "4A",
+      "heading": "Set #4A Classroom, Nurses, Faculty & Cafeteria Sgl. Use Toilets",
+      "item_count": 5,
+      "items": [
+        {
+          "name": "ea. Hinges BB1279 4.5\u201d x 4.5\u201d NRP US26D HAG",
+          "qty": 3,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Privacy Lock, with indicator L9496 06A US26D SCH",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Kick Plate 190S 10\u201d x 2\u201d LDW US32D HAG",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Wall Stop 236W US32D HAG",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Silencers 307D Gray HAG",
+          "qty": 3,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "7A",
+      "heading": "Set #7A Fire Pump Room, Storage Closet \u2013 Out Swing \u2013 Fire Rated",
+      "item_count": 6,
+      "items": [
+        {
+          "name": "ea. Hinges BB1279 4.5\u201d x 4.5\u201d NRP US26D HAG",
+          "qty": 3,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Storeroom Lock L9080R 06A US26D HAG",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Core Match Existing System US26D -",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Closer 4000 ALM LCN",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Kick Plate 190S 10\u201d x 2\u201d LDW US32D HAG",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Gasket 726 head and jambs Char HAG",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "10",
+      "heading": "Set #10 Exterior Class access",
+      "item_count": 8,
+      "items": [
+        {
+          "name": "ea. Hinges BB1191 4.5\u201d x 4.5\u201d NRP US32D HAG",
+          "qty": 3,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Classroom Intruder Lock L9071R 06A US26D SCH",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Core Match Existing System US26D SCH",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Closer 4111CUSH ALM LCN",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Kick Plate 190S 10\u201d x 2\u201d LDW US32D HAG",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Threshold 412S door width MIL HAG",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Gasket 726 head and jambs Char HAG",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Drip Cap 810S door width + 4\u201d MIL HAG",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "11",
+      "heading": "Set #11 Exterior Utility - Pair",
+      "item_count": 8,
+      "items": [
+        {
+          "name": "ea. Hinges BB1191 4.5\u201d x 4.5\u201d NRP US32D HAG",
+          "qty": 5,
+          "qty_source": "capped",
+          "qty_total": 6,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Flush Bolt 282D US26D HAG",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Storeroom Lock L9080R 06A US26D HAG",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Core Match Existing System US26D -",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Kick Plate 190S 10\u201d x 1\u201d LDW US32D HAG",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. O.H. Holder 7016 SRF (2\u20190\u201d inactive leaf) US26D HAG",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Closer 4111HCUSH (3\u20190\u201d active leaf) ALM LCN",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Gasket 726 head and jambs Char HAG",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "11A",
+      "heading": "Set #11A Exterior Utility \u2013 Pair with Card Reader",
+      "item_count": 9,
+      "items": [
+        {
+          "name": "ea. Electrified Hinge BB1191 4.5\u201d x 4.5\u201d ETW US32D HAG",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Hinges BB1191 4.5\u201d x 4.5\u201d NRP US32D HAG",
+          "qty": 5,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Flush Bolt 282D US26D HAG",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Electric Storeroom Lock L9080REU 06A US32D SCH",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Core Match Existing System US26D SCH",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Kick Plate 190S 10\u201d x 1\u201d LDW US32D HAG",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Closer 4111 HCUSH ALM LCN",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Threshold 412S door opening width MIL HAG",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Gasket 726 head and jambs Char HAG",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "12",
+      "heading": "Set #12 Interior Utility - Pair",
+      "item_count": 10,
+      "items": [
+        {
+          "name": "ea. Hinges BB1191 4.5\u201d x 4.5\u201d NRP US32D HAG",
+          "qty": 5,
+          "qty_source": "capped",
+          "qty_total": 6,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Flush Bolt 282D US26D HAG",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Storeroom Lock L9080R 06A US26D HAG",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Core Match Existing System US26D -",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. O.H. Holder 7016 SRF (2\u20190\u201d inactive leaf) US26D HAG",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Closer 4111 HCUSH (3\u20190\u201d active leaf) ALM LCN",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Kick Plate 190S 10\u201d x 1\u201d LDW US32D HAG",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Threshold 412S door width MIL HAG",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Gasket 726 head and jambs Char HAG",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Drip Cap 810S door opening width + 4\u201d MIL HAG",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "12A",
+      "heading": "Set #12A Interior Utility - Pair",
+      "item_count": 10,
+      "items": [
+        {
+          "name": "ea. Hinges BB1191 4.5\u201d x 4.5\u201d NRP US32D HAG",
+          "qty": 5,
+          "qty_source": "capped",
+          "qty_total": 6,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Flush Bolt 282D US26D HAG",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Classroom Intruder Lock L9071R 06A US26D SCH",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Core Match Existing System US26D SCH",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. O.H. Holder 7016 SRF (2\u20190\u201d inactive leaf) US26D HAG",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Closer 4111 HCUSH (3\u20190\u201d active leaf) ALM LCN",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Kick Plate 190S 10\u201d x 1\u201d LDW US32D HAG",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Threshold 412S door width MIL HAG",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Gasket 726 head and jambs Char HAG",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Drip Cap 810S door opening width + 4\u201d MIL HAG",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "13",
+      "heading": "Set #13 Interior Stage \u2013 Pair \u2013 Fire rated",
+      "item_count": 11,
+      "items": [
+        {
+          "name": "ea. Hinges BB1191 4.5\u201d x 4.5\u201d NRP US32D HAG",
+          "qty": 5,
+          "qty_source": "capped",
+          "qty_total": 6,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "set Automatic Flush Bolt 292D US26D HAG",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Classroom Intruder Lock L9071R 06A US26D SCH",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Core Match Existing System US26D SCH",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Closer 4111 HCUSH (3\u20190\u201d active leaf) ALM LCN",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Coordinator 297D USP HAG",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Kick Plate 190S 10\u201d x 1\u201d LDW US32D HAG",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Magnetic Holders 380 Series wall mount ALM HAG",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Threshold 412S door width MIL HAG",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Gasket 726 head and jambs Char HAG",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Drip Cap 810S door opening width + 4\u201d MIL HAG",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "14",
+      "heading": "Set #14 Interior Auditorium Main entrance \u2013 Unequal Pair",
+      "item_count": 9,
+      "items": [
+        {
+          "name": "ea. Hinges BB1279 4.5\u201d x 4.5\u201d NRP US26D HAG",
+          "qty": 5,
+          "qty_source": "capped",
+          "qty_total": 6,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "set Automatic Flush Bolt 296W (2\u20190\u201d inactive leaf) US26D HAG",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Mortise Panic Device 9875-L-06 (3\u20190\u201d active leaf) US26D HAG",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Mortise Cylinder & Core Match Existing System US26D -",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Closer 4111 HCUSH ALM HAG",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Coordinator 297D USP HAG",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Kick Plate 190S 10\u201d x 1\u201d LDW US32D HAG",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Threshold 412S door width MIL HAG",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Gasket 726 head and jambs Char HAG",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "15A",
+      "heading": "Set #15A Art Room Access \u2013 Unequal Pair \u2013 Fire Rated",
+      "item_count": 10,
+      "items": [
+        {
+          "name": "ea. Hinges BB1279 4.5\u201d x 4.5\u201d NRP US26D HAG",
+          "qty": 5,
+          "qty_source": "capped",
+          "qty_total": 6,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "set Automatic Flush Bolt 292D (2\u20190\u201d inactive leaf) US26D HAG",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Classroom Intruder Lock L9071R 06A US26D SCH",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Core Match Existing System US26D SCH",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Coordinator 297D USP HAG",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Closer 4111 CUSH ALM HAG",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Kick Plate 190S 10\u201d x 1\u201d LDW US32D HAG",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Magnetic Holders 380 Series wall mount ALM HAG",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Threshold 412S door width MIL HAG",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Gasket 726 head and jambs Char HAG",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "15",
+      "heading": "Set #15 Interior Auditorium Access \u2013 Unequal Pair \u2013 Fire Rated",
+      "item_count": 10,
+      "items": [
+        {
+          "name": "ea. Hinges BB1279 4.5\u201d x 4.5\u201d NRP US26D HAG",
+          "qty": 5,
+          "qty_source": "capped",
+          "qty_total": 6,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "set Automatic Flush Bolt 292D (2\u20190\u201d inactive leaf) US26D HAG",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Mortise Fire Exit Device 9875F-L (3\u20190\u201d active leaf) US26D HAG",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Mortise Cylinder & Core Match Existing System US26D -",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Coordinator 297D USP HAG",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Closer 4111 CUSH ALM LCN",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Kick Plate 190S 10\u201d x 1\u201d LDW US32D HAG",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Magnetic Holders 380 Series wall mount ALM HAG",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Threshold 412S door width MIL HAG",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Gasket 726 head and jambs Char HAG",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "18",
+      "heading": "Set #18 Lobby from Stairs - Pair \u2013 Fire Rated",
+      "item_count": 10,
+      "items": [
+        {
+          "name": "ea. Hinges BB1279 5\u201d x 4.5\u201d ETW US26D HAG",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Hinges BB1279 5\u201d x 4.5\u201d NRP US26D HAG",
+          "qty": 4,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. MLR Fire Exit Device SVR 9827-F-LBR-QEL-LNL-06 w/fire bolt US26D VD",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Rim Cylinder & Core Match Existing System US26D -",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Closer 4000 ALM LCN",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Kick Plate 190S 10\u201d x 1\u201d LDW US32D HAG",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Wall Stop 236W US32D HAG",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Gasket 726 head and jambs Char HAG",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Key Switch 29KS 2LED US32D HAG",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Mortise Cylinder & Core Match Existing System (for key switch) US26D -",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "19",
+      "heading": "Set #19 Stairs \u2013 Pair Alum Exterior Non- Rated",
+      "item_count": 9,
+      "items": [
+        {
+          "name": "ea. Continuous Hinge 780-224 HD Clear HAG",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Rim Exit Device CD35A-EO US26D VD",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Mortise Cylinder & Core Match Existing System (for CD) US26D SCH",
+          "qty": 1,
+          "qty_source": "capped",
+          "qty_total": 2,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Off-set Pulls 11J US32D HAG",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Keyed Rem. Mullion 4900T USP HAG",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Rim Cylinder & Core Match Existing System (for KRM) US26D -",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Closer w/hold open 4111 HCUSH ALUM LCN",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Drop Plate 5110 (as required) ALUM HAG",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Threshold 412S MIL HAG",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "19A",
+      "heading": "Set #19A Stairs \u2013 Pair Alum Exterior Non- Rated with Card Reader",
+      "item_count": 11,
+      "items": [
+        {
+          "name": "ea. Continuous Hinge 780-224 HD Clear HAG",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Rim Exit Device CD35A-EO (Inactive Leaf) US26D VD",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. MLR Rim Exit Device 4601 MLR Night Latch (NL) US32D HAG",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Rim Cylinder & Core Match Existing System (for NL) US26D SCH",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Mortise Cylinder & Core Match Existing System (for CD) US26D SCH",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Off-set Pulls 11J US32D HAG",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Keyed Rem. Mullion 4900T USP HAG",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Rim Cylinder & Core Match Existing System (for KRM) US26D SCH",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Closer w/hold open 4111 HCUSH ALUM LCN",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Drop Plate (as required) ALUM LCN",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Threshold 412S MIL HAG",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "20",
+      "heading": "Set #20 Stairs \u2013 Pair Alum Vestibule Non- Rated",
+      "item_count": 5,
+      "items": [
+        {
+          "name": "ea. Cont. Hinge 780-224HD Clear HAG",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Push/Pull Bars 157V US32D HAG",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Closer w/hold open 4111 CUSH ALUM LCN",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Drop Plate 5110 (as required) ALUM HAG",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Threshold 412S door opening width MIL HAG",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "21",
+      "heading": "Set #21 Stairs \u2013 SGL. Alum Exterior Non- Rated",
+      "item_count": 7,
+      "items": [
+        {
+          "name": "ea. Continuous Hinge 780-224 HD Clear HAG",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Rim Exit Device 35A-NL-OP US32D VD",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Rim Cylinder & Core Match Existing System (for NL) US26D SCH",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Off-set Pull 11J US32D HAG",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Closer 4111 CUSH ALUM LCN",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Drop Plate (as required) ALUM LCN",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Threshold 412S MIL HAG",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "22",
+      "heading": "Set #22 Media Center & Cafeteria - Interior Pair Alum Non- Rated",
+      "item_count": 10,
+      "items": [
+        {
+          "name": "ea. Continuous Hinge 780-224 HD Clear HAG",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Rim Exit Device CD35A-EO US32D VD",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Mortise Cylinder & Core Match Existing System (for CD) US26D SCH",
+          "qty": 1,
+          "qty_source": "capped",
+          "qty_total": 2,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Off-set Pulls 11J US32D HAG",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Keyed Rem. Mullion 4900T USP HAG",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Rim Cylinder Match Existing System (for KRM) US26D SCH",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Closer 4111 CUSH ALUM LCN",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Closer 4111 HCUSH (E106A) ALUM LCN",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Drop Plate (as required) ALUM LCN",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Threshold 412S MIL HAG",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "23",
+      "heading": "Set #23 Multi-use Toilets",
+      "item_count": 9,
+      "items": [
+        {
+          "name": "ea. Hinges BB1279 4.5\u201d x 4.5\u201d US26D HAG",
+          "qty": 3,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Aux Mortise Classroom Dead-bolt L463R US26D SCH",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Core Match Existing System US26D SCH",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Push Plate 30S 4\u201d x 16\u201d US32D HAG",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Pull Plate 33E 4\u201d x 16\u201d US32D HAG",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Closer 4000 ALM LCN",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Kick Plate 190S 10\u201d x 2\u201d LDW US32D HAG",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Wall Stop 236W US32D HAG",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Silencers 307D Gray HAG",
+          "qty": 3,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "24",
+      "heading": "Set #24 Sgl Media Room Exit",
+      "item_count": 8,
+      "items": [
+        {
+          "name": "ea. Hinges BB1279 4.5\u201d x 4.5\u201d US26D HAG",
+          "qty": 3,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Panic Device CD98L-NL-06 US26D VD",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Rim Cylinder & Core Match Existing System (NL) US26D SCH",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Mortise Cylinder & Core Match Existing System (CD) US26D SCH",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Closer 4000 ALM LCN",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Kick Plate 190S 10\u201d x 2\u201d LDW US32D HAG",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Wall Stop 236W US32D HAG",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Gasket 726 head and jambs Char HAG",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "25",
+      "heading": "Set #25 Cafeteria Sliding Barn Door Bi-Parting Pair",
+      "item_count": 3,
+      "items": [
+        {
+          "name": "ea. Latching Pull LLPA60BS less exterior side US32D CRL",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Flush Pull 15C US32D HAG",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Dust Proof Strike 58DKBS US32D CRL",
+          "qty": 2,
+          "qty_source": "capped",
+          "qty_total": 4,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "26",
+      "heading": "Set #26 Cafeteria Sliding Barn Door Sgl.",
+      "item_count": 3,
+      "items": [
+        {
+          "name": "ea. Latching Pull LLPA60BS less exterior side US32D CRL",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Flush Pull 15C US32D HAG",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Dust Proof Strike 58DKBS US32D CRL",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "27",
+      "heading": "Set #27 Clopass",
+      "item_count": 1,
+      "items": [
+        {
+          "name": "ea. Flush Pulls 2630 US26D HAG",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "30",
+      "heading": "Set #30 Pair \u2013 Exterior from Corridor",
+      "item_count": 12,
+      "items": [
+        {
+          "name": "ea. Hinges BB1191 4.5\u201d x 4.5\u201d NRP US32D HAG",
+          "qty": 5,
+          "qty_source": "capped",
+          "qty_total": 6,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Rim Panic Device CD98L-NL-06 US26D VD",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Rim Cylinder & Core Match Existing System (for NL) US26D SCH",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Mortise Cylinder & Core Match Existing System (for CD) US26D SCH",
+          "qty": 1,
+          "qty_source": "capped",
+          "qty_total": 2,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Keyed Rem. Mullion 4900T USP HAG",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Rim Cylinder & Core Match Existing System (for KRM) US26D SCH",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Closer 4111 CUSH ALM LCN",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Kick Plate 190S 10\u201d x 1\u201d LDW US32D HAG",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Threshold 412S door opening width MIL HAG",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Gasket 726 head and jambs Char HAG",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "set Astragal Weather-strip 872S 2x door height Clear HAG",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Drip Cap 810S door opening width + 4\u201d Mil HAG",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "30A",
+      "heading": "Set #30A Pair \u2013 Exterior from Corridor",
+      "item_count": 11,
+      "items": [
+        {
+          "name": "ea. Hinges BB1191 4.5\u201d x 4.5\u201d NRP US32D HAG",
+          "qty": 5,
+          "qty_source": "capped",
+          "qty_total": 6,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Rim Panic Device CD98L-NL-06 US26D VD",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Rim Cylinder & Core Match Existing System (for NL) US26D SCH",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Mortise Cylinder & Core Match Existing System (for CD) US26D SCH",
+          "qty": 1,
+          "qty_source": "capped",
+          "qty_total": 2,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Keyed Rem. Mullion 4900T USP HAG",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Rim Cylinder & Core Match Existing System (for KRM) US26D SCH",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Closer 4111 CUSH ALM LCN",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Kick Plate 190S 10\u201d x 1\u201d LDW US32D HAG",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Threshold 412S door opening width MIL HAG",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Gasket 726 head and jambs Char HAG",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "set Astragal Weather-strip 872S 2x door height Clear HAG",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "32",
+      "heading": "Set #32 Office - Interior Sgl. Alum with card reader",
+      "item_count": 5,
+      "items": [
+        {
+          "name": "ea. Electrified Continuous Hinge 780-224 HD RETW Clear HAG",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Electrified Lock L9080REU 06A US26D SCH",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Core Match Existing System US26D SCH",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Closer 4111 CUSH ALUM LCN",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Under Desk Push Switch 2-679-0708 White HAG",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "32A",
+      "heading": "Set #32A Office - Interior Sgl. Alum with card reader",
+      "item_count": 6,
+      "items": [
+        {
+          "name": "ea. Electrified Continuous Hinge 780-224 HD RETW Clear HAG",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Electrified Lock L9080REU 06A US26D SCH",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Core Match Existing System US26D SCH",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Closer 4000 ALUM LCN",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Wall Stop 236W US32D HAG",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ea. Under Desk Push Switch 2-679-0708 White HAG",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    }
+  ],
+  "flagged_doors": []
+}

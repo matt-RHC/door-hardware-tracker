@@ -1,0 +1,1211 @@
+{
+  "pdf_name": "sched-Etica.pdf",
+  "door_count": 0,
+  "confirmed_count": 0,
+  "flagged_count": 0,
+  "hw_set_count": 17,
+  "tables_found": 10,
+  "reference_code_count": 0,
+  "hardware_sets": [
+    {
+      "set_id": "1.0",
+      "heading": "Set: 1.0",
+      "item_count": 7,
+      "items": [
+        {
+          "name": "Hinge (heavy weight) MPB99 (NRP and size as required) US32D MK",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Electric Hinge, Hvy Wt US32D MK",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Rim or Mortised Cylinder Housing 626 SC",
+          "qty": 1,
+          "qty_source": "capped",
+          "qty_total": 2,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "LFIC Mortise Cylinder Housing Size and Cam as required US32D SA",
+          "qty": 1,
+          "qty_source": "capped",
+          "qty_total": 2,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Kick Plate K1050 10\" high BEV CSK US32D RO",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Threshold PE",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Gasketing 303AS (Head & Jambs) PE",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "2.0",
+      "heading": "Set: 2.0",
+      "item_count": 6,
+      "items": [
+        {
+          "name": "Hinge (heavy weight) MPB99 (NRP and size as required) US32D MK",
+          "qty": 3,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Rim Exit Device (EO) LD 8810 EO (Less Dogging) US32D SA",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Surface Closer 351 CPS (PA SPG SPT Arm) EN SA",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Kick Plate K1050 10\" high BEV CSK US32D RO",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Threshold PE",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Gasketing 303AS (Head & Jambs) PE",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "3.0",
+      "heading": "Set: 3.0",
+      "item_count": 4,
+      "items": [
+        {
+          "name": "Hinge (heavy weight) MPB99 (NRP and size as required) US32D MK",
+          "qty": 5,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Electric Hinge, Hvy Wt US32D MK",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Self Latching Flush Bolt Set 2845 / 2945 (as required) US26D RO",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Dust Proof Strike 570 US26D RO",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "4.0",
+      "heading": "Set: 4.0",
+      "item_count": 12,
+      "items": [
+        {
+          "name": "Rim or Mortised Cylinder Housing 626 SC",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Primus Cylinder Core Keyed to Owners Existing System 626 SC",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Conc Overhead Stop 1-X36 (Size as Required) 630 RF",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Surface Closer (Tri-Pack) EN SA",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Kick Plate K1050 10\" high BEV CSK US32D RO",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Threshold PE",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Gasketing 303AS (Head & Jambs) PE",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Astragal 29324CNB x Door Height PE",
+          "qty": 1,
+          "qty_source": "capped",
+          "qty_total": 2,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Wiring Diagram Elevation and Point to Point OT",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Hinge (heavy weight) MPB99 (NRP and size as required) US32D MK",
+          "qty": 3,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Storeroom/Closet Lock LC 8204 LSP US32D SA",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Wall Stop 403 (or) 441CU (As Required) US26D RO",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "5.0",
+      "heading": "Set: 5.0",
+      "item_count": 9,
+      "items": [
+        {
+          "name": "Threshold PE",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Gasketing 303AS (Head & Jambs) PE",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Hinge, Full Mortise, Hvy Wt MPB68 (NRP and Size as required) US26D MK",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Hinge (heavy weight) US26D MK",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Rim or Mortised Cylinder Housing 626 SC",
+          "qty": 1,
+          "qty_source": "capped",
+          "qty_total": 2,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "LFIC Mortise Cylinder Housing Size and Cam as required US32D SA",
+          "qty": 1,
+          "qty_source": "capped",
+          "qty_total": 2,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Kick Plate K1050 10\" high BEV CSK US32D RO",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Wall Stop 403 (or) 441CU (As Required) US26D RO",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Wiring Diagram Elevation and Point to Point OT",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "6.0",
+      "heading": "Set: 6.0",
+      "item_count": 11,
+      "items": [
+        {
+          "name": "Hinge, Full Mortise, Hvy Wt MPB68 (NRP and Size as required) US26D MK",
+          "qty": 5,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Hinge (heavy weight) US26D MK",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Self Latching Flush Bolt Set 2845 / 2945 (as required) US26D RO",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Dust Proof Strike 570 US26D RO",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Rim or Mortised Cylinder Housing 626 SC",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Primus Cylinder Core Keyed to Owners Existing System 626 SC",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Surf Overhead Stop 10-X36 630 RF",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Surface Closer (Tri Pack) EN SA",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Kick Plate K1050 10\" high BEV CSK US32D RO",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Silencer 608 RO",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Wiring Diagram Elevation and Point to Point OT",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "9.0",
+      "heading": "Set: 9.0",
+      "item_count": 10,
+      "items": [
+        {
+          "name": "Hinge, Full Mortise, Hvy Wt MPB68 (NRP and Size as required) US26D MK",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Hinge (heavy weight) US26D MK",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Rim or Mortised Cylinder Housing 626 SC",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Surface Closer (Tri Pack) EN SA",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Kick Plate K1050 10\" high BEV CSK US32D RO",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Wall Stop 403 (or) 441CU (As Required) US26D RO",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Silencer 608 RO",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Wiring Diagram Elevation and Point to Point OT",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Hinge, Full Mortise MPB79 (NRP and size as required) US26D MK",
+          "qty": 3,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Storeroom/Closet Lock LC 8204 LSP US32D SA",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "10.0",
+      "heading": "Set: 10.0",
+      "item_count": 7,
+      "items": [
+        {
+          "name": "Hinge, Full Mortise MPB79 (NRP and size as required) US26D MK",
+          "qty": 3,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Storeroom/Closet Lock LC 8204 LSP US32D SA",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Rim or Mortised Cylinder Housing 626 SC",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Conc Overhead Stop 1-X36 (Size as Required) 630 RF",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Surface Closer (Tri Pack) EN SA",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Kick Plate K1050 10\" high BEV CSK US32D RO",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Silencer 608 RO",
+          "qty": 3,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "11.0",
+      "heading": "Set: 11.0",
+      "item_count": 5,
+      "items": [
+        {
+          "name": "Hinge, Full Mortise MPB79 (NRP and size as required) US26D MK",
+          "qty": 3,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Office/Entry Lock LC 8205 LSP US32D SA",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Rim or Mortised Cylinder Housing 626 SC",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Wall Stop 403 (or) 441CU (As Required) US26D RO",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Silencer 608 RO",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "12.0",
+      "heading": "Set: 12.0",
+      "item_count": 8,
+      "items": [
+        {
+          "name": "Hinge, Full Mortise MPB79 (NRP and size as required) US26D MK",
+          "qty": 3,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Office/Entry Lock LC 8205 LSP US32D SA",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Rim or Mortised Cylinder Housing 626 SC",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Primus Cylinder Core Keyed to Owners Existing System 626 SC",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Surface Closer (Tri Pack) EN SA",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Kick Plate K1050 10\" high BEV CSK US32D RO",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Wall Stop 403 (or) 441CU (As Required) US26D RO",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Gasketing S88D (Head & Jambs) PE",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "14.0",
+      "heading": "Set: 14.0",
+      "item_count": 8,
+      "items": [
+        {
+          "name": "Hinge, Full Mortise MPB79 (NRP and size as required) US26D MK",
+          "qty": 3,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Classroom Lock LC 8237 LSP US32D SA",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Rim or Mortised Cylinder Housing 626 SC",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Primus Cylinder Core Keyed to Owners Existing System 626 SC",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Surface Closer (Tri Pack) EN SA",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Kick Plate K1050 10\" high BEV CSK US32D RO",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Wall Stop 403 (or) 441CU (As Required) US26D RO",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Silencer 608 RO",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "14.1",
+      "heading": "Set: 14.1",
+      "item_count": 5,
+      "items": [
+        {
+          "name": "Hinge, Full Mortise MPB79 (NRP and size as required) US26D MK",
+          "qty": 3,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Classroom Lock LC 8237 LSP US32D SA",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Rim or Mortised Cylinder Housing 626 SC",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Primus Cylinder Core Keyed to Owners Existing System 626 SC",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Surface Closer 1431 CPS EN SA",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "15.0",
+      "heading": "Set: 15.0",
+      "item_count": 6,
+      "items": [
+        {
+          "name": "Hinge, Full Mortise MPB79 (NRP and size as required) US26D MK",
+          "qty": 3,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Privacy Lock w/OCC IND V21 8265 LNP US32D SA",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Surface Closer (Tri Pack) EN SA",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Kick Plate K1050 10\" high BEV CSK US32D RO",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Wall Stop 403 (or) 441CU (As Required) US26D RO",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Silencer 608 RO",
+          "qty": 3,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "16.0",
+      "heading": "Set: 16.0",
+      "item_count": 4,
+      "items": [
+        {
+          "name": "Hinge, Full Mortise MPB79 (NRP and size as required) US26D MK",
+          "qty": 3,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Passage Latch 8215 LSP US32D SA",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Surf Overhead Stop 10-X36 630 RF",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Silencer 608 RO",
+          "qty": 3,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "17.0",
+      "heading": "Set: 17.0",
+      "item_count": 3,
+      "items": [
+        {
+          "name": "Rim or Mortised Cylinder Housing 626 SC",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Primus Cylinder Core Keyed to Owners Existing System 626 SC",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "LFIC Cylinder type as required 626 RU",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "19.0",
+      "heading": "Set: 19.0",
+      "item_count": 1,
+      "items": [
+        {
+          "name": "Strike Mounting Plate OT",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "20.0",
+      "heading": "Set: 20.0",
+      "item_count": 2,
+      "items": [
+        {
+          "name": "Primus Cylinder Core Keyed to Owners Existing System .626 SC",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Strike Mounting Plate OT",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    }
+  ],
+  "flagged_doors": []
+}

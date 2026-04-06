@@ -1,0 +1,243 @@
+{
+  "pdf_name": "sched-Barnstable.pdf",
+  "door_count": 0,
+  "confirmed_count": 0,
+  "flagged_count": 0,
+  "hw_set_count": 3,
+  "tables_found": 0,
+  "reference_code_count": 0,
+  "hardware_sets": [
+    {
+      "set_id": "1",
+      "heading": "HW Set 1",
+      "item_count": 7,
+      "items": [
+        {
+          "name": "Continuous geared hinges 780-112HDULFF x [proper height] x Clear HA",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Rim Exit Devices CD99-NL x 990NL x US26D VD",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Rim Cylinders Primus [integrate into existing system]x US26D SC",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Mortise Cylinders Primus [integrate into existing system]x US26D SC",
+          "qty": 1,
+          "qty_source": "capped",
+          "qty_total": 2,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Surface door closer 5100 1-6 HDCS x ALM HA",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Protection plate 190S x 8\u201d high x [proper width] x US32D HA",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Threshold 626S x 6\u201d x [proper length] x CAL HA",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "2",
+      "heading": "HW Set 2",
+      "item_count": 8,
+      "items": [
+        {
+          "name": "Continuous geared hinge 780-112HDULFF x [proper height] x Clear HA",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Rim Exit Device CD99-NL x 990NL x US26D VD",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Rim Cylinder Primus [integrate into existing system]x US26D SC",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Mortise Cylinder Primus [integrate into existing system]x US26D SC",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Surface door closer 5100 1-6 HDCS x ALM HA",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Protection plate 190S x 8\u201d high x [proper width] x US32D HA",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Threshold 626S x 6\u201d x [proper length] x CAL HA",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Door sweep 756S V x [width of door leaf] x MIL HA",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "4",
+      "heading": "HW Set 4",
+      "item_count": 6,
+      "items": [
+        {
+          "name": "Continuous geared hinges 780-112HDULFF x [proper height] x Clear HA",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Vertical Rod Exit Devices 9927L x 996L x LBR x US26D VD",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Rim Cylinders Primus [integrate into existing system]x US26D SC",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Surface door closers 5100 1-6 HDHOCS x ALM HA",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Protection plates 190S x 8\u201d high x [proper width] x US32D HA",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Floor Stops 243F x US26D HA",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    }
+  ],
+  "flagged_doors": []
+}

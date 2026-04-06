@@ -320,3 +320,182 @@ class TestCAANashvilleBaseline:
                     f"Set {hs.set_id}, '{item.name[:40]}': qty_source changed from "
                     f"'{expected_item['qty_source']}' to '{item.qty_source}'"
                 )
+
+
+# ── Schedule-format baseline tests (S-066A) ──
+# These capture current extraction state for schedule-format PDFs.
+# Many have 0 doors because the pipeline doesn't yet handle inline
+# door assignments (no separate opening list grid). Baselines will
+# improve as schedule-aware extraction is added.
+
+def _sched_baseline_tests(extract_tables, pdf_path, baseline_name):
+    """Shared helper: run pipeline and load baseline for a schedule PDF."""
+    baseline = _load_baseline(baseline_name)
+    hw_sets, openings, confirmed, flagged, refs, tf = _run_full_pipeline(extract_tables, pdf_path)
+    return baseline, hw_sets, confirmed, flagged
+
+
+class TestSchedAKNBaseline:
+    """sched-AKN (ESC/Comsense, 46 pages) baseline tests."""
+
+    def test_door_count(self, extract_tables, sched_akn_pdf_path):
+        baseline, hw_sets, confirmed, flagged = _sched_baseline_tests(
+            extract_tables, sched_akn_pdf_path, "sched-AKN.json")
+        actual = len(confirmed) + len(flagged)
+        assert actual == baseline["door_count"], (
+            f"Door count changed: expected {baseline['door_count']}, got {actual}")
+
+    def test_hw_set_count(self, extract_tables, sched_akn_pdf_path):
+        baseline, hw_sets, *_ = _sched_baseline_tests(
+            extract_tables, sched_akn_pdf_path, "sched-AKN.json")
+        assert len(hw_sets) == baseline["hw_set_count"], (
+            f"HW set count changed: expected {baseline['hw_set_count']}, got {len(hw_sets)}")
+
+    def test_set_ids_match(self, extract_tables, sched_akn_pdf_path):
+        baseline, hw_sets, *_ = _sched_baseline_tests(
+            extract_tables, sched_akn_pdf_path, "sched-AKN.json")
+        expected_ids = [s["set_id"] for s in baseline["hardware_sets"]]
+        actual_ids = [s.set_id for s in hw_sets]
+        assert actual_ids == expected_ids
+
+    def test_item_quantities(self, extract_tables, sched_akn_pdf_path):
+        baseline, hw_sets, *_ = _sched_baseline_tests(
+            extract_tables, sched_akn_pdf_path, "sched-AKN.json")
+        for hs, expected_set in zip(hw_sets, baseline["hardware_sets"]):
+            assert len(hs.items) == expected_set["item_count"]
+            for item, expected_item in zip(hs.items, expected_set["items"]):
+                assert item.qty == expected_item["qty"]
+
+
+class TestSchedBarnstableBaseline:
+    """sched-Barnstable (Comsense, 8 pages) baseline tests."""
+
+    def test_door_count(self, extract_tables, sched_barnstable_pdf_path):
+        baseline, _, confirmed, flagged = _sched_baseline_tests(
+            extract_tables, sched_barnstable_pdf_path, "sched-Barnstable.json")
+        assert len(confirmed) + len(flagged) == baseline["door_count"]
+
+    def test_hw_set_count(self, extract_tables, sched_barnstable_pdf_path):
+        baseline, hw_sets, *_ = _sched_baseline_tests(
+            extract_tables, sched_barnstable_pdf_path, "sched-Barnstable.json")
+        assert len(hw_sets) == baseline["hw_set_count"]
+
+    def test_set_ids_match(self, extract_tables, sched_barnstable_pdf_path):
+        baseline, hw_sets, *_ = _sched_baseline_tests(
+            extract_tables, sched_barnstable_pdf_path, "sched-Barnstable.json")
+        expected_ids = [s["set_id"] for s in baseline["hardware_sets"]]
+        assert [s.set_id for s in hw_sets] == expected_ids
+
+
+class TestSchedClaymontBaseline:
+    """sched-Claymont (Comsense, 34 pages) baseline tests."""
+
+    def test_door_count(self, extract_tables, sched_claymont_pdf_path):
+        baseline, _, confirmed, flagged = _sched_baseline_tests(
+            extract_tables, sched_claymont_pdf_path, "sched-Claymont.json")
+        assert len(confirmed) + len(flagged) == baseline["door_count"]
+
+    def test_hw_set_count(self, extract_tables, sched_claymont_pdf_path):
+        baseline, hw_sets, *_ = _sched_baseline_tests(
+            extract_tables, sched_claymont_pdf_path, "sched-Claymont.json")
+        assert len(hw_sets) == baseline["hw_set_count"]
+
+    def test_set_ids_match(self, extract_tables, sched_claymont_pdf_path):
+        baseline, hw_sets, *_ = _sched_baseline_tests(
+            extract_tables, sched_claymont_pdf_path, "sched-Claymont.json")
+        expected_ids = [s["set_id"] for s in baseline["hardware_sets"]]
+        assert [s.set_id for s in hw_sets] == expected_ids
+
+
+class TestSchedCornellBaseline:
+    """sched-Cornell (Comsense, 30 pages) baseline tests."""
+
+    def test_door_count(self, extract_tables, sched_cornell_pdf_path):
+        baseline, _, confirmed, flagged = _sched_baseline_tests(
+            extract_tables, sched_cornell_pdf_path, "sched-Cornell.json")
+        assert len(confirmed) + len(flagged) == baseline["door_count"]
+
+    def test_hw_set_count(self, extract_tables, sched_cornell_pdf_path):
+        baseline, hw_sets, *_ = _sched_baseline_tests(
+            extract_tables, sched_cornell_pdf_path, "sched-Cornell.json")
+        assert len(hw_sets) == baseline["hw_set_count"]
+
+    def test_set_ids_match(self, extract_tables, sched_cornell_pdf_path):
+        baseline, hw_sets, *_ = _sched_baseline_tests(
+            extract_tables, sched_cornell_pdf_path, "sched-Cornell.json")
+        expected_ids = [s["set_id"] for s in baseline["hardware_sets"]]
+        assert [s.set_id for s in hw_sets] == expected_ids
+
+
+class TestSchedDTBaseline:
+    """sched-DT (Comsense, 116 pages) baseline tests."""
+
+    def test_door_count(self, extract_tables, sched_dt_pdf_path):
+        baseline, _, confirmed, flagged = _sched_baseline_tests(
+            extract_tables, sched_dt_pdf_path, "sched-DT.json")
+        assert len(confirmed) + len(flagged) == baseline["door_count"]
+
+    def test_hw_set_count(self, extract_tables, sched_dt_pdf_path):
+        baseline, hw_sets, *_ = _sched_baseline_tests(
+            extract_tables, sched_dt_pdf_path, "sched-DT.json")
+        assert len(hw_sets) == baseline["hw_set_count"]
+
+    def test_set_ids_match(self, extract_tables, sched_dt_pdf_path):
+        baseline, hw_sets, *_ = _sched_baseline_tests(
+            extract_tables, sched_dt_pdf_path, "sched-DT.json")
+        expected_ids = [s["set_id"] for s in baseline["hardware_sets"]]
+        assert [s.set_id for s in hw_sets] == expected_ids
+
+
+class TestSchedEticaBaseline:
+    """sched-Etica (Comsense, 32 pages) baseline tests."""
+
+    def test_door_count(self, extract_tables, sched_etica_pdf_path):
+        baseline, _, confirmed, flagged = _sched_baseline_tests(
+            extract_tables, sched_etica_pdf_path, "sched-Etica.json")
+        assert len(confirmed) + len(flagged) == baseline["door_count"]
+
+    def test_hw_set_count(self, extract_tables, sched_etica_pdf_path):
+        baseline, hw_sets, *_ = _sched_baseline_tests(
+            extract_tables, sched_etica_pdf_path, "sched-Etica.json")
+        assert len(hw_sets) == baseline["hw_set_count"]
+
+    def test_set_ids_match(self, extract_tables, sched_etica_pdf_path):
+        baseline, hw_sets, *_ = _sched_baseline_tests(
+            extract_tables, sched_etica_pdf_path, "sched-Etica.json")
+        expected_ids = [s["set_id"] for s in baseline["hardware_sets"]]
+        assert [s.set_id for s in hw_sets] == expected_ids
+
+
+class TestSchedKdotBaseline:
+    """sched-Kdot (Comsense, 9 pages) — total extraction failure baseline."""
+
+    def test_door_count(self, extract_tables, sched_kdot_pdf_path):
+        baseline, _, confirmed, flagged = _sched_baseline_tests(
+            extract_tables, sched_kdot_pdf_path, "sched-Kdot.json")
+        assert len(confirmed) + len(flagged) == baseline["door_count"]
+
+    def test_hw_set_count(self, extract_tables, sched_kdot_pdf_path):
+        baseline, hw_sets, *_ = _sched_baseline_tests(
+            extract_tables, sched_kdot_pdf_path, "sched-Kdot.json")
+        assert len(hw_sets) == baseline["hw_set_count"]
+
+
+class TestSchedLutheranBaseline:
+    """sched-Lutheran (Comsense, 30 pages) baseline tests."""
+
+    def test_door_count(self, extract_tables, sched_lutheran_pdf_path):
+        baseline, _, confirmed, flagged = _sched_baseline_tests(
+            extract_tables, sched_lutheran_pdf_path, "sched-Lutheran.json")
+        assert len(confirmed) + len(flagged) == baseline["door_count"]
+
+    def test_hw_set_count(self, extract_tables, sched_lutheran_pdf_path):
+        baseline, hw_sets, *_ = _sched_baseline_tests(
+            extract_tables, sched_lutheran_pdf_path, "sched-Lutheran.json")
+        assert len(hw_sets) == baseline["hw_set_count"]
+
+    def test_set_ids_match(self, extract_tables, sched_lutheran_pdf_path):
+        baseline, hw_sets, *_ = _sched_baseline_tests(
+            extract_tables, sched_lutheran_pdf_path, "sched-Lutheran.json")
+        expected_ids = [s["set_id"] for s in baseline["hardware_sets"]]
+        assert [s.set_id for s in hw_sets] == expected_ids
