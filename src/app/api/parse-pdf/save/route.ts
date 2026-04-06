@@ -236,17 +236,17 @@ export async function POST(request: NextRequest) {
 
         if (!promoteResult.success) {
           console.error('Auto-promote failed:', promoteResult.error)
-          // Return staging success but flag that promote failed —
-          // data is safe in staging tables for manual promote later
+          // Staging succeeded but promote failed — return success: false
+          // so the frontend does NOT show "Import Complete"
           return NextResponse.json({
-            success: true,
+            success: false,
+            error: promoteResult.error ?? 'Promotion to production failed',
+            stagingSuccess: true,
             openingsCount: stagingResult.openingsCount,
             itemsCount: itemsInserted,
             hardwareSets: hardwareSets.length,
             unmatchedSets: unmatchedSets.length > 0 ? unmatchedSets : undefined,
             extraction_run_id: runId,
-            promoted: false,
-            promoteError: promoteResult.error,
           })
         }
 

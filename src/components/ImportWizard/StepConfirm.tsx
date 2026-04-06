@@ -26,6 +26,7 @@ export default function StepConfirm({
   const [status, setStatus] = useState("");
   const [saveComplete, setSaveComplete] = useState(false);
   const [overrideUnmatched, setOverrideUnmatched] = useState(false);
+  const [promoteFailed, setPromoteFailed] = useState(false);
   const [saveResult, setSaveResult] = useState<{
     openingsCount: number;
     itemsCount: number;
@@ -90,8 +91,22 @@ export default function StepConfirm({
       }
 
       const result = await saveResp.json();
+
+      // Staging succeeded but promote failed — show warning, not success
+      if (!result.success && result.stagingSuccess) {
+        setSaveResult({
+          openingsCount: result.openingsCount,
+          itemsCount: result.itemsCount,
+          unmatchedSets: result.unmatchedSets,
+        });
+        setPromoteFailed(true);
+        setStatus("Promotion failed");
+        setSaveComplete(true);
+        return;
+      }
+
       if (!result.success) {
-        throw new Error("Save completed but no success response received");
+        throw new Error(result.error || "Save failed");
       }
 
       setSaveResult({
@@ -108,6 +123,48 @@ export default function StepConfirm({
       setLoading(false);
     }
   };
+
+  // ─── Promote-failed state: staging OK but production write failed ───
+  if (saveComplete && saveResult && promoteFailed) {
+    return (
+      <div className="max-w-lg mx-auto text-center py-8">
+        <div className="text-5xl mb-4">&#x26A0;</div>
+        <h3 className="text-xl font-bold text-[#ff9500] mb-2">
+          Promotion Failed
+        </h3>
+        <p className="text-[#a1a1a6] text-sm mb-4">
+          Data saved to staging but final promotion failed. Your data is safe
+          &mdash; contact support or retry.
+        </p>
+
+        <div className="grid grid-cols-2 gap-3 max-w-sm mx-auto text-sm mb-6">
+          <div className="bg-white/[0.04] border border-white/[0.06] rounded-xl p-3">
+            <div className="text-lg font-bold text-[#0a84ff]">
+              {saveResult.openingsCount}
+            </div>
+            <div className="text-[9px] text-[#6e6e73] uppercase">
+              Doors Staged
+            </div>
+          </div>
+          <div className="bg-white/[0.04] border border-white/[0.06] rounded-xl p-3">
+            <div className="text-lg font-bold text-[#ff9500]">
+              {saveResult.itemsCount}
+            </div>
+            <div className="text-[9px] text-[#6e6e73] uppercase">
+              Items Staged
+            </div>
+          </div>
+        </div>
+
+        <button
+          onClick={onComplete}
+          className="px-8 py-2.5 bg-[#ff9500] hover:bg-[#e68600] text-white rounded-lg transition-colors font-semibold"
+        >
+          Done
+        </button>
+      </div>
+    );
+  }
 
   // ─── Success state ───
   if (saveComplete && saveResult) {
