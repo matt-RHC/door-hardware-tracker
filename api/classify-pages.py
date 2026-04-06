@@ -33,8 +33,8 @@ PAGE_TYPE_OTHER = "other"
 
 # Door schedule indicators
 DOOR_SCHEDULE_HEADERS = re.compile(
-    r"(?i)(door\s*(schedule|list)|opening\s*(list|schedule)|"
-    r"(door|opening)\s*(no\.?|num|#|tag).*?(h\.?w\.?\s*set|hardware\s*set|location)|"
+    r"(?i)(door\s*(schedule|list|index)|opening\s*(list|schedule|index)|"
+    r"(door|opening)\s*(no\.?|num|#|tag).*?(h\.?w\.?\s*set|hardware\s*set|hdg\s*#|location)|"
     r"(door|opening)\s+(hdw|h\.?w\.?|hardware)\s*(set|group))"
 )
 DOOR_NUMBER_COLUMN = re.compile(
@@ -63,7 +63,7 @@ _SET_ID_BLOCKLIST = r"(?!up|aside|point|down|out|off|back|about|and|the|has|trim
 HW_SET_HEADING = re.compile(
     r"(?i)"
     r"(?:"
-    r"heading\s*#?\s*([A-Z0-9][A-Z0-9.\-:]*)\s*\(set\s*#?\s*([A-Z0-9][A-Z0-9.\-:]*)\)"
+    r"heading\s*#?\s*([A-Z0-9][A-Z0-9.\-:]*)\s*\((?:hw\s*)?set\s*#?\s*([A-Z0-9][A-Z0-9.\-:]*)\)"
     r"|"
     r"(?:hardware\s+|hw\s+)(?:set|group)\s*[:# ]\s*([A-Z0-9][A-Z0-9.\-:]{0,14})\b"
     r"|"
@@ -84,7 +84,8 @@ REFERENCE_PATTERNS = re.compile(
     r"option\s*(list|key|legend|code|abbrev)|"
     r"abbreviation|legend|general\s*notes|"
     r"symbols?\s*key|keying\s*(schedule|legend)|"
-    r"specification\s*reference|basis\s*of\s*design)"
+    r"specification\s*reference|basis\s*of\s*design|"
+    r"end\s*of\s*schedule|catalog\s*cut\s*summary)"
 )
 
 # Cover page indicators
@@ -211,8 +212,11 @@ def _detect_heading_format(text: str) -> str:
     Match text against HW_SET_HEADING pattern groups and return which
     heading format matched.
 
-    Returns: "himmel" | "hw_prefix" | "colon_sep" | "id_first" | "bare_set" | "unknown"
+    Returns: "specworks" | "himmel" | "hw_prefix" | "colon_sep" | "id_first" | "bare_set" | "unknown"
     """
+    # SpecWorks format: "Heading XXX (HwSet YYY)" — must check before himmel
+    if re.search(r"(?i)heading\s*#?\s*[A-Z0-9].*?\(hw\s*set\s*#?\s*[A-Z0-9]", text):
+        return "specworks"
     # Himmel format: "Heading #X (Set #Y)"
     if re.search(r"(?i)heading\s*#?\s*[A-Z0-9].*?\(set\s*#?\s*[A-Z0-9]", text):
         return "himmel"
@@ -352,10 +356,9 @@ def classify_page(page, page_index: int) -> dict:
         result["section_labels"] = [m[0] if isinstance(m, tuple) else m for m in ref_matches[:3]]
         return result
 
-    # Check for door schedule pages BEFORE hardware set —
-    # Opening list pages often contain "Set" in column headers (e.g. "Hdw Set")
-    # which falsely triggers HW_SET_HEADING. Door schedule headers are more
-    # specific and should take priority.
+    # Check for door schedule pages with EXPLICIT headers (e.g. "Door Schedule",
+    # "Opening List", "Door Index"). These take priority because opening lists
+    # sometimes contain "Set" in column headers which could trigger HW_SET_HEADING.
     has_door_schedule_header = bool(DOOR_SCHEDULE_HEADERS.search(text))
     door_nums = DOOR_NUMBER_VALUES.findall(text)
 
@@ -365,14 +368,9 @@ def classify_page(page, page_index: int) -> dict:
         result["has_door_numbers"] = True
         return result
 
-    # Door number values without explicit headers (schedule data pages)
-    if len(door_nums) >= 5:
-        result["type"] = PAGE_TYPE_DOOR_SCHEDULE
-        result["confidence"] = 0.6
-        result["has_door_numbers"] = True
-        return result
-
-    # Check for hardware set pages
+    # Check for hardware set pages BEFORE door-number-only classification.
+    # SpecWorks/kinship-format set pages contain door assignments with many
+    # door numbers — heading match must take priority over door number count.
     hw_matches = list(HW_SET_HEADING.finditer(text))
     hw_item_matches = HARDWARE_ITEM_NAMES.findall(text)
 
@@ -396,6 +394,13 @@ def classify_page(page, page_index: int) -> dict:
         result["section_labels"] = ["continuation"]
         return result
 
+    # Door number values without explicit headers or hw_set headings
+    if len(door_nums) >= 5:
+        result["type"] = PAGE_TYPE_DOOR_SCHEDULE
+        result["confidence"] = 0.6
+        result["has_door_numbers"] = True
+        return result
+
     # Pages with 3-4 door numbers but no header — weaker signal
     if len(door_nums) >= 3:
         result["type"] = PAGE_TYPE_DOOR_SCHEDULE
@@ -410,6 +415,47 @@ def classify_page(page, page_index: int) -> dict:
         return result
 
     return result
+
+
+def postprocess_cut_sheets(pages: list[dict]) -> None:
+    """Reclassify cut sheet pages after 'End of Schedule' boundary.
+
+    SpecWorks PDFs end the hardware schedule with an 'End of Schedule' page,
+    followed by manufacturer cut sheets (catalog pages). These cut sheets
+    contain hardware terminology (hinge, closer, etc.) that causes
+    misclassification as hardware_set continuation pages.
+
+    Modifies pages in-place.
+    """
+    # Find the last page with an actual hw_set heading ID
+    last_heading_page = -1
+    end_of_schedule_page = -1
+    for p in pages:
+        if p.get("type") == PAGE_TYPE_HARDWARE_SET and p.get("hw_set_ids"):
+            last_heading_page = p["index"]
+        if p.get("type") == PAGE_TYPE_REFERENCE and "end of schedule" in (
+            " ".join(p.get("section_labels", [])).lower()
+        ):
+            end_of_schedule_page = p["index"]
+
+    # Only apply cut sheet reclassification with an explicit boundary marker.
+    # The last_heading_page fallback is too aggressive for formats that rely
+    # on "continuation" classification (e.g., AKN/Comsense).
+    if end_of_schedule_page > 0:
+        boundary = end_of_schedule_page
+    else:
+        return  # No explicit boundary found — do not reclassify
+
+    # Reclassify pages after the boundary that don't have heading IDs
+    for p in pages:
+        if p["index"] <= boundary:
+            continue
+        if p.get("hw_set_ids"):
+            continue  # Page has actual heading IDs, keep it
+        if p["type"] in (PAGE_TYPE_HARDWARE_SET, PAGE_TYPE_DOOR_SCHEDULE):
+            p["type"] = PAGE_TYPE_REFERENCE
+            p["confidence"] = 0.6
+            p["section_labels"] = ["cut_sheet"]
 
 
 def detect_boundaries(pages: list[dict], max_chunk_pages: int = 40) -> list[dict]:
@@ -659,6 +705,9 @@ class handler(BaseHTTPRequestHandler):
                         page, classification["type"]
                     )
                     page_classifications.append(classification)
+
+                # Phase 1.5: Post-process to reclassify cut sheet pages
+                postprocess_cut_sheets(page_classifications)
 
                 # Phase 2: Detect optimal chunk boundaries
                 chunks, reference_pages = detect_boundaries(
