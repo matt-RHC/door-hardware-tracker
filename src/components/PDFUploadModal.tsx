@@ -1135,7 +1135,7 @@ export default function PDFUploadModal({
     // If we get here, something unexpected happened.
     console.warn("Reached chunked fallback — this should not happen with the full pipeline");
     // Phase 1: Classify pages and find smart boundaries
-    setStatus(`Analyzing ${pageCount}-page PDF structure...`);
+    setStatus("Analyzing PDF structure...");
     setProgress(2);
 
     const classificationResult = await classifyPages(fullBase64);
@@ -1220,7 +1220,7 @@ export default function PDFUploadModal({
       const chunkEndPct = Math.round(5 + ((i + 1) / totalChunks) * 75);
 
       const label = chunkLabels[i] || `chunk ${i + 1}`;
-      setStatus(`Processing chunk ${i + 1}/${totalChunks}: ${label}...`);
+      setStatus("Extracting door schedule...");
       setProgress(chunkStartPct);
 
       // Simulate smooth progress while waiting for the API call.
@@ -1239,13 +1239,13 @@ export default function PDFUploadModal({
 
       // Phase labels to keep the status text informative during long waits
       const phaseTimer = setTimeout(() => {
-        setStatus(`Chunk ${i + 1}/${totalChunks}: Extracting hardware sets...`);
+        setStatus("Extracting hardware sets...");
       }, 15000);
       const phaseTimer2 = setTimeout(() => {
-        setStatus(`Chunk ${i + 1}/${totalChunks}: Reading door schedule...`);
+        setStatus("Reading door schedule...");
       }, 45000);
       const phaseTimer3 = setTimeout(() => {
-        setStatus(`Chunk ${i + 1}/${totalChunks}: Validating extraction...`);
+        setStatus("Validating extraction...");
       }, 90000);
 
       try {
@@ -1285,7 +1285,7 @@ export default function PDFUploadModal({
       setProgress(chunkEndPct);
       const setsSoFar = new Set(allHardwareSets.map((s) => s.set_id)).size;
       console.log(`Chunk ${i + 1}/${totalChunks}: ${setsSoFar} sets, ${allDoors.length} doors so far`);
-      setStatus(`Chunk ${i + 1} of ${totalChunks} complete.`);
+      setStatus("Processing complete. Continuing...");
     }
 
     setStatus("Merging results across chunks...");
@@ -1335,32 +1335,14 @@ export default function PDFUploadModal({
     const saveResult = await saveResp.json();
     if (!saveResult.success) throw new Error("Save completed but no success response received");
 
-    // Auto-promote if staging path was used (legacy save has no second button)
-    if (saveResult.extraction_run_id) {
-      setStatus("Finalizing import...");
-      setProgress(90);
-      const promoteResp = await fetch("/api/parse-pdf/promote", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ extractionRunId: saveResult.extraction_run_id }),
-      });
-      if (!promoteResp.ok) {
-        const errBody = await promoteResp.json().catch(() => ({}));
-        throw new Error(errBody.error || `Import finalization failed (${promoteResp.status})`);
-      }
-      const promoteResult = await promoteResp.json();
-      if (!promoteResult.success) throw new Error("Import finalization returned no success");
-    }
-
-    const warnings: string[] = [];
     if (saveResult.unmatchedSets?.length) {
-      warnings.push(`${saveResult.unmatchedSets.length} set(s) not found: ${saveResult.unmatchedSets.join(", ")}`);
+      console.warn(`Unmatched hardware sets: ${saveResult.unmatchedSets.join(", ")}`);
     }
 
     setStatus(
-      warnings.length > 0
-        ? `Done! ${saveResult.openingsCount} doors, ${saveResult.itemsCount} items. â  ${warnings.join("; ")}`
-        : `Done! ${saveResult.openingsCount} doors, ${saveResult.itemsCount} hardware items loaded.`
+      saveResult.unmatchedSets?.length
+        ? "Done! Some sets could not be matched."
+        : `Done! ${saveResult.openingsCount} doors loaded.`
     );
     setProgress(100);
   };
