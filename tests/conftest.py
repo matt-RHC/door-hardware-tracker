@@ -104,6 +104,38 @@ def akn_pdf_path():
     return p
 
 
+# ── Reference docs (test-pdfs/reference/) — NOT submittals ──
+
+REFERENCE_DIR = PROJECT_ROOT / "test-pdfs" / "reference"
+
+
+@pytest.fixture(scope="session")
+def ref_arch_717010a_path():
+    """Path to architectural door schedule (1pg, Bluebeam). NOT a hardware submittal."""
+    p = REFERENCE_DIR / "arch-DoorSchedule-717010A.pdf"
+    if not p.exists():
+        pytest.skip(f"arch-717010A not found at {p}")
+    return p
+
+
+@pytest.fixture(scope="session")
+def ref_spec_marshall_path():
+    """Path to 087100 spec document (24pg). NOT a hardware submittal."""
+    p = REFERENCE_DIR / "spec-MarshallCourts.pdf"
+    if not p.exists():
+        pytest.skip(f"spec-MarshallCourts not found at {p}")
+    return p
+
+
+@pytest.fixture(scope="session")
+def ref_spec_harris_path():
+    """Path to facility spec template (19pg, Word). NOT a hardware submittal."""
+    p = REFERENCE_DIR / "spec-HarrisHealth.pdf"
+    if not p.exists():
+        pytest.skip(f"spec-HarrisHealth not found at {p}")
+    return p
+
+
 # ── PDF Catalog (BUG-11: test infrastructure expansion) ──
 
 PDF_CATALOG_ENTRIES = {

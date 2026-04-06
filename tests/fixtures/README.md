@@ -30,10 +30,20 @@ Symlink them from `test-pdfs/training/` into this directory.
 **Kinship format** (spreadsheet-derived):
 - kinship-GTN3.pdf (328pg) + kinship-GTN3-truth.csv (ground truth)
 
-**Mixed format** (product data / hybrid):
-- mixed-UCO.pdf (26pg)
+**Mixed format** (combined schedule — doors inline under set headings):
+- mixed-UCO.pdf (26pg) — UCO1-2 Data Center, Adobe Acrobat Pro, 7 sets, 49 doors
+  - Format: "Heading #: S01b" + "Door:1.01.A.01C" inline
+  - Pipeline status: UNSUPPORTED (0/0 extraction, S-066C). Needs regex + format work.
 
 ### Reference files (not submittals, in test-pdfs/reference/)
-- arch-DoorSchedule-717010A.pdf (1pg) — architectural door schedule
+
+Used as negative test cases — pipeline should extract 0 real doors from these.
+Tests: `tests/test_reference_docs.py` (9 tests, S-066C).
+
+- arch-DoorSchedule-717010A.pdf (1pg) — Bluebeam architectural door schedule
+  - Has 145 doors with set assignments (Layer 1 only, no hardware items)
+  - Useful for future cross-validation against hardware submittals
 - spec-MarshallCourts.pdf (24pg) — 087100 spec document
-- spec-HarrisHealth.pdf (19pg) — facility spec template
+  - 0 doors, 1 false-positive set from spec template language
+- spec-HarrisHealth.pdf (19pg) — Word facility spec template
+  - 10 false-positive "doors" (section numbers), 0 real sets
