@@ -125,6 +125,7 @@ export default function ImportReviewTable({
   const [error, setError] = useState<string | null>(null);
   const [extractionRunId, setExtractionRunId] = useState<string | null>(null);
   const [promoting, setPromoting] = useState(false);
+  const [promoteResult, setPromoteResult] = useState<{ openingsPromoted: number; itemsPromoted: number } | null>(null);
   const [showSets, setShowSets] = useState(false);
   const [deletedRows, setDeletedRows] = useState<Set<number>>(new Set());
   // Pre-populate from AI triage if available, otherwise start empty
@@ -341,10 +342,13 @@ export default function ImportReviewTable({
       const result = await resp.json();
       if (!result.success) throw new Error("Promote returned no success");
 
+      setPromoteResult({
+        openingsPromoted: result.openingsPromoted ?? 0,
+        itemsPromoted: result.itemsPromoted ?? 0,
+      });
       onComplete();
-      onClose();
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Promote failed");
+      setError(err instanceof Error ? err.message : "Promote failed — click Confirm Import to retry.");
     } finally {
       setPromoting(false);
     }
@@ -418,7 +422,14 @@ export default function ImportReviewTable({
           >
             Cancel
           </button>
-          {extractionRunId ? (
+          {promoteResult ? (
+            <button
+              onClick={onClose}
+              className="px-5 py-1.5 text-sm bg-[#30d158] text-black font-semibold rounded-lg hover:opacity-90 transition-colors"
+            >
+              Done
+            </button>
+          ) : extractionRunId ? (
             <button
               onClick={handlePromote}
               disabled={promoting}
@@ -438,12 +449,16 @@ export default function ImportReviewTable({
         </div>
       </div>
 
-      {/* ── Staging info banner ── */}
-      {extractionRunId && (
+      {/* ── Staging / success banner ── */}
+      {promoteResult ? (
+        <div className="mx-6 mt-3 p-3 bg-[rgba(48,209,88,0.1)] border border-[rgba(48,209,88,0.2)] rounded-xl text-[#30d158] text-sm">
+          Import complete: {promoteResult.openingsPromoted} doors, {promoteResult.itemsPromoted} hardware items.
+        </div>
+      ) : extractionRunId ? (
         <div className="mx-6 mt-3 p-3 bg-[rgba(90,200,250,0.08)] border border-[rgba(90,200,250,0.2)] rounded-xl text-[#5ac8fa] text-sm">
           Data staged for review. Click <strong>Confirm Import</strong> to finalize, or <strong>Cancel</strong> to discard.
         </div>
-      )}
+      ) : null}
 
       {/* ── Error banner ── */}
       {error && (
