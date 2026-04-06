@@ -18,13 +18,16 @@ A Next.js SaaS application that parses door hardware submittal PDFs and turns th
 
 ## Critical Rules
 
-### 1. No Plans Without Merged Code
+### 1. Check Before You Build
+**HARD RULE.** Before creating any new file, table, endpoint, or component, search `origin/main` and the full codebase for existing implementations. This repo evolves across many sessions — the feature may already exist under a different name. If a "small fix" turns into building new infrastructure, STOP and tell the user: "This is bigger than expected — here's what I'm seeing" before proceeding. Default to the smallest change that solves the problem.
+
+### 2. No Plans Without Merged Code
 **HARD RULE.** Do not write new plans, research docs, or architecture documents until the code from the last plan is merged to `main` and tested. If a session only produces documents and no code changes, that is a problem. One bug fix at a time: fix → test → merge → next.
 
-### 2. Milestones Over Speed
+### 3. Milestones Over Speed
 Complete and test one feature end-to-end before starting the next. No placeholder/TODO code in production. Correctness over speed, always.
 
-### 3. Accuracy Over Automation
+### 4. Accuracy Over Automation
 Auto-detect where possible, but if uncertain, **ask the user** rather than guessing. Being interactive is fine. A few extra clicks is acceptable if it prevents bad data. We are NOT pushing AI slop.
 
 ## Turbopack TypeScript Rules
