@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useRouter, useParams } from "next/navigation";
 import OfflineIndicator from "@/components/OfflineIndicator";
 import ProgressBar from "@/components/ProgressBar";
-import PDFUploadModal from "@/components/PDFUploadModal";
+import ImportWizard from "@/components/ImportWizard/ImportWizard";
 
 interface OpeningWithProgress {
   id: string;
@@ -456,7 +456,7 @@ export default function ProjectDetailPage() {
       </main>
 
       {showUploadModal && (
-        <PDFUploadModal
+        <ImportWizard
           projectId={projectId}
           onClose={() => setShowUploadModal(false)}
           onSuccess={() => fetchProjectData()}

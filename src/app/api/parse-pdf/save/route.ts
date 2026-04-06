@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
-import { createExtractionRun, updateExtractionRun, writeStagingData } from '@/lib/extraction-staging'
+import { createExtractionRun, updateExtractionRun, writeStagingData, promoteExtraction } from '@/lib/extraction-staging'
 import type { StagingOpening } from '@/lib/extraction-staging'
 
 // --- Types ---
@@ -249,7 +249,7 @@ export async function POST(request: NextRequest) {
           }
         }
 
-        // 7. Update extraction run status
+        // 7. Update extraction run status to staged
         await updateExtractionRun(supabase, runId, {
           status: 'reviewing',
           doorsExtracted: stagingResult.openingsCount,
@@ -261,13 +261,35 @@ export async function POST(request: NextRequest) {
 
         console.log(`Staging save complete: ${stagingResult.openingsCount} openings, ${itemsInserted} items, run=${runId}`)
 
+        // 8. Auto-promote: staging → production in the same request
+        const promoteResult = await promoteExtraction(supabase, runId, user.id)
+
+        if (!promoteResult.success) {
+          console.error('Auto-promote failed:', promoteResult.error)
+          // Return staging success but flag that promote failed —
+          // data is safe in staging tables for manual promote later
+          return NextResponse.json({
+            success: true,
+            openingsCount: stagingResult.openingsCount,
+            itemsCount: itemsInserted,
+            hardwareSets: hardwareSets.length,
+            unmatchedSets: unmatchedSets.length > 0 ? unmatchedSets : undefined,
+            extraction_run_id: runId,
+            promoted: false,
+            promoteError: promoteResult.error,
+          })
+        }
+
+        console.log(`Auto-promote complete: ${promoteResult.openingsPromoted} openings, ${promoteResult.itemsPromoted} items`)
+
         return NextResponse.json({
           success: true,
-          openingsCount: stagingResult.openingsCount,
-          itemsCount: itemsInserted,
+          openingsCount: promoteResult.openingsPromoted ?? stagingResult.openingsCount,
+          itemsCount: promoteResult.itemsPromoted ?? itemsInserted,
           hardwareSets: hardwareSets.length,
           unmatchedSets: unmatchedSets.length > 0 ? unmatchedSets : undefined,
           extraction_run_id: runId,
+          promoted: true,
         })
       } catch (stagingError) {
         console.error('Staging save failed, falling back to direct production save:', stagingError)
