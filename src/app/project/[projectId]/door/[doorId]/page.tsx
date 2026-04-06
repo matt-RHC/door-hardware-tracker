@@ -53,6 +53,7 @@ export default function DoorDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [notes, setNotes] = useState("");
   const [savingNotes, setSavingNotes] = useState(false);
+  const [notesSaved, setNotesSaved] = useState(false);
   const [attachmentLoading, setAttachmentLoading] = useState(false);
   const [editingItemId, setEditingItemId] = useState<string | null>(null);
   const [editingItem, setEditingItem] = useState<EditingItemState | null>(null);
@@ -294,11 +295,24 @@ export default function DoorDetailPage() {
 
   const handleSaveNotes = async () => {
     setSavingNotes(true);
+    setNotesSaved(false);
     try {
-      // TODO: Implement notes save to Supabase
-      setSavingNotes(false);
+      const response = await fetch(
+        `/api/projects/${projectId}/openings/${doorId}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ notes }),
+        }
+      );
+
+      if (!response.ok) throw new Error("Failed to save notes");
+      setNotesSaved(true);
+      setTimeout(() => setNotesSaved(false), 2000);
     } catch (err) {
       console.error("Error saving notes:", err);
+      alert("Failed to save notes. Please try again.");
+    } finally {
       setSavingNotes(false);
     }
   };
@@ -1165,7 +1179,7 @@ export default function DoorDetailPage() {
               disabled={savingNotes}
               className="mt-4 px-4 py-2.5 bg-[var(--blue)] hover:bg-[var(--blue)]/80 disabled:bg-[var(--surface)] text-white disabled:text-[var(--text-tertiary)] rounded-lg transition-colors text-[15px] font-medium"
             >
-              {savingNotes ? "Saving..." : "Save Notes"}
+              {savingNotes ? "Saving..." : notesSaved ? "Saved!" : "Save Notes"}
             </button>
           </div>
         )}
