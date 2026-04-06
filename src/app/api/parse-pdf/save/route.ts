@@ -2,39 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { createExtractionRun, updateExtractionRun, writeStagingData, promoteExtraction } from '@/lib/extraction-staging'
 import type { StagingOpening } from '@/lib/extraction-staging'
-
-// --- Types ---
-
-interface HardwareItem {
-  qty: number              // per-opening (already normalized by Python layer)
-  qty_total?: number       // raw total from PDF
-  qty_door_count?: number  // openings in this set
-  qty_source?: string      // "parsed" | "divided" | "flagged" | "capped"
-  name: string
-  model: string
-  finish: string
-  manufacturer: string
-}
-
-interface HardwareSet {
-  set_id: string
-  generic_set_id?: string
-  heading: string
-  heading_door_count?: number
-  heading_leaf_count?: number
-  items: HardwareItem[]
-}
-
-interface DoorEntry {
-  door_number: string
-  hw_set: string
-  location: string
-  door_type: string
-  frame_type: string
-  fire_rating: string
-  hand: string
-  field_confidence?: Record<string, number>
-}
+import type { DoorEntry, HardwareSet } from '@/lib/types'
 
 // --- Shared helper: builds Door/Frame auto-items + set items per opening ---
 

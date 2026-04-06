@@ -490,48 +490,13 @@ function HoloLoader({ progress, status }: { progress: number; status: string }) 
 
 // --- Types ---
 
-interface HardwareItem {
-  qty: number;
-  qty_total?: number;
-  qty_door_count?: number;
-  qty_source?: string;
-  name: string;
-  model: string;
-  finish: string;
-  manufacturer: string;
-}
-
-interface HardwareSet {
-  set_id: string;
-  generic_set_id?: string;
-  heading: string;
-  heading_door_count?: number;
-  heading_leaf_count?: number;
-  items: HardwareItem[];
-}
-
-interface DoorEntry {
-  door_number: string;
-  hw_set: string;
-  location: string;
-  door_type: string;
-  frame_type: string;
-  fire_rating: string;
-  hand: string;
-}
-
-interface FlaggedDoor {
-  door: DoorEntry;
-  reason: string;
-  pattern: string;
-  dominant_pattern: string;
-}
+import type { DoorEntry, HardwareSet, PdfplumberFlaggedDoor } from '@/lib/types';
 
 interface ChunkResult {
   chunkIndex: number;
   hardwareSets: HardwareSet[];
   doors: DoorEntry[];
-  flaggedDoors?: FlaggedDoor[];
+  flaggedDoors?: PdfplumberFlaggedDoor[];
 }
 
 // --- Constants ---
@@ -771,7 +736,7 @@ export default function PDFUploadModal({
   const [reviewData, setReviewData] = useState<{
     doors: DoorEntry[];
     sets: HardwareSet[];
-    flaggedDoors?: FlaggedDoor[];
+    flaggedDoors?: PdfplumberFlaggedDoor[];
     byOthersFromTriage?: Set<number>;
   } | null>(null);
 
@@ -816,7 +781,7 @@ export default function PDFUploadModal({
     pageCount: number,
     parseOnly = false,
     explicitMapping?: ColumnMapping | null,
-  ): Promise<{ doors: DoorEntry[]; sets: HardwareSet[]; flaggedDoors?: FlaggedDoor[]; filteredPdfBase64?: string } | void> => {
+  ): Promise<{ doors: DoorEntry[]; sets: HardwareSet[]; flaggedDoors?: PdfplumberFlaggedDoor[]; filteredPdfBase64?: string } | void> => {
     // Convert buffer to base64 (needed by both paths)
     const fullBase64 = arrayBufferToBase64(buffer);
     pdfBase64Ref.current = fullBase64;
@@ -998,7 +963,7 @@ export default function PDFUploadModal({
 
     const allHardwareSets: HardwareSet[] = [];
     const allDoors: DoorEntry[] = [];
-    const allFlaggedDoors: FlaggedDoor[] = [];
+    const allPdfplumberFlaggedDoors: PdfplumberFlaggedDoor[] = [];
     const knownSetIds: string[] = [];
 
     for (let i = 0; i < totalChunks; i++) {
@@ -1055,7 +1020,7 @@ export default function PDFUploadModal({
         const result: ChunkResult = await resp.json();
         allHardwareSets.push(...result.hardwareSets);
         allDoors.push(...result.doors);
-        allFlaggedDoors.push(...(result.flaggedDoors ?? []));
+        allPdfplumberFlaggedDoors.push(...(result.flaggedDoors ?? []));
 
         for (const set of result.hardwareSets) {
           if (!knownSetIds.includes(set.set_id)) knownSetIds.push(set.set_id);
@@ -1080,26 +1045,26 @@ export default function PDFUploadModal({
     const mergedSets = mergeHardwareSets(allHardwareSets);
     const mergedDoors = mergeDoors(allDoors);
 
-    if (mergedDoors.length === 0 && allFlaggedDoors.length === 0) {
+    if (mergedDoors.length === 0 && allPdfplumberFlaggedDoors.length === 0) {
       throw new Error("No doors found across all chunks. The PDF may not contain a door schedule.");
     }
 
-    if (mergedDoors.length === 0 && allFlaggedDoors.length > 0) {
+    if (mergedDoors.length === 0 && allPdfplumberFlaggedDoors.length > 0) {
       // All doors were flagged as pattern outliers — still surface them for review
       // rather than failing with "no doors found"
-      console.debug(`All ${allFlaggedDoors.length} doors flagged for pattern review`);
+      console.debug(`All ${allPdfplumberFlaggedDoors.length} doors flagged for pattern review`);
       setStatus("Flagged doors for review.");
     }
 
     // Parse-only mode: return data for wizard
     if (parseOnly) {
       setProgress(100);
-      const flagNote = allFlaggedDoors.length > 0
-        ? ` (${allFlaggedDoors.length} flagged for review)`
+      const flagNote = allPdfplumberFlaggedDoors.length > 0
+        ? ` (${allPdfplumberFlaggedDoors.length} flagged for review)`
         : "";
       console.debug(`Parsed ${mergedSets.length} sets, ${mergedDoors.length} doors${flagNote}`);
       setStatus("Extraction complete. Ready for review.");
-      return { doors: mergedDoors, sets: mergedSets, flaggedDoors: allFlaggedDoors };
+      return { doors: mergedDoors, sets: mergedSets, flaggedDoors: allPdfplumberFlaggedDoors };
     }
 
     // Save mode: write to DB

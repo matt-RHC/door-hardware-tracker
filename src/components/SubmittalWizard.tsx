@@ -4,21 +4,7 @@ import { useState } from "react";
 
 // ─── Types ───
 
-interface HardwareSet {
-  set_id: string;
-  heading: string;
-  items: Array<{ qty: number; name: string; model: string; finish: string; manufacturer: string }>;
-}
-
-interface ParsedDoor {
-  door_number: string;
-  hw_set: string;
-  location: string;
-  door_type: string;
-  frame_type: string;
-  fire_rating: string;
-  hand: string;
-}
+import type { DoorEntry, HardwareSet } from '@/lib/types';
 
 interface FieldChange {
   field: string;
@@ -70,7 +56,7 @@ interface CompareResult {
 
 interface SubmittalWizardProps {
   projectId: string;
-  parsedDoors: ParsedDoor[];
+  parsedDoors: DoorEntry[];
   parsedSets: HardwareSet[];
   onClose: () => void;
   onComplete: () => void;

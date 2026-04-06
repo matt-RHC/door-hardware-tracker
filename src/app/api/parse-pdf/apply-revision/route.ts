@@ -1,37 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
-
-// --- Types ---
-
-interface HardwareItem {
-  qty: number
-  qty_total?: number
-  qty_door_count?: number
-  qty_source?: string
-  name: string
-  model: string
-  finish: string
-  manufacturer: string
-}
-
-interface HardwareSet {
-  set_id: string
-  generic_set_id?: string
-  heading: string
-  heading_door_count?: number
-  heading_leaf_count?: number
-  items: HardwareItem[]
-}
-
-interface DoorEntry {
-  door_number: string
-  hw_set: string
-  location: string
-  door_type: string
-  frame_type: string
-  fire_rating: string
-  hand: string
-}
+import type { DoorEntry, HardwareSet } from '@/lib/types'
 
 // User decisions from the wizard
 interface RemovedDecision {
