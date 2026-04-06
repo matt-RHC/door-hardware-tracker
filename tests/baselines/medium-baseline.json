@@ -1,10 +1,10 @@
 {
   "pdf_name": "MEDIUM_306169.pdf",
-  "door_count": 104,
-  "confirmed_count": 86,
-  "flagged_count": 18,
+  "door_count": 107,
+  "confirmed_count": 90,
+  "flagged_count": 17,
   "hw_set_count": 35,
-  "tables_found": 33,
+  "tables_found": 5,
   "reference_code_count": 0,
   "hardware_sets": [
     {
@@ -1369,8 +1369,8 @@
         },
         {
           "name": "Flush Bolt",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 2,
+          "qty_source": "flagged",
           "qty_total": 2,
           "qty_door_count": 2,
           "manufacturer": "",
@@ -1489,8 +1489,8 @@
         },
         {
           "name": "Door Sweep",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 2,
+          "qty_source": "flagged",
           "qty_total": 2,
           "qty_door_count": 2,
           "manufacturer": "",
@@ -2090,30 +2090,30 @@
         },
         {
           "name": "Closer 4040XP EDA 689 LC",
-          "qty": 1,
+          "qty": 2,
           "qty_source": "divided",
           "qty_total": 4,
-          "qty_door_count": 4,
+          "qty_door_count": 2,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "Protection Plate 8400 10\" X 35\" B-CS US32D IV",
-          "qty": 1,
+          "qty": 2,
           "qty_source": "divided",
           "qty_total": 4,
-          "qty_door_count": 4,
+          "qty_door_count": 2,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "Wall Stop WS406/407CCV US32D IV",
-          "qty": 1,
+          "qty": 2,
           "qty_source": "divided",
           "qty_total": 4,
-          "qty_door_count": 4,
+          "qty_door_count": 2,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -2140,10 +2140,10 @@
         },
         {
           "name": "Hardware by Others(By DOOR POSITION SWITCH BY SECURITY BO",
-          "qty": 1,
+          "qty": 2,
           "qty_source": "divided",
           "qty_total": 4,
-          "qty_door_count": 4,
+          "qty_door_count": 2,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -2160,50 +2160,50 @@
         },
         {
           "name": "Smoke Seal 5075 C 25' NA",
-          "qty": 1,
+          "qty": 2,
           "qty_source": "divided",
           "qty_total": 4,
-          "qty_door_count": 4,
+          "qty_door_count": 2,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "Gasketing 5060 C-21 21' NA",
-          "qty": 1,
+          "qty": 2,
           "qty_source": "divided",
           "qty_total": 4,
-          "qty_door_count": 4,
+          "qty_door_count": 2,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "Acoustic Seal 60FP NA",
-          "qty": 1,
+          "qty": 2,
           "qty_source": "divided",
           "qty_total": 4,
-          "qty_door_count": 4,
+          "qty_door_count": 2,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "Weatherstrip 326AA 119\" ZE",
-          "qty": 1,
+          "qty": 2,
           "qty_source": "divided",
           "qty_total": 4,
-          "qty_door_count": 4,
+          "qty_door_count": 2,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "Auto Door Bottom 355AA 36\" ZE",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 2,
+          "qty_source": "flagged",
           "qty_total": 4,
-          "qty_door_count": 4,
+          "qty_door_count": 2,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -4808,20 +4808,20 @@
       "items": [
         {
           "name": "Hinges 5BB1 HW 4 1/2 x 4 1/2 652 IV",
-          "qty": 20,
+          "qty": 10,
           "qty_source": "flagged",
           "qty_total": 20,
-          "qty_door_count": 6,
+          "qty_door_count": 2,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "Mortise Privacy Set L9040 06A RH 626 SC",
-          "qty": 2,
-          "qty_source": "parsed",
+          "qty": 1,
+          "qty_source": "divided",
           "qty_total": 2,
-          "qty_door_count": 6,
+          "qty_door_count": 2,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -4829,9 +4829,9 @@
         {
           "name": "Mortise Privacy Set L9040 06A LH 626 SC",
           "qty": 3,
-          "qty_source": "parsed",
+          "qty_source": "flagged",
           "qty_total": 3,
-          "qty_door_count": 6,
+          "qty_door_count": 2,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -4839,9 +4839,9 @@
         {
           "name": "Closer 4040XP RWPA 689 LC",
           "qty": 5,
-          "qty_source": "parsed",
+          "qty_source": "flagged",
           "qty_total": 5,
-          "qty_door_count": 6,
+          "qty_door_count": 2,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -4849,9 +4849,9 @@
         {
           "name": "Kickplate 8400 10\" X 34\" B-CS US32D IV",
           "qty": 5,
-          "qty_source": "parsed",
+          "qty_source": "flagged",
           "qty_total": 5,
-          "qty_door_count": 6,
+          "qty_door_count": 2,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -4859,9 +4859,9 @@
         {
           "name": "Wall Stop WS406/407CCV US32D IV",
           "qty": 5,
-          "qty_source": "parsed",
+          "qty_source": "flagged",
           "qty_total": 5,
-          "qty_door_count": 6,
+          "qty_door_count": 2,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -4869,9 +4869,9 @@
         {
           "name": "Gasket 429AA 1 x 36\" 2 x 96\" ZE",
           "qty": 5,
-          "qty_source": "parsed",
+          "qty_source": "flagged",
           "qty_total": 5,
-          "qty_door_count": 6,
+          "qty_door_count": 2,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -4879,9 +4879,9 @@
         {
           "name": "Smoke Seal 5075 C 25' NA",
           "qty": 5,
-          "qty_source": "parsed",
+          "qty_source": "flagged",
           "qty_total": 5,
-          "qty_door_count": 6,
+          "qty_door_count": 2,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -4889,19 +4889,19 @@
         {
           "name": "Gasketing 5060 C-21 21' NA",
           "qty": 5,
-          "qty_source": "parsed",
+          "qty_source": "flagged",
           "qty_total": 5,
-          "qty_door_count": 6,
+          "qty_door_count": 2,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "Acoustic Seal 60FP NA",
-          "qty": 10,
+          "qty": 5,
           "qty_source": "flagged",
           "qty_total": 10,
-          "qty_door_count": 6,
+          "qty_door_count": 2,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -4909,9 +4909,9 @@
         {
           "name": "Auto Door Bottom 355AA 36\" ZE",
           "qty": 5,
-          "qty_source": "parsed",
+          "qty_source": "flagged",
           "qty_total": 5,
-          "qty_door_count": 6,
+          "qty_door_count": 2,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -5566,8 +5566,8 @@
         },
         {
           "name": "Flush Bolt FB458 36\" US26D IV",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 2,
+          "qty_source": "flagged",
           "qty_total": 2,
           "qty_door_count": 2,
           "manufacturer": "",
@@ -5676,8 +5676,8 @@
         },
         {
           "name": "Smoke Seal 5075 C 25' NA",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 2,
+          "qty_source": "flagged",
           "qty_total": 2,
           "qty_door_count": 2,
           "manufacturer": "",
@@ -5686,8 +5686,8 @@
         },
         {
           "name": "Gasketing 5060 C-21 21' NA",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 2,
+          "qty_source": "flagged",
           "qty_total": 2,
           "qty_door_count": 2,
           "manufacturer": "",
@@ -5696,8 +5696,8 @@
         },
         {
           "name": "Acoustic Seal 60FP NA",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 2,
+          "qty_source": "flagged",
           "qty_total": 2,
           "qty_door_count": 2,
           "manufacturer": "",
@@ -5706,8 +5706,8 @@
         },
         {
           "name": "Weatherstrip 326AA 119\" ZE",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 2,
+          "qty_source": "flagged",
           "qty_total": 2,
           "qty_door_count": 2,
           "manufacturer": "",
@@ -5716,8 +5716,8 @@
         },
         {
           "name": "Auto Door Bottom 355AA 36\" ZE",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 2,
+          "qty_source": "flagged",
           "qty_total": 2,
           "qty_door_count": 2,
           "manufacturer": "",
@@ -6261,8 +6261,8 @@
         },
         {
           "name": "Smoke Seal 5075 C 25' NA",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 2,
+          "qty_source": "flagged",
           "qty_total": 2,
           "qty_door_count": 2,
           "manufacturer": "",
@@ -6271,8 +6271,8 @@
         },
         {
           "name": "Gasketing 5060 C-21 21' NA",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 2,
+          "qty_source": "flagged",
           "qty_total": 2,
           "qty_door_count": 2,
           "manufacturer": "",
@@ -6281,8 +6281,8 @@
         },
         {
           "name": "Acoustic Seal 60FP NA",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 2,
+          "qty_source": "flagged",
           "qty_total": 2,
           "qty_door_count": 2,
           "manufacturer": "",
@@ -6291,8 +6291,8 @@
         },
         {
           "name": "Weatherstrip 326AA 119\" ZE",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 2,
+          "qty_source": "flagged",
           "qty_total": 2,
           "qty_door_count": 2,
           "manufacturer": "",
@@ -6301,8 +6301,8 @@
         },
         {
           "name": "Auto Door Bottom 355AA 36\" ZE",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 2,
+          "qty_source": "flagged",
           "qty_total": 2,
           "qty_door_count": 2,
           "manufacturer": "",
@@ -6388,8 +6388,8 @@
         },
         {
           "name": "Smoke Seal 5075 C 25' NA",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 2,
+          "qty_source": "flagged",
           "qty_total": 2,
           "qty_door_count": 2,
           "manufacturer": "",
@@ -6398,8 +6398,8 @@
         },
         {
           "name": "Gasketing 5060 C-21 21' NA",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 2,
+          "qty_source": "flagged",
           "qty_total": 2,
           "qty_door_count": 2,
           "manufacturer": "",
@@ -6408,8 +6408,8 @@
         },
         {
           "name": "Acoustic Seal 60FP NA",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 2,
+          "qty_source": "flagged",
           "qty_total": 2,
           "qty_door_count": 2,
           "manufacturer": "",
@@ -6418,8 +6418,8 @@
         },
         {
           "name": "Weatherstrip 326AA 119\" ZE",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 2,
+          "qty_source": "flagged",
           "qty_total": 2,
           "qty_door_count": 2,
           "manufacturer": "",
@@ -6428,8 +6428,8 @@
         },
         {
           "name": "Auto Door Bottom 355AA 36\" ZE",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 2,
+          "qty_source": "flagged",
           "qty_total": 2,
           "qty_door_count": 2,
           "manufacturer": "",
@@ -6571,10 +6571,6 @@
     {
       "door_number": "110B-07A",
       "reason": "Pattern 'DL-DL' doesn't match dominant pattern(s) (D, D-DL, DL). May be a hardware set ID, reference code, or extraction artifact."
-    },
-    {
-      "door_number": "1400-BL",
-      "reason": "Pattern 'D-L' doesn't match dominant pattern(s) (D, D-DL, DL). May be a hardware set ID, reference code, or extraction artifact."
     },
     {
       "door_number": "EY-001",

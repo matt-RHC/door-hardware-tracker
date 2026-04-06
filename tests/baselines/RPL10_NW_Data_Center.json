@@ -1,10 +1,10 @@
 {
   "pdf_name": "RPL10_NW_Data_Center.pdf",
-  "door_count": 132,
+  "door_count": 130,
   "confirmed_count": 123,
-  "flagged_count": 9,
+  "flagged_count": 7,
   "hw_set_count": 31,
-  "tables_found": 23,
+  "tables_found": 4,
   "reference_code_count": 0,
   "hardware_sets": [
     {
@@ -583,8 +583,8 @@
         },
         {
           "name": "Surface Bolt SB360 12\" US2C IV",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 2,
+          "qty_source": "flagged",
           "qty_total": 2,
           "qty_door_count": 2,
           "manufacturer": "",
@@ -1532,8 +1532,8 @@
         },
         {
           "name": "Auto Door Bottom 355AA 36\" ZE",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 2,
+          "qty_source": "flagged",
           "qty_total": 2,
           "qty_door_count": 2,
           "manufacturer": "",
@@ -1926,8 +1926,8 @@
         },
         {
           "name": "Weatherstrip 328AA 84\" ZE",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 2,
+          "qty_source": "flagged",
           "qty_total": 2,
           "qty_door_count": 2,
           "manufacturer": "",
@@ -1936,8 +1936,8 @@
         },
         {
           "name": "Door Sweep 111AA 36\" ZE",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 2,
+          "qty_source": "flagged",
           "qty_total": 2,
           "qty_door_count": 2,
           "manufacturer": "",
@@ -3740,10 +3740,10 @@
         },
         {
           "name": "DOOR POSITION DPS BY OTHERS MISC",
-          "qty": 1,
+          "qty": 2,
           "qty_source": "divided",
           "qty_total": 8,
-          "qty_door_count": 8,
+          "qty_door_count": 4,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -3867,50 +3867,50 @@
         },
         {
           "name": "Protection Plate 8400 24\" x 46\" B-CS TK-TX US32D IV",
-          "qty": 1,
+          "qty": 2,
           "qty_source": "divided",
           "qty_total": 12,
-          "qty_door_count": 12,
+          "qty_door_count": 6,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "DOOR POSITION DPS BY OTHERS MISC",
-          "qty": 1,
+          "qty": 2,
           "qty_source": "divided",
           "qty_total": 12,
-          "qty_door_count": 12,
+          "qty_door_count": 6,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "Electric Power Transfer EPT 10 CON SP28 VO",
-          "qty": 1,
+          "qty": 2,
           "qty_source": "divided",
           "qty_total": 12,
-          "qty_door_count": 12,
+          "qty_door_count": 6,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "Power Supply Extension CON-6W SC",
-          "qty": 1,
+          "qty": 2,
           "qty_source": "divided",
           "qty_total": 12,
-          "qty_door_count": 12,
+          "qty_door_count": 6,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "Auto Door Bottom 355AA 48\" ZE",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 2,
+          "qty_source": "flagged",
           "qty_total": 12,
-          "qty_door_count": 12,
+          "qty_door_count": 6,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -4044,8 +4044,8 @@
         },
         {
           "name": "Weatherstrip 139A 108\" ZE",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 2,
+          "qty_source": "flagged",
           "qty_total": 2,
           "qty_door_count": 2,
           "manufacturer": "",
@@ -4054,8 +4054,8 @@
         },
         {
           "name": "Auto Door Bottom 355AA 36\" ZE",
-          "qty": 1,
-          "qty_source": "divided",
+          "qty": 2,
+          "qty_source": "flagged",
           "qty_total": 2,
           "qty_door_count": 2,
           "manufacturer": "",
@@ -4087,20 +4087,12 @@
       "reason": "Pattern 'D' doesn't match dominant pattern(s) (D.LD.D, D.LD.DL). May be a hardware set ID, reference code, or extraction artifact."
     },
     {
-      "door_number": "223-MSLA-10",
-      "reason": "Pattern 'D-L-D' doesn't match dominant pattern(s) (D.LD.D, D.LD.DL). May be a hardware set ID, reference code, or extraction artifact."
-    },
-    {
       "door_number": "304L",
       "reason": "Pattern 'DL' doesn't match dominant pattern(s) (D.LD.D, D.LD.DL). May be a hardware set ID, reference code, or extraction artifact."
     },
     {
       "door_number": "50-231",
       "reason": "Pattern 'D-D' doesn't match dominant pattern(s) (D.LD.D, D.LD.DL). May be a hardware set ID, reference code, or extraction artifact."
-    },
-    {
-      "door_number": "L583-363",
-      "reason": "Pattern 'LD-D' doesn't match dominant pattern(s) (D.LD.D, D.LD.DL). May be a hardware set ID, reference code, or extraction artifact."
     }
   ]
 }

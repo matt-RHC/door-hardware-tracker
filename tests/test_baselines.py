@@ -90,13 +90,13 @@ class TestMediumBaseline:
             f"Door count changed: expected {baseline['door_count']}, got {actual}"
         )
 
-    def test_104_doors(self, extract_tables, medium_pdf_path):
-        """Critical regression: MEDIUM PDF must extract 104 doors.
-        Was 102 before S-045; +2 from ST-1A/ST-1C (stair doors now accepted
-        via DOOR_LOCATION_PREFIXES)."""
+    def test_107_doors(self, extract_tables, medium_pdf_path):
+        """Critical regression: MEDIUM PDF must extract 107 doors.
+        Was 102 before S-045, 104 after S-045 (ST-1A/ST-1C via DOOR_LOCATION_PREFIXES),
+        107 after S-064/S-065 (bare 3-digit doors accepted, false positives removed)."""
         hw_sets, openings, confirmed, flagged, refs, tf = _run_full_pipeline(extract_tables, medium_pdf_path)
         actual = len(confirmed) + len(flagged)
-        assert actual == 104, f"MEDIUM PDF door count regression: expected 104, got {actual}"
+        assert actual == 107, f"MEDIUM PDF door count regression: expected 107, got {actual}"
 
     def test_hw_set_count(self, extract_tables, medium_pdf_path):
         baseline = _load_baseline("medium-baseline.json")
