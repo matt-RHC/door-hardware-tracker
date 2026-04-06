@@ -211,6 +211,330 @@ def deduplicate_hardware_items(items: list[HardwareItem]) -> list[HardwareItem]:
     return deduped
 
 
+# ─── BUG-12: Field-splitting functions ────────────────────────────────────────
+
+def filter_non_hardware_items(items: list[HardwareItem]) -> list[HardwareItem]:
+    """
+    Remove items that are clearly not hardware (sentence fragments from PDF
+    notes, door assignment header rows, section dividers, date strings).
+    Conservative — only removes items that definitely aren't hardware.
+    """
+    filtered: list[HardwareItem] = []
+    for item in items:
+        name = item.name.strip()
+        if not name:
+            continue
+
+        # Door assignment rows, section dividers, date strings
+        if NON_HARDWARE_PATTERN.search(name):
+            logger.debug(f"[filter] Removed non-hardware: {name!r}")
+            continue
+
+        # Sentence fragments (starts with lowercase letter)
+        if name[0].islower():
+            logger.debug(f"[filter] Removed lowercase-start fragment: {name!r}")
+            continue
+
+        # Starts with punctuation (not hardware)
+        if name[0] in ":;-*,":
+            logger.debug(f"[filter] Removed punctuation-start: {name!r}")
+            continue
+
+        # Contains sentence-like patterns
+        if SENTENCE_FRAGMENT_PATTERN.search(name):
+            logger.debug(f"[filter] Removed sentence fragment: {name!r}")
+            continue
+
+        # OCR garble: most tokens are 1-2 chars (e.g. "NTOWN CONNECT IO N")
+        # Exclude tokens that are known mfr/finish codes from the count
+        tokens = name.split()
+        if len(tokens) >= 3:
+            short_garbage = sum(
+                1 for t in tokens
+                if len(t) <= 2
+                and t.upper() not in MANUFACTURER_CODES
+                and not FINISH_CODE_PATTERN.match(t)
+            )
+            if short_garbage >= len(tokens) * 0.5:
+                logger.debug(f"[filter] Removed OCR garble: {name!r}")
+                continue
+
+        filtered.append(item)
+
+    if len(filtered) < len(items):
+        logger.info(
+            f"[filter] Removed {len(items) - len(filtered)} non-hardware items "
+            f"({len(items)} → {len(filtered)})"
+        )
+    return filtered
+
+
+def reassemble_truncated_fields(item: HardwareItem) -> HardwareItem:
+    """
+    Fix Mode 2: pdfplumber misaligned column boundaries causing words to be
+    split across name/mfr/model/finish fields.
+
+    Detection: if mfr starts with lowercase (word continuation) or is a short
+    fragment not matching a known code, reassemble everything into name.
+    """
+    name = item.name.strip()
+    mfr = item.manufacturer.strip()
+    model = item.model.strip()
+    finish = item.finish.strip()
+
+    # Nothing to reassemble if all other fields are empty
+    if not mfr and not model and not finish:
+        return item
+
+    # Check if fields look properly structured (skip reassembly)
+    if (mfr.upper() in MANUFACTURER_CODES
+            and model
+            and len(model) > 2
+            and (not name or name[-1] == " " or not mfr or not mfr[0].islower())):
+        return item
+
+    # Detect truncation artifacts
+    truncated = False
+
+    # (a) mfr starts with lowercase → word continuation of name
+    if mfr and mfr[0].islower():
+        truncated = True
+
+    # (b) mfr is a very short fragment (1-2 chars) not matching any known code
+    elif mfr and len(mfr) <= 2 and mfr.upper() not in MANUFACTURER_CODES:
+        truncated = True
+
+    # (c) finish contains lowercase letters (likely a word fragment, not a code)
+    elif finish and re.search(r"[a-z]", finish) and not FINISH_CODE_PATTERN.match(finish):
+        truncated = True
+
+    # (d) model is very short (1-2 chars) and looks like a fragment
+    elif model and len(model) <= 2 and not re.match(r"^\d+$", model):
+        truncated = True
+
+    if not truncated:
+        return item
+
+    # Reassemble all fields into name
+    parts = [name]
+    if mfr:
+        # Lowercase start = direct continuation (no space)
+        if mfr[0].islower():
+            parts[-1] = parts[-1] + mfr
+        else:
+            parts.append(mfr)
+    if model:
+        parts.append(model)
+    if finish:
+        parts.append(finish)
+
+    reassembled = " ".join(parts)
+    reassembled = re.sub(r"\s+", " ", reassembled).strip()
+
+    logger.debug(
+        f"[reassemble] '{item.name}' + '{mfr}' + '{model}' + '{finish}' → '{reassembled}'"
+    )
+
+    return HardwareItem(
+        qty=item.qty,
+        qty_total=item.qty_total,
+        qty_door_count=item.qty_door_count,
+        qty_source=item.qty_source,
+        name=reassembled,
+        manufacturer="",
+        model="",
+        finish="",
+    )
+
+
+def split_concatenated_hw_fields(
+    item: HardwareItem,
+    pdf_reference_codes: list[ReferenceCode] | None = None,
+) -> HardwareItem:
+    """
+    Split a concatenated hardware item name into separate fields.
+
+    Algorithm (right-to-left):
+    1. Check if last token is a known manufacturer abbreviation → extract mfr
+    2. Check if new last token is a finish code → extract finish
+    3. Match beginning against HARDWARE_ITEM_NAMES → extract item name
+    4. Everything between name and finish/mfr → model
+    """
+    # Skip if fields are already populated
+    if item.manufacturer or item.model or item.finish:
+        return item
+
+    name = item.name.strip()
+    if not name:
+        return item
+
+    # Skip "by others" / "not used" / "by supplier" items
+    # Tolerant of truncation: "by O thers", "b y others", etc.
+    if re.search(
+        r"(?i)\b(by\s*o\s*thers|by\s*door\s*supplier|by\s*supplier|by\s*security"
+        r"|not\s*used|not\s*in\s*contract|no\s*hardware|b\s*y\s*o\b)\b",
+        name,
+    ):
+        return item
+
+    # Build augmented manufacturer lookup from PDF reference codes
+    mfr_lookup: dict[str, str] = dict(MANUFACTURER_CODES)
+    if pdf_reference_codes:
+        for rc in pdf_reference_codes:
+            if rc.code_type == "manufacturer" and rc.code:
+                mfr_lookup[rc.code.upper()] = rc.full_name
+
+    # Tokenize
+    tokens = name.split()
+    if len(tokens) < 2:
+        return item  # Single-word item, nothing to split
+
+    # --- Step 1: Extract manufacturer (rightmost token) ---
+    extracted_mfr = ""
+    last_upper = tokens[-1].upper()
+
+    if last_upper in mfr_lookup and last_upper not in NOT_MANUFACTURER_CODES:
+        extracted_mfr = tokens[-1]
+        tokens = tokens[:-1]
+
+    # --- Step 2: Extract finish (now-rightmost token) ---
+    extracted_finish = ""
+    if tokens:
+        candidate = tokens[-1]
+        # Must match finish pattern AND not be a dimension/model suffix
+        if (FINISH_CODE_PATTERN.match(candidate)
+                and not NOT_FINISH_PATTERN.match(candidate)):
+            extracted_finish = tokens[-1]
+            tokens = tokens[:-1]
+
+    # --- Step 3: Extract item name (leftmost word-tokens) ---
+    # Hardware names are English words (no digits). Model numbers always
+    # contain digits. Walk tokens left-to-right; stop at first token with
+    # a digit — that starts the model.
+    name_end_idx = 0
+    for i, tok in enumerate(tokens):
+        if re.search(r"\d", tok):
+            break
+        name_end_idx = i + 1
+
+    if name_end_idx == 0:
+        name_end_idx = 1  # at minimum, first token is the name
+    extracted_name = " ".join(tokens[:name_end_idx])
+
+    # --- Step 4: Model = everything between name and finish/mfr ---
+    model_tokens = tokens[name_end_idx:]
+    extracted_model = " ".join(model_tokens)
+
+    # Validate: if we extracted nothing useful, keep original
+    if not extracted_model and not extracted_mfr and not extracted_finish:
+        return item
+
+    logger.debug(
+        f"[split] '{item.name}' → name='{extracted_name}', "
+        f"model='{extracted_model}', finish='{extracted_finish}', "
+        f"mfr='{extracted_mfr}'"
+    )
+
+    return HardwareItem(
+        qty=item.qty,
+        qty_total=item.qty_total,
+        qty_door_count=item.qty_door_count,
+        qty_source=item.qty_source,
+        name=extracted_name,
+        manufacturer=extracted_mfr,
+        model=extracted_model,
+        finish=extracted_finish,
+    )
+
+
+def _heal_broken_words(text: str) -> str:
+    """
+    Fix pdfplumber word-break artifacts where characters are split by spaces.
+    E.g., "Continuous Hi nge" → "Continuous Hinge",
+          "Protection Pla te" → "Protection Plate",
+          "Electrified Mortis e L ock" → "Electrified Mortise Lock"
+
+    Rule: a lowercase-starting token is a fragment of the previous word IF either
+    the previous token or the fragment is short (<=3 chars). This distinguishes
+    real fragments ("nge", "ore", "te") from real words ("unlocks", "lockset").
+    """
+    tokens = text.split()
+    if len(tokens) < 2:
+        return text
+
+    # Pass 1: join lowercase fragments to previous token
+    _REAL_WORDS = {"to", "in", "of", "or", "by", "an", "at", "on",
+                   "is", "it", "as", "no", "so", "up", "if", "we",
+                   "be", "do", "he", "me", "us", "am", "my"}
+    merged: list[str] = [tokens[0]]
+    for i in range(1, len(tokens)):
+        tok = tokens[i]
+        if (tok and tok[0].islower() and tok not in ("x",)
+                and tok.lower() not in _REAL_WORDS and merged
+                and merged[-1].lower() not in _REAL_WORDS
+                and (len(merged[-1]) <= 3 or len(tok) <= 3)):
+            merged[-1] = merged[-1] + tok
+        else:
+            merged.append(tok)
+
+    # Pass 2: join isolated single uppercase chars to adjacent token
+    result: list[str] = []
+    i = 0
+    while i < len(merged):
+        tok = merged[i]
+        if len(tok) == 1 and tok.isalpha() and tok.lower() not in ("x",):
+            if i + 1 < len(merged) and merged[i + 1][0:1].isalpha():
+                # Prepend to next token
+                merged[i + 1] = tok + merged[i + 1]
+            elif result and result[-1][-1:].isalpha():
+                # End of string: append to previous
+                result[-1] = result[-1] + tok
+            else:
+                result.append(tok)
+        else:
+            result.append(tok)
+        i += 1
+    return " ".join(result)
+
+
+def apply_field_splitting(
+    hardware_sets: list[HardwareSetDef],
+    reference_codes: list[ReferenceCode],
+) -> None:
+    """
+    Post-processing pass: filter garbage items, reassemble truncated fields,
+    split concatenated fields, and re-deduplicate. Mutates hardware_sets in place.
+    Called after hardware sets AND reference codes are both extracted.
+    """
+    for hw_set in hardware_sets:
+        hw_set.items = filter_non_hardware_items(hw_set.items)
+        new_items: list[HardwareItem] = []
+        for item in hw_set.items:
+            item = reassemble_truncated_fields(item)
+            # Heal broken words before splitting
+            healed_name = _heal_broken_words(item.name)
+            if healed_name != item.name:
+                logger.debug(f"[heal] {item.name!r} → {healed_name!r}")
+                item = HardwareItem(
+                    qty=item.qty, qty_total=item.qty_total,
+                    qty_door_count=item.qty_door_count,
+                    qty_source=item.qty_source,
+                    name=healed_name,
+                    manufacturer=item.manufacturer,
+                    model=item.model,
+                    finish=item.finish,
+                )
+            item = split_concatenated_hw_fields(item, reference_codes)
+            new_items.append(item)
+        # Second filter pass: reassembly can produce longer garbage strings
+        # from short fragments that survived the first filter
+        new_items = filter_non_hardware_items(new_items)
+        hw_set.items = deduplicate_hardware_items(new_items)
+
+
+# ─── End BUG-12 functions ─────────────────────────────────────────────────────
+
+
 # --- Column Detection for Opening List ---
 
 # --- Intelligent Column Detection ---
@@ -498,6 +822,119 @@ HARDWARE_ITEM_NAMES = re.compile(
     r"pull|push|plate|lever|knob|key|magnetic|roller|catch"
     r")"
 )
+
+
+# ─── BUG-12: Field-splitting constants ────────────────────────────────────────
+# Manufacturer abbreviation → full name (from data analysis of all 5 golden baselines).
+# Augmented at runtime by PDF reference codes (code_type == "manufacturer").
+MANUFACTURER_CODES: dict[str, str] = {
+    "IV": "Ives",
+    "SC": "Schlage",
+    "ZE": "Zero International",
+    "LC": "LCN",
+    "AB": "ABH",
+    "ABH": "ABH",
+    "VO": "Von Duprin",
+    "NA": "National Guard Products",
+    "ME": "Medeco",
+    "BE": "Best",
+    "GL": "Glynn-Johnson",
+    "AC": "Accurate",
+    "BO": "Bobrick",
+    "RO": "Rockwood",
+    "ROC": "Rockwood",
+    "DM": "Dorma",
+    "MK": "McKinney",
+    "YA": "Yale",
+    "SA": "Sargent",
+    "PE": "Pemko",
+    "RI": "RIXSON",
+    "SE": "Securitron",
+    "HE": "HES",
+    "AD": "Adams Rite",
+    "LO": "Locknetics",
+    "HA": "Hager",
+    "KN": "Knape & Vogt",
+    "RX": "RIXSON",
+    "DO": "Dorma",
+    "SU": "Sugatsune",
+    "EF": "Effector",
+    "IN": "Ingersoll Rand",
+}
+
+# Tokens that appear in last position but are NOT manufacturer codes.
+NOT_MANUFACTURER_CODES: set[str] = {
+    "RH", "LH", "RHR", "LHR", "RHRA", "RHA", "LHA",
+    "MISC", "B/O'S", "B/O\u2019S",
+    "HIMM", "SUPPLIER",
+}
+
+# Finish code patterns — conservative, only matches known formats.
+FINISH_CODE_PATTERN = re.compile(
+    r"^("
+    r"\d{3}[A-Z]?"          # 3-digit numeric: 626, 652, 628, 630, 689
+    r"|US\d{2}[A-Z]?"       # US-prefix: US32D, US26D, US28
+    r"|SP\d{2,3}"           # SP-prefix: SP28, SP313
+    r"|Z\d{2}"              # Z-prefix: Z49
+    r"|AL"                  # Aluminum
+    r"|GRY"                 # Grey
+    r"|BK"                  # Black
+    r"|BSP"                 # Black Suede Powder
+    r"|S4"                  # Hager finish code
+    r"|CLR"                 # Clear
+    r"|DKB"                 # Dark Bronze
+    r")$",
+    re.IGNORECASE,
+)
+
+# Tokens that look like finish codes but aren't (dimensions, model suffixes).
+NOT_FINISH_PATTERN = re.compile(
+    r"^\d+['\"\u201d\u2033]"   # Dimensions: 36", 84", 108", 25'
+    r"|^CON-\w+"               # Connector model suffixes: CON-6W, CON-38P
+    r"|^\d+FP$"                # Model suffixes like 60FP
+)
+
+# Non-hardware item patterns — used to filter garbage from extraction.
+NON_HARDWARE_PATTERN = re.compile(
+    r"^(Single Door|Pair Doors|Opening\b|Properties:|Notes:|Description:)"  # Non-items
+    r"|(?:REVISED|CHECKED|REVIEWED)\s+BY:"                # Revision stamps
+    r"|_{5,}"                                              # Section dividers
+    r"|^(January|February|March|April|May|June|July|August|September|October|November|December)\b"
+    r"|^Wiring Diagram\b"                                  # Reference diagrams
+    r"|^(Door\s+(normally|remains|nor\b)|Free to egress|Presenting valid)"  # Door operation descriptions
+    r"|,.*," # Multiple commas = sentence, not hardware name
+    , re.IGNORECASE
+)
+SENTENCE_FRAGMENT_PATTERN = re.compile(
+    r"\b(does not|which is|as follows|please verify|we have|have schedule"
+    r"|the floor|this is|it may|if used|are not|all hardware|for pricing"
+    r"|as noted|as scheduled|added where|and do not|and removed|was made"
+    r"|are entry|bolt should|closer are|set for|may be|is required"
+    r"|is a similar|provide new|for a single|for a double|or combination"
+    r"|un-occupied|both sides|from either|concealed vertical"
+    r"|omits these|pairs, as is|not to be us|sized rated|on non-rated"
+    r"|the flushbolts|egress pa|security v|verify this|nomenclatu"
+    r"|connect yes|have schedule"
+    r"|there are many|prior to t|ation of the|way of"
+    r"|card reader unlocks"
+    r"|locked\s*w\s*hen|latc\s*hed|crede\s*ntial|tim\s*es\."  # Garbled OCR fragments
+    r"|to egress"
+    r"|to\s+co\s*nfir|GC\s+to\s+|architect\s+to\s+"   # Project notes
+    r"|all\s+restroom\s+locks|with\s+occupancy"
+    r"|during\s+emergenc|access\s+in\s+during)\b",
+    re.IGNORECASE,
+)
+
+# Words that continue a hardware item name (multi-word names like
+# "Mortise Privacy Set", "Auto Door Bottom", "Flush Bolt Kit").
+# Used to find the boundary between item name and model number.
+NAME_CONTINUATION_WORDS: set[str] = {
+    "set", "lock", "plate", "bolt", "device", "bottom", "hinge",
+    "stop", "holder", "sweep", "drip", "seal", "reader", "position",
+    "transfer", "harness", "core", "sensor", "operator", "kit",
+    "latch", "latchset", "deadbolt",
+}
+# ─── End BUG-12 constants ─────────────────────────────────────────────────────
 
 
 def detect_column_mapping(headers: list[str]) -> dict[str, int]:
@@ -2270,6 +2707,9 @@ class handler(BaseHTTPRequestHandler):
 
                 # Phase 3: Extract reference tables
                 reference_codes = extract_reference_tables(pdf)
+
+                # Phase 3.1: Filter garbage + split concatenated fields (BUG-12)
+                apply_field_splitting(hardware_sets, reference_codes)
 
                 # Phase 3.5: Normalize item qty from total → per-opening/per-leaf
                 normalize_quantities(hardware_sets, openings)

@@ -167,6 +167,7 @@ CRITICAL RULES:
 - DO NOT "fix" item quantities. The quantities shown have ALREADY been normalized from PDF totals to per-opening values by dividing by the number of doors in each set. If the PDF shows "8" for closers across 8 doors, the correct per-opening qty is 1, and the extracted data will show 1. Do NOT change it back to 8.
 - Focus on: missing items/doors, wrong set assignments, misread text (names, manufacturers, models, finishes).
 - Do NOT correct formatting differences (e.g. "HM" vs "Hollow Metal" are both fine).
+- FIELD SPLITTING: The name field should contain ONLY the hardware category name (e.g., "Closer", "Hinges", "Exit Device"). If an item's name still contains model numbers, finish codes, or manufacturer abbreviations (e.g., name="Closer 4040XP AL LC" with empty model/finish/mfr), report it as items_to_fix. Split: name=category only, model=catalog/model number, finish=finish code, manufacturer=company abbreviation. Common codes: IV=Ives, SC=Schlage, ZE=Zero, LC=LCN, AB=ABH, VO=Von Duprin, NA=NGP, ME=Medeco.
 
 ${getTaxonomyPromptText()}`
 

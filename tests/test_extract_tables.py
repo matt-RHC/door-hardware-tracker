@@ -329,3 +329,220 @@ class TestMediumPDFVerification:
                 assert item.qty <= 250, (
                     f"Set {s.set_id}: '{item.name}' qty {item.qty} is unreasonably high"
                 )
+
+
+# ── BUG-12: Hardware item field concatenation splitting ──
+
+class TestBug12FieldSplitting:
+    """BUG-12: When pdfplumber reads all item details into a single name field,
+    split_concatenated_hw_fields() must separate name/model/finish/manufacturer."""
+
+    # --- Mode 1: Full concatenation splitting ---
+
+    def test_split_hinge(self, extract_tables):
+        """Standard hinge with model, finish, and mfr."""
+        HardwareItem = extract_tables.HardwareItem
+        item = HardwareItem(name="Hinges 5BB1 4 1/2 x 4 1/2 652 IV")
+        result = extract_tables.split_concatenated_hw_fields(item)
+        assert result.name == "Hinges"
+        assert result.model == "5BB1 4 1/2 x 4 1/2"
+        assert result.finish == "652"
+        assert result.manufacturer == "IV"
+
+    def test_split_closer(self, extract_tables):
+        """Closer with options in model field."""
+        HardwareItem = extract_tables.HardwareItem
+        item = HardwareItem(name="Closer 4040XP RWPA TBWMS AL LC")
+        result = extract_tables.split_concatenated_hw_fields(item)
+        assert result.name == "Closer"
+        assert result.model == "4040XP RWPA TBWMS"
+        assert result.finish == "AL"
+        assert result.manufacturer == "LC"
+
+    def test_split_mortise_with_hand(self, extract_tables):
+        """Mortise lockset — hand designation (RH) stays in model."""
+        HardwareItem = extract_tables.HardwareItem
+        item = HardwareItem(name="Mortise Privacy Set L9040 03N L283-722 L583-363 RH 626 SC")
+        result = extract_tables.split_concatenated_hw_fields(item)
+        assert result.name == "Mortise Privacy Set"
+        assert "RH" in result.model
+        assert result.finish == "626"
+        assert result.manufacturer == "SC"
+
+    def test_split_exit_device(self, extract_tables):
+        """Exit device with complex model."""
+        HardwareItem = extract_tables.HardwareItem
+        item = HardwareItem(name="Exit Device 9447EO-F 48\" LBRAFL US26D VO")
+        result = extract_tables.split_concatenated_hw_fields(item)
+        assert result.name == "Exit Device"
+        assert "9447EO-F" in result.model
+        assert result.finish == "US26D"
+        assert result.manufacturer == "VO"
+
+    def test_split_continuous_hinge(self, extract_tables):
+        """Continuous hinge — multi-word name."""
+        HardwareItem = extract_tables.HardwareItem
+        item = HardwareItem(name="Continuous Hinge 112XY 83\" EPT LH 628 IV")
+        result = extract_tables.split_concatenated_hw_fields(item)
+        assert result.name == "Continuous Hinge"
+        assert "112XY" in result.model
+        assert result.finish == "628"
+        assert result.manufacturer == "IV"
+
+    def test_split_flush_bolt(self, extract_tables):
+        """Flush bolt with US-prefix finish."""
+        HardwareItem = extract_tables.HardwareItem
+        item = HardwareItem(name="Flush Bolt FB31T 36\" US32D IV")
+        result = extract_tables.split_concatenated_hw_fields(item)
+        assert result.name == "Flush Bolt"
+        assert "FB31T" in result.model
+        assert result.finish == "US32D"
+        assert result.manufacturer == "IV"
+
+    def test_split_weatherstrip_no_finish(self, extract_tables):
+        """Weatherstrip — dimension at end is NOT a finish code."""
+        HardwareItem = extract_tables.HardwareItem
+        item = HardwareItem(name='Weatherstrip 8303AA 1 x 36" 2 x 84" ZE')
+        result = extract_tables.split_concatenated_hw_fields(item)
+        assert result.name == "Weatherstrip"
+        assert result.manufacturer == "ZE"
+        assert result.finish == ""  # dimensions are NOT finish codes
+        assert '36"' in result.model
+
+    def test_split_coordinator(self, extract_tables):
+        """Coordinator with US-prefix finish."""
+        HardwareItem = extract_tables.HardwareItem
+        item = HardwareItem(name="Coordinator 3780 US28 AB")
+        result = extract_tables.split_concatenated_hw_fields(item)
+        assert result.name == "Coordinator"
+        assert result.model == "3780"
+        assert result.finish == "US28"
+        assert result.manufacturer == "AB"
+
+    def test_split_protection_plate(self, extract_tables):
+        """Protection plate — multi-word name with dimensions in model."""
+        HardwareItem = extract_tables.HardwareItem
+        item = HardwareItem(name='Protection Plate 8400 10" X 34" B-CS US32D IV')
+        result = extract_tables.split_concatenated_hw_fields(item)
+        assert result.name == "Protection Plate"
+        assert "8400" in result.model
+        assert result.finish == "US32D"
+        assert result.manufacturer == "IV"
+
+    # --- Bypass / edge cases ---
+
+    def test_skip_by_others(self, extract_tables):
+        """BY OTHERS items are left unchanged."""
+        HardwareItem = extract_tables.HardwareItem
+        item = HardwareItem(name="Card Reader(By Others) CARD READER BY SECURITY VENDOR MISC")
+        result = extract_tables.split_concatenated_hw_fields(item)
+        assert result.name == item.name  # unchanged
+        assert result.manufacturer == ""
+
+    def test_skip_already_split(self, extract_tables):
+        """Items with populated fields are not re-split."""
+        HardwareItem = extract_tables.HardwareItem
+        item = HardwareItem(name="Closer", manufacturer="LC", model="4040XP", finish="AL")
+        result = extract_tables.split_concatenated_hw_fields(item)
+        assert result.name == "Closer"
+        assert result.manufacturer == "LC"
+        assert result.model == "4040XP"
+        assert result.finish == "AL"
+
+    def test_skip_single_word(self, extract_tables):
+        """Single-word items can't be split — returned unchanged."""
+        HardwareItem = extract_tables.HardwareItem
+        item = HardwareItem(name="Closer")
+        result = extract_tables.split_concatenated_hw_fields(item)
+        assert result.name == "Closer"
+        assert result.manufacturer == ""
+
+    def test_preserves_qty_fields(self, extract_tables):
+        """Qty, qty_total, qty_door_count, qty_source are preserved."""
+        HardwareItem = extract_tables.HardwareItem
+        item = HardwareItem(
+            qty=3, qty_total=30, qty_door_count=10,
+            qty_source="divided", name="Hinges 5BB1 652 IV",
+        )
+        result = extract_tables.split_concatenated_hw_fields(item)
+        assert result.qty == 3
+        assert result.qty_total == 30
+        assert result.qty_door_count == 10
+        assert result.qty_source == "divided"
+        assert result.name == "Hinges"
+
+    # --- Mode 2: Truncated reassembly ---
+
+    def test_reassemble_truncated_name_mfr(self, extract_tables):
+        """mfr starts with lowercase → word continuation of name."""
+        HardwareItem = extract_tables.HardwareItem
+        item = HardwareItem(
+            name="Mortise Passag", manufacturer="e Set",
+            model="L9010 03N", finish="",
+        )
+        result = extract_tables.reassemble_truncated_fields(item)
+        assert "Passage" in result.name or "Passag" in result.name
+        assert result.manufacturer == ""
+        assert result.model == ""
+
+    def test_reassemble_protection_plate(self, extract_tables):
+        """Short mfr fragment → truncation artifact."""
+        HardwareItem = extract_tables.HardwareItem
+        item = HardwareItem(
+            name="Protection Plat", manufacturer="e",
+            model='8400 10" X 34" B', finish="CS",
+        )
+        result = extract_tables.reassemble_truncated_fields(item)
+        assert "Protection Plate" in result.name
+        assert result.manufacturer == ""
+
+    def test_no_reassemble_proper_split(self, extract_tables):
+        """Properly split items are NOT reassembled."""
+        HardwareItem = extract_tables.HardwareItem
+        item = HardwareItem(
+            name="Closer", manufacturer="LCN",
+            model="4040XP RWPA", finish="689",
+        )
+        result = extract_tables.reassemble_truncated_fields(item)
+        # LCN is a known mfr code with a real model → should NOT reassemble
+        assert result.manufacturer == "LCN"
+        assert result.model == "4040XP RWPA"
+
+    # --- Garbage filter ---
+
+    def test_filter_door_assignment_rows(self, extract_tables):
+        """Door assignment rows are removed."""
+        HardwareItem = extract_tables.HardwareItem
+        items = [
+            HardwareItem(name="Single Door #10-76A EXECUTIVE LARGE OFFICE RH"),
+            HardwareItem(name="Hinges 5BB1 652 IV"),
+            HardwareItem(name="Pair Doors #2.01.F.03 CORR. to ENTRANCE RHA"),
+        ]
+        result = extract_tables.filter_non_hardware_items(items)
+        assert len(result) == 1
+        assert result[0].name == "Hinges 5BB1 652 IV"
+
+    def test_filter_sentence_fragments(self, extract_tables):
+        """Sentence fragments from PDF notes are removed."""
+        HardwareItem = extract_tables.HardwareItem
+        items = [
+            HardwareItem(name="ew carefully"),
+            HardwareItem(name=": Some of the"),
+            HardwareItem(name="nish. We have"),
+            HardwareItem(name="Closer 4040XP AL LC"),
+        ]
+        result = extract_tables.filter_non_hardware_items(items)
+        assert len(result) == 1
+        assert result[0].name == "Closer 4040XP AL LC"
+
+    def test_filter_keeps_real_hardware(self, extract_tables):
+        """Real hardware items are NOT filtered out."""
+        HardwareItem = extract_tables.HardwareItem
+        items = [
+            HardwareItem(name="Hinges 5BB1 4 1/2 x 4 1/2 652 IV"),
+            HardwareItem(name="Closer 4040XP RWPA TBWMS AL LC"),
+            HardwareItem(name="Exit Device 9447EO-F 48\" LBRAFL US26D VO"),
+            HardwareItem(name="Card Reader(By Others) CARD READER BY SECURITY VENDOR MISC"),
+        ]
+        result = extract_tables.filter_non_hardware_items(items)
+        assert len(result) == 4  # all kept
