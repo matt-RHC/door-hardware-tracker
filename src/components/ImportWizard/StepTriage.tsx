@@ -55,6 +55,7 @@ export default function StepTriage({
   const [status, setStatus] = useState("");
   const [progress, setProgress] = useState(0);
   const [triageResult, setTriageResult] = useState<TriageResult | null>(null);
+  const [triageErrorAcknowledged, setTriageErrorAcknowledged] = useState(false);
   const [doors, setDoors] = useState<DoorEntry[]>([]);
   const [hardwareSets, setHardwareSets] = useState<HardwareSet[]>([]);
 
@@ -253,6 +254,8 @@ export default function StepTriage({
       } else {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const raw: any = await triageResp.json();
+        const triageError: boolean = raw.triage_error === true;
+        const triageErrorMessage: string = raw.triage_error_message ?? '';
         const classifications: Array<{
           door_number: string;
           class: string;
@@ -288,6 +291,8 @@ export default function StepTriage({
           rejected: raw.stats?.rejected ?? 0,
           accepted: acceptedDoors,
           flagged,
+          triage_error: triageError,
+          triage_error_message: triageErrorMessage || undefined,
         };
         setTriageResult(result);
       }
@@ -365,18 +370,34 @@ export default function StepTriage({
         </div>
       )}
 
-      {/* Triage-failed warning: all classifications came back as triage_failed */}
-      {triageResult &&
-        triageResult.flagged.length > 0 &&
-        triageResult.flagged.every((f) => f.reason === "triage_failed") && (
-          <div className="mb-4 p-3 bg-[rgba(255,149,0,0.1)] border border-[rgba(255,149,0,0.25)] rounded-xl flex items-start gap-2">
-            <span className="text-[#ff9500] text-lg leading-none">&#x26A0;</span>
-            <p className="text-[#ff9500] text-sm">
-              AI triage was skipped due to a timeout. All doors were
-              auto-accepted &mdash; review carefully.
+      {/* Triage-failed warning: backend signaled triage_error */}
+      {triageResult?.triage_error && (
+        <div className="mb-4 p-4 bg-[rgba(255,69,58,0.1)] border border-[rgba(255,69,58,0.3)] rounded-xl">
+          <div className="flex items-start gap-2 mb-3">
+            <span className="text-[#ff453a] text-lg leading-none">&#x26A0;</span>
+            <p className="text-[#ff453a] text-sm font-semibold">
+              AI triage failed &mdash; all doors were auto-accepted. Please
+              review each entry carefully before proceeding.
             </p>
           </div>
-        )}
+          {triageResult.triage_error_message && (
+            <p className="text-[#a1a1a6] text-xs mb-3 ml-6">
+              {triageResult.triage_error_message}
+            </p>
+          )}
+          <label className="flex items-center gap-2 ml-6 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={triageErrorAcknowledged}
+              onChange={(e) => setTriageErrorAcknowledged(e.target.checked)}
+              className="w-4 h-4 rounded border-white/20 bg-white/[0.06] accent-[#ff453a]"
+            />
+            <span className="text-[#f5f5f7] text-sm">
+              I understand triage failed and will review all entries manually
+            </span>
+          </label>
+        </div>
+      )}
 
       {/* Triage results */}
       {triageResult && (
@@ -456,7 +477,7 @@ export default function StepTriage({
         </button>
         <button
           onClick={handleNext}
-          disabled={isLoading || !triageResult}
+          disabled={isLoading || !triageResult || (triageResult?.triage_error === true && !triageErrorAcknowledged)}
           className="px-6 py-2 bg-[#0a84ff] hover:bg-[#0975de] text-white rounded-lg transition-colors font-semibold disabled:opacity-50"
         >
           Next
