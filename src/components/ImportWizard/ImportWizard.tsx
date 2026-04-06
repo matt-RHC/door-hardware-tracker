@@ -18,6 +18,7 @@ import StepTriage from "./StepTriage";
 import StepReview from "./StepReview";
 import StepConfirm from "./StepConfirm";
 import PunchAssistant from "./PunchAssistant";
+import { PunchHighlightProvider } from "./usePunchHighlight";
 import {
   classifyMessages,
   mapColumnsMessages,
@@ -149,6 +150,16 @@ export default function ImportWizard({
     }
   }, [state, saveResult]);
 
+  // Keys for DOM highlight (inline messages with field/rowId)
+  const activeKeys = useMemo(
+    () =>
+      punchMessages
+        .filter((m) => m.inline)
+        .map((m) => m.field ?? m.rowId)
+        .filter((k): k is string => !!k),
+    [punchMessages]
+  );
+
   // ─── State helpers ───
 
   const patch = useCallback(
@@ -258,63 +269,65 @@ export default function ImportWizard({
 
       {/* Step content + Punch sidebar */}
       <div className="flex-1 overflow-y-auto min-h-0 px-6 py-4 flex gap-4">
-        {/* Main step area */}
-        <div className="flex-1 min-w-0">
-          {state.currentStep === WizardStep.Upload && (
-            <StepUpload
-              projectId={projectId}
-              onComplete={onUploadComplete}
-              onError={(err) => patch({ error: err })}
-            />
-          )}
+        <PunchHighlightProvider activeKeys={activeKeys}>
+          {/* Main step area */}
+          <div className="flex-1 min-w-0">
+            {state.currentStep === WizardStep.Upload && (
+              <StepUpload
+                projectId={projectId}
+                onComplete={onUploadComplete}
+                onError={(err) => patch({ error: err })}
+              />
+            )}
 
-          {state.currentStep === WizardStep.MapColumns && (
-            <StepMapColumns
-              file={state.file!}
-              classifyResult={state.classifyResult!}
-              onComplete={onMapColumnsComplete}
-              onBack={() => goToStep(WizardStep.Upload)}
-              onError={(err) => patch({ error: err })}
-            />
-          )}
+            {state.currentStep === WizardStep.MapColumns && (
+              <StepMapColumns
+                file={state.file!}
+                classifyResult={state.classifyResult!}
+                onComplete={onMapColumnsComplete}
+                onBack={() => goToStep(WizardStep.Upload)}
+                onError={(err) => patch({ error: err })}
+              />
+            )}
 
-          {state.currentStep === WizardStep.Triage && (
-            <StepTriage
-              projectId={projectId}
-              file={state.file!}
-              columnMappings={state.columnMappings}
-              classifyResult={state.classifyResult!}
-              onComplete={onTriageComplete}
-              onBack={() => goToStep(WizardStep.MapColumns)}
-              onError={(err) => patch({ error: err })}
-            />
-          )}
+            {state.currentStep === WizardStep.Triage && (
+              <StepTriage
+                projectId={projectId}
+                file={state.file!}
+                columnMappings={state.columnMappings}
+                classifyResult={state.classifyResult!}
+                onComplete={onTriageComplete}
+                onBack={() => goToStep(WizardStep.MapColumns)}
+                onError={(err) => patch({ error: err })}
+              />
+            )}
 
-          {state.currentStep === WizardStep.Review && (
-            <StepReview
-              doors={state.doors}
-              hardwareSets={state.hardwareSets}
-              hasExistingData={state.hasExistingData}
-              onComplete={onReviewComplete}
-              onBack={() => goToStep(WizardStep.Triage)}
-            />
-          )}
+            {state.currentStep === WizardStep.Review && (
+              <StepReview
+                doors={state.doors}
+                hardwareSets={state.hardwareSets}
+                hasExistingData={state.hasExistingData}
+                onComplete={onReviewComplete}
+                onBack={() => goToStep(WizardStep.Triage)}
+              />
+            )}
 
-          {state.currentStep === WizardStep.Confirm && (
-            <StepConfirm
-              projectId={projectId}
-              doors={state.doors}
-              hardwareSets={state.hardwareSets}
-              triageResult={state.triageResult}
-              onComplete={onConfirmComplete}
-              onBack={() => goToStep(WizardStep.Review)}
-              onError={(err) => patch({ error: err })}
-            />
-          )}
-        </div>
+            {state.currentStep === WizardStep.Confirm && (
+              <StepConfirm
+                projectId={projectId}
+                doors={state.doors}
+                hardwareSets={state.hardwareSets}
+                triageResult={state.triageResult}
+                onComplete={onConfirmComplete}
+                onBack={() => goToStep(WizardStep.Review)}
+                onError={(err) => patch({ error: err })}
+              />
+            )}
+          </div>
 
-        {/* Punch assistant sidebar */}
-        <PunchAssistant messages={punchMessages} />
+          {/* Punch assistant sidebar */}
+          <PunchAssistant messages={punchMessages} />
+        </PunchHighlightProvider>
       </div>
     </div>
   );

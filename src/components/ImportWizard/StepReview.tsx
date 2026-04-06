@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useCallback } from "react";
+import { usePunchHighlight } from "./usePunchHighlight";
 import type { DoorEntry, HardwareSet } from "./types";
 
 function confidenceBadge(level: "high" | "medium" | "low") {
@@ -79,6 +80,7 @@ export default function StepReview({
   onComplete,
   onBack,
 }: StepReviewProps) {
+  const { registerRef } = usePunchHighlight();
   const [doors, setDoors] = useState<DoorEntry[]>(initialDoors);
   const [editingCell, setEditingCell] = useState<{
     row: number;
@@ -165,6 +167,9 @@ export default function StepReview({
               return (
                 <tr
                   key={`${door.door_number}-${rowIdx}`}
+                  ref={(el) => {
+                    if (door.door_number) registerRef(door.door_number, el);
+                  }}
                   className="border-t border-white/[0.04] hover:bg-white/[0.02]"
                 >
                   <td className="px-2 py-1.5 text-[#6e6e73] text-xs">

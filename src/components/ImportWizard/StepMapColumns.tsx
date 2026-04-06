@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { usePunchHighlight } from "./usePunchHighlight";
 import type {
   ClassifyPagesResponse,
   DetectMappingResponse,
@@ -60,6 +61,7 @@ export default function StepMapColumns({
   onBack,
   onError,
 }: StepMapColumnsProps) {
+  const { registerRef } = usePunchHighlight();
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState("");
   const [detectResult, setDetectResult] =
@@ -175,6 +177,9 @@ export default function StepMapColumns({
             return (
               <div
                 key={mapping.source_header}
+                ref={(el) => {
+                  if (detected?.mapped_field) registerRef(detected.mapped_field, el);
+                }}
                 className="grid grid-cols-[1fr_auto_1fr] gap-3 items-center bg-white/[0.04] border border-white/[0.08] rounded-xl px-3 py-2"
               >
                 {/* Source header */}
