@@ -2,8 +2,8 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import Anthropic from '@anthropic-ai/sdk'
 
-// Triage is lighter than full extraction — 120s is sufficient
-export const maxDuration = 120
+// Bump to 800s — large door lists (100+) with Sonnet can take several minutes
+export const maxDuration = 800
 
 // --- Types ---
 
