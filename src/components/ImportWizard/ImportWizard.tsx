@@ -1,0 +1,243 @@
+"use client";
+
+import { useState, useCallback } from "react";
+import {
+  WizardStep,
+  WizardState,
+  INITIAL_WIZARD_STATE,
+  type ClassifyPagesResponse,
+  type DetectMappingResponse,
+  type ColumnMapping,
+  type TriageResult,
+  type DoorEntry,
+  type HardwareSet,
+} from "./types";
+import StepUpload from "./StepUpload";
+import StepMapColumns from "./StepMapColumns";
+import StepTriage from "./StepTriage";
+import StepReview from "./StepReview";
+import StepConfirm from "./StepConfirm";
+
+// ─── Step indicator ───
+
+const STEP_LABELS = ["Upload", "Map Columns", "Triage", "Review", "Confirm"];
+
+function StepIndicator({ currentStep }: { currentStep: WizardStep }) {
+  return (
+    <div className="flex items-center gap-1">
+      {STEP_LABELS.map((label, i) => (
+        <div key={label} className="flex items-center gap-1">
+          <div
+            className={`flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold transition-all ${
+              i < currentStep
+                ? "bg-[#30d158] text-white"
+                : i === currentStep
+                ? "bg-[#0a84ff] text-white ring-2 ring-[rgba(10,132,255,0.3)]"
+                : "bg-white/[0.06] text-[#6e6e73]"
+            }`}
+          >
+            {i < currentStep ? "\u2713" : i + 1}
+          </div>
+          <span
+            className={`text-xs hidden sm:inline ${
+              i === currentStep
+                ? "text-[#0a84ff] font-semibold"
+                : "text-[#6e6e73]"
+            }`}
+          >
+            {label}
+          </span>
+          {i < STEP_LABELS.length - 1 && (
+            <div
+              className={`w-4 h-px ${
+                i < currentStep ? "bg-[#30d158]" : "bg-white/[0.06]"
+              }`}
+            />
+          )}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ─── Props ───
+
+interface ImportWizardProps {
+  projectId: string;
+  onClose: () => void;
+  onSuccess: () => void;
+}
+
+// ─── Main orchestrator ───
+
+export default function ImportWizard({
+  projectId,
+  onClose,
+  onSuccess,
+}: ImportWizardProps) {
+  const [state, setState] = useState<WizardState>(INITIAL_WIZARD_STATE);
+
+  // ─── State helpers ───
+
+  const patch = useCallback(
+    (partial: Partial<WizardState>) =>
+      setState((prev) => ({ ...prev, ...partial })),
+    []
+  );
+
+  const goToStep = useCallback(
+    (step: WizardStep) => patch({ currentStep: step, error: null }),
+    [patch]
+  );
+
+  // ─── Step 1 complete: file classified ───
+  const onUploadComplete = useCallback(
+    (
+      file: File,
+      classifyResult: ClassifyPagesResponse,
+      hasExistingData: boolean
+    ) => {
+      patch({
+        file,
+        classifyResult,
+        hasExistingData,
+        currentStep: WizardStep.MapColumns,
+      });
+    },
+    [patch]
+  );
+
+  // ─── Step 2 complete: columns mapped ───
+  const onMapColumnsComplete = useCallback(
+    (
+      detectResult: DetectMappingResponse,
+      columnMappings: ColumnMapping[]
+    ) => {
+      patch({
+        detectResult,
+        columnMappings,
+        currentStep: WizardStep.Triage,
+      });
+    },
+    [patch]
+  );
+
+  // ─── Step 3 complete: triage done ───
+  const onTriageComplete = useCallback(
+    (
+      triageResult: TriageResult,
+      doors: DoorEntry[],
+      hardwareSets: HardwareSet[]
+    ) => {
+      patch({
+        triageResult,
+        doors,
+        hardwareSets,
+        currentStep: WizardStep.Review,
+      });
+    },
+    [patch]
+  );
+
+  // ─── Step 4 complete: review done ───
+  const onReviewComplete = useCallback(
+    (doors: DoorEntry[], hardwareSets: HardwareSet[]) => {
+      patch({
+        doors,
+        hardwareSets,
+        currentStep: WizardStep.Confirm,
+      });
+    },
+    [patch]
+  );
+
+  // ─── Step 5 complete: saved ───
+  const onConfirmComplete = useCallback(() => {
+    onSuccess();
+    onClose();
+  }, [onSuccess, onClose]);
+
+  // ─── Render ───
+
+  return (
+    <div className="fixed inset-0 bg-black/80 backdrop-blur-lg flex flex-col z-50">
+      {/* Header */}
+      <div className="flex items-center justify-between px-6 py-4 border-b border-white/[0.08]">
+        <h2 className="text-lg font-semibold text-[#f5f5f7]">
+          Import Wizard
+        </h2>
+        <div className="flex items-center gap-4">
+          <StepIndicator currentStep={state.currentStep} />
+          <button
+            onClick={onClose}
+            className="text-[#6e6e73] hover:text-[#f5f5f7] text-xl leading-none transition-colors ml-4"
+          >
+            &times;
+          </button>
+        </div>
+      </div>
+
+      {/* Error banner */}
+      {state.error && (
+        <div className="mx-6 mt-4 p-3 bg-[rgba(255,69,58,0.1)] border border-[rgba(255,69,58,0.2)] rounded-xl text-[#ff6961] text-sm">
+          {state.error}
+        </div>
+      )}
+
+      {/* Step content */}
+      <div className="flex-1 overflow-y-auto min-h-0 px-6 py-4">
+        {state.currentStep === WizardStep.Upload && (
+          <StepUpload
+            projectId={projectId}
+            onComplete={onUploadComplete}
+            onError={(err) => patch({ error: err })}
+          />
+        )}
+
+        {state.currentStep === WizardStep.MapColumns && (
+          <StepMapColumns
+            file={state.file!}
+            classifyResult={state.classifyResult!}
+            onComplete={onMapColumnsComplete}
+            onBack={() => goToStep(WizardStep.Upload)}
+            onError={(err) => patch({ error: err })}
+          />
+        )}
+
+        {state.currentStep === WizardStep.Triage && (
+          <StepTriage
+            projectId={projectId}
+            file={state.file!}
+            columnMappings={state.columnMappings}
+            classifyResult={state.classifyResult!}
+            onComplete={onTriageComplete}
+            onBack={() => goToStep(WizardStep.MapColumns)}
+            onError={(err) => patch({ error: err })}
+          />
+        )}
+
+        {state.currentStep === WizardStep.Review && (
+          <StepReview
+            doors={state.doors}
+            hardwareSets={state.hardwareSets}
+            hasExistingData={state.hasExistingData}
+            onComplete={onReviewComplete}
+            onBack={() => goToStep(WizardStep.Triage)}
+          />
+        )}
+
+        {state.currentStep === WizardStep.Confirm && (
+          <StepConfirm
+            projectId={projectId}
+            doors={state.doors}
+            hardwareSets={state.hardwareSets}
+            triageResult={state.triageResult}
+            onComplete={onConfirmComplete}
+            onBack={() => goToStep(WizardStep.Review)}
+            onError={(err) => patch({ error: err })}
+          />
+        )}
+      </div>
+    </div>
+  );
+}
