@@ -34,6 +34,18 @@ Git operations run directly in the working directory. See CLAUDE.md for git iden
 - If a session only produced documents and no code, flag that as a problem in the audit log.
 - Clean up at end of session: archive stale files, remove loose artifacts from repo root.
 
+## Smartsheet Quick Reference
+
+These are the cross-session sources of truth. Read at session start, update at session end.
+
+| Sheet | ID | Purpose |
+|---|---|---|
+| Project Plan | 4722023373688708 | All bugs, features, tech debt — Status, Priority, Area |
+| Session Log | 1895373728599940 | Session history — topics, decisions, tasks, status |
+| Metrics Log | 2206493777547140 | Extraction quality per PDF per session |
+
+See CLAUDE.md "Session Protocol" for the full read/write rules.
+
 ## Output Transparency (MANDATORY)
 
 End every response with a clear status block:
