@@ -17,8 +17,6 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          lfs: true  # golden PDF files may use Git LFS
 
       - name: Set up Python
         uses: actions/setup-python@v5
