@@ -213,7 +213,7 @@ ${getTaxonomyPromptText()}`
       text = text.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '')
     }
 
-    return JSON.parse(text) as LLMCorrections
+    return extractJSON(text) as LLMCorrections
   } catch (err) {
     console.error('LLM review failed:', err instanceof Error ? err.message : String(err))
     return { notes: `LLM review failed: ${err instanceof Error ? err.message : String(err)}` }
@@ -332,7 +332,7 @@ export async function POST(request: NextRequest) {
     let pdfplumberResult: PdfplumberResult | null = null
     try {
       pdfplumberResult = await callPdfplumber(chunkBase64, userColumnMapping)
-      console.log(
+      console.debug(
         `Chunk ${chunkIndex + 1}/${totalChunks}: pdfplumber extracted ` +
         `${pdfplumberResult.hw_sets_found} sets, ${pdfplumberResult.openings.length} doors`
       )
@@ -430,7 +430,7 @@ export async function POST(request: NextRequest) {
     // Extract fire ratings embedded in hw_heading/location fields
     extractFireRatings(doors)
 
-    console.log(
+    console.debug(
       `Chunk ${chunkIndex + 1}/${totalChunks}: after LLM review: ` +
       `${hardwareSets.length} sets, ${doors.length} doors. ` +
       `Notes: ${corrections.notes || 'none'}`

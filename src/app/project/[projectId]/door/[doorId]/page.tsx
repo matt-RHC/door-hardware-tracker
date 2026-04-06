@@ -63,7 +63,7 @@ export default function DoorDetailPage() {
   const [activeTab, setActiveTab] = useState<'hardware' | 'files' | 'notes' | 'qr'>('hardware');
   const [viewingAttachment, setViewingAttachment] = useState<Attachment | null>(null);
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
-  const [issueModal, setIssueModal] = useState<{ doorNumber: string; hardwareItem: string } | null>(null);
+  const [issueModal, setIssueModal] = useState<{ doorNumber: string; hardwareItemName: string } | null>(null);
   const [classifyPrompt, setClassifyPrompt] = useState<{
     itemId: string;
     itemName: string;
@@ -1004,7 +1004,7 @@ export default function DoorDetailPage() {
                         <button
                           onClick={() => setIssueModal({
                             doorNumber: opening.door_number,
-                            hardwareItem: item.name,
+                            hardwareItemName: item.name,
                           })}
                           className="ml-auto text-[11px] text-[var(--red)] hover:text-[var(--red)]/80 transition-colors"
                         >
@@ -1242,7 +1242,7 @@ export default function DoorDetailPage() {
         <IssueReportModal
           projectId={projectId}
           doorNumber={issueModal.doorNumber}
-          hardwareItemId={issueModal.hardwareItem}
+          hardwareItemName={issueModal.hardwareItemName}
           onClose={() => setIssueModal(null)}
           onCreated={() => setIssueModal(null)}
         />

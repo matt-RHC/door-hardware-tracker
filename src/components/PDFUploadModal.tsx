@@ -698,7 +698,7 @@ async function buildFilteredPDF(
       new Uint8Array(filteredBytes).reduce((data, byte) => data + String.fromCharCode(byte), "")
     );
 
-    console.log(`Page filter: ${totalPages} pages → ${validPages.length} relevant pages (${Math.round((1 - validPages.length / totalPages) * 100)}% reduction)`);
+    console.debug(`Page filter: ${totalPages} pages → ${validPages.length} relevant pages (${Math.round((1 - validPages.length / totalPages) * 100)}% reduction)`);
     return filteredBase64;
   } catch (err) {
     console.warn("Failed to build filtered PDF, will use full PDF:", err);
@@ -780,14 +780,14 @@ function applyTriageResults(
   for (const door of doors) {
     const classification = classMap.get(door.door_number);
     if (classification?.class === "reject") {
-      console.log(`[triage-reject] ${door.door_number}: ${classification.reason} (${classification.confidence})`);
+      console.debug(`[triage-reject] ${door.door_number}: ${classification.reason} (${classification.confidence})`);
       continue; // Filter out
     }
     const idx = filteredDoors.length;
     filteredDoors.push(door);
     if (classification?.class === "by_others") {
       byOthersIndices.add(idx);
-      console.log(`[triage-by-others] ${door.door_number}: ${classification.reason}`);
+      console.debug(`[triage-by-others] ${door.door_number}: ${classification.reason}`);
     }
   }
 
@@ -1078,7 +1078,7 @@ export default function PDFUploadModal({
 
       try {
         const mappingToSend = explicitMapping ?? confirmedMappingRef.current ?? null;
-        console.log('[PDFUploadModal] Sending userColumnMapping:', mappingToSend);
+        console.debug('[PDFUploadModal] Sending userColumnMapping:', mappingToSend);
         const parseBody: Record<string, unknown> = {
           pdfBase64: fullBase64,
           userColumnMapping: mappingToSend,
@@ -1102,7 +1102,7 @@ export default function PDFUploadModal({
             // Apply the same dedup that the chunked path uses
             const dedupedSets = mergeHardwareSets(result.sets || []);
             setProgress(92);
-            console.log(`Parsed ${dedupedSets.length} hardware sets, ${result.doors?.length ?? 0} doors`);
+            console.debug(`Parsed ${dedupedSets.length} hardware sets, ${result.doors?.length ?? 0} doors`);
             setStatus("Extraction complete. Ready for review.");
             return {
               doors: result.doors || [],
@@ -1148,7 +1148,7 @@ export default function PDFUploadModal({
       // Smart chunking: use semantic boundaries
       const { chunks: smartChunks, reference_pages: refPages, summary } = classification!;
 
-      console.log(`Classification: ${summary.door_schedule_pages} schedule, ${summary.hardware_set_pages} hardware, ${summary.reference_pages} reference pages → ${summary.chunk_count} chunks`);
+      console.debug(`Classification: ${summary.door_schedule_pages} schedule, ${summary.hardware_set_pages} hardware, ${summary.reference_pages} reference pages → ${summary.chunk_count} chunks`);
       setStatus("Analyzing document structure...");
       setProgress(3);
 
@@ -1284,7 +1284,7 @@ export default function PDFUploadModal({
       // Snap to real completion % for this chunk
       setProgress(chunkEndPct);
       const setsSoFar = new Set(allHardwareSets.map((s) => s.set_id)).size;
-      console.log(`Chunk ${i + 1}/${totalChunks}: ${setsSoFar} sets, ${allDoors.length} doors so far`);
+      console.debug(`Chunk ${i + 1}/${totalChunks}: ${setsSoFar} sets, ${allDoors.length} doors so far`);
       setStatus("Processing complete. Continuing...");
     }
 
@@ -1301,7 +1301,7 @@ export default function PDFUploadModal({
     if (mergedDoors.length === 0 && allFlaggedDoors.length > 0) {
       // All doors were flagged as pattern outliers — still surface them for review
       // rather than failing with "no doors found"
-      console.log(`All ${allFlaggedDoors.length} doors flagged for pattern review`);
+      console.debug(`All ${allFlaggedDoors.length} doors flagged for pattern review`);
       setStatus("Flagged doors for review.");
     }
 
@@ -1311,13 +1311,13 @@ export default function PDFUploadModal({
       const flagNote = allFlaggedDoors.length > 0
         ? ` (${allFlaggedDoors.length} flagged for review)`
         : "";
-      console.log(`Parsed ${mergedSets.length} sets, ${mergedDoors.length} doors${flagNote}`);
+      console.debug(`Parsed ${mergedSets.length} sets, ${mergedDoors.length} doors${flagNote}`);
       setStatus("Extraction complete. Ready for review.");
       return { doors: mergedDoors, sets: mergedSets, flaggedDoors: allFlaggedDoors };
     }
 
     // Save mode: write to DB
-    console.log(`Merged: ${mergedSets.length} sets, ${mergedDoors.length} doors`);
+    console.debug(`Merged: ${mergedSets.length} sets, ${mergedDoors.length} doors`);
     setStatus("Saving results...");
     setProgress(85);
 
@@ -1414,7 +1414,7 @@ export default function PDFUploadModal({
           if (triage) {
             const { filteredDoors } = applyTriageResults(result.doors, triage);
             wizardDoors = filteredDoors;
-            console.log(`Triage: ${result.doors.length} → ${filteredDoors.length} doors (${triage.stats.rejected} rejected, ${triage.stats.by_others} by_others)`);
+            console.debug(`Triage: ${result.doors.length} → ${filteredDoors.length} doors (${triage.stats.rejected} rejected, ${triage.stats.by_others} by_others)`);
           }
 
           setWizardData({ doors: wizardDoors, sets: result.sets });
@@ -1442,7 +1442,7 @@ export default function PDFUploadModal({
           const { filteredDoors, byOthersIndices } = applyTriageResults(freshResult.doors, triage);
           reviewDoors = filteredDoors;
           triageByOthers = byOthersIndices.size > 0 ? byOthersIndices : undefined;
-          console.log(`Triage: ${freshResult.doors.length} → ${filteredDoors.length} doors (${triage.stats.rejected} rejected, ${triage.stats.by_others} by_others)`);
+          console.debug(`Triage: ${freshResult.doors.length} → ${filteredDoors.length} doors (${triage.stats.rejected} rejected, ${triage.stats.by_others} by_others)`);
         }
 
         setProgress(100);

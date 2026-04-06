@@ -148,7 +148,7 @@ ${candidateSummary}`
       // Log cache usage if available
       const usage = finalMessage.usage as unknown as Record<string, unknown>
       if (usage?.cache_creation_input_tokens || usage?.cache_read_input_tokens) {
-        console.log(`Triage cache: created=${usage.cache_creation_input_tokens ?? 0}, read=${usage.cache_read_input_tokens ?? 0}`)
+        console.debug(`Triage cache: created=${usage.cache_creation_input_tokens ?? 0}, read=${usage.cache_read_input_tokens ?? 0}`)
       }
     } catch (llmError) {
       // Fail-open: if Claude call fails, return all candidates as 'door'
@@ -182,7 +182,7 @@ ${candidateSummary}`
       rejected: classifications.filter((c) => c.class === 'reject').length,
     }
 
-    console.log(`Triage complete: ${stats.total} candidates → ${stats.doors} doors, ${stats.by_others} by_others, ${stats.rejected} rejected`)
+    console.debug(`Triage complete: ${stats.total} candidates → ${stats.doors} doors, ${stats.by_others} by_others, ${stats.rejected} rejected`)
 
     const response: TriageResponse = { classifications, stats }
     return NextResponse.json(response)
