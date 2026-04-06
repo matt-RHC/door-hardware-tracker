@@ -166,7 +166,7 @@ export async function POST(request: NextRequest) {
         if (leafCount > 1 && item.qty >= leafCount) {
           const perLeaf = item.qty / leafCount
           if (Number.isInteger(perLeaf)) {
-            console.log(`[save-qty-norm] ${setId}: "${item.name}" qty ${item.qty} ÷ ${leafCount} leaves = ${perLeaf}`)
+            console.debug(`[save-qty-norm] ${setId}: "${item.name}" qty ${item.qty} ÷ ${leafCount} leaves = ${perLeaf}`)
             item.qty = perLeaf
             divided = true
           }
@@ -174,7 +174,7 @@ export async function POST(request: NextRequest) {
         if (!divided && doorCount > 1 && doorCount !== leafCount && item.qty >= doorCount) {
           const perOpening = item.qty / doorCount
           if (Number.isInteger(perOpening)) {
-            console.log(`[save-qty-norm] ${setId}: "${item.name}" qty ${item.qty} ÷ ${doorCount} openings = ${perOpening}`)
+            console.debug(`[save-qty-norm] ${setId}: "${item.name}" qty ${item.qty} ÷ ${doorCount} openings = ${perOpening}`)
             item.qty = perOpening
           }
         }
@@ -338,7 +338,7 @@ export async function POST(request: NextRequest) {
 
     const unmatchedSets = findUnmatchedSets(doors, setMap)
 
-    console.log(`Save complete: ${insertedOpenings.length} openings, ${itemsInserted} hardware items`)
+    console.debug(`Save complete: ${insertedOpenings.length} openings, ${itemsInserted} hardware items`)
 
     return NextResponse.json({
       success: true,

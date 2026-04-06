@@ -213,7 +213,7 @@ export async function GET(request: NextRequest) {
           rowsSynced: openings?.length || 0,
         })
 
-        console.log(`Cron sync: ${project.name} — ${syncResult.rowsAdded} added, ${syncResult.rowsUpdated} updated, ${syncResult.rowsDeleted} deleted`)
+        console.debug(`Cron sync: ${project.name} — ${syncResult.rowsAdded} added, ${syncResult.rowsUpdated} updated, ${syncResult.rowsDeleted} deleted`)
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err)
         console.error(`Cron sync failed for ${project.name}:`, message)

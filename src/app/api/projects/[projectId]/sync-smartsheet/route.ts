@@ -146,7 +146,7 @@ export async function POST(
       .eq('user_id', user.id)
       .single()
 
-    if (!membership || membership.role !== 'admin') {
+    if (!membership || (membership as any).role !== 'admin') {
       return NextResponse.json({ error: 'Admin access required' }, { status: 403 })
     }
 

@@ -175,7 +175,7 @@ export async function POST(request: NextRequest) {
         const newIsEmpty = !n || n === '-' || n === 'n/a' || n === 'null' || n === 'undefined'
         if (o && newIsEmpty) {
           // Don't flag as changed — keep existing value
-          console.log(`Empty-field protection: ${door.door_number}.${field} keeping "${oldVal}" (new was empty)`)
+          console.debug(`Empty-field protection: ${door.door_number}.${field} keeping "${oldVal}" (new was empty)`)
           continue
         }
 
