@@ -2322,8 +2322,11 @@ class handler(BaseHTTPRequestHandler):
 
     def _send_json(self, status: int, result: ExtractionResult):
         body = result.model_dump_json()
+        body_bytes = body.encode()
+        logger.info(f"[extract-tables] Sending response: status={status}, body_size={len(body_bytes)} bytes, "
+                     f"openings={len(result.openings)}, hw_sets={len(result.hardware_sets)}")
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
-        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Content-Length", str(len(body_bytes)))
         self.end_headers()
-        self.wfile.write(body.encode())
+        self.wfile.write(body_bytes)
