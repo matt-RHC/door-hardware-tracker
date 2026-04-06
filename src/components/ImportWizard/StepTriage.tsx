@@ -290,6 +290,19 @@ export default function StepTriage({
         </div>
       )}
 
+      {/* Triage-failed warning: all classifications came back as triage_failed */}
+      {triageResult &&
+        triageResult.flagged.length > 0 &&
+        triageResult.flagged.every((f) => f.reason === "triage_failed") && (
+          <div className="mb-4 p-3 bg-[rgba(255,149,0,0.1)] border border-[rgba(255,149,0,0.25)] rounded-xl flex items-start gap-2">
+            <span className="text-[#ff9500] text-lg leading-none">&#x26A0;</span>
+            <p className="text-[#ff9500] text-sm">
+              AI triage was skipped due to a timeout. All doors were
+              auto-accepted &mdash; review carefully.
+            </p>
+          </div>
+        )}
+
       {/* Triage results */}
       {triageResult && (
         <>
