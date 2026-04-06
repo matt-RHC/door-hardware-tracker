@@ -6,6 +6,15 @@ import SubmittalWizard from "./SubmittalWizard";
 import ImportReviewTable from "./ImportReviewTable";
 import ColumnMapperWizard, { type ColumnMapping, type DetectMappingResponse } from "./ColumnMapperWizard";
 
+function arrayBufferToBase64(buffer: ArrayBuffer | Uint8Array): string {
+  const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += 8192) {
+    binary += String.fromCharCode(...bytes.subarray(i, i + 8192));
+  }
+  return btoa(binary);
+}
+
 /* âââ Holographic Loading Overlay âââ */
 function HoloLoader({ progress, status }: { progress: number; status: string }) {
   const [tick, setTick] = useState(0);
@@ -631,9 +640,7 @@ async function splitPDFByPages(
     }
 
     const chunkBytes = await chunkDoc.save();
-    const chunkBase64 = btoa(
-      new Uint8Array(chunkBytes).reduce((data, byte) => data + String.fromCharCode(byte), "")
-    );
+    const chunkBase64 = arrayBufferToBase64(chunkBytes);
     chunks.push(chunkBase64);
   }
 
@@ -654,9 +661,7 @@ async function splitPDFFixed(buffer: ArrayBuffer, pagesPerChunk: number): Promis
       chunkDoc.addPage(page);
     }
     const chunkBytes = await chunkDoc.save();
-    const chunkBase64 = btoa(
-      new Uint8Array(chunkBytes).reduce((data, byte) => data + String.fromCharCode(byte), "")
-    );
+    const chunkBase64 = arrayBufferToBase64(chunkBytes);
     chunks.push(chunkBase64);
   }
 
@@ -694,9 +699,7 @@ async function buildFilteredPDF(
     }
 
     const filteredBytes = await filteredDoc.save();
-    const filteredBase64 = btoa(
-      new Uint8Array(filteredBytes).reduce((data, byte) => data + String.fromCharCode(byte), "")
-    );
+    const filteredBase64 = arrayBufferToBase64(filteredBytes);
 
     console.debug(`Page filter: ${totalPages} pages → ${validPages.length} relevant pages (${Math.round((1 - validPages.length / totalPages) * 100)}% reduction)`);
     return filteredBase64;
@@ -941,77 +944,13 @@ export default function PDFUploadModal({
         setError("Please select a PDF file");
         return;
       }
+      const MAX_PDF_SIZE_MB = 25;
+      if (selectedFile.size > MAX_PDF_SIZE_MB * 1024 * 1024) {
+        setError(`PDF must be under ${MAX_PDF_SIZE_MB}MB. This file is ${(selectedFile.size / 1024 / 1024).toFixed(1)}MB.`);
+        return;
+      }
       setFile(selectedFile);
       setError(null);
-    }
-  };
-
-  // ==========================================
-  // SMALL PDF: Original single-request flow
-  // ==========================================
-  const processSmallPDF = async (formData: FormData) => {
-    setStatus("Uploading to server...");
-    setProgress(5);
-
-    const response = await fetch("/api/parse-pdf", {
-      method: "POST",
-      body: formData,
-    });
-
-    if (!response.ok) {
-      const errBody = await response.json().catch(() => null);
-      throw new Error(errBody?.error || `Upload failed (${response.status})`);
-    }
-
-    const reader = response.body?.getReader();
-    if (!reader) throw new Error("No response stream");
-
-    const decoder = new TextDecoder();
-    let buffer = "";
-    let lastEvent: {
-      progress: number;
-      status: string;
-      error?: string;
-      result?: Record<string, unknown>;
-    } | null = null;
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split("\n");
-      buffer = lines.pop() || "";
-
-      for (const line of lines) {
-        if (!line.trim()) continue;
-        try {
-          const event = JSON.parse(line);
-          lastEvent = event;
-          setProgress(event.progress);
-          setStatus(event.status);
-          if (event.error) setError(event.error);
-        } catch {
-          // skip malformed
-        }
-      }
-    }
-
-    if (buffer.trim()) {
-      try {
-        const event = JSON.parse(buffer);
-        lastEvent = event;
-        setProgress(event.progress);
-        setStatus(event.status);
-        if (event.error) setError(event.error);
-      } catch {
-        // skip
-      }
-    }
-
-    if (lastEvent?.error) throw new Error(lastEvent.error);
-    if (!lastEvent?.result?.success) {
-      throw new Error("Upload completed but no success response received");
     }
   };
 
@@ -1027,9 +966,7 @@ export default function PDFUploadModal({
     explicitMapping?: ColumnMapping | null,
   ): Promise<{ doors: DoorEntry[]; sets: HardwareSet[]; flaggedDoors?: FlaggedDoor[]; filteredPdfBase64?: string } | void> => {
     // Convert buffer to base64 (needed by both paths)
-    const fullBase64 = btoa(
-      new Uint8Array(buffer).reduce((data, byte) => data + String.fromCharCode(byte), "")
-    );
+    const fullBase64 = arrayBufferToBase64(buffer);
     pdfBase64Ref.current = fullBase64;
 
     // ── Primary path: full pdfplumber + LLM review pipeline ──
@@ -1114,18 +1051,15 @@ export default function PDFUploadModal({
           // If pdfplumber returned zero results, report clearly instead of
           // silently falling back to a chunk path that loses data
           console.warn("Full pipeline returned zero results");
-          setError("PDF extraction found no doors or hardware sets. The PDF format may not be supported. Try re-uploading or contact support.");
-          return;
+          throw new Error("PDF extraction found no doors or hardware sets. The PDF format may not be supported. Try re-uploading or contact support.");
         } else {
           const errBody = await resp.json().catch(() => ({}));
           console.error("Full pipeline failed:", errBody.error);
-          setError(`PDF extraction failed: ${errBody.error || resp.statusText}. Try re-uploading.`);
-          return;
+          throw new Error(`PDF extraction failed: ${errBody.error || resp.statusText}. Try re-uploading.`);
         }
       } catch (err) {
         console.error("Full pipeline error:", err);
-        setError(`PDF extraction error: ${err instanceof Error ? err.message : "Unknown error"}. Try re-uploading.`);
-        return;
+        throw new Error(`PDF extraction error: ${err instanceof Error ? err.message : "Unknown error"}. Try re-uploading.`);
       }
     }
 
