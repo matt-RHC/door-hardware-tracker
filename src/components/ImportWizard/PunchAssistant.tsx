@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import PunchAvatar from './PunchAvatar';
+import { usePunchHighlight } from './usePunchHighlight';
 import type { PunchAvatarState } from './PunchAvatar';
 import type { PunchMessage, PunchSeverity } from '@/lib/punch-messages';
 
@@ -73,6 +74,7 @@ export default function PunchAssistant({
   messages,
   defaultCollapsed = false,
 }: PunchAssistantProps) {
+  const { scrollToRef } = usePunchHighlight();
   const [collapsed, setCollapsed] = useState(defaultCollapsed);
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -200,24 +202,29 @@ export default function PunchAssistant({
               </p>
             )}
 
-            {sidebarMessages.map((msg, i) => (
-              <div
-                key={`${msg.severity}-${i}`}
-                style={{
-                  padding: '8px 10px',
-                  borderRadius: 8,
-                  backgroundColor: severityBg[msg.severity],
-                  borderLeft: `3px solid ${severityColor[msg.severity]}`,
-                  fontSize: 13,
-                  lineHeight: '18px',
-                  color: '#E4E6EB',
-                  animation: 'punchBounce 0.35s ease-out both',
-                  animationDelay: `${i * 60}ms`,
-                }}
-              >
-                {msg.text}
-              </div>
-            ))}
+            {sidebarMessages.map((msg, i) => {
+              const refKey = msg.field ?? msg.rowId;
+              return (
+                <div
+                  key={`${msg.severity}-${i}`}
+                  onClick={refKey ? () => scrollToRef(refKey) : undefined}
+                  style={{
+                    padding: '8px 10px',
+                    borderRadius: 8,
+                    backgroundColor: severityBg[msg.severity],
+                    borderLeft: `3px solid ${severityColor[msg.severity]}`,
+                    fontSize: 13,
+                    lineHeight: '18px',
+                    color: '#E4E6EB',
+                    cursor: refKey ? 'pointer' : undefined,
+                    animation: 'punchBounce 0.35s ease-out both',
+                    animationDelay: `${i * 60}ms`,
+                  }}
+                >
+                  {msg.text}
+                </div>
+              );
+            })}
           </div>
         )}
       </div>
