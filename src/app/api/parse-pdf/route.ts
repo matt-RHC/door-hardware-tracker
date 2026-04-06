@@ -5,8 +5,8 @@ import { getTaxonomyPromptText } from '@/lib/hardware-taxonomy'
 import { extractFireRatings, type DoorEntry } from '@/lib/fire-rating'
 import { extractJSON } from '@/lib/extractJSON'
 
-// Vercel Fluid Compute: 300s timeout (Pro plan supports up to 800s)
-export const maxDuration = 300
+// Vercel Fluid Compute: 800s timeout (Pro plan max)
+export const maxDuration = 800
 
 // --- Types ---
 

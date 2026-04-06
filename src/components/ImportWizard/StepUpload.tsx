@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback, type ChangeEvent, type DragEvent } from "react";
 import type { ClassifyPagesResponse } from "./types";
+import { arrayBufferToBase64 } from "@/lib/pdf-utils";
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50 MB
 
@@ -74,12 +75,7 @@ export default function StepUpload({
     try {
       // Convert file to base64 — the Python endpoint expects JSON, not FormData
       const arrayBuffer = await file.arrayBuffer();
-      const bytes = new Uint8Array(arrayBuffer);
-      let binary = "";
-      for (let i = 0; i < bytes.length; i++) {
-        binary += String.fromCharCode(bytes[i]);
-      }
-      const pdfBase64 = btoa(binary);
+      const pdfBase64 = arrayBufferToBase64(arrayBuffer);
 
       setProgress(30);
       setStatus("Classifying pages...");
