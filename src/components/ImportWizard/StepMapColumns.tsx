@@ -8,6 +8,7 @@ import type {
   ColumnMapping,
   DoorEntry,
 } from "./types";
+import { arrayBufferToBase64 } from "@/lib/pdf-utils";
 
 // Fields available for mapping
 const MAPPABLE_FIELDS: { value: keyof DoorEntry | ""; label: string }[] = [
@@ -79,12 +80,7 @@ export default function StepMapColumns({
 
       // Convert file to base64 — Python endpoint expects JSON, not FormData
       const arrayBuffer = await file.arrayBuffer();
-      const bytes = new Uint8Array(arrayBuffer);
-      let binary = "";
-      for (let i = 0; i < bytes.length; i++) {
-        binary += String.fromCharCode(bytes[i]);
-      }
-      const pdfBase64 = btoa(binary);
+      const pdfBase64 = arrayBufferToBase64(arrayBuffer);
 
       const resp = await fetch("/api/detect-mapping", {
         method: "POST",

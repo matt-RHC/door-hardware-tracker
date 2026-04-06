@@ -9,6 +9,15 @@ import type {
   HardwareSet,
 } from "./types";
 import { scoreExtraction } from "@/lib/confidence-scoring";
+import {
+  arrayBufferToBase64,
+  splitPDFByPages,
+  splitPDFFixed,
+  mergeHardwareSets,
+  mergeDoors,
+  CHUNK_SIZE_THRESHOLD,
+  FALLBACK_PAGES_PER_CHUNK,
+} from "@/lib/pdf-utils";
 
 interface StepTriageProps {
   projectId: string;
@@ -47,52 +56,109 @@ export default function StepTriage({
     setProgress(10);
 
     try {
-      // Step A: Call /api/parse-pdf?parseOnly=true with JSON body
-      // Convert file to base64
       const arrayBuffer = await file.arrayBuffer();
-      const bytes = new Uint8Array(arrayBuffer);
-      let binary = "";
-      for (let i = 0; i < bytes.length; i++) {
-        binary += String.fromCharCode(bytes[i]);
-      }
-      const pdfBase64 = btoa(binary);
 
       // Build userColumnMapping from ColumnMapping[] → Record<string, number>
-      // The parse-pdf route forwards this to extract-tables.py as user_column_mapping
       const userColumnMapping: Record<string, number> = {};
       for (let i = 0; i < columnMappings.length; i++) {
         if (columnMappings[i].mapped_field) {
           userColumnMapping[columnMappings[i].mapped_field as string] = i;
         }
       }
+      const mappingPayload =
+        Object.keys(userColumnMapping).length > 0 ? userColumnMapping : null;
 
-      setProgress(20);
-      setStatus("Running extraction...");
+      let extractedDoors: DoorEntry[];
+      let extractedSets: HardwareSet[];
 
-      const parseResp = await fetch("/api/parse-pdf?parseOnly=true", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          pdfBase64,
-          userColumnMapping:
-            Object.keys(userColumnMapping).length > 0
-              ? userColumnMapping
-              : null,
-        }),
-      });
+      if (file.size > CHUNK_SIZE_THRESHOLD) {
+        // ── Chunked extraction for large PDFs ──
+        // Split into chunks, send each to /api/parse-pdf?parseOnly=true, merge results
+        setProgress(15);
+        setStatus("Splitting large PDF into chunks...");
 
-      if (!parseResp.ok) {
-        const err = await parseResp.json().catch(() => ({}));
-        throw new Error(
-          err.error || `Extraction failed (${parseResp.status})`
-        );
+        // Use classify result to build smart chunks if available
+        let chunks: string[];
+        const schedulePages = classifyResult.summary.door_schedule_pages;
+        const hwPages = classifyResult.summary.hardware_set_pages;
+        const allContentPages = [...schedulePages, ...hwPages].sort((a, b) => a - b);
+
+        if (allContentPages.length > 0) {
+          // Group content pages into chunks of FALLBACK_PAGES_PER_CHUNK
+          const chunkSets: number[][] = [];
+          for (let i = 0; i < allContentPages.length; i += FALLBACK_PAGES_PER_CHUNK) {
+            chunkSets.push(allContentPages.slice(i, i + FALLBACK_PAGES_PER_CHUNK));
+          }
+          // Use submittal/reference pages as context prepended to each chunk
+          const refPages = classifyResult.summary.submittal_pages;
+          chunks = await splitPDFByPages(arrayBuffer, chunkSets, refPages);
+        } else {
+          // No classification data — fall back to fixed splitting
+          chunks = await splitPDFFixed(arrayBuffer, FALLBACK_PAGES_PER_CHUNK);
+        }
+
+        setProgress(20);
+        setStatus(`Extracting from ${chunks.length} chunk(s)...`);
+
+        const allDoors: DoorEntry[] = [];
+        const allSets: HardwareSet[] = [];
+
+        for (let i = 0; i < chunks.length; i++) {
+          setStatus(`Extracting chunk ${i + 1} of ${chunks.length}...`);
+          setProgress(20 + Math.round((i / chunks.length) * 40));
+
+          const chunkResp = await fetch("/api/parse-pdf?parseOnly=true", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              pdfBase64: chunks[i],
+              userColumnMapping: mappingPayload,
+            }),
+          });
+
+          if (!chunkResp.ok) {
+            const err = await chunkResp.json().catch(() => ({}));
+            console.warn(`Chunk ${i + 1} failed:`, err.error);
+            continue; // skip failed chunks, merge what we can
+          }
+
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const chunkResult: any = await chunkResp.json();
+          allDoors.push(...(chunkResult.doors ?? []));
+          allSets.push(...(chunkResult.sets ?? []));
+        }
+
+        // Merge and deduplicate across chunks
+        extractedDoors = mergeDoors(allDoors);
+        extractedSets = mergeHardwareSets(allSets);
+      } else {
+        // ── Single-request extraction for small PDFs ──
+        const pdfBase64 = arrayBufferToBase64(arrayBuffer);
+
+        setProgress(20);
+        setStatus("Running extraction...");
+
+        const parseResp = await fetch("/api/parse-pdf?parseOnly=true", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            pdfBase64,
+            userColumnMapping: mappingPayload,
+          }),
+        });
+
+        if (!parseResp.ok) {
+          const err = await parseResp.json().catch(() => ({}));
+          throw new Error(
+            err.error || `Extraction failed (${parseResp.status})`
+          );
+        }
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const parseResult: any = await parseResp.json();
+        extractedDoors = parseResult.doors ?? [];
+        extractedSets = parseResult.sets ?? [];
       }
-
-      // parseOnly returns regular JSON: { success, doors, sets, flaggedDoors, stats, reviewNotes }
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const parseResult: any = await parseResp.json();
-      const extractedDoors: DoorEntry[] = parseResult.doors ?? [];
-      const extractedSets: HardwareSet[] = parseResult.sets ?? [];
 
       if (extractedDoors.length === 0) {
         throw new Error("No doors found during extraction.");

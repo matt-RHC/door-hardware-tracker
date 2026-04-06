@@ -5,15 +5,13 @@ import { PDFDocument } from "pdf-lib";
 import SubmittalWizard from "./SubmittalWizard";
 import ImportReviewTable from "./ImportReviewTable";
 import ColumnMapperWizard, { type ColumnMapping, type DetectMappingResponse } from "./ColumnMapperWizard";
-
-function arrayBufferToBase64(buffer: ArrayBuffer | Uint8Array): string {
-  const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
-  let binary = '';
-  for (let i = 0; i < bytes.length; i += 8192) {
-    binary += String.fromCharCode(...bytes.subarray(i, i + 8192));
-  }
-  return btoa(binary);
-}
+import {
+  arrayBufferToBase64,
+  splitPDFByPages,
+  splitPDFFixed,
+  mergeHardwareSets,
+  mergeDoors,
+} from "@/lib/pdf-utils";
 
 /* âââ Holographic Loading Overlay âââ */
 function HoloLoader({ progress, status }: { progress: number; status: string }) {
@@ -609,64 +607,7 @@ async function classifyPages(pdfBase64: string): Promise<ClassifyPagesResponse |
   }
 }
 
-/**
- * Split a PDF into chunks by specific page indices.
- * Each chunk is a base64-encoded PDF containing only the specified pages.
- * Optionally prepends reference pages to each chunk for context.
- */
-async function splitPDFByPages(
-  buffer: ArrayBuffer,
-  chunkPageSets: number[][],
-  referencePageIndices: number[] = []
-): Promise<string[]> {
-  const srcDoc = await PDFDocument.load(buffer);
-  const chunks: string[] = [];
-
-  for (const pageIndices of chunkPageSets) {
-    const chunkDoc = await PDFDocument.create();
-
-    // Prepend reference pages for context (if any)
-    if (referencePageIndices.length > 0) {
-      const refPages = await chunkDoc.copyPages(srcDoc, referencePageIndices);
-      for (const page of refPages) {
-        chunkDoc.addPage(page);
-      }
-    }
-
-    // Add the actual content pages
-    const contentPages = await chunkDoc.copyPages(srcDoc, pageIndices);
-    for (const page of contentPages) {
-      chunkDoc.addPage(page);
-    }
-
-    const chunkBytes = await chunkDoc.save();
-    const chunkBase64 = arrayBufferToBase64(chunkBytes);
-    chunks.push(chunkBase64);
-  }
-
-  return chunks;
-}
-
-/** Fallback: Split a PDF ArrayBuffer into fixed-size chunks (legacy behavior) */
-async function splitPDFFixed(buffer: ArrayBuffer, pagesPerChunk: number): Promise<string[]> {
-  const srcDoc = await PDFDocument.load(buffer);
-  const totalPages = srcDoc.getPageCount();
-  const chunks: string[] = [];
-
-  for (let start = 0; start < totalPages; start += pagesPerChunk) {
-    const end = Math.min(start + pagesPerChunk, totalPages);
-    const chunkDoc = await PDFDocument.create();
-    const pages = await chunkDoc.copyPages(srcDoc, Array.from({ length: end - start }, (_, i) => start + i));
-    for (const page of pages) {
-      chunkDoc.addPage(page);
-    }
-    const chunkBytes = await chunkDoc.save();
-    const chunkBase64 = arrayBufferToBase64(chunkBytes);
-    chunks.push(chunkBase64);
-  }
-
-  return chunks;
-}
+// splitPDFByPages and splitPDFFixed imported from @/lib/pdf-utils
 
 /**
  * Build a filtered PDF containing only pages of specified types.
@@ -797,97 +738,8 @@ function applyTriageResults(
   return { filteredDoors, byOthersIndices };
 }
 
-// --- Hardware item dedup helpers (Level 2: cross-chunk, Level 3: pre-save) ---
-
-const NAME_ABBREVIATIONS: Record<string, string> = {
-  'cont.': 'continuous', 'cont': 'continuous',
-  'flr': 'floor', 'flr.': 'floor',
-  'w/': 'with ', 'w/o': 'without',
-  'mtd': 'mounted', 'mtd.': 'mounted',
-  'hd': 'heavy duty', 'hd.': 'heavy duty',
-  'adj': 'adjustable', 'adj.': 'adjustable',
-  'auto': 'automatic', 'auto.': 'automatic',
-  'elec': 'electric', 'elec.': 'electric',
-  'mag': 'magnetic', 'mag.': 'magnetic',
-  'mech': 'mechanical', 'mech.': 'mechanical',
-  'ss': 'stainless steel',
-  'alum': 'aluminum', 'alum.': 'aluminum',
-  'brz': 'bronze', 'brz.': 'bronze',
-  'sfc': 'surface', 'sfc.': 'surface',
-  'conc': 'concealed', 'conc.': 'concealed',
-  'ovhd': 'overhead', 'ovhd.': 'overhead',
-  'thresh': 'threshold', 'thresh.': 'threshold',
-};
-
-function normalizeItemName(name: string): string {
-  let n = name.toLowerCase().trim();
-  for (const [abbr, full] of Object.entries(NAME_ABBREVIATIONS)) {
-    const escaped = abbr.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    n = n.replace(new RegExp(`\\b${escaped}\\b`, 'g'), full);
-    if (abbr === 'w/') n = n.replace(/\bw\//g, 'with ');
-  }
-  return n.replace(/[()]/g, '').replace(/\s+/g, ' ').replace(/[,;.]+$/, '').trim();
-}
-
-function hardwareItemDedupKey(item: HardwareItem): string {
-  const model = (item.model || '').trim().toLowerCase();
-  if (model) return `model:${model}`;
-  return `name:${normalizeItemName(item.name)}`;
-}
-
-/** Deduplicate hardware items, keeping the version with more complete data */
-function deduplicateHardwareItems(items: HardwareItem[]): HardwareItem[] {
-  const seen = new Map<string, HardwareItem>();
-  for (const item of items) {
-    const key = hardwareItemDedupKey(item);
-    const existing = seen.get(key);
-    if (!existing) {
-      seen.set(key, item);
-    } else {
-      // Keep the version with more populated fields
-      const existingScore = [existing.name, existing.model, existing.manufacturer, existing.finish].filter(Boolean).length;
-      const newScore = [item.name, item.model, item.manufacturer, item.finish].filter(Boolean).length;
-      if (newScore > existingScore) seen.set(key, item);
-    }
-  }
-  return Array.from(seen.values());
-}
-
-/** Deduplicate hardware sets by set_id, merge items across chunks, then dedup items */
-function mergeHardwareSets(allSets: HardwareSet[]): HardwareSet[] {
-  const map = new Map<string, HardwareSet>();
-  for (const set of allSets) {
-    const existing = map.get(set.set_id);
-    if (!existing) {
-      map.set(set.set_id, { ...set, items: [...set.items] });
-    } else {
-      // Merge items from both versions, then dedup below
-      existing.items.push(...set.items);
-      // Keep the longer heading if available
-      if (set.heading && (!existing.heading || set.heading.length > existing.heading.length)) {
-        existing.heading = set.heading;
-      }
-    }
-  }
-  // Dedup items within each merged set
-  for (const set of map.values()) {
-    set.items = deduplicateHardwareItems(set.items);
-  }
-  return Array.from(map.values());
-}
-
-/** Deduplicate doors by door_number (first occurrence wins) */
-function mergeDoors(allDoors: DoorEntry[]): DoorEntry[] {
-  const seen = new Set<string>();
-  const unique: DoorEntry[] = [];
-  for (const door of allDoors) {
-    if (!seen.has(door.door_number)) {
-      seen.add(door.door_number);
-      unique.push(door);
-    }
-  }
-  return unique;
-}
+// Hardware dedup helpers imported from @/lib/pdf-utils:
+// mergeHardwareSets, mergeDoors, deduplicateHardwareItems, normalizeItemName
 
 // --- Component ---
 
