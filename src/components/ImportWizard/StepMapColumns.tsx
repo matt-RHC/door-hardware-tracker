@@ -75,15 +75,21 @@ export default function StepMapColumns({
 
     try {
       const bestPage =
-        classifyResult.summary.door_schedule_pages[0] ?? 1;
+        classifyResult.summary.door_schedule_pages[0] ?? 0;
 
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("page", String(bestPage));
+      // Convert file to base64 — Python endpoint expects JSON, not FormData
+      const arrayBuffer = await file.arrayBuffer();
+      const bytes = new Uint8Array(arrayBuffer);
+      let binary = "";
+      for (let i = 0; i < bytes.length; i++) {
+        binary += String.fromCharCode(bytes[i]);
+      }
+      const pdfBase64 = btoa(binary);
 
       const resp = await fetch("/api/detect-mapping", {
         method: "POST",
-        body: formData,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pdf_base64: pdfBase64, page_index: bestPage }),
       });
 
       if (!resp.ok) {
@@ -93,7 +99,34 @@ export default function StepMapColumns({
         );
       }
 
-      const result: DetectMappingResponse = await resp.json();
+      // Transform Python response to match DetectMappingResponse type.
+      // Python returns: { headers: string[], auto_mapping: {field: colIdx}, confidence_scores: {field: score}, sample_rows, page_index }
+      // TS expects:     { columns: DetectedColumn[], best_door_schedule_page: number, raw_headers: string[] }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const raw: any = await resp.json();
+      const headers: string[] = raw.headers ?? [];
+      const autoMapping: Record<string, number> = raw.auto_mapping ?? {};
+      const confidenceScores: Record<string, number> = raw.confidence_scores ?? {};
+
+      // Build reverse map: column index -> mapped field name
+      const indexToField = new Map<number, string>();
+      for (const [field, colIdx] of Object.entries(autoMapping)) {
+        indexToField.set(colIdx as number, field);
+      }
+
+      const result: DetectMappingResponse = {
+        columns: headers.map((header, i) => {
+          const mappedField = indexToField.get(i) ?? null;
+          const confidence = mappedField ? (confidenceScores[mappedField] ?? 0) : 0;
+          return {
+            source_header: header,
+            mapped_field: mappedField as keyof DoorEntry | null,
+            confidence,
+          };
+        }),
+        best_door_schedule_page: raw.page_index ?? bestPage,
+        raw_headers: headers,
+      };
       setDetectResult(result);
 
       // Initialize mappings from detected columns

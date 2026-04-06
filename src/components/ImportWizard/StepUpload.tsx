@@ -3,7 +3,7 @@
 import { useState, useRef, useCallback, type ChangeEvent, type DragEvent } from "react";
 import type { ClassifyPagesResponse } from "./types";
 
-const MAX_FILE_SIZE = 25 * 1024 * 1024; // 25 MB
+const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50 MB
 
 interface StepUploadProps {
   projectId: string;
@@ -37,7 +37,7 @@ export default function StepUpload({
         return;
       }
       if (f.size > MAX_FILE_SIZE) {
-        onError(`File is too large (${(f.size / 1024 / 1024).toFixed(1)} MB). Maximum is 25 MB.`);
+        onError(`File is too large (${(f.size / 1024 / 1024).toFixed(1)} MB). Maximum is 50 MB.`);
         return;
       }
       setFile(f);
@@ -68,19 +68,26 @@ export default function StepUpload({
   const handleClassify = async () => {
     if (!file) return;
     setLoading(true);
-    setStatus("Uploading PDF for page classification...");
+    setStatus("Reading PDF...");
     setProgress(10);
 
     try {
-      const formData = new FormData();
-      formData.append("file", file);
+      // Convert file to base64 — the Python endpoint expects JSON, not FormData
+      const arrayBuffer = await file.arrayBuffer();
+      const bytes = new Uint8Array(arrayBuffer);
+      let binary = "";
+      for (let i = 0; i < bytes.length; i++) {
+        binary += String.fromCharCode(bytes[i]);
+      }
+      const pdfBase64 = btoa(binary);
 
       setProgress(30);
       setStatus("Classifying pages...");
 
       const resp = await fetch("/api/classify-pages", {
         method: "POST",
-        body: formData,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pdfBase64 }),
       });
 
       if (!resp.ok) {
@@ -90,7 +97,36 @@ export default function StepUpload({
         );
       }
 
-      const result: ClassifyPagesResponse = await resp.json();
+      // Transform Python response to match ClassifyPagesResponse type.
+      // Python returns: { page_classifications: [{index, type, ...}], summary: {door_schedule_pages: count, ...} }
+      // TS expects:     { pages: [{page_number, page_type, confidence}], summary: {door_schedule_pages: number[], ...} }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const raw: any = await resp.json();
+      const pageClassifications: Array<{ index: number; type: string; confidence?: number }> =
+        raw.page_classifications ?? [];
+
+      const result: ClassifyPagesResponse = {
+        pages: pageClassifications.map((p) => ({
+          page_number: p.index,
+          page_type: p.type as ClassifyPagesResponse["pages"][0]["page_type"],
+          confidence: p.confidence ?? 1,
+        })),
+        summary: {
+          total_pages: raw.total_pages ?? pageClassifications.length,
+          door_schedule_pages: pageClassifications
+            .filter((p) => p.type === "door_schedule")
+            .map((p) => p.index),
+          hardware_set_pages: pageClassifications
+            .filter((p) => p.type === "hardware_set")
+            .map((p) => p.index),
+          submittal_pages: pageClassifications
+            .filter((p) => p.type === "reference")
+            .map((p) => p.index),
+          other_pages: pageClassifications
+            .filter((p) => p.type === "other" || p.type === "cover")
+            .map((p) => p.index),
+        },
+      };
       setClassifyResult(result);
       setProgress(70);
       setStatus("Classification complete.");
@@ -212,7 +248,7 @@ export default function StepUpload({
               Drag &amp; drop a PDF here, or click to browse
             </p>
             <p className="text-[#6e6e73] text-xs mt-1">
-              Max 25 MB
+              Max 50 MB
             </p>
           </div>
         )}

@@ -944,7 +944,7 @@ export default function PDFUploadModal({
         setError("Please select a PDF file");
         return;
       }
-      const MAX_PDF_SIZE_MB = 25;
+      const MAX_PDF_SIZE_MB = 50;
       if (selectedFile.size > MAX_PDF_SIZE_MB * 1024 * 1024) {
         setError(`PDF must be under ${MAX_PDF_SIZE_MB}MB. This file is ${(selectedFile.size / 1024 / 1024).toFixed(1)}MB.`);
         return;

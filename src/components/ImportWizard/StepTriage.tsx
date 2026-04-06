@@ -47,27 +47,38 @@ export default function StepTriage({
     setProgress(10);
 
     try {
-      // Step A: Call /api/parse-pdf with parseOnly=true and column mapping
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("projectId", projectId);
-      formData.append("parseOnly", "true");
-      formData.append("columnMappings", JSON.stringify(columnMappings));
-      formData.append(
-        "doorSchedulePages",
-        JSON.stringify(classifyResult.summary.door_schedule_pages)
-      );
-      formData.append(
-        "hardwareSetPages",
-        JSON.stringify(classifyResult.summary.hardware_set_pages)
-      );
+      // Step A: Call /api/parse-pdf?parseOnly=true with JSON body
+      // Convert file to base64
+      const arrayBuffer = await file.arrayBuffer();
+      const bytes = new Uint8Array(arrayBuffer);
+      let binary = "";
+      for (let i = 0; i < bytes.length; i++) {
+        binary += String.fromCharCode(bytes[i]);
+      }
+      const pdfBase64 = btoa(binary);
+
+      // Build userColumnMapping from ColumnMapping[] → Record<string, number>
+      // The parse-pdf route forwards this to extract-tables.py as user_column_mapping
+      const userColumnMapping: Record<string, number> = {};
+      for (let i = 0; i < columnMappings.length; i++) {
+        if (columnMappings[i].mapped_field) {
+          userColumnMapping[columnMappings[i].mapped_field as string] = i;
+        }
+      }
 
       setProgress(20);
       setStatus("Running extraction...");
 
-      const parseResp = await fetch("/api/parse-pdf", {
+      const parseResp = await fetch("/api/parse-pdf?parseOnly=true", {
         method: "POST",
-        body: formData,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          pdfBase64,
+          userColumnMapping:
+            Object.keys(userColumnMapping).length > 0
+              ? userColumnMapping
+              : null,
+        }),
       });
 
       if (!parseResp.ok) {
@@ -77,50 +88,11 @@ export default function StepTriage({
         );
       }
 
-      // The parse-pdf route streams events; read them all
-      const reader = parseResp.body?.getReader();
-      if (!reader) throw new Error("No response stream");
-
-      const decoder = new TextDecoder();
-      let buffer = "";
-      let extractedDoors: DoorEntry[] = [];
-      let extractedSets: HardwareSet[] = [];
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() || "";
-
-        for (const line of lines) {
-          if (!line.trim()) continue;
-          try {
-            const event = JSON.parse(line);
-            if (event.progress) setProgress(20 + (event.progress / 100) * 40);
-            if (event.status) setStatus(event.status);
-            if (event.error) throw new Error(event.error);
-            if (event.result?.doors) extractedDoors = event.result.doors;
-            if (event.result?.hardwareSets)
-              extractedSets = event.result.hardwareSets;
-          } catch (e) {
-            if (e instanceof Error && e.message !== line.trim()) throw e;
-          }
-        }
-      }
-
-      // Process remaining buffer
-      if (buffer.trim()) {
-        try {
-          const event = JSON.parse(buffer);
-          if (event.error) throw new Error(event.error);
-          if (event.result?.doors) extractedDoors = event.result.doors;
-          if (event.result?.hardwareSets)
-            extractedSets = event.result.hardwareSets;
-        } catch {
-          // skip malformed
-        }
-      }
+      // parseOnly returns regular JSON: { success, doors, sets, flaggedDoors, stats, reviewNotes }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const parseResult: any = await parseResp.json();
+      const extractedDoors: DoorEntry[] = parseResult.doors ?? [];
+      const extractedSets: HardwareSet[] = parseResult.sets ?? [];
 
       if (extractedDoors.length === 0) {
         throw new Error("No doors found during extraction.");
@@ -139,18 +111,26 @@ export default function StepTriage({
       setStatus("Running triage...");
 
       // Step B: Call /api/parse-pdf/triage to classify candidates
+      // The triage route expects { candidates: TriageCandidate[] }
       const triageResp = await fetch("/api/parse-pdf/triage", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          projectId,
-          doors: extractedDoors,
-          hardwareSets: extractedSets,
+          candidates: extractedDoors.map((d) => ({
+            door_number: d.door_number,
+            hw_set: d.hw_set || null,
+            door_type: d.door_type || null,
+            frame_type: d.frame_type || null,
+            fire_rating: d.fire_rating || null,
+            hand: d.hand || null,
+            location: d.location || null,
+            page_number: null,
+          })),
         }),
       });
 
       if (!triageResp.ok) {
-        // If triage endpoint doesn't exist yet, create a synthetic result
+        // If triage fails, skip it — all doors are accepted
         const result: TriageResult = {
           doors_found: extractedDoors.length,
           by_others: 0,
@@ -160,7 +140,38 @@ export default function StepTriage({
         };
         setTriageResult(result);
       } else {
-        const result: TriageResult = await triageResp.json();
+        // Transform triage response: { classifications, stats } → TriageResult
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const raw: any = await triageResp.json();
+        const classifications: Array<{
+          door_number: string;
+          class: string;
+          confidence: string;
+          reason: string;
+        }> = raw.classifications ?? [];
+
+        const acceptedDoors = extractedDoors.filter((d) => {
+          const c = classifications.find(
+            (cl) => cl.door_number === d.door_number
+          );
+          return !c || c.class === "door";
+        });
+        const flagged = classifications
+          .filter((c) => c.class === "by_others" || c.confidence === "low")
+          .map((c) => ({
+            door_number: c.door_number,
+            reason: c.reason,
+            confidence:
+              c.confidence === "high" ? 0.9 : c.confidence === "medium" ? 0.6 : 0.3,
+          }));
+
+        const result: TriageResult = {
+          doors_found: raw.stats?.total ?? extractedDoors.length,
+          by_others: raw.stats?.by_others ?? 0,
+          rejected: raw.stats?.rejected ?? 0,
+          accepted: acceptedDoors,
+          flagged,
+        };
         setTriageResult(result);
       }
 
