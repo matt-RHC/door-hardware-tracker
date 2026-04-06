@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { getTaxonomyPromptText } from '@/lib/hardware-taxonomy'
+import { extractFireRatings, type DoorEntry } from '@/lib/fire-rating'
 
 // Vercel Fluid Compute: 300s timeout (Pro plan supports up to 800s)
 export const maxDuration = 300
@@ -28,16 +29,7 @@ interface HardwareSet {
   items: HardwareItem[]
 }
 
-interface DoorEntry {
-  door_number: string
-  hw_set: string
-  hw_heading: string
-  location: string
-  door_type: string
-  frame_type: string
-  fire_rating: string
-  hand: string
-}
+// DoorEntry imported from @/lib/fire-rating
 
 interface FlaggedDoor {
   door: DoorEntry
@@ -434,26 +426,8 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Fire rating extraction from hw_heading/location fields
-    const fireRatingPattern = /\b(\d{1,3}\s*[Mm]in|[123]\s*[Hh]r)\b/
-    for (const door of doors) {
-      if (!door.fire_rating) {
-        // Check hw_heading first
-        const match = fireRatingPattern.exec(door.hw_heading || '')
-        if (match) {
-          door.fire_rating = match[1]
-          door.hw_heading = (door.hw_heading || '').replace(match[0], '').trim()
-        }
-        // Then check location (MCA/Comsense PDFs put fire ratings here)
-        if (!door.fire_rating) {
-          const locMatch = fireRatingPattern.exec(door.location || '')
-          if (locMatch) {
-            door.fire_rating = locMatch[1]
-            door.location = (door.location || '').replace(locMatch[0], '').trim()
-          }
-        }
-      }
-    }
+    // Extract fire ratings embedded in hw_heading/location fields
+    extractFireRatings(doors)
 
     console.log(
       `Chunk ${chunkIndex + 1}/${totalChunks}: after LLM review: ` +

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { getTaxonomyPromptText } from '@/lib/hardware-taxonomy'
+import { extractFireRatings, type DoorEntry } from '@/lib/fire-rating'
 
 // Vercel Fluid Compute: 300s timeout (Pro plan supports up to 800s)
 export const maxDuration = 300
@@ -28,16 +29,7 @@ interface HardwareSet {
   items: HardwareItem[]
 }
 
-interface DoorEntry {
-  door_number: string
-  hw_set: string
-  hw_heading: string
-  location: string
-  door_type: string
-  frame_type: string
-  fire_rating: string
-  hand: string
-}
+// DoorEntry imported from @/lib/fire-rating
 
 interface PdfplumberResult {
   success: boolean
@@ -104,9 +96,9 @@ async function callPdfplumber(
   const payload: Record<string, unknown> = { pdf_base64: base64 }
   if (userColumnMapping) {
     payload.user_column_mapping = userColumnMapping
-    console.log('[parse-pdf] Sending user_column_mapping to extract-tables:', JSON.stringify(userColumnMapping))
-  } else {
-    console.log('[parse-pdf] No user_column_mapping — extract-tables will auto-detect')
+    if (process.env.NODE_ENV === 'development') {
+      console.log('[parse-pdf] Sending user_column_mapping to extract-tables:', JSON.stringify(userColumnMapping))
+    }
   }
 
   const response = await fetch(`${baseUrl}/api/extract-tables`, {
@@ -391,7 +383,6 @@ async function extractFromPDF(base64: string, filteredPdfBase64?: string, userCo
       if (leafCount > 1 && item.qty >= leafCount) {
         const perLeaf = item.qty / leafCount
         if (Number.isInteger(perLeaf)) {
-          console.log(`[post-llm-renorm] ${set.set_id}: "${item.name}" qty ${item.qty} ÷ ${leafCount} leaves = ${perLeaf}`)
           item.qty_total = item.qty
           item.qty_door_count = leafCount
           item.qty = perLeaf
@@ -402,7 +393,6 @@ async function extractFromPDF(base64: string, filteredPdfBase64?: string, userCo
       if (!divided && doorCount > 1 && doorCount !== leafCount && item.qty >= doorCount) {
         const perOpening = item.qty / doorCount
         if (Number.isInteger(perOpening)) {
-          console.log(`[post-llm-renorm] ${set.set_id}: "${item.name}" qty ${item.qty} ÷ ${doorCount} openings = ${perOpening}`)
           item.qty_total = item.qty
           item.qty_door_count = doorCount
           item.qty = perOpening
@@ -412,22 +402,8 @@ async function extractFromPDF(base64: string, filteredPdfBase64?: string, userCo
     }
   }
 
-  // --- Extract fire ratings from hw_heading if misplaced ---
-  const fireRatingPattern = /\b(\d{1,3}\s*[Mm]in|[123]\s*[Hh]r)\b/
-  for (const door of allDoors) {
-    if (!door.fire_rating) {
-      const match = fireRatingPattern.exec(door.hw_heading || '')
-      if (match) {
-        door.fire_rating = match[1]
-        door.hw_heading = (door.hw_heading || '').replace(match[0], '').trim()
-      }
-      const locMatch = fireRatingPattern.exec(door.location || '')
-      if (!door.fire_rating && locMatch) {
-        door.fire_rating = locMatch[1]
-        door.location = (door.location || '').replace(locMatch[0], '').trim()
-      }
-    }
-  }
+  // Extract fire ratings embedded in hw_heading/location fields
+  extractFireRatings(allDoors)
 
   return {
     hardwareSets,
@@ -466,7 +442,6 @@ export async function POST(request: NextRequest) {
       const filteredPdfBase64: string | undefined = body.filteredPdfBase64 ?? undefined
 
       const userColumnMapping = body.userColumnMapping ?? null
-      console.log('[parse-pdf] Route handler received userColumnMapping:', userColumnMapping ? JSON.stringify(userColumnMapping) : 'null')
       const { hardwareSets, doors, corrections, stats } = await extractFromPDF(base64, filteredPdfBase64, userColumnMapping)
 
       return NextResponse.json({
