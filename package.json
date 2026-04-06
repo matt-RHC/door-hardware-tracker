@@ -7,7 +7,6 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "vitest run || echo 'If vitest fails due to path spaces, run: node node_modules/vitest/vitest.mjs run'",
     "test:py": "pytest tests/ -v"
   },
   "dependencies": {
