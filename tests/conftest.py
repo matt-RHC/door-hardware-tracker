@@ -102,3 +102,60 @@ def akn_pdf_path():
     if not p.exists():
         pytest.skip(f"AKN PDF not found at {p}. Copy it from Downloads.")
     return p
+
+
+# ── PDF Catalog (BUG-11: test infrastructure expansion) ──
+
+PDF_CATALOG_ENTRIES = {
+    "SMALL": "SMALL_081113.pdf",
+    "MEDIUM": "MEDIUM_306169.pdf",
+    "LARGE": "LARGE_MCA.pdf",
+    "RPL10": "RPL10_NW_Data_Center.pdf",
+    "CAA": "CAA_Nashville_Yards.pdf",
+    "AKN": "AKN_ESC.pdf",
+}
+
+CROSS_PDF_NAMES = ["SMALL", "MEDIUM", "LARGE", "RPL10", "CAA"]
+
+
+@pytest.fixture(scope="session")
+def pdf_catalog():
+    """Return {name: Path|None} for all golden PDFs. Does NOT skip — tests decide."""
+    catalog = {}
+    for name, filename in PDF_CATALOG_ENTRIES.items():
+        p = FIXTURES_DIR / filename
+        catalog[name] = p if p.exists() else None
+    return catalog
+
+
+class _PipelineCache:
+    """Lazy cache for full-pipeline extraction results. Avoids re-running 30s extractions."""
+
+    def __init__(self, extract_mod, catalog):
+        self._mod = extract_mod
+        self._catalog = catalog
+        self._cache = {}
+
+    def get(self, name):
+        if name in self._cache:
+            return self._cache[name]
+        path = self._catalog.get(name)
+        if path is None:
+            self._cache[name] = None
+            return None
+        import pdfplumber
+        with pdfplumber.open(str(path), unicode_norm="NFKC") as pdf:
+            hw_sets = self._mod.extract_all_hardware_sets(pdf)
+            openings, tables_found = self._mod.extract_opening_list(pdf, None)
+            ref_codes = self._mod.extract_reference_tables(pdf)
+            self._mod.normalize_quantities(hw_sets, openings)
+            confirmed, flagged = self._mod.validate_door_number_consistency(openings)
+        result = (hw_sets, openings, confirmed, flagged, ref_codes, tables_found)
+        self._cache[name] = result
+        return result
+
+
+@pytest.fixture(scope="session")
+def pipeline_results(extract_tables, pdf_catalog):
+    """Lazy cache for full extraction pipeline results across all golden PDFs."""
+    return _PipelineCache(extract_tables, pdf_catalog)
