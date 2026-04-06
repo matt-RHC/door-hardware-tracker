@@ -1023,7 +1023,8 @@ export default function PDFUploadModal({
   const processLargePDF = async (
     buffer: ArrayBuffer,
     pageCount: number,
-    parseOnly = false
+    parseOnly = false,
+    explicitMapping?: ColumnMapping | null,
   ): Promise<{ doors: DoorEntry[]; sets: HardwareSet[]; flaggedDoors?: FlaggedDoor[]; filteredPdfBase64?: string } | void> => {
     // Convert buffer to base64 (needed by both paths)
     const fullBase64 = btoa(
@@ -1076,9 +1077,11 @@ export default function PDFUploadModal({
       setProgress(15);
 
       try {
+        const mappingToSend = explicitMapping ?? confirmedMappingRef.current ?? null;
+        console.log('[PDFUploadModal] Sending userColumnMapping:', mappingToSend);
         const parseBody: Record<string, unknown> = {
           pdfBase64: fullBase64,
-          userColumnMapping: confirmedMappingRef.current ?? null,
+          userColumnMapping: mappingToSend,
         };
         // Send filtered PDF for cheaper LLM review (server still extracts from full PDF)
         if (filteredPdfBase64) {
@@ -1200,7 +1203,7 @@ export default function PDFUploadModal({
     }
 
     // ── Use confirmed mapping for extraction ──
-    const userMapping = confirmedMappingRef.current ?? null;
+    const userMapping = explicitMapping ?? confirmedMappingRef.current ?? null;
 
     const totalChunks = chunks.length;
 
@@ -1506,13 +1509,13 @@ export default function PDFUploadModal({
               setMappingSummary(parts.length > 0 ? parts.join(" \u00b7 ") : null);
               setMapperData(null);
               mapperDoneRef.current = true;
-              // Resume the upload with confirmed mapping
+              // Resume the upload with confirmed mapping — pass mapping directly
               const pending = pendingUploadRef.current;
               if (pending) {
                 pendingUploadRef.current = null;
                 setLoading(true);
                 setError(null);
-                processLargePDF(pending.buffer, pending.pageCount, pending.parseOnly)
+                processLargePDF(pending.buffer, pending.pageCount, pending.parseOnly, mapping)
                   .catch((err) => setError(err instanceof Error ? err.message : "Upload failed"))
                   .finally(() => setLoading(false));
               }

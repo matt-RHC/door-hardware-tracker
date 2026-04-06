@@ -2246,6 +2246,8 @@ class handler(BaseHTTPRequestHandler):
             pdf_base64 = data.get("pdf_base64", "")
             raw_mapping = data.get("user_column_mapping")  # Optional override
             user_column_mapping = normalize_mapping_keys(raw_mapping)
+            logger.info(f"[extract-tables] raw_mapping from request: {raw_mapping}")
+            logger.info(f"[extract-tables] normalized user_column_mapping: {user_column_mapping}")
             if not pdf_base64:
                 self._send_json(400, ExtractionResult(
                     success=False,
@@ -2264,6 +2266,7 @@ class handler(BaseHTTPRequestHandler):
                 # Phase 2: Extract Opening List via table grid detection
                 # If user provided a confirmed column mapping, use it
                 openings, tables_found = extract_opening_list(pdf, user_column_mapping)
+                logger.info(f"[extract-tables] extract_opening_list: {len(openings)} doors, {tables_found} tables")
 
                 # Phase 3: Extract reference tables
                 reference_codes = extract_reference_tables(pdf)
