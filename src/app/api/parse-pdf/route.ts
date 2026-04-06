@@ -79,15 +79,30 @@ async function callPdfplumber(
     }
   }
 
-  const response = await fetch(`${baseUrl}/api/extract-tables`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(payload),
-  })
+  const controller = new AbortController()
+  const timeoutId = setTimeout(() => controller.abort(), 280_000)
 
-  // Read raw text first — if the Python function crashes, response.json()
-  // throws "Unexpected end of JSON input" with no diagnostic info
-  const responseText = await response.text()
+  let response: Response
+  let responseText: string
+  try {
+    response = await fetch(`${baseUrl}/api/extract-tables`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    })
+
+    // Read raw text first — if the Python function crashes, response.json()
+    // throws "Unexpected end of JSON input" with no diagnostic info
+    responseText = await response.text()
+  } catch (err) {
+    if (err instanceof DOMException && err.name === 'AbortError') {
+      throw new Error('Python endpoint timed out after 280s')
+    }
+    throw err
+  } finally {
+    clearTimeout(timeoutId)
+  }
 
   if (!response.ok) {
     console.error(`[parse-pdf] extract-tables returned ${response.status}:`, responseText.slice(0, 500))
@@ -585,46 +600,54 @@ export async function POST(request: NextRequest) {
           const isPair = heading.includes('pair') || heading.includes('double') ||
                          doorType.includes('pr') || doorType.includes('pair')
 
-          if (isPair) {
+          // Add door(s) only when door_type is known
+          const doorModel = doorInfo?.door_type?.trim() || null
+          if (doorModel) {
+            if (isPair) {
+              allHardwareRows.push({
+                opening_id: opening.id,
+                name: `Door (Active Leaf)`,
+                qty: 1,
+                manufacturer: null,
+                model: doorModel,
+                finish: null,
+                sort_order: sortOrder++,
+              })
+              allHardwareRows.push({
+                opening_id: opening.id,
+                name: `Door (Inactive Leaf)`,
+                qty: 1,
+                manufacturer: null,
+                model: doorModel,
+                finish: null,
+                sort_order: sortOrder++,
+              })
+            } else {
+              allHardwareRows.push({
+                opening_id: opening.id,
+                name: `Door`,
+                qty: 1,
+                manufacturer: null,
+                model: doorModel,
+                finish: null,
+                sort_order: sortOrder++,
+              })
+            }
+          }
+
+          // Frame — only when frame_type is known
+          const frameModel = doorInfo?.frame_type?.trim() || null
+          if (frameModel) {
             allHardwareRows.push({
               opening_id: opening.id,
-              name: `Door (Active Leaf)`,
+              name: `Frame`,
               qty: 1,
               manufacturer: null,
-              model: doorInfo?.door_type || null,
-              finish: null,
-              sort_order: sortOrder++,
-            })
-            allHardwareRows.push({
-              opening_id: opening.id,
-              name: `Door (Inactive Leaf)`,
-              qty: 1,
-              manufacturer: null,
-              model: doorInfo?.door_type || null,
-              finish: null,
-              sort_order: sortOrder++,
-            })
-          } else {
-            allHardwareRows.push({
-              opening_id: opening.id,
-              name: `Door`,
-              qty: 1,
-              manufacturer: null,
-              model: doorInfo?.door_type || null,
+              model: frameModel,
               finish: null,
               sort_order: sortOrder++,
             })
           }
-
-          allHardwareRows.push({
-            opening_id: opening.id,
-            name: `Frame`,
-            qty: 1,
-            manufacturer: null,
-            model: doorInfo?.frame_type || null,
-            finish: null,
-            sort_order: sortOrder++,
-          })
 
           if (hwSet?.items?.length) {
             for (const item of hwSet.items) {
