@@ -3,7 +3,7 @@
 Golden test PDFs are NOT committed to git (see .gitignore).
 Symlink them from `test-pdfs/training/` into this directory.
 
-### Current Golden PDFs (5 baselined)
+### Current Golden PDFs (5 grid + 8 schedule baselined)
 
 | Fixture Name | Source | Format | Pages |
 |---|---|---|---|
@@ -12,6 +12,14 @@ Symlink them from `test-pdfs/training/` into this directory.
 | LARGE_MCA.pdf | grid-MCA.pdf | Grid | 79 |
 | RPL10_NW_Data_Center.pdf | grid-RPL10.pdf | Grid | 52 |
 | CAA_Nashville_Yards.pdf | grid-CAA.pdf | Grid | 107 |
+| sched-AKN.pdf | sched-AKN.pdf | Schedule | 46 |
+| sched-Barnstable.pdf | sched-Barnstable.pdf | Schedule | 8 |
+| sched-Claymont.pdf | sched-Claymont.pdf | Schedule | 34 |
+| sched-Cornell.pdf | sched-Cornell.pdf | Schedule | 30 |
+| sched-DT.pdf | sched-DT.pdf | Schedule | 116 |
+| sched-Etica.pdf | sched-Etica.pdf | Schedule | 32 |
+| sched-Kdot.pdf | sched-Kdot.pdf | Schedule | 9 |
+| sched-Lutheran.pdf | sched-Lutheran.pdf | Schedule | 30 |
 
 ### Full Golden PDF Catalog (15 submittals)
 

@@ -136,6 +136,81 @@ def ref_spec_harris_path():
     return p
 
 
+# ── Schedule-format PDF fixtures (S-066A) ──
+
+
+@pytest.fixture(scope="session")
+def sched_akn_pdf_path():
+    """sched-AKN: ESC/Comsense, 46 pages."""
+    p = FIXTURES_DIR / "sched-AKN.pdf"
+    if not p.exists():
+        pytest.skip(f"sched-AKN PDF not found at {p}.")
+    return p
+
+
+@pytest.fixture(scope="session")
+def sched_barnstable_pdf_path():
+    """sched-Barnstable: Comsense, 8 pages."""
+    p = FIXTURES_DIR / "sched-Barnstable.pdf"
+    if not p.exists():
+        pytest.skip(f"sched-Barnstable PDF not found at {p}.")
+    return p
+
+
+@pytest.fixture(scope="session")
+def sched_claymont_pdf_path():
+    """sched-Claymont: Comsense, 34 pages."""
+    p = FIXTURES_DIR / "sched-Claymont.pdf"
+    if not p.exists():
+        pytest.skip(f"sched-Claymont PDF not found at {p}.")
+    return p
+
+
+@pytest.fixture(scope="session")
+def sched_cornell_pdf_path():
+    """sched-Cornell: Comsense, 30 pages."""
+    p = FIXTURES_DIR / "sched-Cornell.pdf"
+    if not p.exists():
+        pytest.skip(f"sched-Cornell PDF not found at {p}.")
+    return p
+
+
+@pytest.fixture(scope="session")
+def sched_dt_pdf_path():
+    """sched-DT: Comsense, 116 pages."""
+    p = FIXTURES_DIR / "sched-DT.pdf"
+    if not p.exists():
+        pytest.skip(f"sched-DT PDF not found at {p}.")
+    return p
+
+
+@pytest.fixture(scope="session")
+def sched_etica_pdf_path():
+    """sched-Etica: Comsense, 32 pages."""
+    p = FIXTURES_DIR / "sched-Etica.pdf"
+    if not p.exists():
+        pytest.skip(f"sched-Etica PDF not found at {p}.")
+    return p
+
+
+@pytest.fixture(scope="session")
+def sched_kdot_pdf_path():
+    """sched-Kdot: Comsense, 9 pages."""
+    p = FIXTURES_DIR / "sched-Kdot.pdf"
+    if not p.exists():
+        pytest.skip(f"sched-Kdot PDF not found at {p}.")
+    return p
+
+
+@pytest.fixture(scope="session")
+def sched_lutheran_pdf_path():
+    """sched-Lutheran: Comsense, 30 pages."""
+    p = FIXTURES_DIR / "sched-Lutheran.pdf"
+    if not p.exists():
+        pytest.skip(f"sched-Lutheran PDF not found at {p}.")
+    return p
+
+
 # ── PDF Catalog (BUG-11: test infrastructure expansion) ──
 
 PDF_CATALOG_ENTRIES = {
@@ -145,6 +220,14 @@ PDF_CATALOG_ENTRIES = {
     "RPL10": "RPL10_NW_Data_Center.pdf",
     "CAA": "CAA_Nashville_Yards.pdf",
     "AKN": "AKN_ESC.pdf",
+    "SCHED_AKN": "sched-AKN.pdf",
+    "SCHED_BARNSTABLE": "sched-Barnstable.pdf",
+    "SCHED_CLAYMONT": "sched-Claymont.pdf",
+    "SCHED_CORNELL": "sched-Cornell.pdf",
+    "SCHED_DT": "sched-DT.pdf",
+    "SCHED_ETICA": "sched-Etica.pdf",
+    "SCHED_KDOT": "sched-Kdot.pdf",
+    "SCHED_LUTHERAN": "sched-Lutheran.pdf",
 }
 
 CROSS_PDF_NAMES = ["SMALL", "MEDIUM", "LARGE", "RPL10", "CAA"]

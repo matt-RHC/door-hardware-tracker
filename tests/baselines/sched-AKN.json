@@ -1,0 +1,604 @@
+{
+  "pdf_name": "sched-AKN.pdf",
+  "door_count": 180,
+  "confirmed_count": 175,
+  "flagged_count": 5,
+  "hw_set_count": 3,
+  "tables_found": 16,
+  "reference_code_count": 0,
+  "hardware_sets": [
+    {
+      "set_id": "EL-XL1",
+      "heading": "33. HW XL1 & EL-XL.1 - Doors 001.01.C.02A, 001.01.D.01, 002.01.C.02A, 002.01.D.06, 104.01.W.01A, 104.02.W.01A -",
+      "item_count": 32,
+      "items": [
+        {
+          "name": "10.",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "001.01.N.09C",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "11.",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "001.01.N.09D",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "12.",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "001.01.N.10B",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "13.",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "001.01.N.35A",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "14.",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "001.01.N.35B",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "15.",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "001.01.N.36A",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "16.",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "002.01.A.05D",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "17.",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "002.01.A.05C",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "18.",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "002.01.B.04A",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "19.",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "002.01.B.04B",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "20.",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "002.01.C.07C",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "21.",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "002.01.C.07D",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "22.",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "002.01.D.04A",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "23.",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "002.01.D.04B",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "All r",
+          "qty": 4,
+          "qty_source": "capped",
+          "qty_total": 31,
+          "qty_door_count": null,
+          "manufacturer": "estroom locks",
+          "model": "with",
+          "finish": "occupancy indic"
+        },
+        {
+          "name": "cato",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "r does not wo",
+          "model": "rk on",
+          "finish": "the 1.75\" width"
+        },
+        {
+          "name": "PLEA",
+          "qty": 4,
+          "qty_source": "capped",
+          "qty_total": 32,
+          "qty_door_count": null,
+          "manufacturer": "SE NOTE HAR",
+          "model": "DWA",
+          "finish": "RE SPEC ISSUED"
+        },
+        {
+          "name": "ICES",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "ON A PAIRED",
+          "model": "OPE",
+          "finish": "NING. ADDITION"
+        },
+        {
+          "name": "BAB",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "LY BE STORER",
+          "model": "OOM",
+          "finish": "FUNCTION CON"
+        },
+        {
+          "name": "CTIV",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "E LEAF. PLEAS",
+          "model": "E AD",
+          "finish": "VISE"
+        },
+        {
+          "name": "e ar",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "e exterior doo",
+          "model": "rs &",
+          "finish": "the exit device is"
+        },
+        {
+          "name": "rior",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "?",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Schl",
+          "qty": 4,
+          "qty_source": "capped",
+          "qty_total": 34,
+          "qty_door_count": null,
+          "manufacturer": "age CON-6 wir",
+          "model": "ing h",
+          "finish": "arness requeste"
+        },
+        {
+          "name": "be t",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "urned over to",
+          "model": "secui",
+          "finish": "rty for connecti"
+        },
+        {
+          "name": "GC t",
+          "qty": 4,
+          "qty_source": "capped",
+          "qty_total": 35,
+          "qty_door_count": null,
+          "manufacturer": "o confirm with",
+          "model": "secu",
+          "finish": "rity & electrical"
+        },
+        {
+          "name": "curr",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "ently has TW8",
+          "model": "inclu",
+          "finish": "ded, but TW12"
+        },
+        {
+          "name": "Arch",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "itect to confir",
+          "model": "m ap",
+          "finish": "propriate hardw"
+        },
+        {
+          "name": "Doo",
+          "qty": 4,
+          "qty_source": "capped",
+          "qty_total": 38,
+          "qty_door_count": null,
+          "manufacturer": "rs in the hardw",
+          "model": "are",
+          "finish": "sets - SSI1-F-0-X"
+        },
+        {
+          "name": "ical",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "rod exit devic",
+          "model": "e con",
+          "finish": "flicts with morti"
+        },
+        {
+          "name": "urfa",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "ce applied doo",
+          "model": "r bot",
+          "finish": "tom, or mortise"
+        },
+        {
+          "name": "reac",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "h full door wi",
+          "model": "dth.",
+          "finish": ""
+        },
+        {
+          "name": "neeri",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "ng Specialties Co.,",
+          "model": "Inc.",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "added",
+      "heading": "HW Set added in CCD 042 for doors 001.01.A.14 & 002.01.A.14",
+      "item_count": 14,
+      "items": [
+        {
+          "name": "Hin",
+          "qty": 4,
+          "qty_source": "capped",
+          "qty_total": 6,
+          "qty_door_count": null,
+          "manufacturer": "ge, Full Morti",
+          "model": "se",
+          "finish": ", Hvy"
+        },
+        {
+          "name": "Pul",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "l Plate",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Sur",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "face Closer",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Kic",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "k Plate",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "4' 1",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "1/2\" x 9' 6\" x",
+          "model": "1",
+          "finish": "3/4\" HM"
+        },
+        {
+          "name": "Fire",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "Rated Surf V",
+          "model": "e",
+          "finish": "rt Rod"
+        },
+        {
+          "name": "Inte",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "rchangeable",
+          "model": "C",
+          "finish": "ore"
+        },
+        {
+          "name": "Cyl",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "inder",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Ele",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "ctromagnetic",
+          "model": "H",
+          "finish": "older"
+        },
+        {
+          "name": "Ast",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "ragal",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "ask",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "eting change",
+          "model": "at",
+          "finish": "header t"
+        },
+        {
+          "name": "3' 0",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "\" x 7' 0\" x 1 3",
+          "model": "/4",
+          "finish": "\" HMD/H"
+        },
+        {
+          "name": "Fire",
+          "qty": 4,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "Rated Conc",
+          "model": "V",
+          "finish": "ert Rod"
+        },
+        {
+          "name": "los",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "er mounted on",
+          "model": "t",
+          "finish": "he pull si"
+        }
+      ]
+    },
+    {
+      "set_id": "SI2-G-E2",
+      "heading": "HW Set is built for pair of doors but single doors 001.01.F.13 & 002.01.E.10 are assigned to this set.",
+      "item_count": 9,
+      "items": [
+        {
+          "name": "Hin",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "ge, Full Morti",
+          "model": "se,",
+          "finish": "Hvy"
+        },
+        {
+          "name": "Flu",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "sh Bolt",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Ele",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "ctrified Mortis",
+          "model": "e L",
+          "finish": "ock"
+        },
+        {
+          "name": "Inte",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "rchangeable",
+          "model": "Co",
+          "finish": "re"
+        },
+        {
+          "name": "Sur",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "face Closer",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Kic",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "k Plate",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Ast",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "ragal",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Wir",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "e Harness",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "C/A",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "rchitect to co",
+          "model": "nfir",
+          "finish": "m appro"
+        }
+      ]
+    }
+  ],
+  "flagged_doors": [
+    {
+      "door_number": "26-094",
+      "reason": "Pattern 'D-D' doesn't match dominant pattern(s) (D.D.L.D, D.D.L.DL). May be a hardware set ID, reference code, or extraction artifact."
+    },
+    {
+      "door_number": "3780",
+      "reason": "Pattern 'D' doesn't match dominant pattern(s) (D.D.L.D, D.D.L.DL). May be a hardware set ID, reference code, or extraction artifact."
+    },
+    {
+      "door_number": "WS406C",
+      "reason": "Pattern 'LDL' doesn't match dominant pattern(s) (D.D.L.D, D.D.L.DL). May be a hardware set ID, reference code, or extraction artifact."
+    },
+    {
+      "door_number": "20-079",
+      "reason": "Pattern 'D-D' doesn't match dominant pattern(s) (D.D.L.D, D.D.L.DL). May be a hardware set ID, reference code, or extraction artifact."
+    },
+    {
+      "door_number": "ER-ADJ10",
+      "reason": "Pattern 'L-LD' doesn't match dominant pattern(s) (D.D.L.D, D.D.L.DL). May be a hardware set ID, reference code, or extraction artifact."
+    }
+  ]
+}

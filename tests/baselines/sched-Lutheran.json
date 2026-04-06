@@ -1,0 +1,1494 @@
+{
+  "pdf_name": "sched-Lutheran.pdf",
+  "door_count": 0,
+  "confirmed_count": 0,
+  "flagged_count": 0,
+  "hw_set_count": 26,
+  "tables_found": 8,
+  "reference_code_count": 0,
+  "hardware_sets": [
+    {
+      "set_id": "01",
+      "heading": "HARDWARE SET: 01",
+      "item_count": 8,
+      "items": [
+        {
+          "name": "EA HW HINGE 5BB1HW 4.5 X 4.5 NRP IVE",
+          "qty": 3,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA PANIC HARDWARE 88-NL-880 VON",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA SFIC CORE C607 FAL",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA CLOSER WITH STOP 1461 SCUSH FC - ST-2693 - INSTALL LCN",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA KICK PLATE 8400 10\" X 2\" LDW B4E CS IVE",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA DRIP CAP 16DKB NGP",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA DOOR SWEEP 198NDKB NGP",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA THRESHOLD 613BRDKB NGP",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "02",
+      "heading": "HARDWARE SET: 02",
+      "item_count": 7,
+      "items": [
+        {
+          "name": "EA HINGE 5BB1 4.5 X 4.5 NRP IVE",
+          "qty": 3,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA CLASSROOM LOCK T561H7D DANE FAL",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA SFIC CORE C607 FAL",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA CLOSER WITH HOLD 1461 HW/PA FC - INSTALL LCN",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA KICK PLATE 8400 10\" X 2\" LDW B4E CS IVE",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA WALL STOP WS407CVX IVE",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA SILENCER SR64 OR SR65 - AS REQUIRED IVE",
+          "qty": 3,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "04",
+      "heading": "HARDWARE SET: 04",
+      "item_count": 5,
+      "items": [
+        {
+          "name": "EA HINGE 5BB1 4.5 X 4.5 NRP IVE",
+          "qty": 3,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA STOREROOM LOCK T581H7D DANE FAL",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA SFIC CORE C607 FAL",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA KICK PLATE 8400 10\" X 2\" LDW B4E CS IVE",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA SILENCER SR64 OR SR65 - AS REQUIRED IVE",
+          "qty": 3,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "05",
+      "heading": "HARDWARE SET: 05",
+      "item_count": 6,
+      "items": [
+        {
+          "name": "EA HW HINGE 5BB1HW 4.5 X 4.5 IVE",
+          "qty": 5,
+          "qty_source": "capped",
+          "qty_total": 6,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA PUSH PLATE PRESTON GRANDE 3\" X 19\" TRI",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA PULL PLATE VENICE 7-1/4\" X PRESTON GRANDE TRI",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA CLOSER WITH 1461 SHCUSH FC - INSTALL LCN",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA KICK PLATE 8400 10\" X 1\" LDW B4E CS IVE",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA SILENCER SR64 OR SR65 - AS REQUIRED IVE",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "07",
+      "heading": "HARDWARE SET: 07",
+      "item_count": 3,
+      "items": [
+        {
+          "name": "EA HW HINGE 5BB1HW4.5X4.5 IVE",
+          "qty": 3,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA CLASSROOM LOCK T561H7D DANE FAL",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA SFIC CORE C607 FAL",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "08",
+      "heading": "HARDWARE SET: 08",
+      "item_count": 3,
+      "items": [
+        {
+          "name": "EA HW HINGE 5BB1HW4.5X4.5 IVE",
+          "qty": 3,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA ENTRY / OFFICE T511H7D DANE FAL",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA SFIC CORE C607 FAL",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "09",
+      "heading": "HARDWARE SET: 09",
+      "item_count": 2,
+      "items": [
+        {
+          "name": "EA HW HINGE 5BB1HW 4.5 X 4.5 IVE",
+          "qty": 3,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA PUSH PLATE 8200 6\u201d X 16\u201d TRI",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "10",
+      "heading": "HARDWARE SET: 10",
+      "item_count": 6,
+      "items": [
+        {
+          "name": "EA HINGE 5BB1 4.5 X 4.5 NRP IVE",
+          "qty": 5,
+          "qty_source": "capped",
+          "qty_total": 6,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA DUST PROOF STRIKE DP2 IVE",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA STOREROOM LOCK T581H7D DANE FAL",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA SFIC CORE C607 FAL",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA WALL STOP WS407CVX IVE",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA SILENCER SR64 OR SR65 - AS REQUIRED IVE",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "12",
+      "heading": "HARDWARE SET: 12",
+      "item_count": 7,
+      "items": [
+        {
+          "name": "EA HINGE 5BB1 4.5 X 4.5 IVE",
+          "qty": 3,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA CLASSROOM LOCK T561H7D DANE FAL",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA SFIC CORE C607 FAL",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA CLOSER WITH HOLD 1461 HW/PA FC - INSTALL REGULAR LCN",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA KICK PLATE 8400 10\" X 2\" LDW B4E CS IVE",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA WALL STOP WS407CVX IVE",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA SILENCER SR64 OR SR65 - AS REQUIRED IVE",
+          "qty": 3,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "13",
+      "heading": "HARDWARE SET: 13",
+      "item_count": 3,
+      "items": [
+        {
+          "name": "EA HINGE 5BB1 4.5 X 4.5 IVE",
+          "qty": 3,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA CLASSROOM LOCK T561H7D DANE FAL",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA SFIC CORE C607 FAL",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "14",
+      "heading": "HARDWARE SET: 14",
+      "item_count": 4,
+      "items": [
+        {
+          "name": "EA HINGE 5BB1 4.5 X 4.5 IVE",
+          "qty": 5,
+          "qty_source": "capped",
+          "qty_total": 6,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA ROLLER LATCH RL30A IVE",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA WALL STOP WS407CVX IVE",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA SILENCER SR64 OR SR65 - AS REQUIRED IVE",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "15",
+      "heading": "HARDWARE SET: 15",
+      "item_count": 5,
+      "items": [
+        {
+          "name": "EA HINGE 5BB1 4.5 X 4.5 IVE",
+          "qty": 3,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA ENTRY / OFFICE T511H7D DANE FAL",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA SFIC CORE C607 FAL",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA KICK PLATE 8400 10\" X 2\" LDW B4E CS IVE",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA WALL STOP WS407CCV IVE",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "16",
+      "heading": "HARDWARE SET: 16",
+      "item_count": 5,
+      "items": [
+        {
+          "name": "EA HINGE 5BB1 4.5 X 4.5 IVE",
+          "qty": 3,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA ENTRY / OFFICE T511H7D DANE FAL",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA SFIC CORE C607 FAL",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA KICK PLATE 8400 10\" X 2\" LDW B4E CS IVE",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA DOOR BOTTOM 423N NGP",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "17",
+      "heading": "HARDWARE SET: 17",
+      "item_count": 4,
+      "items": [
+        {
+          "name": "EA HINGE 5BB1 4.5 X 4.5 IVE",
+          "qty": 3,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA PASSAGE SET T101S DANE FAL",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA WALL STOP WS407CVX IVE",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA SILENCER SR64 OR SR65 - AS REQUIRED IVE",
+          "qty": 3,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "18",
+      "heading": "HARDWARE SET: 18",
+      "item_count": 4,
+      "items": [
+        {
+          "name": "EA HINGE 5BB1 4.5 X 4.5 IVE",
+          "qty": 5,
+          "qty_source": "capped",
+          "qty_total": 6,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA DUST PROOF STRIKE DP2 IVE",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA PASSAGE SET T101S DANE FAL",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA SILENCER SR64 OR SR65 - AS REQUIRED IVE",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "19",
+      "heading": "HARDWARE SET: 19",
+      "item_count": 4,
+      "items": [
+        {
+          "name": "EA HINGE 5BB1 4.5 X 4.5 NRP IVE",
+          "qty": 3,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA CLASSROOM LOCK T561H7D DANE FAL",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA ROLLER BUMPERS RB471 IVE",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA SILENCER SR64 OR SR65 - AS REQUIRED IVE",
+          "qty": 3,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "20",
+      "heading": "HARDWARE SET: 20",
+      "item_count": 6,
+      "items": [
+        {
+          "name": "EA HW HINGE 5BB1HW 4.5 X 4.5 NRP IVE",
+          "qty": 5,
+          "qty_source": "capped",
+          "qty_total": 6,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA PANIC HARDWARE 8827-L-LBR-373-06 VON",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA MORTISE CYLINDER C987H - WITH REQUIRED CAM AND FAL",
+          "qty": 1,
+          "qty_source": "capped",
+          "qty_total": 2,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA SFIC CORE C607 FAL",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA SURFACE CLOSER 1461 RW/PA FC - INSTALL PARALLEL LCN",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA KICK PLATE 8400 10\" X 1\" LDW B4E CS IVE",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "21",
+      "heading": "HARDWARE SET: 21",
+      "item_count": 5,
+      "items": [
+        {
+          "name": "EA HINGE 5BB1 4.5 X 4.5 NRP IVE",
+          "qty": 5,
+          "qty_source": "capped",
+          "qty_total": 8,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA DUST PROOF STRIKE DP2 IVE",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA STOREROOM LOCK T581H7D DANE FAL",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA SFIC CORE C607 FAL",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA SILENCER SR64 OR SR65 - AS REQUIRED IVE",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "22",
+      "heading": "HARDWARE SET: 22",
+      "item_count": 5,
+      "items": [
+        {
+          "name": "EA HINGE 5BB1 4.5 X 4.5 NRP IVE",
+          "qty": 5,
+          "qty_source": "capped",
+          "qty_total": 6,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA DUST PROOF STRIKE DP2 IVE",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA STOREROOM LOCK T581H7D DANE FAL",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA SFIC CORE C607 FAL",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA SILENCER SR64 OR SR65 - AS REQUIRED IVE",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "24",
+      "heading": "HARDWARE SET: 24",
+      "item_count": 5,
+      "items": [
+        {
+          "name": "EA HINGE 5BB1 4.5 X 4.5 IVE",
+          "qty": 3,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA PRIVACY LOCK T301S DANE FAL",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA SURFACE CLOSER 1461 RW/PA FC - INSTALL REGULAR LCN",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA KICK PLATE 8400 10\" X 2\" LDW B4E CS IVE",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA WALL STOP WS407CCV IVE",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "25",
+      "heading": "HARDWARE SET: 25",
+      "item_count": 1,
+      "items": [
+        {
+          "name": "EA HINGE 5BB1 4.5 X 4.5 NRP IVE",
+          "qty": 5,
+          "qty_source": "capped",
+          "qty_total": 6,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "26",
+      "heading": "HARDWARE SET: 26",
+      "item_count": 7,
+      "items": [
+        {
+          "name": "EA HINGE 5BB1 4.5 X 4.5 IVE",
+          "qty": 3,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA CLASSROOM LOCK T561H7D DANE FAL",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA SFIC CORE C607 FAL",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA CLOSER WITH HOLD 1461 HW/PA FC - INSTALL REGULAR LCN",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA KICK PLATE 8400 10\" X 2\" LDW B4E CS IVE",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA FLOOR STOP FS436 IVE",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA SILENCER SR64 OR SR65 - AS REQUIRED IVE",
+          "qty": 3,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "27",
+      "heading": "HARDWARE SET: 27",
+      "item_count": 10,
+      "items": [
+        {
+          "name": "EA CONT. HINGE 224HD IVE",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA PANIC HARDWARE 5547-EO VON",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA PANIC HARDWARE 5547-TL-376T - LEES 550DT PULL VON",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA MORTISE CYLINDER C987H - WITH REQUIRED CAM AND FAL",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA SFIC CORE C607 FAL",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA 90 DEG OFFSET PULL 8190 12\" O IVE",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA SURFACE CLOSER 4040XP RW/PA - INSTALL TOP JAMB LCN",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA DOOR BOTTOM BY DOOR/FRAME MANUFACTURER BYO",
+          "qty": 1,
+          "qty_source": "capped",
+          "qty_total": 2,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA ASTRAGAL BY DOOR/FRAME MANUFACTURER BYO",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA THRESHOLD 613BRDKB NGP",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "28",
+      "heading": "HARDWARE SET: 28",
+      "item_count": 5,
+      "items": [
+        {
+          "name": "EA HW HINGE 5BB1HW 4.5 X 4.5 NRP IVE",
+          "qty": 5,
+          "qty_source": "capped",
+          "qty_total": 6,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA SFIC CORE C607 FAL",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA SURFACE CLOSER 1461 RW/PA FC - INSTALL PARALLEL LCN",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA KICK PLATE 8400 10\" X 1\" LDW B4E CS IVE",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "SET ASTRAGAL 115NDKB NGP",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "29",
+      "heading": "HARDWARE SET: 29",
+      "item_count": 6,
+      "items": [
+        {
+          "name": "EA CONT. HINGE 224HD IVE",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "SET PUSH/PULL BAR 9190-12\"-NO IVE",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA SURFACE CLOSER 4040XP RW/PA - INSTALL TOP JAMB LCN",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA DOOR BOTTOM BY DOOR/FRAME MANUFACTURER BYO",
+          "qty": 1,
+          "qty_source": "capped",
+          "qty_total": 2,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA ASTRAGAL BY DOOR/FRAME MANUFACTURER BYO",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA THRESHOLD 613BRDKB NGP",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "30",
+      "heading": "HARDWARE SET: 30",
+      "item_count": 4,
+      "items": [
+        {
+          "name": "EA HW HINGE 5BB1HW 4.5 X 4.5 NRP IVE",
+          "qty": 5,
+          "qty_source": "capped",
+          "qty_total": 6,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA PANIC HARDWARE 5547-EO VON",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA PANIC HARDWARE 5547-TL-376T - LEES 550DT PULL VON",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "EA MORTISE CYLINDER C987H - WITH REQUIRED CAM AND FAL",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    }
+  ],
+  "flagged_doors": []
+}
