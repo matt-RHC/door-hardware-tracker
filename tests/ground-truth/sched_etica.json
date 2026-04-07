@@ -1,0 +1,8 @@
+{
+  "pdf_name": "sched-Etica.pdf",
+  "catalog_key": "SCHED_ETICA",
+  "format": "schedule",
+  "expected_door_count": 0,
+  "expected_set_count": 17,
+  "verified": false
+}
