@@ -235,7 +235,7 @@ export default function StepReview({
               >
                 <span className="text-[#0a84ff] font-mono">{set.set_id}</span>
                 <span className="text-[#6e6e73] ml-1">
-                  ({set.items.length} items)
+                  ({(set.items ?? []).length} items)
                 </span>
               </div>
             ))}

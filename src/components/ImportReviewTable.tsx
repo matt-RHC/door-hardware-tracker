@@ -485,7 +485,7 @@ export default function ImportReviewTable({
                   )}
                 </div>
                 <div className="space-y-0.5">
-                  {s.items.map((item, i) => {
+                  {(s.items ?? []).map((item, i) => {
                     const hasMeta = item.qty_total != null && item.qty_door_count != null;
                     const isFlagged = item.qty_source === "flagged";
                     const isDivided = item.qty_source === "divided";

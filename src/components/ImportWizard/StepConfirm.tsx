@@ -34,7 +34,7 @@ export default function StepConfirm({
   } | null>(null);
 
   const totalItems = hardwareSets.reduce(
-    (sum, s) => sum + s.items.length,
+    (sum, s) => sum + (s.items ?? []).length,
     0
   );
 
