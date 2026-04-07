@@ -3,7 +3,7 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 
 /* ─── Types ─── */
-import type { DoorEntry, HardwareSet, PdfplumberFlaggedDoor } from '@/lib/types';
+import type { DoorEntry, HardwareSet, PdfplumberFlaggedDoor, PunchyObservation, PunchyQuantityCheck } from '@/lib/types';
 
 /* ─── Editable Cell ─── */
 function EditableCell({
@@ -72,6 +72,8 @@ interface ImportReviewTableProps {
   sets: HardwareSet[];
   flaggedDoors?: PdfplumberFlaggedDoor[];
   byOthersFromTriage?: Set<number>;
+  punchyObservations?: PunchyObservation[];
+  punchyQuantityCheck?: PunchyQuantityCheck;
   onClose: () => void;
   onComplete: () => void;
 }
@@ -82,6 +84,8 @@ export default function ImportReviewTable({
   sets,
   flaggedDoors = [],
   byOthersFromTriage,
+  punchyObservations,
+  punchyQuantityCheck,
   onClose,
   onComplete,
 }: ImportReviewTableProps) {
@@ -92,6 +96,11 @@ export default function ImportReviewTable({
   const [promoting, setPromoting] = useState(false);
   const [promoteResult, setPromoteResult] = useState<{ openingsPromoted: number; itemsPromoted: number } | null>(null);
   const [showSets, setShowSets] = useState(false);
+  const [showPunchy, setShowPunchy] = useState(false);
+
+  // Punchy: count of actionable flags
+  const punchyFlagCount = (punchyQuantityCheck?.flags?.length ?? 0) + (punchyQuantityCheck?.compliance_issues?.length ?? 0);
+  const hasPunchyAlerts = punchyFlagCount > 0 || (punchyObservations?.length ?? 0) > 0;
   const [deletedRows, setDeletedRows] = useState<Set<number>>(new Set());
   // Pre-populate from AI triage if available, otherwise start empty
   const [byOthersRows, setByOthersRows] = useState<Set<number>>(
@@ -375,6 +384,19 @@ export default function ImportReviewTable({
               Clear By Others
             </button>
           )}
+          {hasPunchyAlerts && (
+            <button
+              onClick={() => setShowPunchy(!showPunchy)}
+              className="px-3 py-1.5 text-sm rounded-lg transition-colors"
+              style={{
+                backgroundColor: 'rgba(90,200,250,0.08)',
+                border: '1px solid rgba(90,200,250,0.2)',
+                color: '#5ac8fa',
+              }}
+            >
+              {showPunchy ? 'Hide' : 'Show'} Punchy ({punchyFlagCount})
+            </button>
+          )}
           <button
             onClick={() => setShowSets(!showSets)}
             className="px-3 py-1.5 text-sm bg-white/[0.04] border border-white/[0.08] text-[#a1a1a6] rounded-lg hover:bg-white/[0.07] transition-colors"
@@ -508,6 +530,140 @@ export default function ImportReviewTable({
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* ── Punchy AI Alerts Panel (collapsible) ── */}
+      {showPunchy && hasPunchyAlerts && (
+        <div className="mx-6 mt-3 max-h-64 overflow-y-auto rounded-xl border p-4" style={{
+          backgroundColor: 'rgba(90,200,250,0.03)',
+          borderColor: 'rgba(90,200,250,0.15)',
+        }}>
+          <h3 className="text-sm font-semibold mb-3 flex items-center gap-2" style={{
+            color: '#5ac8fa',
+            fontFamily: "'Orbitron', sans-serif",
+          }}>
+            <span>🤖</span> PUNCHY AI REVIEW
+          </h3>
+
+          {/* Quantity Flags */}
+          {(punchyQuantityCheck?.flags?.length ?? 0) > 0 && (
+            <div className="mb-3">
+              <h4 className="text-xs uppercase tracking-widest text-[#636366] font-semibold mb-2">
+                Quantity Flags
+              </h4>
+              <div className="space-y-1.5">
+                {(punchyQuantityCheck?.flags ?? []).map((flag, i) => (
+                  <div
+                    key={`qf-${i}`}
+                    className="flex items-start gap-2 p-2 rounded-lg text-xs"
+                    style={{
+                      backgroundColor: 'rgba(255,214,10,0.06)',
+                      border: '1px solid rgba(255,214,10,0.15)',
+                    }}
+                  >
+                    <span className="shrink-0 mt-0.5">⚠️</span>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="font-semibold text-[#ffd60a]">
+                          {flag.set_id}
+                        </span>
+                        <span className="text-[#a1a1a6] truncate">{flag.item_name}</span>
+                      </div>
+                      <p className="text-[#8e8e93] mt-0.5">{flag.message}</p>
+                      {flag.regulation && (
+                        <p className="text-[10px] text-[#636366] mt-0.5 font-mono">
+                          {flag.regulation}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Compliance Issues */}
+          {(punchyQuantityCheck?.compliance_issues?.length ?? 0) > 0 && (
+            <div className="mb-3">
+              <h4 className="text-xs uppercase tracking-widest text-[#636366] font-semibold mb-2">
+                Compliance Issues
+              </h4>
+              <div className="space-y-1.5">
+                {(punchyQuantityCheck?.compliance_issues ?? []).map((issue, i) => {
+                  const sevColor = issue.severity === 'error'
+                    ? { bg: 'rgba(255,69,58,0.08)', border: 'rgba(255,69,58,0.2)', text: '#ff6961', icon: '🚫' }
+                    : issue.severity === 'warning'
+                    ? { bg: 'rgba(255,159,10,0.08)', border: 'rgba(255,159,10,0.2)', text: '#ff9f0a', icon: '⚠️' }
+                    : { bg: 'rgba(90,200,250,0.06)', border: 'rgba(90,200,250,0.15)', text: '#5ac8fa', icon: 'ℹ️' };
+                  return (
+                    <div
+                      key={`ci-${i}`}
+                      className="flex items-start gap-2 p-2 rounded-lg text-xs"
+                      style={{ backgroundColor: sevColor.bg, border: `1px solid ${sevColor.border}` }}
+                    >
+                      <span className="shrink-0 mt-0.5">{sevColor.icon}</span>
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold" style={{ color: sevColor.text }}>
+                            {issue.set_id}
+                          </span>
+                          <span className="text-[10px] uppercase tracking-wider font-mono px-1.5 py-0.5 rounded" style={{
+                            backgroundColor: `${sevColor.text}15`,
+                            color: sevColor.text,
+                          }}>
+                            {issue.severity}
+                          </span>
+                        </div>
+                        <p className="text-[#a1a1a6] mt-0.5">{issue.issue}</p>
+                        <p className="text-[10px] text-[#636366] mt-0.5 font-mono">
+                          {issue.regulation}
+                        </p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* General Observations */}
+          {(punchyObservations?.length ?? 0) > 0 && (
+            <div>
+              <h4 className="text-xs uppercase tracking-widest text-[#636366] font-semibold mb-2">
+                Observations
+              </h4>
+              <div className="space-y-1">
+                {(punchyObservations ?? []).map((obs, i) => {
+                  const confColor = obs.confidence === 'high' ? '#5ac8fa'
+                    : obs.confidence === 'medium' ? '#ffd60a' : '#ff9f0a';
+                  return (
+                    <div
+                      key={`po-${i}`}
+                      className="flex items-center gap-2 px-2 py-1.5 rounded text-xs"
+                      style={{ backgroundColor: 'rgba(255,255,255,0.02)' }}
+                    >
+                      <span className="text-[10px] uppercase tracking-wider font-mono px-1 py-0.5 rounded shrink-0" style={{
+                        color: confColor,
+                        backgroundColor: `${confColor}15`,
+                      }}>
+                        {obs.confidence}
+                      </span>
+                      <span className="text-[#a1a1a6] truncate">{obs.message}</span>
+                      <span className="text-[10px] text-[#636366] ml-auto shrink-0">{obs.checkpoint}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Notes */}
+          {punchyQuantityCheck?.notes && (
+            <p className="mt-3 text-[11px] text-[#636366] italic border-t border-white/[0.04] pt-2">
+              {punchyQuantityCheck.notes}
+            </p>
+          )}
         </div>
       )}
 

@@ -490,13 +490,72 @@ function HoloLoader({ progress, status }: { progress: number; status: string }) 
 
 // --- Types ---
 
-import type { DoorEntry, HardwareSet, PdfplumberFlaggedDoor } from '@/lib/types';
+import type { DoorEntry, HardwareSet, PdfplumberFlaggedDoor, PunchyObservation, PunchyQuantityCheck } from '@/lib/types';
 
 interface ChunkResult {
   chunkIndex: number;
   hardwareSets: HardwareSet[];
   doors: DoorEntry[];
   flaggedDoors?: PdfplumberFlaggedDoor[];
+  punchyObservations?: PunchyObservation[];
+  punchyQuantityCheck?: PunchyQuantityCheck;
+}
+
+/* ─── Punchy Observation Badges ─── */
+function PunchyBadges({ observations }: { observations: PunchyObservation[] }) {
+  if (observations.length === 0) return null;
+
+  const getIcon = (checkpoint: string, confidence: string) => {
+    if (checkpoint.includes('compliance') || checkpoint.includes('quantity')) {
+      return confidence === 'high' ? '⚠️' : '🔍';
+    }
+    if (confidence === 'high' && !checkpoint.includes('unmapped') && !checkpoint.includes('flag')) {
+      return '✅';
+    }
+    return '🔍';
+  };
+
+  const getColor = (confidence: string) => {
+    if (confidence === 'high') return { bg: 'rgba(90,200,250,0.08)', border: 'rgba(90,200,250,0.2)', text: '#5ac8fa' };
+    if (confidence === 'medium') return { bg: 'rgba(255,214,10,0.08)', border: 'rgba(255,214,10,0.2)', text: '#ffd60a' };
+    return { bg: 'rgba(255,159,10,0.08)', border: 'rgba(255,159,10,0.2)', text: '#ff9f0a' };
+  };
+
+  // Show only the last 3 observations to keep it ambient
+  const visible = observations.slice(-3);
+
+  return (
+    <div className="space-y-1.5 mt-2 animate-fade-in-up">
+      {visible.map((obs, i) => {
+        const colors = getColor(obs.confidence);
+        const icon = getIcon(obs.checkpoint, obs.confidence);
+        return (
+          <div
+            key={`${obs.checkpoint}-${i}`}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs transition-all"
+            style={{
+              backgroundColor: colors.bg,
+              border: `1px solid ${colors.border}`,
+            }}
+          >
+            <span>{icon}</span>
+            <span
+              className="font-display tracking-wide truncate"
+              style={{ color: colors.text, fontFamily: "'Orbitron', sans-serif" }}
+            >
+              Punchy: {obs.message.length > 35 ? obs.message.slice(0, 35) + '…' : obs.message}
+            </span>
+            <span
+              className="ml-auto text-[10px] uppercase tracking-widest opacity-60 shrink-0"
+              style={{ color: colors.text }}
+            >
+              {obs.confidence}
+            </span>
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 // --- Constants ---
@@ -738,7 +797,13 @@ export default function PDFUploadModal({
     sets: HardwareSet[];
     flaggedDoors?: PdfplumberFlaggedDoor[];
     byOthersFromTriage?: Set<number>;
+    punchyObservations?: PunchyObservation[];
+    punchyQuantityCheck?: PunchyQuantityCheck;
   } | null>(null);
+
+  // Punchy AI observations collected during extraction
+  const [punchyObservations, setPunchyObservations] = useState<PunchyObservation[]>([]);
+  const [punchyQuantityCheck, setPunchyQuantityCheck] = useState<PunchyQuantityCheck | null>(null);
 
   // Column mapper: shown between classification and extraction
   const [mapperData, setMapperData] = useState<DetectMappingResponse | null>(null);
@@ -781,7 +846,7 @@ export default function PDFUploadModal({
     pageCount: number,
     parseOnly = false,
     explicitMapping?: ColumnMapping | null,
-  ): Promise<{ doors: DoorEntry[]; sets: HardwareSet[]; flaggedDoors?: PdfplumberFlaggedDoor[]; filteredPdfBase64?: string } | void> => {
+  ): Promise<{ doors: DoorEntry[]; sets: HardwareSet[]; flaggedDoors?: PdfplumberFlaggedDoor[]; filteredPdfBase64?: string; punchyObservations?: PunchyObservation[]; punchyQuantityCheck?: PunchyQuantityCheck } | void> => {
     // Convert buffer to base64 (needed by both paths)
     const fullBase64 = arrayBufferToBase64(buffer);
     pdfBase64Ref.current = fullBase64;
@@ -856,6 +921,17 @@ export default function PDFUploadModal({
             // Apply the same dedup that the chunked path uses
             const dedupedSets = mergeHardwareSets(result.sets || []);
             setProgress(92);
+
+            // Collect Punchy AI observations from pipeline response
+            const pObs: PunchyObservation[] = result.punchyObservations ?? [];
+            const pQty: PunchyQuantityCheck | undefined = result.punchyQuantityCheck ?? undefined;
+            if (pObs.length > 0) {
+              setPunchyObservations(prev => [...prev, ...pObs]);
+            }
+            if (pQty) {
+              setPunchyQuantityCheck(pQty);
+            }
+
             console.debug(`Parsed ${dedupedSets.length} hardware sets, ${result.doors?.length ?? 0} doors`);
             setStatus("Extraction complete. Ready for review.");
             return {
@@ -863,6 +939,8 @@ export default function PDFUploadModal({
               sets: dedupedSets,
               flaggedDoors: result.flaggedDoors || [],
               filteredPdfBase64: filteredPdfBase64 ?? undefined,
+              punchyObservations: pObs.length > 0 ? pObs : undefined,
+              punchyQuantityCheck: pQty,
             };
           }
           // If pdfplumber returned zero results, report clearly instead of
@@ -1021,6 +1099,22 @@ export default function PDFUploadModal({
         allHardwareSets.push(...result.hardwareSets);
         allDoors.push(...result.doors);
         allPdfplumberFlaggedDoors.push(...(result.flaggedDoors ?? []));
+
+        // Collect Punchy observations from each chunk
+        if ((result.punchyObservations?.length ?? 0) > 0) {
+          setPunchyObservations(prev => [...prev, ...(result.punchyObservations ?? [])]);
+        }
+        if (result.punchyQuantityCheck) {
+          setPunchyQuantityCheck(prev => {
+            if (!prev) return result.punchyQuantityCheck ?? null;
+            // Merge chunk quantity checks
+            return {
+              flags: [...prev.flags, ...(result.punchyQuantityCheck?.flags ?? [])],
+              compliance_issues: [...prev.compliance_issues, ...(result.punchyQuantityCheck?.compliance_issues ?? [])],
+              notes: [prev.notes, result.punchyQuantityCheck?.notes].filter(Boolean).join('; '),
+            };
+          });
+        }
 
         for (const set of result.hardwareSets) {
           if (!knownSetIds.includes(set.set_id)) knownSetIds.push(set.set_id);
@@ -1202,6 +1296,8 @@ export default function PDFUploadModal({
           sets: freshResult.sets,
           flaggedDoors: freshResult.flaggedDoors,
           byOthersFromTriage: triageByOthers,
+          punchyObservations: (freshResult.punchyObservations?.length ?? 0) > 0 ? freshResult.punchyObservations : (punchyObservations.length > 0 ? punchyObservations : undefined),
+          punchyQuantityCheck: freshResult.punchyQuantityCheck ?? punchyQuantityCheck ?? undefined,
         });
       }
       // Don't close - review table will render
@@ -1225,6 +1321,7 @@ export default function PDFUploadModal({
             data={mapperData}
             pdfBuffer={pendingUploadRef.current?.buffer}
             pageCount={pendingUploadRef.current?.pageCount}
+            punchyObservations={punchyObservations.length > 0 ? punchyObservations : undefined}
             onRedetect={async (pageIndex: number) => {
               const b64 = pdfBase64Ref.current;
               if (!b64) return null;
@@ -1302,6 +1399,8 @@ export default function PDFUploadModal({
         sets={reviewData.sets}
         flaggedDoors={reviewData.flaggedDoors}
         byOthersFromTriage={reviewData.byOthersFromTriage}
+        punchyObservations={reviewData.punchyObservations}
+        punchyQuantityCheck={reviewData.punchyQuantityCheck}
         onClose={onClose}
         onComplete={onSuccess}
       />
@@ -1356,6 +1455,7 @@ export default function PDFUploadModal({
                 {mappingSummary}
               </p>
             )}
+            <PunchyBadges observations={punchyObservations} />
           </div>
         )}
 

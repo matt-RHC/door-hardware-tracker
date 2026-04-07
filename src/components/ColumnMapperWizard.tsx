@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useCallback } from "react";
 import PDFPageBrowser from "./PDFPageBrowser";
+import type { PunchyObservation } from "@/lib/types";
 
 // ─── Types ───
 
@@ -30,6 +31,7 @@ interface ColumnMapperWizardProps {
   data: DetectMappingResponse;
   pdfBuffer?: ArrayBuffer;
   pageCount?: number;
+  punchyObservations?: PunchyObservation[];
   onConfirm: (mapping: ColumnMapping) => void;
   onSkip: () => void;
   onRedetect?: (pageIndex: number) => Promise<DetectMappingResponse | null>;
@@ -73,6 +75,85 @@ const FIELD_COLORS: Record<string, string> = {
   fire_rating: "#ff453a",
   hand: "#ffd60a",
 };
+
+// ─── Punchy Column Suggestions ───
+
+function PunchySuggestions({
+  observations,
+  onAccept,
+  onDismiss,
+}: {
+  observations: PunchyObservation[];
+  onAccept: (field: string) => void;
+  onDismiss: (idx: number) => void;
+}) {
+  // Filter to only observations that have field_suggestions
+  const withSuggestions = observations
+    .map((obs, idx) => ({ obs, idx }))
+    .filter(({ obs }) => (obs.field_suggestions?.length ?? 0) > 0);
+
+  const [dismissed, setDismissed] = useState<Set<number>>(new Set());
+
+  if (withSuggestions.length === 0) return null;
+
+  const visible = withSuggestions.filter(({ idx }) => !dismissed.has(idx));
+  if (visible.length === 0) return null;
+
+  return (
+    <div className="mb-4 space-y-2">
+      {visible.map(({ obs, idx }) => (
+        <div
+          key={`ps-${idx}`}
+          className="p-3 rounded-lg flex items-start gap-3"
+          style={{
+            backgroundColor: 'rgba(90,200,250,0.06)',
+            border: '1px solid rgba(90,200,250,0.2)',
+          }}
+        >
+          <span className="text-lg shrink-0">🤖</span>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm text-[#5ac8fa] font-medium" style={{ fontFamily: "'Orbitron', sans-serif" }}>
+              Punchy found unmapped fields
+            </p>
+            <div className="mt-1.5 space-y-1">
+              {(obs.field_suggestions ?? []).map((sug, si) => (
+                <div key={si} className="flex items-center gap-2 text-xs">
+                  <span className="text-[#e8e8ed]">
+                    <strong className="text-[#5ac8fa]">{sug.field}</strong>
+                    {sug.column ? ` in column ${sug.column}` : ''}
+                    {sug.pages ? ` (pages ${sug.pages})` : ''}
+                    {sug.suggestion ? ` — ${sug.suggestion}` : ''}
+                  </span>
+                  <button
+                    onClick={() => onAccept(sug.field)}
+                    className="px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide transition-colors"
+                    style={{
+                      backgroundColor: 'rgba(48,209,88,0.15)',
+                      color: '#30d158',
+                      border: '1px solid rgba(48,209,88,0.3)',
+                    }}
+                  >
+                    Map it
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+          <button
+            onClick={() => {
+              setDismissed(prev => new Set([...prev, idx]));
+              onDismiss(idx);
+            }}
+            className="shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs text-[#636366] hover:text-[#a1a1a6] hover:bg-white/[0.06] transition-colors"
+            title="Dismiss"
+          >
+            ✕
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 // ─── Step indicator component ───
 
@@ -245,6 +326,7 @@ function Step2MapColumns({
   fieldLabels,
   skippedFields,
   onToggleSkip,
+  punchyObservations,
 }: {
   data: DetectMappingResponse;
   mapping: ColumnMapping;
@@ -257,6 +339,7 @@ function Step2MapColumns({
   fieldLabels: Record<string, string>;
   skippedFields: Set<string>;
   onToggleSkip: (field: string) => void;
+  punchyObservations?: PunchyObservation[];
 }) {
   // Reverse mapping: column index → field name
   const reverseMapping = useMemo(() => {
@@ -308,6 +391,20 @@ function Step2MapColumns({
           </p>
         </div>
       </div>
+
+      {/* Punchy suggestions for unmapped fields */}
+      {(punchyObservations?.length ?? 0) > 0 && (
+        <PunchySuggestions
+          observations={punchyObservations ?? []}
+          onAccept={(field) => {
+            // Select the field for mapping
+            if (ALL_FIELDS.includes(field)) {
+              onFieldClick(field);
+            }
+          }}
+          onDismiss={() => { /* dismissed via internal state */ }}
+        />
+      )}
 
       <div className="grid grid-cols-2 gap-6 min-h-[500px]">
         {/* Left: Field cards */}
@@ -692,6 +789,7 @@ export default function ColumnMapperWizard({
   data,
   pdfBuffer,
   pageCount: pageCountProp,
+  punchyObservations,
   onConfirm: onConfirmProp,
   onSkip: onSkipProp,
   onRedetect,
@@ -852,6 +950,7 @@ export default function ColumnMapperWizard({
               fieldLabels={fieldLabels}
               skippedFields={skippedFields}
               onToggleSkip={handleToggleSkip}
+              punchyObservations={punchyObservations}
             />
           )}
           {phase === "step3" && (
