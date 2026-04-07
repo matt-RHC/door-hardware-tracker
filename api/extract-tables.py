@@ -1529,11 +1529,6 @@ def is_valid_door_number(val: str, log_rejections: bool = False) -> bool:
             print(f"[DOOR_VALIDATION] Rejected '{val}': leading-zero numeric (product code)")
         return False
 
-    # Must match at least one positive door number pattern
-    for pattern in DOOR_NUMBER_PATTERNS:
-        if re.match(pattern, clean):
-            return True
-
     # S-065: Reject values containing ANSI/BHMA finish codes (US32D, US26D, US10B, etc.)
     # These appear when table parsing concatenates a value with its finish column
     if re.search(r'US\d{1,2}[A-Z]?$', clean):
@@ -1541,17 +1536,7 @@ def is_valid_door_number(val: str, log_rejections: bool = False) -> bool:
             print(f"[DOOR_VALIDATION] Rejected '{val}': contains ANSI finish code suffix")
         return False
 
-    # Fallback: if it has 3+ consecutive digits and isn't a set ID, cautiously accept
-    # This catches unconventional numbering we haven't seen yet.
-    # Require 3+ digits to avoid matching bare quantities (20, 94, etc.)
-    # Reject pure-digit strings > 4 chars (project/document numbers like 303872)
-    if re.match(r'^\d{5,}$', clean):
-        if log_rejections:
-            print(f"[DOOR_VALIDATION] Rejected '{val}': pure numeric > 4 digits (project/doc number)")
-        return False
     # S-067: Reject standalone BHMA architectural finish codes (600-699 range).
-    # These are 3-digit numbers that appear on reference table pages and get
-    # extracted as door numbers. Common: 626, 628, 630, 652, 689.
     if re.match(r'^\d{3}$', clean):
         code = int(clean)
         if 600 <= code <= 699:
@@ -1559,9 +1544,26 @@ def is_valid_door_number(val: str, log_rejections: bool = False) -> bool:
                 print(f"[DOOR_VALIDATION] Rejected '{val}': BHMA finish code (600-699)")
             return False
 
-    # S-065: Tightened — only accept bare 3-4 digit numbers in fallback,
-    # not arbitrary mixed alphanumeric with 3+ embedded digits
-    if re.match(r'^\d{3,4}$', clean):
+    # PERMISSIVE ACCEPTANCE: Accept anything that passed the blocklist checks
+    # above, as long as it meets minimum structural requirements. Unusual door
+    # numbering schemes should NOT be silently rejected — the consensus
+    # validator and human review handle outliers downstream.
+    # (DOOR_NUMBER_PATTERNS retained for documentation but no longer used as gate.)
+
+    # Reject pure-digit strings > 4 chars (project/document numbers like 303872)
+    if re.match(r'^\d{5,}$', clean):
+        if log_rejections:
+            print(f"[DOOR_VALIDATION] Rejected '{val}': pure numeric > 4 digits (project/doc number)")
+        return False
+
+    # Reject bare 1-2 digit numbers (quantities, page numbers, not doors)
+    if re.match(r'^\d{1,2}$', clean):
+        if log_rejections:
+            print(f"[DOOR_VALIDATION] Rejected '{val}': bare 1-2 digit number")
+        return False
+
+    # Accept: must contain at least one digit and be within length bounds
+    if len(clean) >= 2 and len(clean) <= 15:
         return True
 
     if log_rejections:
@@ -1749,6 +1751,14 @@ HEADING_DOOR_LINE = re.compile(
     re.IGNORECASE,
 )
 
+# BUG-25: Pattern to extract door numbers from heading block lines.
+# Captures: qty, type (Pair/Single), and the door number after #.
+HEADING_DOOR_WITH_NUMBER = re.compile(
+    r"(?:For\s+|Qty[:\s]+)?(\d+)\s*[-–]?\s*(Pair|Single)\s+Doors?\s*"
+    r"(?:Opening)?s?\s*#\s*(\S+)",
+    re.IGNORECASE,
+)
+
 
 def count_heading_doors(page_text: str) -> tuple[int, int]:
     """
@@ -1768,6 +1778,59 @@ def count_heading_doors(page_text: str) -> tuple[int, int]:
         opening_count += qty
         leaf_count += qty * (2 if is_pair else 1)
     return (opening_count, leaf_count)
+
+
+def extract_doors_from_set_headings(pdf) -> list[DoorEntry]:
+    """
+    BUG-25: Extract door numbers from hardware schedule heading blocks as a
+    fallback when the opening list table extraction fails or returns
+    incomplete results.
+
+    Parses lines like:
+      "1 Single Door #10-12B CORR 10-90 to STOR 10-01 90° LH"
+      "1 Pair Doors #09-15AREV1 SOCIAL HUB 09-13 from 9TH FLOOR"
+
+    Returns DoorEntry objects with door_number and hw_set populated.
+    The hw_set is taken from the current heading context.
+    """
+    doors: list[DoorEntry] = []
+    seen: set[str] = set()
+
+    for page in pdf.pages:
+        text = page.extract_text() or ""
+        current_set_id = ""
+        for line in text.split("\n"):
+            heading_match = _HEADING_LINE_PATTERN.match(line.strip())
+            if heading_match:
+                current_set_id = next(
+                    (g for g in heading_match.groups() if g), ""
+                )
+
+            door_match = HEADING_DOOR_WITH_NUMBER.search(line)
+            if door_match:
+                door_num = door_match.group(3).strip().rstrip(",;:")
+                if door_num and door_num not in seen and is_valid_door_number(door_num):
+                    seen.add(door_num)
+                    loc = ""
+                    after_door = line[door_match.end(3):]
+                    loc_match = re.match(
+                        r"\s+(.+?)(?:\s+\d+°|\s+[LR]H[RA]?\s*$|\s*$)",
+                        after_door,
+                    )
+                    if loc_match:
+                        loc = loc_match.group(1).strip()
+
+                    doors.append(DoorEntry(
+                        door_number=door_num,
+                        hw_set=current_set_id,
+                        location=loc,
+                    ))
+
+    logger.info(
+        f"[extract-tables] extract_doors_from_set_headings: "
+        f"{len(doors)} doors from hardware schedule headings"
+    )
+    return doors
 
 
 # Patterns for extracting door numbers from heading block text.
@@ -3378,6 +3441,21 @@ class handler(BaseHTTPRequestHandler):
                     if inline_doors:
                         openings = inline_doors
                         logger.info(f"[extract-tables] Inline door extraction found {len(openings)} doors")
+
+                # Phase 2.6: BUG-25 — Merge doors from "N Single/Pair Door #XXX" lines
+                # in hardware schedule headings. Complements Phase 2.5 by catching
+                # doors listed in heading blocks that inline extraction missed.
+                heading_doors = extract_doors_from_set_headings(pdf)
+                if heading_doors:
+                    existing_nums = {d.door_number for d in openings}
+                    added = 0
+                    for hd in heading_doors:
+                        if hd.door_number not in existing_nums:
+                            openings.append(hd)
+                            existing_nums.add(hd.door_number)
+                            added += 1
+                    if added:
+                        logger.info(f"[extract-tables] Merged {added} doors from heading blocks (total now {len(openings)})")
 
                 # Phase 3: Extract reference tables
                 reference_codes = extract_reference_tables(pdf)

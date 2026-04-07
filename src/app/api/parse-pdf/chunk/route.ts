@@ -84,11 +84,15 @@ async function callPunchyColumnReview(
 
 export async function POST(request: NextRequest) {
   try {
-    // Auth check
-    const supabase = await createServerSupabaseClient()
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
-    if (authError || !user) {
-      return NextResponse.json({ error: 'You must be signed in' }, { status: 401 })
+    // Auth check (service role bypass for testing scripts)
+    const serviceRoleHeader = request.headers.get('x-service-role')
+    const isServiceRole = serviceRoleHeader && serviceRoleHeader === process.env.SUPABASE_SERVICE_ROLE_KEY
+    if (!isServiceRole) {
+      const supabase = await createServerSupabaseClient()
+      const { data: { user }, error: authError } = await supabase.auth.getUser()
+      if (authError || !user) {
+        return NextResponse.json({ error: 'You must be signed in' }, { status: 401 })
+      }
     }
 
     const body = await request.json()
@@ -144,7 +148,7 @@ export async function POST(request: NextRequest) {
     // Step 2: Punchy Checkpoint 1 — Column Mapping Review
     // (only on first chunk when user provided a mapping)
     // ==========================================
-    const client = new Anthropic()
+    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
     const punchyObservations: PunchyObservation[] = []
 
     if (chunkIndex === 0 && userColumnMapping) {

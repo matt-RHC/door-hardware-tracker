@@ -55,7 +55,8 @@ export async function callPdfplumber(
   base64: string,
   userColumnMapping?: Record<string, number> | null,
 ): Promise<PdfplumberResult> {
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || (process.env.VERCEL_URL
+  // PYTHON_API_URL allows pointing to a standalone Python server in local dev
+  const baseUrl = process.env.PYTHON_API_URL || process.env.NEXT_PUBLIC_APP_URL || (process.env.VERCEL_URL
     ? `https://${process.env.VERCEL_URL}`
     : 'http://localhost:3000')
 
