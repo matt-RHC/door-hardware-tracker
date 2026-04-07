@@ -44,40 +44,38 @@ const ALL_STEPS: Array<{ label: string; step: WizardStep }> = [
 
 function StepIndicator({ currentStep, hasExistingData }: { currentStep: WizardStep; hasExistingData: boolean }) {
   const visibleSteps = hasExistingData ? ALL_STEPS : ALL_STEPS.filter(s => s.step !== WizardStep.Compare);
+  // Mobile: show only current step name
+  const currentLabel = visibleSteps.find(s => s.step === currentStep)?.label ?? "";
+  const currentIdx = visibleSteps.findIndex(s => s.step === currentStep);
   return (
-    <div className="flex items-center gap-1">
-      {visibleSteps.map(({ label, step }, i) => (
-        <div key={label} className="flex items-center gap-1">
-          <div
-            className={`flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold transition-all ${
-              step < currentStep
-                ? "bg-[#30d158] text-white"
-                : step === currentStep
-                ? "bg-[#0a84ff] text-white ring-2 ring-[rgba(10,132,255,0.3)]"
-                : "bg-white/[0.06] text-[#6e6e73]"
-            }`}
-          >
-            {step < currentStep ? "\u2713" : i + 1}
-          </div>
-          <span
-            className={`text-xs hidden sm:inline ${
-              step === currentStep
-                ? "text-[#0a84ff] font-semibold"
-                : "text-[#6e6e73]"
-            }`}
-          >
-            {label}
-          </span>
-          {i < visibleSteps.length - 1 && (
-            <div
-              className={`w-4 h-px ${
-                step < currentStep ? "bg-[#30d158]" : "bg-white/[0.06]"
+    <>
+      {/* Desktop: breadcrumb stepper */}
+      <div className="hidden sm:flex items-center gap-1">
+        {visibleSteps.map(({ label, step }, i) => (
+          <div key={label} className="flex items-center gap-1">
+            <span
+              className={`text-xs transition-colors ${
+                step < currentStep
+                  ? "text-[#6e6e73]"
+                  : step === currentStep
+                  ? "text-[#0a84ff] font-semibold"
+                  : "text-[#6e6e73]/50"
               }`}
-            />
-          )}
-        </div>
-      ))}
-    </div>
+            >
+              {step < currentStep ? `\u2713 ${label}` : label}
+            </span>
+            {i < visibleSteps.length - 1 && (
+              <span className="text-[#6e6e73]/30 text-xs">\u2192</span>
+            )}
+          </div>
+        ))}
+      </div>
+      {/* Mobile: current step only */}
+      <div className="flex sm:hidden items-center gap-2 text-xs">
+        <span className="text-[#6e6e73]">{currentIdx + 1}/{visibleSteps.length}</span>
+        <span className="text-[#0a84ff] font-semibold">{currentLabel}</span>
+      </div>
+    </>
   );
 }
 
@@ -349,11 +347,9 @@ export default function ImportWizard({
         </div>
       )}
 
-      {/* Step content + Punch sidebar */}
-      <div className="flex-1 overflow-y-auto min-h-0 px-6 py-4 flex gap-4">
+      {/* Step content (full-width, Punch drawer is fixed at bottom) */}
+      <div className="flex-1 overflow-y-auto min-h-0 px-6 py-4 pb-16">
         <PunchHighlightProvider activeKeys={activeKeys}>
-          {/* Main step area */}
-          <div className="flex-1 min-w-0">
             {state.currentStep === WizardStep.Upload && (
               <StepUpload
                 projectId={projectId}
@@ -419,9 +415,8 @@ export default function ImportWizard({
                 onError={(err) => patch({ error: err })}
               />
             )}
-          </div>
 
-          {/* Punch assistant sidebar */}
+          {/* Punch assistant bottom drawer */}
           <PunchAssistant
             messages={punchMessages}
             questions={triageQuestions}
