@@ -74,6 +74,8 @@ export interface PunchyObservation {
   field_suggestions?: Array<{
     field: string
     suggestion: string
+    column?: string
+    pages?: string
     confidence: PunchyConfidence
   }>
 }
@@ -132,16 +134,19 @@ export interface PunchyQuantityCheck {
   flags: Array<{
     set_id: string
     item_name: string
-    current_qty: number
-    expected_qty: number
-    reason: string
-    confidence: PunchyConfidence
+    current_qty?: number
+    expected_qty?: number
+    message: string
+    reason?: string
+    regulation?: string
+    confidence?: PunchyConfidence
   }>
   compliance_issues: Array<{
     set_id: string
     issue: string
     regulation: string
-    confidence: PunchyConfidence
+    severity: 'error' | 'warning' | 'info'
+    confidence?: PunchyConfidence
   }>
   notes?: string
 }
