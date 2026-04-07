@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { QRCodeSVG } from "qrcode.react";
 import OfflineIndicator from "@/components/OfflineIndicator";
@@ -10,7 +10,10 @@ import IssueReportModal from "@/components/IssueReportModal";
 import { createClient } from "@/lib/supabase/client";
 import { initDB, cacheOpening, getCachedOpening } from "@/lib/offline/db";
 import { Opening, HardwareItem, ChecklistProgress, Attachment } from "@/lib/types/database";
-import { playClick, playSuccess, playToggle } from "@/lib/sounds";
+import { playSuccess, playToggle } from "@/lib/sounds";
+import { useItemEditing } from "@/hooks/useItemEditing";
+import { useOpeningEditing } from "@/hooks/useOpeningEditing";
+import { useClassification } from "@/hooks/useClassification";
 
 interface HardwareItemWithProgress extends HardwareItem {
   progress?: ChecklistProgress;
@@ -19,27 +22,6 @@ interface HardwareItemWithProgress extends HardwareItem {
 interface OpeningDetail extends Opening {
   hardware_items: HardwareItemWithProgress[];
   attachments: Attachment[];
-}
-
-interface EditingItemState {
-  itemId: string;
-  name: string;
-  qty: number;
-  manufacturer: string | null;
-  model: string | null;
-  finish: string | null;
-  options: string | null;
-  install_type: 'bench' | 'field' | null;
-}
-
-interface EditingOpeningState {
-  door_number: string;
-  hw_set: string | null;
-  location: string | null;
-  door_type: string | null;
-  frame_type: string | null;
-  fire_rating: string | null;
-  hand: string | null;
 }
 
 export default function DoorDetailPage() {
@@ -55,64 +37,15 @@ export default function DoorDetailPage() {
   const [savingNotes, setSavingNotes] = useState(false);
   const [notesSaved, setNotesSaved] = useState(false);
   const [attachmentLoading, setAttachmentLoading] = useState(false);
-  const [editingItemId, setEditingItemId] = useState<string | null>(null);
-  const [editingItem, setEditingItem] = useState<EditingItemState | null>(null);
-  const [savingItem, setSavingItem] = useState(false);
-  const [editingOpening, setEditingOpening] = useState(false);
-  const [editingOpeningData, setEditingOpeningData] = useState<EditingOpeningState | null>(null);
-  const [savingOpening, setSavingOpening] = useState(false);
   const [activeTab, setActiveTab] = useState<'hardware' | 'files' | 'notes' | 'qr'>('hardware');
   const [viewingAttachment, setViewingAttachment] = useState<Attachment | null>(null);
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [issueModal, setIssueModal] = useState<{ doorNumber: string; hardwareItemName: string } | null>(null);
-  const [classifyPrompt, setClassifyPrompt] = useState<{
-    itemId: string;
-    itemName: string;
-    installType: 'bench' | 'field';
-    totalCount: number;
-  } | null>(null);
-  const [classifyLoading, setClassifyLoading] = useState(false);
-  const [dontAskClassify, setDontAskClassify] = useState(false);
-  const [editApplyAllPrompt, setEditApplyAllPrompt] = useState<{
-    originalName: string;
-    updates: Record<string, string | null>;
-    totalCount: number;
-  } | null>(null);
-  const [editApplyAllLoading, setEditApplyAllLoading] = useState(false);
-  const [dontAskEditApplyAll, setDontAskEditApplyAll] = useState(false);
 
   const supabase = createClient();
+  const fetchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  useEffect(() => {
-    initDB().then(() => fetchOpeningData());
-  }, [doorId]);
-
-  // Subscribe to realtime updates
-  useEffect(() => {
-    if (!opening) return;
-
-    const subscription = (supabase as any)
-      .channel(`checklist_progress:opening_id=eq.${doorId}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "checklist_progress",
-          filter: `opening_id=eq.${doorId}`,
-        },
-        (payload: any) => {
-          fetchOpeningData();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      (supabase as any).removeChannel(subscription);
-    };
-  }, [opening, doorId]);
-
-  const fetchOpeningData = async () => {
+  const fetchOpeningData = useCallback(async () => {
     try {
       const response = await fetch(
         `/api/projects/${projectId}/openings/${doorId}`
@@ -134,7 +67,47 @@ export default function DoorDetailPage() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [projectId, doorId]);
+
+  const debouncedFetch = useCallback(() => {
+    if (fetchDebounceRef.current) clearTimeout(fetchDebounceRef.current);
+    fetchDebounceRef.current = setTimeout(() => fetchOpeningData(), 300);
+  }, [fetchOpeningData]);
+
+  // Extracted hooks
+  const itemEditing = useItemEditing({ projectId, doorId, opening, fetchOpeningData });
+  const openingEditing = useOpeningEditing({ projectId, doorId, opening, fetchOpeningData });
+  const classification = useClassification({ projectId, doorId, opening, fetchOpeningData });
+
+  useEffect(() => {
+    initDB().then(() => fetchOpeningData());
+  }, [doorId, fetchOpeningData]);
+
+  // Subscribe to realtime updates
+  useEffect(() => {
+    if (!opening) return;
+
+    const subscription = (supabase as any)
+      .channel(`checklist_progress:opening_id=eq.${doorId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "checklist_progress",
+          filter: `opening_id=eq.${doorId}`,
+        },
+        () => {
+          debouncedFetch();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      (supabase as any).removeChannel(subscription);
+      if (fetchDebounceRef.current) clearTimeout(fetchDebounceRef.current);
+    };
+  }, [opening, doorId, debouncedFetch, supabase]);
 
   type WorkflowStep = 'received' | 'pre_install' | 'installed' | 'qa_qc';
 
@@ -173,101 +146,6 @@ export default function DoorDetailPage() {
       await fetchOpeningData();
     } catch (err) {
       console.error("Error toggling step:", err);
-    }
-  };
-
-  const handleInstallTypeChange = async (itemId: string, installType: 'bench' | 'field' | null) => {
-    if (!installType || !opening) {
-      // Clearing install type — just patch the single item
-      try {
-        const response = await fetch(
-          `/api/openings/${doorId}/items/${itemId}`,
-          {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ install_type: installType }),
-          }
-        );
-        if (!response.ok) throw new Error("Failed to update install type");
-        await fetchOpeningData();
-      } catch (err) {
-        console.error("Error updating install type:", err);
-      }
-      return;
-    }
-
-    const item = opening.hardware_items.find(i => i.id === itemId);
-    if (!item) return;
-
-    // If user chose "don't ask again", apply to all silently
-    if (dontAskClassify) {
-      await applyClassification(item.name, installType);
-      return;
-    }
-
-    // Check how many matching items exist across the project
-    try {
-      const countRes = await fetch(
-        `/api/projects/${projectId}/classify-items?item_name=${encodeURIComponent(item.name)}`
-      );
-      if (!countRes.ok) {
-        // Fallback to single-item update
-        await applySingleClassification(itemId, installType);
-        return;
-      }
-      const { total } = await countRes.json();
-
-      if (total > 1) {
-        // Show the prompt
-        setClassifyPrompt({ itemId, itemName: item.name, installType, totalCount: total });
-      } else {
-        // Only one instance, just apply directly
-        await applySingleClassification(itemId, installType);
-      }
-    } catch {
-      await applySingleClassification(itemId, installType);
-    }
-  };
-
-  const applySingleClassification = async (itemId: string, installType: 'bench' | 'field') => {
-    try {
-      const response = await fetch(
-        `/api/openings/${doorId}/items/${itemId}`,
-        {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ install_type: installType }),
-        }
-      );
-      if (!response.ok) throw new Error("Failed to update install type");
-      await fetchOpeningData();
-    } catch (err) {
-      console.error("Error updating install type:", err);
-    }
-  };
-
-  const applyClassification = async (itemName: string, installType: 'bench' | 'field', itemIds?: string[]) => {
-    setClassifyLoading(true);
-    try {
-      const response = await fetch(
-        `/api/projects/${projectId}/classify-items`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            item_name: itemName,
-            install_type: installType,
-            ...(itemIds ? { item_ids: itemIds } : {}),
-          }),
-        }
-      );
-      if (!response.ok) throw new Error("Failed to classify items");
-      await fetchOpeningData();
-    } catch (err) {
-      console.error("Error classifying items:", err);
-    } finally {
-      setClassifyLoading(false);
-      setClassifyPrompt(null);
     }
   };
 
@@ -314,171 +192,6 @@ export default function DoorDetailPage() {
       alert("Failed to save notes. Please try again.");
     } finally {
       setSavingNotes(false);
-    }
-  };
-
-  const [originalItemName, setOriginalItemName] = useState<string | null>(null);
-
-  const startEditItem = (item: HardwareItemWithProgress) => {
-    setEditingItemId(item.id);
-    setOriginalItemName(item.name);
-    setEditingItem({
-      itemId: item.id,
-      name: item.name,
-      qty: item.qty,
-      manufacturer: item.manufacturer,
-      model: item.model,
-      finish: item.finish,
-      options: item.options,
-      install_type: item.install_type || null,
-    });
-  };
-
-  const cancelEditItem = () => {
-    setEditingItemId(null);
-    setEditingItem(null);
-  };
-
-  const saveEditItem = async () => {
-    if (!editingItem || !originalItemName) return;
-
-    // Build the updates object for text fields that changed
-    const textUpdates: Record<string, string | null> = {};
-    const origItem = opening?.hardware_items.find(i => i.id === editingItem.itemId);
-    if (origItem) {
-      if (editingItem.name !== origItem.name) textUpdates.name = editingItem.name;
-      if (editingItem.manufacturer !== origItem.manufacturer) textUpdates.manufacturer = editingItem.manufacturer;
-      if (editingItem.model !== origItem.model) textUpdates.model = editingItem.model;
-      if (editingItem.finish !== origItem.finish) textUpdates.finish = editingItem.finish;
-      if (editingItem.options !== origItem.options) textUpdates.options = editingItem.options;
-    }
-
-    const hasTextChanges = Object.keys(textUpdates).length > 0;
-
-    // If text fields changed, check for apply-to-all (unless "don't ask" is set)
-    if (hasTextChanges && !dontAskEditApplyAll) {
-      try {
-        const countRes = await fetch(
-          `/api/projects/${projectId}/classify-items?item_name=${encodeURIComponent(originalItemName)}`
-        );
-        if (countRes.ok) {
-          const { total } = await countRes.json();
-          if (total > 1) {
-            setEditApplyAllPrompt({
-              originalName: originalItemName,
-              updates: textUpdates,
-              totalCount: total,
-            });
-            return; // Wait for user decision
-          }
-        }
-      } catch {
-        // Fall through to single save
-      }
-    }
-
-    // If "don't ask" is set and there are text changes, apply to all silently
-    if (hasTextChanges && dontAskEditApplyAll) {
-      await applyBulkItemUpdate(originalItemName, textUpdates);
-    }
-
-    // Always save the full single item (includes qty, install_type, etc.)
-    await saveSingleItem();
-  };
-
-  const saveSingleItem = async () => {
-    if (!editingItem) return;
-    setSavingItem(true);
-    try {
-      const response = await fetch(
-        `/api/openings/${doorId}/items/${editingItem.itemId}`,
-        {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            name: editingItem.name,
-            qty: editingItem.qty,
-            manufacturer: editingItem.manufacturer,
-            model: editingItem.model,
-            finish: editingItem.finish,
-            options: editingItem.options,
-            install_type: editingItem.install_type,
-          }),
-        }
-      );
-
-      if (!response.ok) throw new Error("Failed to save item");
-      await fetchOpeningData();
-      setEditingItemId(null);
-      setEditingItem(null);
-      setOriginalItemName(null);
-    } catch (err) {
-      console.error("Error saving item:", err);
-    } finally {
-      setSavingItem(false);
-    }
-  };
-
-  const applyBulkItemUpdate = async (originalName: string, updates: Record<string, string | null>) => {
-    setEditApplyAllLoading(true);
-    try {
-      const response = await fetch(
-        `/api/projects/${projectId}/bulk-update-items`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ original_name: originalName, updates }),
-        }
-      );
-      if (!response.ok) throw new Error("Failed to bulk update items");
-    } catch (err) {
-      console.error("Error bulk updating items:", err);
-    } finally {
-      setEditApplyAllLoading(false);
-      setEditApplyAllPrompt(null);
-    }
-  };
-
-  const startEditOpening = () => {
-    if (!opening) return;
-    setEditingOpening(true);
-    setEditingOpeningData({
-      door_number: opening.door_number,
-      hw_set: opening.hw_set,
-      location: opening.location,
-      door_type: opening.door_type,
-      frame_type: opening.frame_type,
-      fire_rating: opening.fire_rating,
-      hand: opening.hand,
-    });
-  };
-
-  const cancelEditOpening = () => {
-    setEditingOpening(false);
-    setEditingOpeningData(null);
-  };
-
-  const saveEditOpening = async () => {
-    if (!editingOpeningData) return;
-    setSavingOpening(true);
-    try {
-      const response = await fetch(
-        `/api/projects/${projectId}/openings/${doorId}`,
-        {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(editingOpeningData),
-        }
-      );
-
-      if (!response.ok) throw new Error("Failed to save opening");
-      await fetchOpeningData();
-      setEditingOpening(false);
-      setEditingOpeningData(null);
-    } catch (err) {
-      console.error("Error saving opening:", err);
-    } finally {
-      setSavingOpening(false);
     }
   };
 
@@ -537,7 +250,7 @@ export default function DoorDetailPage() {
   const progress = totalItems > 0 ? (checkedItems / totalItems) * 100 : 0;
 
   // Workflow step helper
-  const getStepLabel = (item: HardwareItemWithProgress, step: WorkflowStep): string => {
+  const getStepLabel = (_item: HardwareItemWithProgress, step: WorkflowStep): string => {
     if (step === 'received') return 'Received';
     if (step === 'pre_install') return 'Pre-Install';
     if (step === 'installed') return 'Installed';
@@ -567,6 +280,23 @@ export default function DoorDetailPage() {
     return parts.join(" · ");
   };
 
+  // Destructure hooks for cleaner JSX
+  const {
+    editingItemId, editingItem, setEditingItem, savingItem,
+    editApplyAllPrompt, editApplyAllLoading, dontAskEditApplyAll, setDontAskEditApplyAll,
+    startEditItem, cancelEditItem, saveEditItem, saveSingleItem, applyBulkItemUpdate,
+  } = itemEditing;
+
+  const {
+    editingOpening, editingOpeningData, setEditingOpeningData,
+    savingOpening, startEditOpening, cancelEditOpening, saveEditOpening,
+  } = openingEditing;
+
+  const {
+    classifyPrompt, classifyLoading, dontAskClassify, setDontAskClassify,
+    setClassifyPrompt, handleInstallTypeChange, applySingleClassification, applyClassification,
+  } = classification;
+
   return (
     <div className="min-h-screen bg-[var(--background)] pb-28">
       <OfflineIndicator />
@@ -576,7 +306,7 @@ export default function DoorDetailPage() {
         <div className="max-w-[430px] md:max-w-[900px] mx-auto px-4 py-4 flex items-center justify-between">
           <button
             onClick={() => router.push(`/project/${projectId}`)}
-            className="text-[var(--blue)] hover:text-[var(--blue)]/80 flex items-center gap-1 text-[15px]"
+            className="text-[var(--blue)] hover:text-[var(--blue)]/80 flex items-center gap-1 text-[15px] min-h-[44px] min-w-[44px] justify-center"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -588,7 +318,7 @@ export default function DoorDetailPage() {
           {!editingOpening && (
             <button
               onClick={startEditOpening}
-              className="text-[var(--text-tertiary)] hover:text-[var(--text-primary)] p-2.5 -m-1.5"
+              className="text-[var(--text-tertiary)] hover:text-[var(--text-primary)] min-h-[44px] min-w-[44px] flex items-center justify-center"
               title="Edit door details"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -613,7 +343,7 @@ export default function DoorDetailPage() {
               />
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
                 <label className="block text-[13px] text-[var(--text-secondary)] mb-2">HW Set</label>
                 <input
@@ -636,7 +366,7 @@ export default function DoorDetailPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
                 <label className="block text-[13px] text-[var(--text-secondary)] mb-2">Door Type</label>
                 <input
@@ -659,7 +389,7 @@ export default function DoorDetailPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
                 <label className="block text-[13px] text-[var(--text-secondary)] mb-2">Fire Rating</label>
                 <input
@@ -686,14 +416,14 @@ export default function DoorDetailPage() {
               <button
                 onClick={saveEditOpening}
                 disabled={savingOpening}
-                className="flex-1 px-4 py-2.5 bg-[var(--blue)] hover:bg-[var(--blue)]/80 disabled:bg-[var(--surface)] text-white disabled:text-[var(--text-tertiary)] rounded-lg transition-colors text-[15px] font-medium"
+                className="flex-1 px-4 py-2.5 min-h-[44px] bg-[var(--blue)] hover:bg-[var(--blue)]/80 disabled:bg-[var(--surface)] text-white disabled:text-[var(--text-tertiary)] rounded-lg transition-colors text-[15px] font-medium"
               >
                 {savingOpening ? "Saving..." : "Save"}
               </button>
               <button
                 onClick={cancelEditOpening}
                 disabled={savingOpening}
-                className="flex-1 px-4 py-2.5 bg-[var(--surface)] border border-[var(--border)] hover:bg-[var(--surface-hover)] disabled:opacity-50 text-[var(--text-secondary)] rounded-lg transition-colors text-[15px] font-medium"
+                className="flex-1 px-4 py-2.5 min-h-[44px] bg-[var(--surface)] border border-[var(--border)] hover:bg-[var(--surface-hover)] disabled:opacity-50 text-[var(--text-secondary)] rounded-lg transition-colors text-[15px] font-medium"
               >
                 Cancel
               </button>
@@ -767,7 +497,7 @@ export default function DoorDetailPage() {
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
-                className={`flex-1 px-3 py-3 rounded-lg text-[13px] font-medium uppercase transition-colors ${
+                className={`flex-1 px-3 py-3 min-h-[44px] rounded-lg text-[13px] font-medium uppercase transition-colors ${
                   activeTab === tab
                     ? 'bg-[var(--surface-hover)] text-[var(--text-primary)] border border-[var(--border-hover)]'
                     : 'text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]'
@@ -799,7 +529,7 @@ export default function DoorDetailPage() {
                   {editingItemId === item.id && editingItem ? (
                     // Edit mode
                     <div className="space-y-3">
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         <div>
                           <label className="block text-[12px] text-[var(--text-secondary)] mb-1">Name</label>
                           <input
@@ -820,7 +550,7 @@ export default function DoorDetailPage() {
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-3 gap-3">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                         <div>
                           <label className="block text-[12px] text-[var(--text-secondary)] mb-1">Manufacturer</label>
                           <input
@@ -853,7 +583,7 @@ export default function DoorDetailPage() {
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-3">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         <div>
                           <label className="block text-[12px] text-[var(--text-secondary)] mb-1">Options</label>
                           <input
@@ -869,7 +599,7 @@ export default function DoorDetailPage() {
                           <select
                             value={editingItem.install_type || ""}
                             onChange={(e) => setEditingItem({ ...editingItem, install_type: (e.target.value as 'bench' | 'field') || null })}
-                            className="w-full px-3 py-2 bg-[var(--surface)] border border-[var(--border)] rounded-lg text-[var(--text-primary)] focus:border-[rgba(10,132,255,0.3)] focus:outline-none text-[13px]"
+                            className="w-full px-3 py-2 min-h-[44px] bg-[var(--surface)] border border-[var(--border)] rounded-lg text-[var(--text-primary)] focus:border-[rgba(10,132,255,0.3)] focus:outline-none text-[13px]"
                           >
                             <option value="">Not set</option>
                             <option value="bench">Bench</option>
@@ -882,14 +612,14 @@ export default function DoorDetailPage() {
                         <button
                           onClick={saveEditItem}
                           disabled={savingItem}
-                          className="flex-1 px-3 py-2 bg-[var(--blue)] hover:bg-[var(--blue)]/80 disabled:bg-[var(--surface)] text-white disabled:text-[var(--text-tertiary)] rounded-lg transition-colors text-[13px] font-medium"
+                          className="flex-1 px-3 py-2 min-h-[44px] bg-[var(--blue)] hover:bg-[var(--blue)]/80 disabled:bg-[var(--surface)] text-white disabled:text-[var(--text-tertiary)] rounded-lg transition-colors text-[13px] font-medium"
                         >
                           {savingItem ? "Saving..." : "Save"}
                         </button>
                         <button
                           onClick={cancelEditItem}
                           disabled={savingItem}
-                          className="flex-1 px-3 py-2 bg-[var(--surface)] border border-[var(--border)] hover:bg-[var(--surface-hover)] disabled:opacity-50 text-[var(--text-secondary)] rounded-lg transition-colors text-[13px] font-medium"
+                          className="flex-1 px-3 py-2 min-h-[44px] bg-[var(--surface)] border border-[var(--border)] hover:bg-[var(--surface-hover)] disabled:opacity-50 text-[var(--text-secondary)] rounded-lg transition-colors text-[13px] font-medium"
                         >
                           Cancel
                         </button>
@@ -919,7 +649,7 @@ export default function DoorDetailPage() {
                           )}
                           <button
                             onClick={() => startEditItem(item)}
-                            className="text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] p-2.5 -m-1.5"
+                            className="text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] min-h-[44px] min-w-[44px] flex items-center justify-center"
                             title="Edit item"
                           >
                             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1008,7 +738,7 @@ export default function DoorDetailPage() {
                               item.id,
                               item.install_type === 'bench' ? 'field' : 'bench'
                             )}
-                            className="ml-2 text-[11px] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] underline"
+                            className="ml-2 text-[11px] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] underline min-h-[44px] flex items-center"
                             title={`Switch to ${item.install_type === 'bench' ? 'field' : 'bench'}`}
                           >
                             Switch to {item.install_type === 'bench' ? 'Field' : 'Bench'}
@@ -1020,7 +750,7 @@ export default function DoorDetailPage() {
                             doorNumber: opening.door_number,
                             hardwareItemName: item.name,
                           })}
-                          className="ml-auto text-[11px] text-[var(--red)] hover:text-[var(--red)]/80 transition-colors"
+                          className="ml-auto text-[11px] text-[var(--red)] hover:text-[var(--red)]/80 transition-colors min-h-[44px] flex items-center"
                         >
                           Report Issue
                         </button>
@@ -1048,7 +778,7 @@ export default function DoorDetailPage() {
                 <button
                   key={cat.label}
                   onClick={() => setActiveCategory(cat.value)}
-                  className={`text-[12px] font-medium px-3 py-1.5 rounded-full transition-colors ${
+                  className={`text-[12px] font-medium px-3 py-1.5 min-h-[44px] rounded-full transition-colors ${
                     activeCategory === cat.value
                       ? 'bg-[rgba(10,132,255,0.15)] border border-[var(--blue)] text-[var(--blue)]'
                       : 'bg-[var(--surface)] border border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--surface-hover)]'
@@ -1060,9 +790,9 @@ export default function DoorDetailPage() {
             </div>
 
             {/* Attachment cards */}
-            {opening.attachments && opening.attachments.length > 0 ? (
+            {(opening.attachments ?? []).length > 0 ? (
               <div className="space-y-3">
-                {opening.attachments
+                {(opening.attachments ?? [])
                   .filter((att) => !activeCategory || att.category === activeCategory)
                   .map((attachment) => {
                     const isPdf = attachment.file_type?.includes("pdf") || attachment.file_name?.toLowerCase().endsWith(".pdf");
@@ -1139,7 +869,7 @@ export default function DoorDetailPage() {
             )}
 
             {/* Upload button */}
-            <label className="block p-4 bg-[var(--surface)] border border-dashed border-[var(--border)] rounded-xl text-center cursor-pointer hover:bg-[var(--surface-hover)] active:bg-[var(--surface-hover)] transition-colors">
+            <label className="block p-4 min-h-[44px] bg-[var(--surface)] border border-dashed border-[var(--border)] rounded-xl text-center cursor-pointer hover:bg-[var(--surface-hover)] active:bg-[var(--surface-hover)] transition-colors">
               <input
                 type="file"
                 onChange={(e) => {
@@ -1177,7 +907,7 @@ export default function DoorDetailPage() {
             <button
               onClick={handleSaveNotes}
               disabled={savingNotes}
-              className="mt-4 px-4 py-2.5 bg-[var(--blue)] hover:bg-[var(--blue)]/80 disabled:bg-[var(--surface)] text-white disabled:text-[var(--text-tertiary)] rounded-lg transition-colors text-[15px] font-medium"
+              className="mt-4 px-4 py-2.5 min-h-[44px] bg-[var(--blue)] hover:bg-[var(--blue)]/80 disabled:bg-[var(--surface)] text-white disabled:text-[var(--text-tertiary)] rounded-lg transition-colors text-[15px] font-medium"
             >
               {savingNotes ? "Saving..." : notesSaved ? "Saved!" : "Save Notes"}
             </button>
@@ -1198,7 +928,7 @@ export default function DoorDetailPage() {
             <p className="text-[15px] text-[var(--text-secondary)] text-center mb-4">
               Scan to open this door on mobile
             </p>
-            <button className="px-4 py-2.5 bg-[var(--blue)] hover:bg-[var(--blue)]/80 text-white rounded-lg transition-colors text-[15px] font-medium">
+            <button className="px-4 py-2.5 min-h-[44px] bg-[var(--blue)] hover:bg-[var(--blue)]/80 text-white rounded-lg transition-colors text-[15px] font-medium">
               Share
             </button>
           </div>
@@ -1211,7 +941,7 @@ export default function DoorDetailPage() {
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
-            className={`flex flex-col items-center gap-1 px-3 py-2 transition-colors ${
+            className={`flex flex-col items-center gap-1 px-3 py-2 min-h-[44px] min-w-[44px] transition-colors ${
               activeTab === tab
                 ? 'text-[var(--blue)]'
                 : 'text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]'
@@ -1264,7 +994,7 @@ export default function DoorDetailPage() {
 
       {/* Classify apply-to-all prompt */}
       {classifyPrompt && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto">
           <div className="panel corner-brackets w-full max-w-sm p-5 animate-fade-in-up">
             <h3
               className="text-[15px] font-bold text-[var(--text-primary)] mb-3"
@@ -1293,7 +1023,7 @@ export default function DoorDetailPage() {
               <button
                 onClick={() => applyClassification(classifyPrompt.itemName, classifyPrompt.installType)}
                 disabled={classifyLoading}
-                className="glow-btn--primary w-full rounded-lg py-2 text-[13px] disabled:opacity-40"
+                className="glow-btn--primary w-full rounded-lg py-2 min-h-[44px] text-[13px] disabled:opacity-40"
               >
                 {classifyLoading ? "Applying..." : `Yes, apply to all ${classifyPrompt.totalCount}`}
               </button>
@@ -1303,13 +1033,13 @@ export default function DoorDetailPage() {
                   setClassifyPrompt(null);
                 }}
                 disabled={classifyLoading}
-                className="glow-btn--ghost w-full rounded-lg py-2 text-[13px] disabled:opacity-40"
+                className="glow-btn--ghost w-full rounded-lg py-2 min-h-[44px] text-[13px] disabled:opacity-40"
               >
                 Just this one
               </button>
             </div>
 
-            <label className="flex items-center gap-2 cursor-pointer">
+            <label className="flex items-center gap-2 cursor-pointer min-h-[44px]">
               <input
                 type="checkbox"
                 checked={dontAskClassify}
@@ -1324,7 +1054,7 @@ export default function DoorDetailPage() {
 
       {/* Edit apply-to-all prompt */}
       {editApplyAllPrompt && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto">
           <div className="panel corner-brackets w-full max-w-sm p-5 animate-fade-in-up">
             <h3
               className="text-[15px] font-bold text-[var(--text-primary)] mb-3"
@@ -1353,23 +1083,22 @@ export default function DoorDetailPage() {
                   await saveSingleItem();
                 }}
                 disabled={editApplyAllLoading}
-                className="glow-btn--primary w-full rounded-lg py-2 text-[13px] disabled:opacity-40"
+                className="glow-btn--primary w-full rounded-lg py-2 min-h-[44px] text-[13px] disabled:opacity-40"
               >
                 {editApplyAllLoading ? "Applying..." : `Yes, update all ${editApplyAllPrompt.totalCount}`}
               </button>
               <button
                 onClick={async () => {
-                  setEditApplyAllPrompt(null);
                   await saveSingleItem();
                 }}
                 disabled={editApplyAllLoading}
-                className="glow-btn--ghost w-full rounded-lg py-2 text-[13px] disabled:opacity-40"
+                className="glow-btn--ghost w-full rounded-lg py-2 min-h-[44px] text-[13px] disabled:opacity-40"
               >
                 Just this one
               </button>
             </div>
 
-            <label className="flex items-center gap-2 cursor-pointer">
+            <label className="flex items-center gap-2 cursor-pointer min-h-[44px]">
               <input
                 type="checkbox"
                 checked={dontAskEditApplyAll}
