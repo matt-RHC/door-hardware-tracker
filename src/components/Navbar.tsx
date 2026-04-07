@@ -48,7 +48,7 @@ export default function Navbar() {
         className="absolute bottom-0 left-0 right-0 h-[1px]"
         style={{
           background:
-            "linear-gradient(90deg, transparent, rgba(10,132,255,0.2) 30%, rgba(10,132,255,0.3) 50%, rgba(10,132,255,0.2) 70%, transparent)",
+            "linear-gradient(90deg, transparent, rgba(10,132,255,0.12) 30%, rgba(10,132,255,0.18) 50%, rgba(10,132,255,0.12) 70%, transparent)",
         }}
       />
 
