@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import type { DoorEntry, HardwareSet } from '@/lib/types'
+import { buildPerOpeningItems } from '@/lib/parse-pdf-helpers'
 
 // User decisions from the wizard
 interface RemovedDecision {
@@ -155,40 +156,17 @@ export async function POST(request: NextRequest) {
           .delete()
           .eq('opening_id', decision.existing_id)
 
-        // Insert new hardware items
-        if (hwSet?.items?.length) {
-          const doorInfo = { door_type: parsedDoor.door_type, frame_type: parsedDoor.frame_type }
-          const heading = (hwSet.heading || '').toLowerCase()
-          const doorType = (doorInfo.door_type || '').toLowerCase()
-          const isPair = heading.includes('pair') || heading.includes('double') ||
-                         doorType.includes('pr') || doorType.includes('pair')
-
-          const newItems: Array<Record<string, unknown>> = []
-          let sortOrder = 0
-
-          // Door(s)
-          if (isPair) {
-            newItems.push({ opening_id: decision.existing_id, name: 'Door (Active Leaf)', qty: 1, manufacturer: null, model: doorInfo.door_type || null, finish: null, sort_order: sortOrder++ })
-            newItems.push({ opening_id: decision.existing_id, name: 'Door (Inactive Leaf)', qty: 1, manufacturer: null, model: doorInfo.door_type || null, finish: null, sort_order: sortOrder++ })
-          } else {
-            newItems.push({ opening_id: decision.existing_id, name: 'Door', qty: 1, manufacturer: null, model: doorInfo.door_type || null, finish: null, sort_order: sortOrder++ })
-          }
-
-          // Frame
-          newItems.push({ opening_id: decision.existing_id, name: 'Frame', qty: 1, manufacturer: null, model: doorInfo.frame_type || null, finish: null, sort_order: sortOrder++ })
-
-          // Hardware items
-          for (const item of hwSet.items) {
-            newItems.push({
-              opening_id: decision.existing_id,
-              name: item.name, qty: item.qty || 1,
-              manufacturer: item.manufacturer || null,
-              model: item.model || null,
-              finish: item.finish || null,
-              sort_order: sortOrder++,
-            })
-          }
-
+        // Insert new hardware items via shared builder
+        const doorInfoMap = new Map([[parsedDoor.door_number, {
+          door_type: parsedDoor.door_type || '',
+          frame_type: parsedDoor.frame_type || '',
+        }]])
+        const newItems = buildPerOpeningItems(
+          [{ id: decision.existing_id, door_number: parsedDoor.door_number, hw_set: parsedDoor.hw_set ?? null }],
+          doorInfoMap,
+          setMap,
+        )
+        if (newItems.length > 0) {
           await (supabase as any)
             .from('hardware_items')
             .insert(newItems)
@@ -236,40 +214,15 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      // Insert hardware items for new doors
-      const allHardwareRows: Array<Record<string, unknown>> = []
-
-      for (const opening of insertedOpenings) {
-        let sortOrder = 0
-        const door = doorMap.get(opening.door_number)
-        const hwSet = setMap.get(opening.hw_set)
-        const heading = (hwSet?.heading || '').toLowerCase()
-        const doorType = (door?.door_type || '').toLowerCase()
-        const isPair = heading.includes('pair') || heading.includes('double') ||
-                       doorType.includes('pr') || doorType.includes('pair')
-
-        if (isPair) {
-          allHardwareRows.push({ opening_id: opening.id, name: 'Door (Active Leaf)', qty: 1, manufacturer: null, model: door?.door_type || null, finish: null, sort_order: sortOrder++ })
-          allHardwareRows.push({ opening_id: opening.id, name: 'Door (Inactive Leaf)', qty: 1, manufacturer: null, model: door?.door_type || null, finish: null, sort_order: sortOrder++ })
-        } else {
-          allHardwareRows.push({ opening_id: opening.id, name: 'Door', qty: 1, manufacturer: null, model: door?.door_type || null, finish: null, sort_order: sortOrder++ })
-        }
-
-        allHardwareRows.push({ opening_id: opening.id, name: 'Frame', qty: 1, manufacturer: null, model: door?.frame_type || null, finish: null, sort_order: sortOrder++ })
-
-        if (hwSet?.items?.length) {
-          for (const item of hwSet.items) {
-            allHardwareRows.push({
-              opening_id: opening.id,
-              name: item.name, qty: item.qty || 1,
-              manufacturer: item.manufacturer || null,
-              model: item.model || null,
-              finish: item.finish || null,
-              sort_order: sortOrder++,
-            })
-          }
-        }
+      // Build hardware items for new doors via shared builder
+      const newDoorInfoMap = new Map<string, { door_type: string; frame_type: string }>()
+      for (const door of newDoors) {
+        newDoorInfoMap.set(door.door_number, {
+          door_type: door.door_type || '',
+          frame_type: door.frame_type || '',
+        })
       }
+      const allHardwareRows = buildPerOpeningItems(insertedOpenings, newDoorInfoMap, setMap)
 
       for (let i = 0; i < allHardwareRows.length; i += CHUNK_SIZE) {
         const chunk = allHardwareRows.slice(i, i + CHUNK_SIZE)

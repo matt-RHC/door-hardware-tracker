@@ -1,8 +1,5 @@
 /**
- * Shared PDF utilities for ImportWizard and PDFUploadModal.
- *
- * Extracted from PDFUploadModal to avoid duplication and ensure
- * both code paths use the same chunking/merging logic.
+ * Shared PDF utilities for the ImportWizard extraction pipeline.
  */
 import { PDFDocument } from 'pdf-lib'
 import type { DoorEntry, HardwareItem, HardwareSet } from '@/lib/types'
