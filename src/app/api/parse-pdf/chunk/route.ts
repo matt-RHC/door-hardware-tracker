@@ -330,7 +330,7 @@ function applyCorrections(
 
       // Remove items
       if (corr.items_to_remove) {
-        set.items = set.items.filter(
+        set.items = (set.items ?? []).filter(
           item => !corr.items_to_remove!.includes(item.name)
         )
       }
@@ -338,7 +338,7 @@ function applyCorrections(
       // Fix items
       if (corr.items_to_fix) {
         for (const fix of corr.items_to_fix) {
-          const item = set.items.find(i => i.name === fix.name)
+          const item = (set.items ?? []).find(i => i.name === fix.name)
           if (item && fix.field in item) {
             const val = fix.new_value
             if (fix.field === 'qty') {
@@ -356,7 +356,8 @@ function applyCorrections(
       if (corr.items_to_add) {
         for (const newItem of corr.items_to_add) {
           // Only add if not already present
-          if (!set.items.some(i => i.name === newItem.name)) {
+          if (!(set.items ?? []).some(i => i.name === newItem.name)) {
+            if (!set.items) set.items = []
             set.items.push(newItem)
           }
         }
@@ -371,7 +372,7 @@ function applyCorrections(
         hardwareSets.push({
           set_id: newSet.set_id,
           heading: newSet.heading,
-          items: newSet.items,
+          items: newSet.items ?? [],
         })
       }
     }

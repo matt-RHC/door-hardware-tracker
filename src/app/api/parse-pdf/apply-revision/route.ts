@@ -64,7 +64,7 @@ export async function POST(request: NextRequest) {
       const doorCount = (set.heading_door_count ?? 0) > 1 ? (set.heading_door_count ?? 0) : 0
       if (leafCount <= 1 && doorCount <= 1) continue
 
-      for (const item of set.items) {
+      for (const item of set.items ?? []) {
         if (item.qty_source === 'divided' || item.qty_source === 'flagged' || item.qty_source === 'capped') continue
         let divided = false
         if (leafCount > 1 && item.qty >= leafCount) {
@@ -178,7 +178,7 @@ export async function POST(request: NextRequest) {
           newItems.push({ opening_id: decision.existing_id, name: 'Frame', qty: 1, manufacturer: null, model: doorInfo.frame_type || null, finish: null, sort_order: sortOrder++ })
 
           // Hardware items
-          for (const item of hwSet.items) {
+          for (const item of hwSet.items ?? []) {
             newItems.push({
               opening_id: decision.existing_id,
               name: item.name, qty: item.qty || 1,
@@ -258,7 +258,7 @@ export async function POST(request: NextRequest) {
         allHardwareRows.push({ opening_id: opening.id, name: 'Frame', qty: 1, manufacturer: null, model: door?.frame_type || null, finish: null, sort_order: sortOrder++ })
 
         if (hwSet?.items?.length) {
-          for (const item of hwSet.items) {
+          for (const item of hwSet.items ?? []) {
             allHardwareRows.push({
               opening_id: opening.id,
               name: item.name, qty: item.qty || 1,
