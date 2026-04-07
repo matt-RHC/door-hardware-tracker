@@ -11,13 +11,14 @@ import type {
 
 export type { DoorEntry, ExtractedHardwareItem, HardwareSet, FlaggedDoor, PageClassification };
 
-/** The five steps the wizard progresses through. */
+/** The steps the wizard progresses through. Compare is only shown for revisions. */
 export enum WizardStep {
   Upload = 0,
   MapColumns = 1,
   Triage = 2,
   Review = 3,
-  Confirm = 4,
+  Compare = 4,
+  Confirm = 5,
 }
 
 // ─── API response types ───
