@@ -66,7 +66,7 @@ async function extractFromPDF(base64: string, filteredPdfBase64?: string, userCo
   // ==========================================
   // Punchy Checkpoint 2: Post-Extraction Review
   // ==========================================
-  const client = new Anthropic()
+  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
   const punchyObservations: PunchyObservation[] = []
 
   // Use filtered PDF for Punchy review if available (fewer pages = cheaper + faster)
@@ -136,10 +136,15 @@ async function extractFromPDF(base64: string, filteredPdfBase64?: string, userCo
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createServerSupabaseClient()
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
-    if (authError || !user) {
-      return NextResponse.json({ error: 'You must be signed in' }, { status: 401 })
+    // Service role bypass for testing scripts (e.g. run-golden-suite.mjs)
+    const serviceRoleHeader = request.headers.get('x-service-role')
+    const isServiceRole = serviceRoleHeader && serviceRoleHeader === process.env.SUPABASE_SERVICE_ROLE_KEY
+    if (!isServiceRole) {
+      const supabase = await createServerSupabaseClient()
+      const { data: { user }, error: authError } = await supabase.auth.getUser()
+      if (authError || !user) {
+        return NextResponse.json({ error: 'You must be signed in' }, { status: 401 })
+      }
     }
 
     const body = await request.json()
