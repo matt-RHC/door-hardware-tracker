@@ -17,6 +17,7 @@ import StepMapColumns from "./StepMapColumns";
 import StepTriage from "./StepTriage";
 import StepReview from "./StepReview";
 import StepConfirm from "./StepConfirm";
+import StepCompare from "./StepCompare";
 import PunchAssistant from "./PunchAssistant";
 import { PunchHighlightProvider } from "./usePunchHighlight";
 import {
@@ -31,37 +32,46 @@ import {
 
 // ─── Step indicator ───
 
-const STEP_LABELS = ["Upload", "Map Columns", "Triage", "Review", "Confirm"];
+// All steps with their enum values. Compare is conditionally shown for revisions.
+const ALL_STEPS: Array<{ label: string; step: WizardStep }> = [
+  { label: "Upload", step: WizardStep.Upload },
+  { label: "Map Columns", step: WizardStep.MapColumns },
+  { label: "Triage", step: WizardStep.Triage },
+  { label: "Review", step: WizardStep.Review },
+  { label: "Compare", step: WizardStep.Compare },
+  { label: "Confirm", step: WizardStep.Confirm },
+];
 
-function StepIndicator({ currentStep }: { currentStep: WizardStep }) {
+function StepIndicator({ currentStep, hasExistingData }: { currentStep: WizardStep; hasExistingData: boolean }) {
+  const visibleSteps = hasExistingData ? ALL_STEPS : ALL_STEPS.filter(s => s.step !== WizardStep.Compare);
   return (
     <div className="flex items-center gap-1">
-      {STEP_LABELS.map((label, i) => (
+      {visibleSteps.map(({ label, step }, i) => (
         <div key={label} className="flex items-center gap-1">
           <div
             className={`flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold transition-all ${
-              i < currentStep
+              step < currentStep
                 ? "bg-[#30d158] text-white"
-                : i === currentStep
+                : step === currentStep
                 ? "bg-[#0a84ff] text-white ring-2 ring-[rgba(10,132,255,0.3)]"
                 : "bg-white/[0.06] text-[#6e6e73]"
             }`}
           >
-            {i < currentStep ? "\u2713" : i + 1}
+            {step < currentStep ? "\u2713" : i + 1}
           </div>
           <span
             className={`text-xs hidden sm:inline ${
-              i === currentStep
+              step === currentStep
                 ? "text-[#0a84ff] font-semibold"
                 : "text-[#6e6e73]"
             }`}
           >
             {label}
           </span>
-          {i < STEP_LABELS.length - 1 && (
+          {i < visibleSteps.length - 1 && (
             <div
               className={`w-4 h-px ${
-                i < currentStep ? "bg-[#30d158]" : "bg-white/[0.06]"
+                step < currentStep ? "bg-[#30d158]" : "bg-white/[0.06]"
               }`}
             />
           )}
@@ -195,6 +205,12 @@ export default function ImportWizard({
           }))
         );
       }
+      case WizardStep.Compare: {
+        return [{
+          severity: 'info' as const,
+          text: 'Comparing your revised submittal against the existing project data. Review each category of changes before applying.',
+        }];
+      }
       case WizardStep.Confirm: {
         if (saveResult) {
           return confirmMessages({
@@ -288,16 +304,16 @@ export default function ImportWizard({
     [patch]
   );
 
-  // ─── Step 4 complete: review done ───
+  // ─── Step 4 complete: review done → Compare (revision) or Confirm (fresh) ───
   const onReviewComplete = useCallback(
     (doors: DoorEntry[], hardwareSets: HardwareSet[]) => {
       patch({
         doors,
         hardwareSets,
-        currentStep: WizardStep.Confirm,
+        currentStep: state.hasExistingData ? WizardStep.Compare : WizardStep.Confirm,
       });
     },
-    [patch]
+    [patch, state.hasExistingData]
   );
 
   // ─── Step 5 complete: saved ───
@@ -316,7 +332,7 @@ export default function ImportWizard({
           Import Wizard
         </h2>
         <div className="flex items-center gap-4">
-          <StepIndicator currentStep={state.currentStep} />
+          <StepIndicator currentStep={state.currentStep} hasExistingData={state.hasExistingData} />
           <button
             onClick={onClose}
             className="text-[#6e6e73] hover:text-[#f5f5f7] text-xl leading-none transition-colors ml-4"
@@ -381,6 +397,17 @@ export default function ImportWizard({
               />
             )}
 
+            {state.currentStep === WizardStep.Compare && (
+              <StepCompare
+                projectId={projectId}
+                doors={state.doors}
+                hardwareSets={state.hardwareSets}
+                onComplete={onConfirmComplete}
+                onBack={() => goToStep(WizardStep.Review)}
+                onError={(err) => patch({ error: err })}
+              />
+            )}
+
             {state.currentStep === WizardStep.Confirm && (
               <StepConfirm
                 projectId={projectId}
@@ -388,7 +415,7 @@ export default function ImportWizard({
                 hardwareSets={state.hardwareSets}
                 triageResult={state.triageResult}
                 onComplete={onConfirmComplete}
-                onBack={() => goToStep(WizardStep.Review)}
+                onBack={() => goToStep(state.hasExistingData ? WizardStep.Compare : WizardStep.Review)}
                 onError={(err) => patch({ error: err })}
               />
             )}

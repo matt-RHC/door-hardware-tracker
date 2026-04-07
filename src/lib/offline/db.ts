@@ -66,7 +66,7 @@ export async function syncPendingChecks(supabase: any) {
             checked_by: check.checked_by,
             checked_at: check.checked_at,
           },
-          { onConflict: 'id' }
+          { onConflict: 'opening_id,item_id' }
         )
         .select()
 

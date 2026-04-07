@@ -22,7 +22,7 @@ export interface DoorEntry {
 }
 
 /** A single hardware item within a hardware set. */
-export interface HardwareItem {
+export interface ExtractedHardwareItem {
   qty: number
   qty_total?: number
   qty_door_count?: number
@@ -40,7 +40,7 @@ export interface HardwareSet {
   heading: string
   heading_door_count?: number
   heading_leaf_count?: number
-  items: HardwareItem[]
+  items: ExtractedHardwareItem[]
 }
 
 // ── Flagged door types ────────────────────────────────────────────
@@ -86,7 +86,7 @@ export interface PunchyCorrections {
   hardware_sets_corrections?: Array<{
     set_id: string
     heading?: string
-    items_to_add?: HardwareItem[]
+    items_to_add?: ExtractedHardwareItem[]
     items_to_remove?: string[]
     items_to_fix?: Array<{
       name: string
@@ -107,7 +107,7 @@ export interface PunchyCorrections {
   missing_sets?: Array<{
     set_id: string
     heading: string
-    items: HardwareItem[]
+    items: ExtractedHardwareItem[]
     confidence?: PunchyConfidence
   }>
   notes?: string

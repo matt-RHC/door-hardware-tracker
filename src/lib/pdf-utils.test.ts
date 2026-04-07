@@ -7,7 +7,7 @@ import {
   mergeDoors,
   CHUNK_SIZE_THRESHOLD,
   FALLBACK_PAGES_PER_CHUNK,
-  type HardwareItem,
+  type ExtractedHardwareItem,
   type HardwareSet,
   type DoorEntry,
 } from './pdf-utils'
@@ -95,7 +95,7 @@ describe('normalizeItemName', () => {
 })
 
 describe('deduplicateHardwareItems', () => {
-  const makeItem = (overrides: Partial<HardwareItem> = {}): HardwareItem => ({
+  const makeItem = (overrides: Partial<ExtractedHardwareItem> = {}): ExtractedHardwareItem => ({
     qty: 1,
     name: 'Closer',
     model: '',
@@ -175,7 +175,7 @@ describe('mergeHardwareSets', () => {
   })
 
   it('deduplicates items within merged sets', () => {
-    const hinge: HardwareItem = { qty: 3, name: 'Hinge', model: '5BB1', finish: '626', manufacturer: 'Ives' }
+    const hinge: ExtractedHardwareItem = { qty: 3, name: 'Hinge', model: '5BB1', finish: '626', manufacturer: 'Ives' }
     const sets = [
       makeSet({ set_id: 'DH1', items: [hinge] }),
       makeSet({ set_id: 'DH1', items: [{ ...hinge }] }), // same item from another chunk

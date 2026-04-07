@@ -3,21 +3,22 @@
 // Domain types imported from canonical source
 import type {
   DoorEntry,
-  HardwareItem,
+  ExtractedHardwareItem,
   HardwareSet,
   FlaggedDoor,
   PageClassification,
 } from '@/lib/types';
 
-export type { DoorEntry, HardwareItem, HardwareSet, FlaggedDoor, PageClassification };
+export type { DoorEntry, ExtractedHardwareItem, HardwareSet, FlaggedDoor, PageClassification };
 
-/** The five steps the wizard progresses through. */
+/** The steps the wizard progresses through. Compare is only shown for revisions. */
 export enum WizardStep {
   Upload = 0,
   MapColumns = 1,
   Triage = 2,
   Review = 3,
-  Confirm = 4,
+  Compare = 4,
+  Confirm = 5,
 }
 
 // ─── API response types ───
