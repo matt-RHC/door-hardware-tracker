@@ -1,9 +1,18 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import Anthropic from '@anthropic-ai/sdk'
-import { getTaxonomyPromptText } from '@/lib/hardware-taxonomy'
 import { extractFireRatings } from '@/lib/fire-rating'
-import type { DoorEntry, HardwareItem, HardwareSet } from '@/lib/types'
+import {
+  getPostExtractionReviewPrompt,
+  getQuantityCheckPrompt,
+} from '@/lib/punchy-prompts'
+import type {
+  DoorEntry,
+  HardwareItem,
+  HardwareSet,
+  PunchyQuantityCheck,
+  PunchyObservation,
+} from '@/lib/types'
 import { extractJSON } from '@/lib/extractJSON'
 
 // Vercel Fluid Compute: 800s timeout (Pro plan max)
@@ -44,20 +53,23 @@ interface LLMCorrections {
     heading?: string
     items_to_add?: HardwareItem[]
     items_to_remove?: string[]
-    items_to_fix?: Array<{ name: string; field: string; old_value: string; new_value: string }>
+    items_to_fix?: Array<{ name: string; field: string; old_value: string; new_value: string; confidence?: string }>
   }>
   doors_corrections?: Array<{
     door_number: string
     field: string
     old_value: string
     new_value: string
+    confidence?: string
   }>
-  missing_doors?: DoorEntry[]
+  missing_doors?: Array<DoorEntry & { confidence?: string }>
   missing_sets?: Array<{
     set_id: string
     heading: string
     items: HardwareItem[]
+    confidence?: string
   }>
+  overall_confidence?: string
   notes?: string
 }
 
@@ -117,62 +129,24 @@ async function callPdfplumber(
   }
 }
 
-async function callLLMReview(
+// ── Punchy Checkpoint 2: Post-Extraction Review ──────────────────
+
+async function callPunchyPostExtraction(
   client: Anthropic,
   base64: string,
   pdfplumberResult: PdfplumberResult
 ): Promise<LLMCorrections> {
-  const systemPrompt = `You are a quality reviewer for door hardware submittal PDF extraction.
-
-You will receive:
-1. A PDF document (door hardware submittal)
-2. Structured data extracted from that PDF by an automated tool (pdfplumber)
-
-Your job is to REVIEW the extracted data against the actual PDF and return ONLY corrections needed. Do NOT re-extract everything — just identify errors and missing data.
-
-Return valid JSON with this structure:
-{
-  "hardware_sets_corrections": [
-    {
-      "set_id": "DH1",
-      "heading": "corrected heading if wrong",
-      "items_to_add": [{"qty": 1, "name": "Missing Item", "manufacturer": "MFR", "model": "MDL", "finish": "FIN"}],
-      "items_to_remove": ["Item Name That Shouldnt Be There"],
-      "items_to_fix": [{"name": "Item Name", "field": "qty", "old_value": "2", "new_value": "3"}]
-    }
-  ],
-  "doors_corrections": [
-    {"door_number": "110-01A", "field": "hw_set", "old_value": "DH1", "new_value": "DH2"}
-  ],
-  "missing_doors": [
-    {"door_number": "110-05A", "hw_set": "DH1", "location": "Office", "door_type": "WD", "frame_type": "HM", "fire_rating": "20Min", "hand": "LHR"}
-  ],
-  "missing_sets": [
-    {"set_id": "DH5", "heading": "Storage Room", "items": [{"qty": 3, "name": "Hinges", "manufacturer": "IV", "model": "5BB1", "finish": "626"}]}
-  ],
-  "notes": "Optional notes about extraction quality"
-}
-
-If the extraction is accurate and complete, return: {"notes": "Extraction looks correct"}
-
-CRITICAL RULES:
-- Only report REAL errors you can see in the PDF. Do not hallucinate corrections.
-- DO NOT "fix" item quantities. The quantities shown have ALREADY been normalized from PDF totals to per-opening values by dividing by the number of doors in each set. If the PDF shows "8" for closers across 8 doors, the correct per-opening qty is 1, and the extracted data will show 1. Do NOT change it back to 8.
-- Focus on: missing items/doors, wrong set assignments, misread text (names, manufacturers, models, finishes).
-- Do NOT correct formatting differences (e.g. "HM" vs "Hollow Metal" are both fine).
-- FIELD SPLITTING: The name field should contain ONLY the hardware category name (e.g., "Closer", "Hinges", "Exit Device"). If an item's name still contains model numbers, finish codes, or manufacturer abbreviations (e.g., name="Closer 4040XP AL LC" with empty model/finish/mfr), report it as items_to_fix. Split: name=category only, model=catalog/model number, finish=finish code, manufacturer=company abbreviation. Common codes: IV=Ives, SC=Schlage, ZE=Zero, LC=LCN, AB=ABH, VO=Von Duprin, NA=NGP, ME=Medeco.
-
-${getTaxonomyPromptText()}`
+  const systemPrompt = getPostExtractionReviewPrompt()
 
   const extractedSummary = JSON.stringify({
-    hardware_sets: pdfplumberResult.hardware_sets.map(s => ({
+    hardware_sets: (pdfplumberResult?.hardware_sets ?? []).map(s => ({
       set_id: s.set_id,
       heading: s.heading,
-      item_count: s.items.length,
-      items: s.items,
+      item_count: s.items?.length ?? 0,
+      items: s.items ?? [],
     })),
-    doors_count: pdfplumberResult.openings.length,
-    doors: pdfplumberResult.openings,
+    doors_count: pdfplumberResult?.openings?.length ?? 0,
+    doors: pdfplumberResult?.openings ?? [],
   }, null, 2)
 
   try {
@@ -198,9 +172,9 @@ ${getTaxonomyPromptText()}`
       ],
     })
 
-    const textBlock = response.content.find((b) => b.type === 'text')
+    const textBlock = response.content.find((b: { type: string }) => b.type === 'text')
     if (!textBlock || textBlock.type !== 'text') {
-      return { notes: 'LLM review returned no text' }
+      return { notes: 'Punchy returned no text' }
     }
 
     let text = textBlock.text.trim()
@@ -210,8 +184,81 @@ ${getTaxonomyPromptText()}`
 
     return extractJSON(text) as LLMCorrections
   } catch (err) {
-    console.error('LLM review failed:', err instanceof Error ? err.message : String(err))
-    return { notes: `LLM review failed: ${err instanceof Error ? err.message : String(err)}` }
+    console.error('Punchy post-extraction review failed:', err instanceof Error ? err.message : String(err))
+    return { notes: `Punchy review failed: ${err instanceof Error ? err.message : String(err)}` }
+  }
+}
+
+// ── Punchy Checkpoint 3: Quantity Sanity Check ───────────────────
+
+async function callPunchyQuantityCheck(
+  client: Anthropic,
+  base64: string,
+  hardwareSets: HardwareSet[],
+  doors: DoorEntry[],
+): Promise<PunchyQuantityCheck> {
+  const systemPrompt = getQuantityCheckPrompt()
+
+  const dataSummary = JSON.stringify({
+    hardware_sets: hardwareSets.map(s => ({
+      set_id: s.set_id,
+      heading: s.heading,
+      items: s.items.map(i => ({
+        name: i.name,
+        qty: i.qty,
+        qty_source: i.qty_source,
+        manufacturer: i.manufacturer,
+        model: i.model,
+        finish: i.finish,
+      })),
+    })),
+    doors: doors.slice(0, 20).map(d => ({
+      door_number: d.door_number,
+      hw_set: d.hw_set,
+      fire_rating: d.fire_rating,
+      door_type: d.door_type,
+      hand: d.hand,
+    })),
+    total_doors: doors.length,
+  }, null, 2)
+
+  try {
+    const response = await client.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 4096,
+      system: [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }],
+      messages: [
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'document',
+              source: { type: 'base64', media_type: 'application/pdf', data: base64 },
+              cache_control: { type: 'ephemeral' },
+            },
+            {
+              type: 'text',
+              text: `Here are the normalized hardware quantities and door assignments. Check quantities against DFH standards and flag any compliance issues:\n\n${dataSummary}`,
+            },
+          ],
+        },
+      ],
+    })
+
+    const textBlock = response.content.find((b: { type: string }) => b.type === 'text')
+    if (!textBlock || textBlock.type !== 'text') {
+      return { flags: [], compliance_issues: [], notes: 'Punchy returned no text' }
+    }
+
+    let text = textBlock.text.trim()
+    if (text.startsWith('```')) {
+      text = text.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '')
+    }
+
+    return extractJSON(text) as PunchyQuantityCheck
+  } catch (err) {
+    console.error('Punchy quantity check failed:', err instanceof Error ? err.message : String(err))
+    return { flags: [], compliance_issues: [], notes: `Punchy quantity check failed: ${err instanceof Error ? err.message : String(err)}` }
   }
 }
 
@@ -297,6 +344,8 @@ async function extractFromPDF(base64: string, filteredPdfBase64?: string, userCo
   hardwareSets: HardwareSet[]
   doors: DoorEntry[]
   corrections: LLMCorrections
+  punchyObservations: PunchyObservation[]
+  punchyQuantityCheck: PunchyQuantityCheck | null
   stats: { tables_found: number; hw_sets_found: number; method: string }
 }> {
   let pdfplumberResult: PdfplumberResult | null = null
@@ -331,10 +380,15 @@ async function extractFromPDF(base64: string, filteredPdfBase64?: string, userCo
 
   let allDoors: DoorEntry[] = pdfplumberResult?.openings || []
 
+  // ==========================================
+  // Punchy Checkpoint 2: Post-Extraction Review
+  // ==========================================
   const client = new Anthropic()
-  // Use filtered PDF for LLM review if available (fewer pages = cheaper + faster)
+  const punchyObservations: PunchyObservation[] = []
+
+  // Use filtered PDF for Punchy review if available (fewer pages = cheaper + faster)
   const reviewPdf = filteredPdfBase64 ?? base64
-  const corrections = await callLLMReview(client, reviewPdf, pdfplumberResult || {
+  const corrections = await callPunchyPostExtraction(client, reviewPdf, pdfplumberResult ?? {
     success: false,
     openings: [],
     hardware_sets: [],
@@ -346,12 +400,20 @@ async function extractFromPDF(base64: string, filteredPdfBase64?: string, userCo
     error: 'pdfplumber failed',
   })
 
+  if (corrections.notes) {
+    punchyObservations.push({
+      checkpoint: 'post_extraction',
+      message: corrections.notes,
+      confidence: (corrections.overall_confidence as PunchyObservation['confidence']) ?? 'medium',
+    })
+  }
+
   const corrected = applyCorrections(hardwareSets, allDoors, corrections)
   hardwareSets = corrected.hardwareSets
   allDoors = corrected.doors
 
-  // --- Post-LLM qty re-normalization ---
-  // The LLM may "correct" already-normalized quantities back to PDF totals.
+  // --- Post-Punchy qty re-normalization ---
+  // Punchy may "correct" already-normalized quantities back to PDF totals.
   // Use heading-based counts from Python, fall back to Opening List counting.
   const doorsPerSet = new Map<string, number>()
   for (const door of allDoors) {
@@ -360,8 +422,6 @@ async function extractFromPDF(base64: string, filteredPdfBase64?: string, userCo
     }
   }
   for (const set of hardwareSets) {
-    // Skip items already normalized by Python
-    // Prefer heading-based counts; fall back to Opening List
     const leafCount = (set.heading_leaf_count ?? 0) > 1
       ? (set.heading_leaf_count ?? 0)
       : 0
@@ -374,7 +434,6 @@ async function extractFromPDF(base64: string, filteredPdfBase64?: string, userCo
       if (item.qty_source === 'divided' || item.qty_source === 'flagged' || item.qty_source === 'capped') {
         continue
       }
-      // Try leaf count first, then opening count (same strategy as Python)
       let divided = false
       if (leafCount > 1 && item.qty >= leafCount) {
         const perLeaf = item.qty / leafCount
@@ -401,14 +460,33 @@ async function extractFromPDF(base64: string, filteredPdfBase64?: string, userCo
   // Extract fire ratings embedded in hw_heading/location fields
   extractFireRatings(allDoors)
 
+  // ==========================================
+  // Punchy Checkpoint 3: Quantity Sanity Check
+  // ==========================================
+  let punchyQuantityCheck: PunchyQuantityCheck | null = null
+  try {
+    punchyQuantityCheck = await callPunchyQuantityCheck(client, reviewPdf, hardwareSets, allDoors)
+    if ((punchyQuantityCheck.flags?.length ?? 0) > 0 || (punchyQuantityCheck.compliance_issues?.length ?? 0) > 0) {
+      punchyObservations.push({
+        checkpoint: 'quantity_check',
+        message: punchyQuantityCheck.notes ?? 'Quantity check complete',
+        confidence: (punchyQuantityCheck.compliance_issues?.length ?? 0) > 0 ? 'medium' : 'high',
+      })
+    }
+  } catch (err) {
+    console.error('Punchy quantity check error:', err instanceof Error ? err.message : String(err))
+  }
+
   return {
     hardwareSets,
     doors: allDoors,
     corrections,
+    punchyObservations,
+    punchyQuantityCheck,
     stats: {
-      tables_found: pdfplumberResult?.tables_found || 0,
-      hw_sets_found: pdfplumberResult?.hw_sets_found || 0,
-      method: pdfplumberResult?.method || 'none',
+      tables_found: pdfplumberResult?.tables_found ?? 0,
+      hw_sets_found: pdfplumberResult?.hw_sets_found ?? 0,
+      method: pdfplumberResult?.method ?? 'none',
     },
   }
 }
@@ -438,7 +516,7 @@ export async function POST(request: NextRequest) {
       const filteredPdfBase64: string | undefined = body.filteredPdfBase64 ?? undefined
 
       const userColumnMapping = body.userColumnMapping ?? null
-      const { hardwareSets, doors, corrections, stats } = await extractFromPDF(base64, filteredPdfBase64, userColumnMapping)
+      const { hardwareSets, doors, corrections, punchyObservations, punchyQuantityCheck, stats } = await extractFromPDF(base64, filteredPdfBase64, userColumnMapping)
 
       return NextResponse.json({
         success: true,
@@ -447,6 +525,8 @@ export async function POST(request: NextRequest) {
         flaggedDoors: [],
         stats,
         reviewNotes: corrections.notes,
+        punchyObservations,
+        punchyQuantityCheck,
       })
     } catch (error) {
       console.error('Parse-only PDF error:', error)
@@ -500,7 +580,7 @@ export async function POST(request: NextRequest) {
         // ==========================================
         send(8, 'Extracting tables (deterministic)...')
 
-        const { hardwareSets, doors: allDoors, corrections } = await extractFromPDF(base64)
+        const { hardwareSets, doors: allDoors, corrections, punchyObservations } = await extractFromPDF(base64)
 
         const setCount = hardwareSets.length
         const totalItems = hardwareSets.reduce((sum, s) => sum + (s.items?.length || 0), 0)
@@ -716,6 +796,7 @@ export async function POST(request: NextRequest) {
           hardwareSets: setCount,
           unmatchedSets: unmatchedSets.length > 0 ? unmatchedSets : undefined,
           reviewNotes: corrections.notes,
+          punchyObservations,
         })
 
         // Auto-trigger submittal sync (fire-and-forget)

@@ -16,7 +16,18 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 - **TypeScript:** Always use `?.`, `??`, and `?? []` for nullable access. Turbopack will reject `&&` guards and `if` narrowing patterns that tsc accepts. See CLAUDE.md for the full list.
 - **No placeholder code.** Every feature must work end-to-end before moving on. No TODOs in production code.
-- **Test against golden PDFs.** Any change to the extraction pipeline must be tested against the 3 benchmark PDFs in `test-pdfs/` (small 3pg, medium 44pg, large 82pg).
+- **Test against golden PDFs.** Any change to the extraction pipeline must be tested against the 15 benchmark PDFs in `test-pdfs/training/` (grid, schedule, kinship, mixed formats).
+
+## Punchy AI Review Architecture
+
+The extraction pipeline uses a multi-pass AI review system called **Punchy** — a senior DFH consultant persona that reviews extraction results at 3 checkpoints. See CLAUDE.md "Punchy AI Review Layer" section for full details.
+
+When modifying extraction pipeline code:
+- **Punchy prompts** live in `src/lib/punchy-prompts.ts` — update these when adding new domain knowledge or changing extraction behavior
+- **Checkpoint functions** are in `chunk/route.ts` and `route.ts` — `callPunchyPostExtraction()`, `callPunchyColumnReview()`, `callPunchyQuantityCheck()`
+- **Types** in `src/lib/types/index.ts` — `PunchyObservation`, `PunchyCorrections`, `PunchyColumnReview`, `PunchyQuantityCheck`
+- **Confidence scoring** — every Punchy observation must include high/medium/low confidence
+- **API responses** now include `punchyObservations` and `punchyQuantityCheck` fields
 
 ## User Interaction
 

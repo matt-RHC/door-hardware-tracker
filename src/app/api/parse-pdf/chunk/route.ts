@@ -1,9 +1,22 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import Anthropic from '@anthropic-ai/sdk'
-import { getTaxonomyPromptText } from '@/lib/hardware-taxonomy'
 import { extractFireRatings } from '@/lib/fire-rating'
-import type { DoorEntry, HardwareItem, HardwareSet, PdfplumberFlaggedDoor } from '@/lib/types'
+import {
+  getPostExtractionReviewPrompt,
+  getQuantityCheckPrompt,
+  getColumnMappingReviewPrompt,
+} from '@/lib/punchy-prompts'
+import type {
+  DoorEntry,
+  HardwareItem,
+  HardwareSet,
+  PdfplumberFlaggedDoor,
+  PunchyCorrections,
+  PunchyQuantityCheck,
+  PunchyColumnReview,
+  PunchyObservation,
+} from '@/lib/types'
 import { extractJSON } from '@/lib/extractJSON'
 
 // Vercel Fluid Compute: 800s timeout (Pro plan max)
@@ -39,26 +52,31 @@ interface PdfplumberResult {
   error: string
 }
 
+// Legacy LLMCorrections type kept for applyCorrections compatibility
+// PunchyCorrections extends this with confidence scoring
 interface LLMCorrections {
   hardware_sets_corrections?: Array<{
     set_id: string
     heading?: string
     items_to_add?: HardwareItem[]
-    items_to_remove?: string[]  // item names to remove
-    items_to_fix?: Array<{ name: string; field: string; old_value: string; new_value: string }>
+    items_to_remove?: string[]
+    items_to_fix?: Array<{ name: string; field: string; old_value: string; new_value: string; confidence?: string }>
   }>
   doors_corrections?: Array<{
     door_number: string
     field: string
     old_value: string
     new_value: string
+    confidence?: string
   }>
-  missing_doors?: DoorEntry[]
+  missing_doors?: Array<DoorEntry & { confidence?: string }>
   missing_sets?: Array<{
     set_id: string
     heading: string
     items: HardwareItem[]
+    confidence?: string
   }>
+  overall_confidence?: string
   notes?: string
 }
 
@@ -108,65 +126,27 @@ async function callPdfplumber(
   }
 }
 
-async function callLLMReview(
+// ── Punchy Checkpoint 2: Post-Extraction Review ──────────────────
+
+async function callPunchyPostExtraction(
   client: Anthropic,
   base64: string,
   pdfplumberResult: PdfplumberResult,
   knownSetIds?: string[]
 ): Promise<LLMCorrections> {
-  const systemPrompt = `You are a quality reviewer for door hardware submittal PDF extraction.
-
-You will receive:
-1. A PDF document (door hardware submittal)
-2. Structured data extracted from that PDF by an automated tool (pdfplumber)
-
-Your job is to REVIEW the extracted data against the actual PDF and return ONLY corrections needed. Do NOT re-extract everything — just identify errors and missing data.
-
-Return valid JSON with this structure:
-{
-  "hardware_sets_corrections": [
-    {
-      "set_id": "DH1",
-      "heading": "corrected heading if wrong",
-      "items_to_add": [{"qty": 1, "name": "Missing Item", "manufacturer": "MFR", "model": "MDL", "finish": "FIN"}],
-      "items_to_remove": ["Item Name That Shouldnt Be There"],
-      "items_to_fix": [{"name": "Item Name", "field": "qty", "old_value": "2", "new_value": "3"}]
-    }
-  ],
-  "doors_corrections": [
-    {"door_number": "110-01A", "field": "hw_set", "old_value": "DH1", "new_value": "DH2"}
-  ],
-  "missing_doors": [
-    {"door_number": "110-05A", "hw_set": "DH1", "location": "Office", "door_type": "WD", "frame_type": "HM", "fire_rating": "20Min", "hand": "LHR"}
-  ],
-  "missing_sets": [
-    {"set_id": "DH5", "heading": "Storage Room", "items": [{"qty": 3, "name": "Hinges", "manufacturer": "IV", "model": "5BB1", "finish": "626"}]}
-  ],
-  "notes": "Optional notes about extraction quality"
-}
-
-If the extraction is accurate and complete, return: {"notes": "Extraction looks correct"}
-
-CRITICAL RULES:
-- Only report REAL errors you can see in the PDF. Do not hallucinate corrections.
-- DO NOT "fix" item quantities. The quantities shown have ALREADY been normalized from PDF totals to per-opening values by dividing by the number of doors in each set. If the PDF shows "8" for closers across 8 doors, the correct per-opening qty is 1, and the extracted data will show 1. Do NOT change it back to 8.
-- Focus on: missing items/doors, wrong set assignments, misread text (names, manufacturers, models, finishes).
-- Do NOT correct formatting differences (e.g. "HM" vs "Hollow Metal" are both fine).
-- FIELD SPLITTING: The name field should contain ONLY the hardware category name (e.g., "Closer", "Hinges", "Exit Device"). If an item's name still contains model numbers, finish codes, or manufacturer abbreviations (e.g., name="Closer 4040XP AL LC" with empty model/finish/mfr), report it as items_to_fix. Split: name=category only, model=catalog/model number, finish=finish code, manufacturer=company abbreviation. Common codes: IV=Ives, SC=Schlage, ZE=Zero, LC=LCN, AB=ABH, VO=Von Duprin, NA=NGP, ME=Medeco.
-
-${getTaxonomyPromptText()}`
+  const systemPrompt = getPostExtractionReviewPrompt()
 
   const extractedSummary = JSON.stringify({
-    hardware_sets: pdfplumberResult.hardware_sets.map(s => ({
+    hardware_sets: (pdfplumberResult?.hardware_sets ?? []).map(s => ({
       set_id: s.set_id,
       heading: s.heading,
-      item_count: s.items.length,
-      items: s.items,
+      item_count: s.items?.length ?? 0,
+      items: s.items ?? [],
     })),
-    doors_count: pdfplumberResult.openings.length,
-    doors_sample: pdfplumberResult.openings.slice(0, 10),
-    total_doors: pdfplumberResult.openings.length,
-    known_set_ids: knownSetIds || [],
+    doors_count: pdfplumberResult?.openings?.length ?? 0,
+    doors_sample: (pdfplumberResult?.openings ?? []).slice(0, 10),
+    total_doors: pdfplumberResult?.openings?.length ?? 0,
+    known_set_ids: knownSetIds ?? [],
   }, null, 2)
 
   try {
@@ -192,9 +172,9 @@ ${getTaxonomyPromptText()}`
       ],
     })
 
-    const textBlock = response.content.find((b) => b.type === 'text')
+    const textBlock = response.content.find((b: { type: string }) => b.type === 'text')
     if (!textBlock || textBlock.type !== 'text') {
-      return { notes: 'LLM review returned no text' }
+      return { notes: 'Punchy returned no text' }
     }
 
     let text = textBlock.text.trim()
@@ -204,8 +184,134 @@ ${getTaxonomyPromptText()}`
 
     return extractJSON(text) as LLMCorrections
   } catch (err) {
-    console.error('LLM review failed:', err instanceof Error ? err.message : String(err))
-    return { notes: `LLM review failed: ${err instanceof Error ? err.message : String(err)}` }
+    console.error('Punchy post-extraction review failed:', err instanceof Error ? err.message : String(err))
+    return { notes: `Punchy review failed: ${err instanceof Error ? err.message : String(err)}` }
+  }
+}
+
+// ── Punchy Checkpoint 1: Column Mapping Review ───────────────────
+
+async function callPunchyColumnReview(
+  client: Anthropic,
+  base64: string,
+  columnMapping: Record<string, number> | null | undefined,
+): Promise<PunchyColumnReview> {
+  const systemPrompt = getColumnMappingReviewPrompt()
+
+  const mappingSummary = columnMapping
+    ? JSON.stringify(columnMapping, null, 2)
+    : 'No column mapping provided (auto-detection will be used)'
+
+  try {
+    const response = await client.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 4096,
+      system: [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }],
+      messages: [
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'document',
+              source: { type: 'base64', media_type: 'application/pdf', data: base64 },
+              cache_control: { type: 'ephemeral' },
+            },
+            {
+              type: 'text',
+              text: `Here is the user's column mapping for the opening list table:\n\n${mappingSummary}\n\nReview the PDF and check if any expected fields are unmapped or incorrectly mapped. Return corrections as JSON.`,
+            },
+          ],
+        },
+      ],
+    })
+
+    const textBlock = response.content.find((b: { type: string }) => b.type === 'text')
+    if (!textBlock || textBlock.type !== 'text') {
+      return { unmapped_fields: [], mapping_issues: [], notes: 'Punchy returned no text' }
+    }
+
+    let text = textBlock.text.trim()
+    if (text.startsWith('```')) {
+      text = text.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '')
+    }
+
+    return extractJSON(text) as PunchyColumnReview
+  } catch (err) {
+    console.error('Punchy column review failed:', err instanceof Error ? err.message : String(err))
+    return { unmapped_fields: [], mapping_issues: [], notes: `Punchy column review failed: ${err instanceof Error ? err.message : String(err)}` }
+  }
+}
+
+// ── Punchy Checkpoint 3: Quantity Sanity Check ───────────────────
+
+async function callPunchyQuantityCheck(
+  client: Anthropic,
+  base64: string,
+  hardwareSets: HardwareSet[],
+  doors: DoorEntry[],
+): Promise<PunchyQuantityCheck> {
+  const systemPrompt = getQuantityCheckPrompt()
+
+  const dataSummary = JSON.stringify({
+    hardware_sets: hardwareSets.map(s => ({
+      set_id: s.set_id,
+      heading: s.heading,
+      items: s.items.map(i => ({
+        name: i.name,
+        qty: i.qty,
+        qty_source: i.qty_source,
+        manufacturer: i.manufacturer,
+        model: i.model,
+        finish: i.finish,
+      })),
+    })),
+    doors: doors.slice(0, 20).map(d => ({
+      door_number: d.door_number,
+      hw_set: d.hw_set,
+      fire_rating: d.fire_rating,
+      door_type: d.door_type,
+      hand: d.hand,
+    })),
+    total_doors: doors.length,
+  }, null, 2)
+
+  try {
+    const response = await client.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 4096,
+      system: [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }],
+      messages: [
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'document',
+              source: { type: 'base64', media_type: 'application/pdf', data: base64 },
+              cache_control: { type: 'ephemeral' },
+            },
+            {
+              type: 'text',
+              text: `Here are the normalized hardware quantities and door assignments. Check quantities against DFH standards and flag any compliance issues:\n\n${dataSummary}`,
+            },
+          ],
+        },
+      ],
+    })
+
+    const textBlock = response.content.find((b: { type: string }) => b.type === 'text')
+    if (!textBlock || textBlock.type !== 'text') {
+      return { flags: [], compliance_issues: [], notes: 'Punchy returned no text' }
+    }
+
+    let text = textBlock.text.trim()
+    if (text.startsWith('```')) {
+      text = text.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '')
+    }
+
+    return extractJSON(text) as PunchyQuantityCheck
+  } catch (err) {
+    console.error('Punchy quantity check failed:', err instanceof Error ? err.message : String(err))
+    return { flags: [], compliance_issues: [], notes: `Punchy quantity check failed: ${err instanceof Error ? err.message : String(err)}` }
   }
 }
 
@@ -354,10 +460,37 @@ export async function POST(request: NextRequest) {
     const flaggedDoors: PdfplumberFlaggedDoor[] = pdfplumberResult?.flagged_doors || []
 
     // ==========================================
-    // Step 2: LLM review pass (always)
+    // Step 2: Punchy Checkpoint 1 — Column Mapping Review
+    // (only on first chunk when user provided a mapping)
     // ==========================================
     const client = new Anthropic()
-    const corrections = await callLLMReview(client, chunkBase64, pdfplumberResult || {
+    const punchyObservations: PunchyObservation[] = []
+
+    if (chunkIndex === 0 && userColumnMapping) {
+      try {
+        const columnReview = await callPunchyColumnReview(client, chunkBase64, userColumnMapping)
+        if ((columnReview.unmapped_fields?.length ?? 0) > 0 || (columnReview.mapping_issues?.length ?? 0) > 0) {
+          punchyObservations.push({
+            checkpoint: 'column_mapping',
+            message: columnReview.notes ?? 'Column mapping review complete',
+            confidence: (columnReview.unmapped_fields?.length ?? 0) > 0 ? 'medium' : 'high',
+            field_suggestions: (columnReview.unmapped_fields ?? []).map(f => ({
+              field: f.field,
+              suggestion: f.suggestion,
+              confidence: f.confidence,
+            })),
+          })
+        }
+        console.debug(`Chunk ${chunkIndex + 1}: Punchy column review: ${columnReview.unmapped_fields?.length ?? 0} unmapped fields, ${columnReview.mapping_issues?.length ?? 0} issues`)
+      } catch (err) {
+        console.error('Punchy column review error:', err instanceof Error ? err.message : String(err))
+      }
+    }
+
+    // ==========================================
+    // Step 3: Punchy Checkpoint 2 — Post-Extraction Review
+    // ==========================================
+    const corrections = await callPunchyPostExtraction(client, chunkBase64, pdfplumberResult ?? {
       success: false,
       openings: [],
       hardware_sets: [],
@@ -370,13 +503,22 @@ export async function POST(request: NextRequest) {
       error: 'pdfplumber failed',
     }, knownSetIds)
 
+    // Track Punchy's post-extraction observations
+    if (corrections.notes) {
+      punchyObservations.push({
+        checkpoint: 'post_extraction',
+        message: corrections.notes,
+        confidence: (corrections.overall_confidence as PunchyObservation['confidence']) ?? 'medium',
+      })
+    }
+
     // Apply corrections
     const corrected = applyCorrections(hardwareSets, doors, corrections)
     hardwareSets = corrected.hardwareSets
     doors = corrected.doors
 
     // --- Post-LLM qty re-normalization ---
-    // LLM may revert normalized quantities back to PDF totals.
+    // Punchy may revert normalized quantities back to PDF totals.
     // Build doorsPerSet from Opening List as fallback (parity with route.ts)
     const doorsPerSet = new Map<string, number>()
     for (const door of doors) {
@@ -421,10 +563,31 @@ export async function POST(request: NextRequest) {
     // Extract fire ratings embedded in hw_heading/location fields
     extractFireRatings(doors)
 
+    // ==========================================
+    // Step 4: Punchy Checkpoint 3 — Quantity Sanity Check
+    // ==========================================
+    let quantityCheck: PunchyQuantityCheck | null = null
+    try {
+      quantityCheck = await callPunchyQuantityCheck(client, chunkBase64, hardwareSets, doors)
+      if ((quantityCheck.flags?.length ?? 0) > 0 || (quantityCheck.compliance_issues?.length ?? 0) > 0) {
+        punchyObservations.push({
+          checkpoint: 'quantity_check',
+          message: quantityCheck.notes ?? 'Quantity check complete',
+          confidence: (quantityCheck.compliance_issues?.length ?? 0) > 0 ? 'medium' : 'high',
+        })
+      }
+      console.debug(
+        `Chunk ${chunkIndex + 1}: Punchy qty check: ${quantityCheck.flags?.length ?? 0} flags, ` +
+        `${quantityCheck.compliance_issues?.length ?? 0} compliance issues`
+      )
+    } catch (err) {
+      console.error('Punchy quantity check error:', err instanceof Error ? err.message : String(err))
+    }
+
     console.debug(
-      `Chunk ${chunkIndex + 1}/${totalChunks}: after LLM review: ` +
-      `${hardwareSets.length} sets, ${doors.length} doors. ` +
-      `Notes: ${corrections.notes || 'none'}`
+      `Chunk ${chunkIndex + 1}/${totalChunks}: Punchy pipeline complete: ` +
+      `${hardwareSets.length} sets, ${doors.length} doors, ` +
+      `${punchyObservations.length} observations`
     )
 
     return NextResponse.json({
@@ -433,6 +596,8 @@ export async function POST(request: NextRequest) {
       doors,
       flaggedDoors,
       reviewNotes: corrections.notes,
+      punchyObservations,
+      punchyQuantityCheck: quantityCheck,
     })
   } catch (error) {
     console.error('Chunk processing error:', error)
