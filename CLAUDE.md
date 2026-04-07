@@ -84,13 +84,37 @@ Every door hardware submittal PDF has three layers:
 
 ### Pipeline Flow
 ```
-classify-pages.py → detect-mapping.py → ColumnMapperWizard (user) → extract-tables.py → chunk/route.ts → LLM review → merge → ImportReviewTable (user review) → save
+classify-pages.py → detect-mapping.py → ColumnMapperWizard (user)
+  → Punchy Checkpoint 1: Column Mapping Review
+  → extract-tables.py (pdfplumber)
+  → Punchy Checkpoint 2: Post-Extraction Review
+  → quantity normalization
+  → Punchy Checkpoint 3: Quantity Sanity Check
+  → merge → ImportReviewTable (user review) → save
 ```
 
 - PDFs ≤ 45 pages: full pipeline, no chunking
 - PDFs > 45 pages: client-side splitting into 35-page chunks via pdf-lib
 - Resubmissions use the compare wizard for revision tracking
 - SHA-256 hash prevents duplicate uploads
+
+### Punchy AI Review Layer (S-067)
+
+**Punchy** is the AI persona for the extraction pipeline — a senior DFH consultant with 25 years in commercial construction. Punchy reviews extraction results at 3 checkpoints and provides confidence-rated observations.
+
+**Checkpoints:**
+1. **Column Mapping Review** — checks if expected fields (location, fire_rating, hand) are unmapped and suggests where to find them in the PDF
+2. **Post-Extraction Review** — finds missing doors/sets, wrong assignments, field splitting issues. If pdfplumber found very few doors (schedule format), Punchy does heavier lifting extracting inline door assignments
+3. **Quantity Sanity Check** — validates normalized quantities against DFH standards (hinge count, fire-rated hardware, pair door rules, IBC egress requirements)
+
+**Key files:**
+- `src/lib/punchy-prompts.ts` — shared system prompts for all checkpoints
+- `src/app/api/parse-pdf/chunk/route.ts` — 3 Punchy checkpoints wired into chunk processing
+- `src/app/api/parse-pdf/route.ts` — same checkpoints for non-chunked flow
+- `src/lib/types/index.ts` — `PunchyObservation`, `PunchyCorrections`, `PunchyColumnReview`, `PunchyQuantityCheck` types
+
+**Model:** `claude-haiku-4-5-20251001` (cost-efficient, production-proven)
+**Confidence scoring:** Every observation rated high/medium/low so users know what to verify
 
 ## UI / UX Notes
 

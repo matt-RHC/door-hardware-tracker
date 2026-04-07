@@ -60,6 +60,92 @@ export interface PdfplumberFlaggedDoor {
   dominant_pattern: string
 }
 
+// ── Punchy AI review types ────────────────────────────────────────
+
+/** Confidence level for a Punchy observation or correction. */
+export type PunchyConfidence = 'high' | 'medium' | 'low'
+
+/** A single observation from Punchy at a pipeline checkpoint. */
+export interface PunchyObservation {
+  checkpoint: 'column_mapping' | 'post_extraction' | 'quantity_check'
+  message: string
+  confidence: PunchyConfidence
+  /** Field-level suggestions (e.g., unmapped column found elsewhere) */
+  field_suggestions?: Array<{
+    field: string
+    suggestion: string
+    confidence: PunchyConfidence
+  }>
+}
+
+/** Corrections returned by Punchy's post-extraction review (Checkpoint 2). */
+export interface PunchyCorrections {
+  hardware_sets_corrections?: Array<{
+    set_id: string
+    heading?: string
+    items_to_add?: HardwareItem[]
+    items_to_remove?: string[]
+    items_to_fix?: Array<{
+      name: string
+      field: string
+      old_value: string
+      new_value: string
+      confidence: PunchyConfidence
+    }>
+  }>
+  doors_corrections?: Array<{
+    door_number: string
+    field: string
+    old_value: string
+    new_value: string
+    confidence: PunchyConfidence
+  }>
+  missing_doors?: Array<DoorEntry & { confidence: PunchyConfidence }>
+  missing_sets?: Array<{
+    set_id: string
+    heading: string
+    items: HardwareItem[]
+    confidence: PunchyConfidence
+  }>
+  notes?: string
+  overall_confidence: PunchyConfidence
+}
+
+/** Column mapping review result from Punchy (Checkpoint 1). */
+export interface PunchyColumnReview {
+  unmapped_fields: Array<{
+    field: string
+    found_location: string
+    confidence: PunchyConfidence
+    suggestion: string
+  }>
+  mapping_issues: Array<{
+    field: string
+    issue: string
+    confidence: PunchyConfidence
+  }>
+  notes?: string
+}
+
+/** Quantity sanity check result from Punchy (Checkpoint 3). */
+export interface PunchyQuantityCheck {
+  flags: Array<{
+    set_id: string
+    item_name: string
+    current_qty: number
+    expected_qty: number
+    reason: string
+    confidence: PunchyConfidence
+  }>
+  compliance_issues: Array<{
+    set_id: string
+    issue: string
+    regulation: string
+    confidence: PunchyConfidence
+  }>
+  notes?: string
+}
+
 // ── Page classification ───────────────────────────────────────────
 
 /** Classification of a single PDF page. */

@@ -1549,6 +1549,16 @@ def is_valid_door_number(val: str, log_rejections: bool = False) -> bool:
         if log_rejections:
             print(f"[DOOR_VALIDATION] Rejected '{val}': pure numeric > 4 digits (project/doc number)")
         return False
+    # S-067: Reject standalone BHMA architectural finish codes (600-699 range).
+    # These are 3-digit numbers that appear on reference table pages and get
+    # extracted as door numbers. Common: 626, 628, 630, 652, 689.
+    if re.match(r'^\d{3}$', clean):
+        code = int(clean)
+        if 600 <= code <= 699:
+            if log_rejections:
+                print(f"[DOOR_VALIDATION] Rejected '{val}': BHMA finish code (600-699)")
+            return False
+
     # S-065: Tightened — only accept bare 3-4 digit numbers in fallback,
     # not arbitrary mixed alphanumeric with 3+ embedded digits
     if re.match(r'^\d{3,4}$', clean):
@@ -1758,6 +1768,102 @@ def count_heading_doors(page_text: str) -> tuple[int, int]:
         opening_count += qty
         leaf_count += qty * (2 if is_pair else 1)
     return (opening_count, leaf_count)
+
+
+# Patterns for extracting door numbers from heading block text.
+# Matches "For Openings: 101, 102, 103" / "Doors: 101, 102A" / "#101, #102"
+_INLINE_DOOR_LIST_RE = re.compile(
+    r"(?:For\s+(?:Openings?|Doors?)\s*[:\-]\s*"      # "For Openings: ..." / "For Doors: ..."
+    r"|Doors?\s*[:\-]\s*"                               # "Door: ..." / "Doors: ..."
+    r"|Openings?\s*[:\-]\s*"                            # "Opening: ..." / "Openings: ..."
+    r"|Assigned\s+(?:to\s+)?(?:Doors?|Openings?)\s*[:\-]\s*"  # "Assigned to Doors: ..."
+    r")"
+    r"(.+)",
+    re.IGNORECASE,
+)
+
+# Pattern for individual door numbers in a comma/space/and-separated list
+# Handles: 101, 102A, 1-101, B1.03, 1.01.A.01A, 101A & 102B
+_DOOR_TOKEN_RE = re.compile(
+    r"#?\s*([A-Z0-9][A-Z0-9.\-]{1,14})",
+    re.IGNORECASE,
+)
+
+# Pattern for doors listed after Pair/Single on heading lines:
+# "1 Pair Doors #101, #102" / "2 Single Doors #103A, #104B, #105C"
+_HEADING_DOOR_NUMBERS_RE = re.compile(
+    r"(?:For\s+|Qty[:\s]+)?(\d+)\s*[-–]?\s*(Pair|Single)\s+Doors?\s*"
+    r"(?:Opening)?s?\s*#?\s*(.+)",
+    re.IGNORECASE,
+)
+
+
+def extract_inline_door_assignments(
+    page_text: str,
+    set_id: str,
+    heading: str = "",
+) -> list[DoorEntry]:
+    """Extract door number assignments from heading block text.
+
+    Handles multiple patterns:
+    1. "N Pair/Single Doors #101, #102, #103"  (extends HEADING_DOOR_LINE)
+    2. "For Openings: 101, 102, 103"
+    3. "Doors: 101, 102A, 103B"
+    4. SpecWorks: "1 SGL DOOR(S)3.01.H.04"  (delegates to existing parser)
+
+    Returns DoorEntry list with hw_set pre-populated from the set heading.
+    """
+    doors: list[DoorEntry] = []
+    seen: set[str] = set()
+
+    def _add_door(door_number: str, door_type: str = "", hand: str = ""):
+        """Add a door if valid and not duplicate."""
+        dn = door_number.strip().strip("#").strip()
+        if not dn or dn.upper() in seen:
+            return
+        if not is_valid_door_number(dn):
+            return
+        seen.add(dn.upper())
+        doors.append(DoorEntry(
+            door_number=dn,
+            hw_set=set_id,
+            hw_heading=heading,
+            door_type=door_type,
+        ))
+
+    # Strategy 1: SpecWorks format ("N SGL DOOR(S)X.XX.Y.ZZ")
+    specworks_doors = _parse_specworks_door_assignments(page_text)
+    if specworks_doors:
+        for sd in specworks_doors:
+            _add_door(
+                sd["door_number"],
+                door_type="PR" if sd.get("door_type") == "PR" else "",
+                hand=sd.get("hand", ""),
+            )
+        # Update hand if available
+        for d in doors:
+            match = next((sd for sd in specworks_doors if sd["door_number"] == d.door_number), None)
+            if match and match.get("hand"):
+                d.hand = match["hand"]
+        return doors
+
+    # Strategy 2: "N Pair/Single Doors #101, #102, #103" pattern
+    for m in _HEADING_DOOR_NUMBERS_RE.finditer(page_text):
+        door_type = "PR" if m.group(2).lower() == "pair" else ""
+        door_list_text = m.group(3)
+        for token in _DOOR_TOKEN_RE.finditer(door_list_text):
+            _add_door(token.group(1), door_type=door_type)
+
+    if doors:
+        return doors
+
+    # Strategy 3: "For Openings: 101, 102" / "Doors: 101, 102" patterns
+    for m in _INLINE_DOOR_LIST_RE.finditer(page_text):
+        door_list_text = m.group(1)
+        for token in _DOOR_TOKEN_RE.finditer(door_list_text):
+            _add_door(token.group(1))
+
+    return doors
 
 
 # Strict pattern for splitting: heading keywords at start of line only.
@@ -2360,6 +2466,95 @@ def extract_all_hardware_sets(pdf: pdfplumber.PDF) -> list[HardwareSetDef]:
                 all_sets.append(hw_set)
 
     return all_sets
+
+
+def extract_inline_doors_from_sets(
+    pdf: pdfplumber.PDF,
+    hardware_sets: list[HardwareSetDef],
+) -> list[DoorEntry]:
+    """Extract door assignments from hardware set heading blocks.
+
+    Fallback for schedule-format PDFs that have no separate Opening List table.
+    Scans each hardware set page for inline door numbers like:
+    - "1 Pair Doors #101, #102"
+    - "For Openings: 101, 102, 103"
+    - SpecWorks: "1 SGL DOOR(S)3.01.H.04"
+
+    Returns a list of DoorEntry objects with hw_set pre-populated.
+    """
+    all_doors: list[DoorEntry] = []
+    seen: set[str] = set()
+    set_ids_by_page: dict[int, list[tuple[str, str]]] = {}
+
+    # Map pages to their hardware sets
+    for page_num, page in enumerate(pdf.pages):
+        text = page.extract_text() or ""
+        if not is_hardware_set_page(text):
+            continue
+
+        # Get set ID from this page
+        heading_id, generic_id, heading = parse_hw_set_id_from_text(text)
+        if not heading_id:
+            continue
+
+        # Use generic_set_id for matching (consistent with extract_all_hardware_sets)
+        match_id = generic_id or heading_id
+        set_ids_by_page.setdefault(page_num, []).append((match_id, heading))
+
+    # Now scan each page for inline door assignments
+    for page_num, page in enumerate(pdf.pages):
+        if page_num not in set_ids_by_page:
+            continue
+
+        text = page.extract_text() or ""
+
+        # Handle multi-heading pages by splitting at headings
+        sections = _split_page_at_headings(text)
+
+        if len(sections) > 1:
+            # Multi-heading page: extract per-section
+            for section_text in sections:
+                sec_id, sec_generic, sec_heading = parse_hw_set_id_from_text(section_text)
+                if not sec_id:
+                    continue
+                match_id = sec_generic or sec_id
+                # Only extract if this set_id matches one in our hardware_sets
+                matching_set = next(
+                    (s for s in hardware_sets if (s.generic_set_id or s.set_id) == match_id),
+                    None,
+                )
+                if not matching_set:
+                    continue
+                inline_doors = extract_inline_door_assignments(
+                    section_text, matching_set.set_id, matching_set.heading
+                )
+                for d in inline_doors:
+                    if d.door_number.upper() not in seen:
+                        seen.add(d.door_number.upper())
+                        all_doors.append(d)
+        else:
+            # Single heading: use full page text
+            for match_id, heading in set_ids_by_page[page_num]:
+                matching_set = next(
+                    (s for s in hardware_sets if (s.generic_set_id or s.set_id) == match_id),
+                    None,
+                )
+                if not matching_set:
+                    continue
+                inline_doors = extract_inline_door_assignments(
+                    text, matching_set.set_id, matching_set.heading
+                )
+                for d in inline_doors:
+                    if d.door_number.upper() not in seen:
+                        seen.add(d.door_number.upper())
+                        all_doors.append(d)
+
+    if all_doors:
+        logger.info(
+            f"[inline-doors] Extracted {len(all_doors)} doors from "
+            f"hardware set heading blocks (schedule-format fallback)"
+        )
+    return all_doors
 
 
 # --- Opening List Extraction ---
@@ -3173,6 +3368,16 @@ class handler(BaseHTTPRequestHandler):
                 # If user provided a confirmed column mapping, use it
                 openings, tables_found = extract_opening_list(pdf, user_column_mapping)
                 logger.info(f"[extract-tables] extract_opening_list: {len(openings)} doors, {tables_found} tables")
+
+                # Phase 2.5: Schedule-format fallback — if no tabular opening
+                # list found but hardware sets exist, extract door assignments
+                # from heading blocks on hardware set pages
+                if len(openings) == 0 and len(hardware_sets) > 0:
+                    logger.info("[extract-tables] No tabular opening list found, trying inline door extraction from heading blocks")
+                    inline_doors = extract_inline_doors_from_sets(pdf, hardware_sets)
+                    if inline_doors:
+                        openings = inline_doors
+                        logger.info(f"[extract-tables] Inline door extraction found {len(openings)} doors")
 
                 # Phase 3: Extract reference tables
                 reference_codes = extract_reference_tables(pdf)
