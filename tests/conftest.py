@@ -5,6 +5,7 @@ Loads the Python extraction module via importlib (since it lives in api/ and
 has no __init__.py). Provides path fixtures for golden test PDFs.
 """
 import importlib.util
+import json
 import os
 import sys
 from pathlib import Path
@@ -274,3 +275,59 @@ class _PipelineCache:
 def pipeline_results(extract_tables, pdf_catalog):
     """Lazy cache for full extraction pipeline results across all golden PDFs."""
     return _PipelineCache(extract_tables, pdf_catalog)
+
+
+# ── Ground truth fixtures ──
+
+GROUND_TRUTH_DIR = Path(__file__).resolve().parent / "ground-truth"
+
+
+@pytest.fixture(scope="session")
+def ground_truth():
+    """Load all ground-truth JSON files, keyed by catalog_key (e.g. 'SMALL')."""
+    truth = {}
+    if GROUND_TRUTH_DIR.exists():
+        for f in GROUND_TRUTH_DIR.glob("*.json"):
+            data = json.loads(f.read_text(encoding="utf-8"))
+            key = data.get("catalog_key", f.stem.upper())
+            truth[key] = data
+    return truth
+
+
+# ── LLM review markers and flags ──
+
+
+def pytest_addoption(parser):
+    parser.addoption(
+        "--run-ai-review",
+        action="store_true",
+        default=False,
+        help="Run tests that call the Anthropic LLM review API (requires ANTHROPIC_API_KEY)",
+    )
+
+
+def pytest_configure(config):
+    config.addinivalue_line(
+        "markers",
+        "llm_review: marks tests that call the Anthropic API for LLM review (skip by default)",
+    )
+
+
+def pytest_collection_modifyitems(config, items):
+    if not config.getoption("--run-ai-review"):
+        skip_llm = pytest.mark.skip(reason="Need --run-ai-review flag to run")
+        for item in items:
+            if "llm_review" in item.keywords:
+                item.add_marker(skip_llm)
+
+
+@pytest.fixture(scope="session")
+def punchy_reviewer():
+    """Session-scoped lazy Anthropic client wrapper for Punchy review.
+
+    Returns the punchy_review module. Skips if ANTHROPIC_API_KEY is not set.
+    """
+    if not os.environ.get("ANTHROPIC_API_KEY"):
+        pytest.skip("ANTHROPIC_API_KEY not set — skipping LLM review tests")
+    from tests.punchy_review import review_extraction, apply_corrections
+    return {"review": review_extraction, "apply": apply_corrections}

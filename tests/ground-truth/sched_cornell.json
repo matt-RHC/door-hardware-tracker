@@ -1,0 +1,8 @@
+{
+  "pdf_name": "sched-Cornell.pdf",
+  "catalog_key": "SCHED_CORNELL",
+  "format": "schedule",
+  "expected_door_count": 4,
+  "expected_set_count": 22,
+  "verified": false
+}
