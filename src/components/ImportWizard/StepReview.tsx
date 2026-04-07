@@ -1,33 +1,11 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { usePunchHighlight } from "./usePunchHighlight";
 import type { DoorEntry, HardwareSet } from "./types";
 
-function confidenceBadge(level: "high" | "medium" | "low") {
-  switch (level) {
-    case "high":
-      return (
-        <span className="text-[10px] px-1.5 py-0.5 rounded bg-[rgba(48,209,88,0.15)] text-[#30d158]">
-          High
-        </span>
-      );
-    case "medium":
-      return (
-        <span className="text-[10px] px-1.5 py-0.5 rounded bg-[rgba(255,149,0,0.15)] text-[#ff9500]">
-          Med
-        </span>
-      );
-    case "low":
-      return (
-        <span className="text-[10px] px-1.5 py-0.5 rounded bg-[rgba(255,69,58,0.15)] text-[#ff453a]">
-          Low
-        </span>
-      );
-  }
-}
+// ─── Confidence scoring ───
 
-// Simple heuristic: doors with all fields populated are "high", missing hw_set or door_number are "low", else "medium"
 function getConfidence(door: DoorEntry): "high" | "medium" | "low" {
   if (!door.door_number || !door.hw_set) return "low";
   const fields = [
@@ -43,7 +21,18 @@ function getConfidence(door: DoorEntry): "high" | "medium" | "low" {
   return "low";
 }
 
-type DoorStringField = "door_number" | "hw_set" | "location" | "door_type" | "frame_type" | "fire_rating" | "hand";
+// ─── Types ───
+
+type DoorStringField =
+  | "door_number"
+  | "hw_set"
+  | "location"
+  | "door_type"
+  | "frame_type"
+  | "fire_rating"
+  | "hand";
+
+type SortDir = "asc" | "desc";
 
 const FIELD_KEYS: DoorStringField[] = [
   "door_number",
@@ -64,6 +53,19 @@ const FIELD_LABELS: Record<DoorStringField, string> = {
   fire_rating: "Fire Rating",
   hand: "Hand",
 };
+
+// ─── Grouped door type ───
+
+interface DoorGroup {
+  setId: string;
+  heading: string;
+  doors: Array<{ door: DoorEntry; originalIndex: number }>;
+  highCount: number;
+  medCount: number;
+  lowCount: number;
+}
+
+// ─── Props ───
 
 interface StepReviewProps {
   doors: DoorEntry[];
@@ -90,11 +92,22 @@ export default function StepReview({
   } | null>(null);
   const [editValue, setEditValue] = useState("");
 
+  // ─── Search & filter ───
+  const [search, setSearch] = useState("");
+  const [filterLevel, setFilterLevel] = useState<
+    "all" | "high" | "medium" | "low"
+  >("all");
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(
+    new Set()
+  );
+  const [sortField, setSortField] = useState<DoorStringField>("door_number");
+  const [sortDir, setSortDir] = useState<SortDir>("asc");
+
   // ─── Inline editing ───
   const startEdit = useCallback(
-    (rowIndex: number, field: DoorStringField) => {
-      setEditingCell({ row: rowIndex, field });
-      setEditValue(doors[rowIndex]?.[field] ?? "");
+    (originalIndex: number, field: DoorStringField) => {
+      setEditingCell({ row: originalIndex, field });
+      setEditValue(doors[originalIndex]?.[field] ?? "");
     },
     [doors]
   );
@@ -118,133 +131,338 @@ export default function StepReview({
     setEditValue("");
   }, []);
 
-  // Stats
+  // ─── Stats ───
   const highCount = doors.filter((d) => getConfidence(d) === "high").length;
   const medCount = doors.filter((d) => getConfidence(d) === "medium").length;
   const lowCount = doors.filter((d) => getConfidence(d) === "low").length;
+  const totalDoors = doors.length;
+
+  // ─── Filter + search ───
+  const filteredDoors = useMemo(() => {
+    const lowerSearch = search.toLowerCase().trim();
+    return doors.map((door, idx) => ({ door, originalIndex: idx })).filter(({ door }) => {
+      // Confidence filter
+      if (filterLevel !== "all" && getConfidence(door) !== filterLevel) return false;
+      // Search
+      if (lowerSearch) {
+        const searchable = [
+          door.door_number,
+          door.hw_set,
+          door.location,
+          door.door_type,
+          door.fire_rating,
+        ]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+        if (!searchable.includes(lowerSearch)) return false;
+      }
+      return true;
+    });
+  }, [doors, search, filterLevel]);
+
+  // ─── Sort ───
+  const sortedDoors = useMemo(() => {
+    const sorted = [...filteredDoors];
+    sorted.sort((a, b) => {
+      const aVal = (a.door[sortField] ?? "").toLowerCase();
+      const bVal = (b.door[sortField] ?? "").toLowerCase();
+      const cmp = aVal.localeCompare(bVal, undefined, { numeric: true });
+      return sortDir === "asc" ? cmp : -cmp;
+    });
+    return sorted;
+  }, [filteredDoors, sortField, sortDir]);
+
+  // ─── Group by hardware set ───
+  const groups: DoorGroup[] = useMemo(() => {
+    const setMap = new Map<string, HardwareSet>();
+    for (const set of hardwareSets) {
+      setMap.set(set.set_id, set);
+    }
+
+    const groupMap = new Map<string, DoorGroup>();
+    for (const item of sortedDoors) {
+      const setId = item.door.hw_set || "(unassigned)";
+      if (!groupMap.has(setId)) {
+        const set = setMap.get(setId);
+        groupMap.set(setId, {
+          setId,
+          heading: set?.heading ?? "",
+          doors: [],
+          highCount: 0,
+          medCount: 0,
+          lowCount: 0,
+        });
+      }
+      const group = groupMap.get(setId)!;
+      group.doors.push(item);
+      const conf = getConfidence(item.door);
+      if (conf === "high") group.highCount++;
+      else if (conf === "medium") group.medCount++;
+      else group.lowCount++;
+    }
+
+    return Array.from(groupMap.values());
+  }, [sortedDoors, hardwareSets]);
+
+  // Auto-collapse all-green groups on first render
+  useMemo(() => {
+    const autoCollapsed = new Set<string>();
+    for (const group of groups) {
+      if (
+        group.doors.length > 0 &&
+        group.medCount === 0 &&
+        group.lowCount === 0
+      ) {
+        autoCollapsed.add(group.setId);
+      }
+    }
+    if (autoCollapsed.size > 0 && collapsedGroups.size === 0) {
+      setCollapsedGroups(autoCollapsed);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [groups.length]);
+
+  const toggleGroup = useCallback((setId: string) => {
+    setCollapsedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(setId)) next.delete(setId);
+      else next.add(setId);
+      return next;
+    });
+  }, []);
+
+  const handleSort = useCallback(
+    (field: DoorStringField) => {
+      if (sortField === field) {
+        setSortDir((d) => (d === "asc" ? "desc" : "asc"));
+      } else {
+        setSortField(field);
+        setSortDir("asc");
+      }
+    },
+    [sortField]
+  );
+
+  // ─── Confidence border color ───
+  const confBorder = (door: DoorEntry) => {
+    const c = getConfidence(door);
+    if (c === "high") return "row-accent-green";
+    if (c === "medium") return "row-accent-amber";
+    return "row-accent-red";
+  };
 
   return (
-    <div className="max-w-5xl mx-auto">
-      <div className="flex items-center justify-between mb-2">
-        <h3 className="text-[#f5f5f7] font-semibold">Step 4: Review</h3>
-        <div className="flex items-center gap-3 text-xs">
-          <span className="text-[#30d158]">{highCount} high</span>
-          <span className="text-[#ff9500]">{medCount} med</span>
-          <span className="text-[#ff453a]">{lowCount} low</span>
-        </div>
-      </div>
-      <p className="text-[#a1a1a6] text-sm mb-4">
-        Review extracted doors and hardware. Click any cell to edit.
-        {hasExistingData && (
-          <span className="text-[#ff9500] ml-1">
-            (Revision mode: existing data will be compared on save.)
+    <div className="flex flex-col h-full max-w-5xl mx-auto">
+      {/* ── Summary Stats Bar ── */}
+      <div className="mb-4 p-3 bg-white/[0.02] border border-white/[0.06] rounded-xl">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-sm text-[#f5f5f7] font-medium">
+            {totalDoors} doors extracted
           </span>
-        )}
-      </p>
+          {hasExistingData && (
+            <span className="text-xs bg-[rgba(255,149,0,0.12)] text-[#ff9500] px-2 py-0.5 rounded-full">
+              Revision
+            </span>
+          )}
+        </div>
 
-      {/* Table */}
-      <div className="overflow-x-auto border border-white/[0.08] rounded-xl">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="bg-white/[0.04]">
-              <th className="px-2 py-2 text-left text-[10px] text-[#6e6e73] uppercase font-semibold w-10">
-                #
-              </th>
-              {FIELD_KEYS.map((field) => (
-                <th
-                  key={field}
-                  className="px-2 py-2 text-left text-[10px] text-[#6e6e73] uppercase font-semibold"
-                >
-                  {FIELD_LABELS[field]}
-                </th>
-              ))}
-              <th className="px-2 py-2 text-center text-[10px] text-[#6e6e73] uppercase font-semibold w-14">
-                Conf.
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {doors.map((door, rowIdx) => {
-              const conf = getConfidence(door);
-              return (
-                <tr
-                  key={`${door.door_number}-${rowIdx}`}
-                  ref={(el) => {
-                    if (door.door_number) registerRef(door.door_number, el);
-                  }}
-                  className="border-t border-white/[0.04] hover:bg-white/[0.02]"
-                >
-                  <td className="px-2 py-1.5 text-[#6e6e73] text-xs">
-                    {rowIdx + 1}
-                  </td>
-                  {FIELD_KEYS.map((field) => {
-                    const isEditing =
-                      editingCell?.row === rowIdx &&
-                      editingCell?.field === field;
-                    return (
-                      <td key={field} className="px-2 py-1.5">
-                        {isEditing ? (
-                          <input
-                            autoFocus
-                            type="text"
-                            value={editValue}
-                            onChange={(e) => setEditValue(e.target.value)}
-                            onBlur={commitEdit}
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter") commitEdit();
-                              if (e.key === "Escape") cancelEdit();
-                            }}
-                            className="w-full bg-white/[0.08] border border-[#0a84ff] rounded px-1.5 py-0.5 text-[#f5f5f7] text-xs focus:outline-none"
-                          />
-                        ) : (
-                          <span
-                            onClick={() => startEdit(rowIdx, field)}
-                            className={`cursor-pointer text-xs font-mono ${
-                              door[field]
-                                ? "text-[#f5f5f7]"
-                                : "text-[#6e6e73] italic"
-                            }`}
-                          >
-                            {door[field] || "\u2014"}
-                          </span>
-                        )}
-                      </td>
-                    );
-                  })}
-                  <td className="px-2 py-1.5 text-center">
-                    {confidenceBadge(conf)}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
+        {/* Confidence bar */}
+        <div className="confidence-bar mb-2">
+          {highCount > 0 && (
+            <div
+              className="confidence-bar__segment confidence-bar__segment--high"
+              style={{ width: `${(highCount / totalDoors) * 100}%` }}
+            />
+          )}
+          {medCount > 0 && (
+            <div
+              className="confidence-bar__segment confidence-bar__segment--med"
+              style={{ width: `${(medCount / totalDoors) * 100}%` }}
+            />
+          )}
+          {lowCount > 0 && (
+            <div
+              className="confidence-bar__segment confidence-bar__segment--low"
+              style={{ width: `${(lowCount / totalDoors) * 100}%` }}
+            />
+          )}
+        </div>
+
+        {/* Human labels */}
+        <div className="flex items-center gap-4 text-xs mb-3">
+          <span className="text-[#30d158]">{highCount} ready</span>
+          <span className="text-[#ff9500]">{medCount} need review</span>
+          <span className="text-[#ff453a]">{lowCount} missing data</span>
+        </div>
+
+        {/* Filter chips + search */}
+        <div className="flex items-center gap-2 flex-wrap">
+          {(
+            [
+              ["all", "All"],
+              ["medium", "Needs Review"],
+              ["low", "Missing Data"],
+            ] as const
+          ).map(([level, label]) => (
+            <button
+              key={level}
+              onClick={() => setFilterLevel(level)}
+              className={`text-xs px-3 py-1 rounded-full transition-colors ${
+                filterLevel === level
+                  ? "bg-[#0a84ff] text-white"
+                  : "bg-white/[0.04] border border-white/[0.08] text-[#a1a1a6] hover:bg-white/[0.08]"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+          <input
+            type="text"
+            placeholder="Search doors..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="ml-auto text-xs px-3 py-1.5 bg-white/[0.04] border border-white/[0.08] rounded-lg text-[#f5f5f7] placeholder-[#6e6e73] focus:border-[#0a84ff] focus:outline-none w-48"
+          />
+        </div>
       </div>
 
-      {/* Hardware sets summary */}
-      {hardwareSets.length > 0 && (
-        <div className="mt-4">
-          <h4 className="text-[#a1a1a6] text-xs font-semibold uppercase mb-2">
-            Hardware Sets ({hardwareSets.length})
-          </h4>
-          <div className="flex flex-wrap gap-2">
-            {hardwareSets.map((set) => (
-              <div
-                key={set.set_id}
-                className="bg-white/[0.04] border border-white/[0.08] rounded-lg px-2 py-1 text-xs"
-              >
-                <span className="text-[#0a84ff] font-mono">{set.set_id}</span>
-                <span className="text-[#6e6e73] ml-1">
-                  ({(set.items ?? []).length} items)
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+      {/* ── Grouped Table ── */}
+      <div className="flex-1 overflow-y-auto min-h-0">
+        {groups.length === 0 && (
+          <p className="text-[#6e6e73] text-sm text-center py-8">
+            No doors match your filters.
+          </p>
+        )}
 
-      {/* Navigation */}
-      <div className="flex justify-between mt-6">
+        {groups.map((group) => {
+          const isCollapsed = collapsedGroups.has(group.setId);
+          return (
+            <div key={group.setId} className="mb-3">
+              {/* Group header */}
+              <button
+                onClick={() => toggleGroup(group.setId)}
+                className="group-header w-full mb-0.5"
+              >
+                <span className="text-[#6e6e73] text-xs transition-transform inline-block" style={{ transform: isCollapsed ? "rotate(-90deg)" : "rotate(0deg)" }}>
+                  ▾
+                </span>
+                <span className="text-[#0a84ff] font-mono text-sm font-medium">
+                  {group.setId}
+                </span>
+                {group.heading && (
+                  <span className="text-[#6e6e73] text-xs truncate">
+                    {group.heading}
+                  </span>
+                )}
+                <span className="ml-auto text-[#6e6e73] text-xs">
+                  {group.doors.length} doors
+                </span>
+                {/* Mini confidence dots */}
+                <span className="flex items-center gap-1 ml-2">
+                  {group.highCount > 0 && (
+                    <span className="w-2 h-2 rounded-full bg-[var(--green)]" title={`${group.highCount} ready`} />
+                  )}
+                  {group.medCount > 0 && (
+                    <span className="w-2 h-2 rounded-full bg-[var(--orange)]" title={`${group.medCount} need review`} />
+                  )}
+                  {group.lowCount > 0 && (
+                    <span className="w-2 h-2 rounded-full bg-[var(--red)]" title={`${group.lowCount} missing data`} />
+                  )}
+                </span>
+              </button>
+
+              {/* Group table */}
+              {!isCollapsed && (
+                <div className="overflow-x-auto border border-white/[0.06] rounded-lg">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="bg-white/[0.03] sticky top-0 z-10 shadow-[0_1px_0_rgba(255,255,255,0.06)]">
+                        {FIELD_KEYS.map((field) => (
+                          <th
+                            key={field}
+                            onClick={() => handleSort(field)}
+                            className="px-3 py-2 text-left text-[11px] text-[#6e6e73] uppercase font-semibold cursor-pointer hover:text-[#a1a1a6] select-none"
+                          >
+                            {FIELD_LABELS[field]}
+                            {sortField === field && (
+                              <span className="ml-1 text-[#0a84ff]">
+                                {sortDir === "asc" ? "▲" : "▼"}
+                              </span>
+                            )}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {group.doors.map(({ door, originalIndex }, i) => {
+                        return (
+                          <tr
+                            key={`${door.door_number}-${originalIndex}`}
+                            ref={(el) => {
+                              if (door.door_number)
+                                registerRef(door.door_number, el);
+                            }}
+                            className={`${confBorder(door)} border-t border-white/[0.04] hover:bg-white/[0.04] transition-colors duration-150 ${
+                              i % 2 === 1 ? "bg-white/[0.015]" : ""
+                            }`}
+                            style={{ minHeight: "40px" }}
+                          >
+                            {FIELD_KEYS.map((field) => {
+                              const isEditing =
+                                editingCell?.row === originalIndex &&
+                                editingCell?.field === field;
+                              return (
+                                <td
+                                  key={field}
+                                  className="px-3 py-2"
+                                >
+                                  {isEditing ? (
+                                    <input
+                                      autoFocus
+                                      type="text"
+                                      value={editValue}
+                                      onChange={(e) =>
+                                        setEditValue(e.target.value)
+                                      }
+                                      onBlur={commitEdit}
+                                      onKeyDown={(e) => {
+                                        if (e.key === "Enter") commitEdit();
+                                        if (e.key === "Escape") cancelEdit();
+                                      }}
+                                      className="w-full bg-white/[0.08] border border-[#0a84ff] rounded px-2 py-1 text-[#f5f5f7] text-[13px] focus:outline-none"
+                                    />
+                                  ) : (
+                                    <span
+                                      onClick={() =>
+                                        startEdit(originalIndex, field)
+                                      }
+                                      className={`cursor-pointer text-[13px] font-mono ${
+                                        door[field]
+                                          ? "text-[#f5f5f7]"
+                                          : "text-[#6e6e73] border-b border-dashed border-[#6e6e73]/30"
+                                      }`}
+                                    >
+                                      {door[field] || "\u00A0"}
+                                    </span>
+                                  )}
+                                </td>
+                              );
+                            })}
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {/* ── Navigation ── */}
+      <div className="flex justify-between mt-4 pt-4 border-t border-white/[0.08]">
         <div className="flex items-center gap-2">
           <button
             onClick={onBack}
