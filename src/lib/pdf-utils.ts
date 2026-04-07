@@ -2,9 +2,9 @@
  * Shared PDF utilities for the ImportWizard extraction pipeline.
  */
 import { PDFDocument } from 'pdf-lib'
-import type { DoorEntry, HardwareItem, HardwareSet } from '@/lib/types'
+import type { DoorEntry, ExtractedHardwareItem, HardwareSet } from '@/lib/types'
 
-export type { DoorEntry, HardwareItem, HardwareSet }
+export type { DoorEntry, ExtractedHardwareItem, HardwareSet }
 
 // ── Constants ──────────────────────────────────────────────────────
 
@@ -130,15 +130,15 @@ export function normalizeItemName(name: string): string {
   return n.replace(/[()]/g, '').replace(/\s+/g, ' ').replace(/[,;.]+$/, '').trim()
 }
 
-function hardwareItemDedupKey(item: HardwareItem): string {
+function hardwareItemDedupKey(item: ExtractedHardwareItem): string {
   const model = (item.model || '').trim().toLowerCase()
   if (model) return `model:${model}`
   return `name:${normalizeItemName(item.name)}`
 }
 
 /** Deduplicate hardware items, keeping the version with more complete data */
-export function deduplicateHardwareItems(items: HardwareItem[]): HardwareItem[] {
-  const seen = new Map<string, HardwareItem>()
+export function deduplicateHardwareItems(items: ExtractedHardwareItem[]): ExtractedHardwareItem[] {
+  const seen = new Map<string, ExtractedHardwareItem>()
   for (const item of items) {
     const key = hardwareItemDedupKey(item)
     const existing = seen.get(key)

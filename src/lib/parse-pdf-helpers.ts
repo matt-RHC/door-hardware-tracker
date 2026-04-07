@@ -9,7 +9,7 @@ import {
 } from '@/lib/punchy-prompts'
 import type {
   DoorEntry,
-  HardwareItem,
+  ExtractedHardwareItem,
   HardwareSet,
   PdfplumberFlaggedDoor,
   PunchyCorrections,

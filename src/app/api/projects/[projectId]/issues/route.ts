@@ -105,7 +105,7 @@ export async function POST(
       fetch(`${appUrl}/api/projects/${projectId}/sync-issues`, {
         method: 'POST',
         headers: { cookie: request.headers.get('cookie') || '' },
-      }).catch(() => {})
+      }).catch(err => { console.error('[smartsheet-sync] Background issues sync failed:', err) })
     } catch {}
 
     return NextResponse.json(issue, { status: 201 })

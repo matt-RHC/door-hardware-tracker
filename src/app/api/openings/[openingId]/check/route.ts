@@ -129,8 +129,8 @@ export async function POST(
     fetch(`${baseUrl}/api/projects/${projectId}/sync-smartsheet`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-    }).catch(() => {
-      // Ignore errors — sync is best-effort
+    }).catch(err => {
+      console.error('[smartsheet-sync] Background sync failed:', err)
     })
 
     return NextResponse.json(result)

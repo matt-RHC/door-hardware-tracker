@@ -3,13 +3,13 @@
 // Domain types imported from canonical source
 import type {
   DoorEntry,
-  HardwareItem,
+  ExtractedHardwareItem,
   HardwareSet,
   FlaggedDoor,
   PageClassification,
 } from '@/lib/types';
 
-export type { DoorEntry, HardwareItem, HardwareSet, FlaggedDoor, PageClassification };
+export type { DoorEntry, ExtractedHardwareItem, HardwareSet, FlaggedDoor, PageClassification };
 
 /** The five steps the wizard progresses through. */
 export enum WizardStep {
