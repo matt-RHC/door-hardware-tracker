@@ -203,7 +203,7 @@ async function callPunchyQuantityCheck(
     hardware_sets: hardwareSets.map(s => ({
       set_id: s.set_id,
       heading: s.heading,
-      items: s.items.map(i => ({
+      items: (s.items ?? []).map(i => ({
         name: i.name,
         qty: i.qty,
         qty_source: i.qty_source,
@@ -366,7 +366,7 @@ async function extractFromPDF(base64: string, filteredPdfBase64?: string, userCo
   let hardwareSets: HardwareSet[] = (pdfplumberResult?.hardware_sets || []).map(s => ({
     set_id: s.set_id,
     heading: s.heading,
-    items: s.items.map(i => ({
+    items: (s.items ?? []).map(i => ({
       qty: i.qty,
       qty_total: i.qty_total,
       qty_door_count: i.qty_door_count,
@@ -430,7 +430,7 @@ async function extractFromPDF(base64: string, filteredPdfBase64?: string, userCo
       : (doorsPerSet.get((set.generic_set_id ?? set.set_id).toUpperCase()) ?? 0)
     if (leafCount <= 1 && doorCount <= 1) continue
 
-    for (const item of set.items) {
+    for (const item of set.items ?? []) {
       if (item.qty_source === 'divided' || item.qty_source === 'flagged' || item.qty_source === 'capped') {
         continue
       }

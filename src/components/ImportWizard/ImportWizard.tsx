@@ -206,7 +206,7 @@ export default function ImportWizard({
           mode: state.hasExistingData ? "revision" : "fresh",
           doorCount: state.doors.length,
           hardwareItemCount: state.hardwareSets.reduce(
-            (sum, s) => sum + s.items.length,
+            (sum, s) => sum + (s.items ?? []).length,
             0
           ),
         });

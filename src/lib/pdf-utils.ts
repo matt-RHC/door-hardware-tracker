@@ -162,16 +162,16 @@ export function mergeHardwareSets(allSets: HardwareSet[]): HardwareSet[] {
   for (const set of allSets) {
     const existing = map.get(set.set_id)
     if (!existing) {
-      map.set(set.set_id, { ...set, items: [...set.items] })
+      map.set(set.set_id, { ...set, items: [...(set.items ?? [])] })
     } else {
-      existing.items.push(...set.items)
+      existing.items.push(...(set.items ?? []))
       if (set.heading && (!existing.heading || set.heading.length > existing.heading.length)) {
         existing.heading = set.heading
       }
     }
   }
   for (const set of map.values()) {
-    set.items = deduplicateHardwareItems(set.items)
+    set.items = deduplicateHardwareItems(set.items ?? [])
   }
   return Array.from(map.values())
 }

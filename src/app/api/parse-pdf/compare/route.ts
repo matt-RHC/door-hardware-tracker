@@ -236,7 +236,7 @@ export async function POST(request: NextRequest) {
         progress_count: r.progress_count,
         item_count: r.existing.hardware_items?.length || 0,
       })),
-      hardwareSets: hardwareSets.map(s => ({ set_id: s.set_id, heading: s.heading, item_count: s.items.length })),
+      hardwareSets: hardwareSets.map(s => ({ set_id: s.set_id, heading: s.heading, item_count: (s.items ?? []).length })),
     })
   } catch (error) {
     console.error('Compare error:', error)
