@@ -80,7 +80,8 @@ export interface PunchyObservation {
   }>
 }
 
-/** Corrections returned by Punchy's post-extraction review (Checkpoint 2). */
+/** Corrections returned by Punchy's post-extraction review (Checkpoint 2).
+ *  Confidence fields are optional because LLM output is not guaranteed to include them. */
 export interface PunchyCorrections {
   hardware_sets_corrections?: Array<{
     set_id: string
@@ -92,7 +93,7 @@ export interface PunchyCorrections {
       field: string
       old_value: string
       new_value: string
-      confidence: PunchyConfidence
+      confidence?: PunchyConfidence
     }>
   }>
   doors_corrections?: Array<{
@@ -100,17 +101,17 @@ export interface PunchyCorrections {
     field: string
     old_value: string
     new_value: string
-    confidence: PunchyConfidence
+    confidence?: PunchyConfidence
   }>
-  missing_doors?: Array<DoorEntry & { confidence: PunchyConfidence }>
+  missing_doors?: Array<DoorEntry & { confidence?: PunchyConfidence }>
   missing_sets?: Array<{
     set_id: string
     heading: string
     items: HardwareItem[]
-    confidence: PunchyConfidence
+    confidence?: PunchyConfidence
   }>
   notes?: string
-  overall_confidence: PunchyConfidence
+  overall_confidence?: PunchyConfidence
 }
 
 /** Column mapping review result from Punchy (Checkpoint 1). */

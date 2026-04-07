@@ -2,348 +2,31 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { extractFireRatings } from '@/lib/fire-rating'
-import {
-  getPostExtractionReviewPrompt,
-  getQuantityCheckPrompt,
-} from '@/lib/punchy-prompts'
 import type {
   DoorEntry,
-  HardwareItem,
   HardwareSet,
+  PunchyCorrections,
   PunchyQuantityCheck,
   PunchyObservation,
 } from '@/lib/types'
-import { extractJSON } from '@/lib/extractJSON'
+import {
+  callPdfplumber,
+  callPunchyPostExtraction,
+  callPunchyQuantityCheck,
+  applyCorrections,
+  normalizeQuantities,
+  type PdfplumberResult,
+} from '@/lib/parse-pdf-helpers'
 
 // Vercel Fluid Compute: 800s timeout (Pro plan max)
 export const maxDuration = 800
 
-interface PdfplumberResult {
-  success: boolean
-  openings: DoorEntry[]
-  hardware_sets: Array<{
-    set_id: string
-    heading: string
-    items: Array<{
-      qty: number
-      qty_total?: number
-      qty_door_count?: number
-      qty_source?: string
-      name: string
-      manufacturer: string
-      model: string
-      finish: string
-    }>
-  }>
-  reference_codes: Array<{
-    code_type: string
-    code: string
-    full_name: string
-  }>
-  expected_door_count: number
-  tables_found: number
-  hw_sets_found: number
-  method: string
-  error: string
-}
-
-interface LLMCorrections {
-  hardware_sets_corrections?: Array<{
-    set_id: string
-    heading?: string
-    items_to_add?: HardwareItem[]
-    items_to_remove?: string[]
-    items_to_fix?: Array<{ name: string; field: string; old_value: string; new_value: string; confidence?: string }>
-  }>
-  doors_corrections?: Array<{
-    door_number: string
-    field: string
-    old_value: string
-    new_value: string
-    confidence?: string
-  }>
-  missing_doors?: Array<DoorEntry & { confidence?: string }>
-  missing_sets?: Array<{
-    set_id: string
-    heading: string
-    items: HardwareItem[]
-    confidence?: string
-  }>
-  overall_confidence?: string
-  notes?: string
-}
-
-// --- Helpers ---
-
-async function callPdfplumber(
-  base64: string,
-  userColumnMapping?: Record<string, number> | null,
-): Promise<PdfplumberResult> {
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || (process.env.VERCEL_URL
-    ? `https://${process.env.VERCEL_URL}`
-    : 'http://localhost:3000')
-
-  const payload: Record<string, unknown> = { pdf_base64: base64 }
-  if (userColumnMapping) {
-    payload.user_column_mapping = userColumnMapping
-    if (process.env.NODE_ENV === 'development') {
-      console.debug('[parse-pdf] Sending user_column_mapping to extract-tables:', JSON.stringify(userColumnMapping))
-    }
-  }
-
-  const controller = new AbortController()
-  const timeoutId = setTimeout(() => controller.abort(), 280_000)
-
-  let response: Response
-  let responseText: string
-  try {
-    response = await fetch(`${baseUrl}/api/extract-tables`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
-      signal: controller.signal,
-    })
-
-    // Read raw text first — if the Python function crashes, response.json()
-    // throws "Unexpected end of JSON input" with no diagnostic info
-    responseText = await response.text()
-  } catch (err) {
-    if (err instanceof DOMException && err.name === 'AbortError') {
-      throw new Error('Python endpoint timed out after 280s')
-    }
-    throw err
-  } finally {
-    clearTimeout(timeoutId)
-  }
-
-  if (!response.ok) {
-    console.error(`[parse-pdf] extract-tables returned ${response.status}:`, responseText.slice(0, 500))
-    throw new Error(`Pdfplumber extraction failed: ${response.status} — ${responseText.slice(0, 200)}`)
-  }
-
-  try {
-    return JSON.parse(responseText) as PdfplumberResult
-  } catch {
-    console.error(`[parse-pdf] extract-tables returned invalid JSON (${responseText.length} bytes):`, responseText.slice(0, 500))
-    throw new Error(`extract-tables returned invalid JSON (${responseText.length} bytes): ${responseText.slice(0, 200)}`)
-  }
-}
-
-// ── Punchy Checkpoint 2: Post-Extraction Review ──────────────────
-
-async function callPunchyPostExtraction(
-  client: Anthropic,
-  base64: string,
-  pdfplumberResult: PdfplumberResult
-): Promise<LLMCorrections> {
-  const systemPrompt = getPostExtractionReviewPrompt()
-
-  const extractedSummary = JSON.stringify({
-    hardware_sets: (pdfplumberResult?.hardware_sets ?? []).map(s => ({
-      set_id: s.set_id,
-      heading: s.heading,
-      item_count: s.items?.length ?? 0,
-      items: s.items ?? [],
-    })),
-    doors_count: pdfplumberResult?.openings?.length ?? 0,
-    doors: pdfplumberResult?.openings ?? [],
-  }, null, 2)
-
-  try {
-    const response = await client.messages.create({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 16384,
-      system: [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }],
-      messages: [
-        {
-          role: 'user',
-          content: [
-            {
-              type: 'document',
-              source: { type: 'base64', media_type: 'application/pdf', data: base64 },
-              cache_control: { type: 'ephemeral' },
-            },
-            {
-              type: 'text',
-              text: `Here is the automated extraction result. Review it against the PDF and return corrections as JSON:\n\n${extractedSummary}`,
-            },
-          ],
-        },
-      ],
-    })
-
-    const textBlock = response.content.find((b: { type: string }) => b.type === 'text')
-    if (!textBlock || textBlock.type !== 'text') {
-      return { notes: 'Punchy returned no text' }
-    }
-
-    let text = textBlock.text.trim()
-    if (text.startsWith('```')) {
-      text = text.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '')
-    }
-
-    return extractJSON(text) as LLMCorrections
-  } catch (err) {
-    console.error('Punchy post-extraction review failed:', err instanceof Error ? err.message : String(err))
-    return { notes: `Punchy review failed: ${err instanceof Error ? err.message : String(err)}` }
-  }
-}
-
-// ── Punchy Checkpoint 3: Quantity Sanity Check ───────────────────
-
-async function callPunchyQuantityCheck(
-  client: Anthropic,
-  base64: string,
-  hardwareSets: HardwareSet[],
-  doors: DoorEntry[],
-): Promise<PunchyQuantityCheck> {
-  const systemPrompt = getQuantityCheckPrompt()
-
-  const dataSummary = JSON.stringify({
-    hardware_sets: hardwareSets.map(s => ({
-      set_id: s.set_id,
-      heading: s.heading,
-      items: (s.items ?? []).map(i => ({
-        name: i.name,
-        qty: i.qty,
-        qty_source: i.qty_source,
-        manufacturer: i.manufacturer,
-        model: i.model,
-        finish: i.finish,
-      })),
-    })),
-    doors: doors.slice(0, 20).map(d => ({
-      door_number: d.door_number,
-      hw_set: d.hw_set,
-      fire_rating: d.fire_rating,
-      door_type: d.door_type,
-      hand: d.hand,
-    })),
-    total_doors: doors.length,
-  }, null, 2)
-
-  try {
-    const response = await client.messages.create({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 4096,
-      system: [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }],
-      messages: [
-        {
-          role: 'user',
-          content: [
-            {
-              type: 'document',
-              source: { type: 'base64', media_type: 'application/pdf', data: base64 },
-              cache_control: { type: 'ephemeral' },
-            },
-            {
-              type: 'text',
-              text: `Here are the normalized hardware quantities and door assignments. Check quantities against DFH standards and flag any compliance issues:\n\n${dataSummary}`,
-            },
-          ],
-        },
-      ],
-    })
-
-    const textBlock = response.content.find((b: { type: string }) => b.type === 'text')
-    if (!textBlock || textBlock.type !== 'text') {
-      return { flags: [], compliance_issues: [], notes: 'Punchy returned no text' }
-    }
-
-    let text = textBlock.text.trim()
-    if (text.startsWith('```')) {
-      text = text.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '')
-    }
-
-    return extractJSON(text) as PunchyQuantityCheck
-  } catch (err) {
-    console.error('Punchy quantity check failed:', err instanceof Error ? err.message : String(err))
-    return { flags: [], compliance_issues: [], notes: `Punchy quantity check failed: ${err instanceof Error ? err.message : String(err)}` }
-  }
-}
-
-function applyCorrections(
-  hardwareSets: HardwareSet[],
-  doors: DoorEntry[],
-  corrections: LLMCorrections
-): { hardwareSets: HardwareSet[]; doors: DoorEntry[] } {
-  if (corrections.hardware_sets_corrections) {
-    for (const corr of corrections.hardware_sets_corrections) {
-      const set = hardwareSets.find(s => s.set_id === corr.set_id)
-      if (!set) continue
-
-      if (corr.heading) set.heading = corr.heading
-
-      if (corr.items_to_remove) {
-        set.items = set.items.filter(
-          item => !corr.items_to_remove!.includes(item.name)
-        )
-      }
-
-      if (corr.items_to_fix) {
-        for (const fix of corr.items_to_fix) {
-          const item = set.items.find(i => i.name === fix.name)
-          if (item && fix.field in item) {
-            const val = fix.new_value
-            if (fix.field === 'qty') {
-              (item as any)[fix.field] = parseInt(val, 10) || 1
-              // S-064: Reset qty_source so post-LLM re-normalization catches this
-              ;(item as any).qty_source = 'llm_override'
-            } else {
-              (item as any)[fix.field] = val
-            }
-          }
-        }
-      }
-
-      if (corr.items_to_add) {
-        for (const newItem of corr.items_to_add) {
-          if (!set.items.some(i => i.name === newItem.name)) {
-            set.items.push(newItem)
-          }
-        }
-      }
-    }
-  }
-
-  if (corrections.missing_sets) {
-    for (const newSet of corrections.missing_sets) {
-      if (!hardwareSets.some(s => s.set_id === newSet.set_id)) {
-        hardwareSets.push({
-          set_id: newSet.set_id,
-          heading: newSet.heading,
-          items: newSet.items,
-        })
-      }
-    }
-  }
-
-  if (corrections.doors_corrections) {
-    for (const corr of corrections.doors_corrections) {
-      const door = doors.find(d => d.door_number === corr.door_number)
-      if (door && corr.field in door) {
-        (door as any)[corr.field] = corr.new_value
-      }
-    }
-  }
-
-  if (corrections.missing_doors) {
-    for (const newDoor of corrections.missing_doors) {
-      if (!doors.some(d => d.door_number === newDoor.door_number)) {
-        doors.push(newDoor)
-      }
-    }
-  }
-
-  return { hardwareSets, doors }
-}
-
-// --- Core extraction logic (shared by streaming and parse-only modes) ---
+// --- Core extraction logic (non-chunked flow orchestrator) ---
 
 async function extractFromPDF(base64: string, filteredPdfBase64?: string, userColumnMapping?: Record<string, number> | null): Promise<{
   hardwareSets: HardwareSet[]
   doors: DoorEntry[]
-  corrections: LLMCorrections
+  corrections: PunchyCorrections
   punchyObservations: PunchyObservation[]
   punchyQuantityCheck: PunchyQuantityCheck | null
   stats: { tables_found: number; hw_sets_found: number; method: string }
@@ -354,7 +37,7 @@ async function extractFromPDF(base64: string, filteredPdfBase64?: string, userCo
     console.debug(
       `Pdfplumber: ${pdfplumberResult.hw_sets_found} hardware sets, ` +
       `${pdfplumberResult.openings.length} doors, ` +
-      `${pdfplumberResult.reference_codes.length} reference codes`
+      `${(pdfplumberResult.reference_codes ?? []).length} reference codes`
     )
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err)
@@ -412,50 +95,8 @@ async function extractFromPDF(base64: string, filteredPdfBase64?: string, userCo
   hardwareSets = corrected.hardwareSets
   allDoors = corrected.doors
 
-  // --- Post-Punchy qty re-normalization ---
-  // Punchy may "correct" already-normalized quantities back to PDF totals.
-  // Use heading-based counts from Python, fall back to Opening List counting.
-  const doorsPerSet = new Map<string, number>()
-  for (const door of allDoors) {
-    if (door.hw_set) {
-      doorsPerSet.set(door.hw_set.toUpperCase(), (doorsPerSet.get(door.hw_set.toUpperCase()) ?? 0) + 1)
-    }
-  }
-  for (const set of hardwareSets) {
-    const leafCount = (set.heading_leaf_count ?? 0) > 1
-      ? (set.heading_leaf_count ?? 0)
-      : 0
-    const doorCount = (set.heading_door_count ?? 0) > 1
-      ? (set.heading_door_count ?? 0)
-      : (doorsPerSet.get((set.generic_set_id ?? set.set_id).toUpperCase()) ?? 0)
-    if (leafCount <= 1 && doorCount <= 1) continue
-
-    for (const item of set.items ?? []) {
-      if (item.qty_source === 'divided' || item.qty_source === 'flagged' || item.qty_source === 'capped') {
-        continue
-      }
-      let divided = false
-      if (leafCount > 1 && item.qty >= leafCount) {
-        const perLeaf = item.qty / leafCount
-        if (Number.isInteger(perLeaf)) {
-          item.qty_total = item.qty
-          item.qty_door_count = leafCount
-          item.qty = perLeaf
-          item.qty_source = 'divided'
-          divided = true
-        }
-      }
-      if (!divided && doorCount > 1 && doorCount !== leafCount && item.qty >= doorCount) {
-        const perOpening = item.qty / doorCount
-        if (Number.isInteger(perOpening)) {
-          item.qty_total = item.qty
-          item.qty_door_count = doorCount
-          item.qty = perOpening
-          item.qty_source = 'divided'
-        }
-      }
-    }
-  }
+  // Post-Punchy qty re-normalization
+  normalizeQuantities(hardwareSets, allDoors)
 
   // Extract fire ratings embedded in hw_heading/location fields
   extractFireRatings(allDoors)
@@ -491,336 +132,42 @@ async function extractFromPDF(base64: string, filteredPdfBase64?: string, userCo
   }
 }
 
-// --- Main handler (streaming progress + parse-only mode) ---
+// --- Main handler ---
 
 export async function POST(request: NextRequest) {
-  // Parse-only mode: return JSON instead of streaming + saving
-  const parseOnly = request.nextUrl.searchParams.get('parseOnly') === 'true'
-
-  if (parseOnly) {
-    try {
-      const supabase = await createServerSupabaseClient()
-      const { data: { user }, error: authError } = await supabase.auth.getUser()
-      if (authError || !user) {
-        return NextResponse.json({ error: 'You must be signed in' }, { status: 401 })
-      }
-
-      const body = await request.json()
-      const base64 = body.pdfBase64
-      if (!base64) {
-        return NextResponse.json({ error: 'Missing pdfBase64' }, { status: 400 })
-      }
-
-      // Client may send a filtered PDF (opening list + hardware schedule pages only)
-      // for cheaper LLM review. pdfplumber still gets the full PDF.
-      const filteredPdfBase64: string | undefined = body.filteredPdfBase64 ?? undefined
-
-      const userColumnMapping = body.userColumnMapping ?? null
-      const { hardwareSets, doors, corrections, punchyObservations, punchyQuantityCheck, stats } = await extractFromPDF(base64, filteredPdfBase64, userColumnMapping)
-
-      return NextResponse.json({
-        success: true,
-        doors,
-        sets: hardwareSets,
-        flaggedDoors: [],
-        stats,
-        reviewNotes: corrections.notes,
-        punchyObservations,
-        punchyQuantityCheck,
-      })
-    } catch (error) {
-      console.error('Parse-only PDF error:', error)
-      const message = error instanceof Error ? error.message : 'Internal server error'
-      return NextResponse.json({ error: message }, { status: 500 })
+  try {
+    const supabase = await createServerSupabaseClient()
+    const { data: { user }, error: authError } = await supabase.auth.getUser()
+    if (authError || !user) {
+      return NextResponse.json({ error: 'You must be signed in' }, { status: 401 })
     }
+
+    const body = await request.json()
+    const base64 = body.pdfBase64
+    if (!base64) {
+      return NextResponse.json({ error: 'Missing pdfBase64' }, { status: 400 })
+    }
+
+    // Client may send a filtered PDF (opening list + hardware schedule pages only)
+    // for cheaper LLM review. pdfplumber still gets the full PDF.
+    const filteredPdfBase64: string | undefined = body.filteredPdfBase64 ?? undefined
+
+    const userColumnMapping = body.userColumnMapping ?? null
+    const { hardwareSets, doors, corrections, punchyObservations, punchyQuantityCheck, stats } = await extractFromPDF(base64, filteredPdfBase64, userColumnMapping)
+
+    return NextResponse.json({
+      success: true,
+      doors,
+      sets: hardwareSets,
+      flaggedDoors: [],
+      stats,
+      reviewNotes: corrections.notes,
+      punchyObservations,
+      punchyQuantityCheck,
+    })
+  } catch (error) {
+    console.error('Parse PDF error:', error)
+    const message = error instanceof Error ? error.message : 'Internal server error'
+    return NextResponse.json({ error: message }, { status: 500 })
   }
-
-  // --- Streaming mode (original behavior) ---
-  const encoder = new TextEncoder()
-
-  const stream = new ReadableStream({
-    async start(controller) {
-      function send(progress: number, status: string, error?: string, result?: Record<string, unknown>) {
-        const event = JSON.stringify({ progress, status, error, result })
-        controller.enqueue(encoder.encode(event + '\n'))
-      }
-
-      try {
-        send(2, 'Authenticating...')
-
-        const supabase = await createServerSupabaseClient()
-        const { data: { user }, error: authError } = await supabase.auth.getUser()
-        if (authError || !user) {
-          send(0, 'Error', 'You must be signed in to upload')
-          controller.close()
-          return
-        }
-
-        const formData = await request.formData()
-        const file = formData.get('file') as File
-        const projectId = formData.get('projectId') as string
-
-        if (!file || !projectId) {
-          send(0, 'Error', 'Missing file or project ID')
-          controller.close()
-          return
-        }
-        if (file.type !== 'application/pdf') {
-          send(0, 'Error', 'File must be a PDF')
-          controller.close()
-          return
-        }
-
-        send(5, 'Reading PDF...')
-        const buffer = await file.arrayBuffer()
-        const base64 = Buffer.from(buffer).toString('base64')
-
-        // ==========================================
-        // STEP 1+2: Pdfplumber extraction + LLM review
-        // ==========================================
-        send(8, 'Extracting tables (deterministic)...')
-
-        const { hardwareSets, doors: allDoors, corrections, punchyObservations } = await extractFromPDF(base64)
-
-        const setCount = hardwareSets.length
-        const totalItems = hardwareSets.reduce((sum, s) => sum + (s.items?.length || 0), 0)
-
-        console.debug(
-          `After extraction: ${setCount} sets (${totalItems} items), ${allDoors.length} doors. ` +
-          `Notes: ${corrections.notes || 'none'}`
-        )
-
-        if (setCount === 0) {
-          send(0, 'Error', 'No hardware sets found in the document. The PDF may not be a hardware submittal.')
-          controller.close()
-          return
-        }
-
-        if (allDoors.length === 0) {
-          send(0, 'Error', 'No doors found in the document. The PDF may not contain a door schedule.')
-          controller.close()
-          return
-        }
-
-        send(55, `Verified: ${setCount} hardware sets (${totalItems} items), ${allDoors.length} doors. Saving to database...`)
-
-        const setMap = new Map<string, HardwareSet>()
-        for (const set of hardwareSets) {
-          setMap.set(set.set_id, set)
-        }
-
-        // ==========================================
-        // STEP 3: COMBINE & BATCH INSERT
-        // ==========================================
-
-        send(60, `Saving ${allDoors.length} doors to database...`)
-
-        // Delete existing openings (cascade deletes children)
-        const { error: deleteError } = await (supabase as any)
-          .from('openings')
-          .delete()
-          .eq('project_id', projectId)
-
-        if (deleteError) {
-          console.error('Error deleting existing openings:', deleteError)
-        }
-
-        // Batch insert all openings at once
-        const openingRows = allDoors.map((door) => ({
-          project_id: projectId,
-          door_number: door.door_number,
-          hw_set: door.hw_set || null,
-          hw_heading: setMap.get(door.hw_set)?.heading || null,
-          location: door.location || null,
-          door_type: door.door_type || null,
-          frame_type: door.frame_type || null,
-          fire_rating: door.fire_rating || null,
-          hand: door.hand || null,
-        }))
-
-        const CHUNK_SIZE = 200
-        const insertedOpenings: Array<{ id: string; door_number: string; hw_set: string }> = []
-
-        for (let i = 0; i < openingRows.length; i += CHUNK_SIZE) {
-          const chunk = openingRows.slice(i, i + CHUNK_SIZE)
-          const progress = 60 + Math.round((i / openingRows.length) * 15)
-          send(progress, `Saving doors ${i + 1}–${Math.min(i + CHUNK_SIZE, openingRows.length)} of ${openingRows.length}...`)
-
-          const { data, error } = await (supabase as any)
-            .from('openings')
-            .insert(chunk as any)
-            .select('id, door_number, hw_set')
-
-          if (error) {
-            console.error(`Error inserting openings chunk at ${i}:`, error)
-          } else if (data) {
-            insertedOpenings.push(...data)
-          }
-        }
-
-        send(77, `Saved ${insertedOpenings.length} doors. Loading hardware items...`)
-
-        // Build all hardware item rows
-        const allHardwareRows: Array<Record<string, unknown>> = []
-
-        const doorInfoMap = new Map<string, { door_type: string; frame_type: string }>()
-        for (const door of allDoors) {
-          doorInfoMap.set(door.door_number, {
-            door_type: door.door_type || '',
-            frame_type: door.frame_type || '',
-          })
-        }
-
-        for (const opening of insertedOpenings) {
-          let sortOrder = 0
-          const doorInfo = doorInfoMap.get(opening.door_number)
-
-          // Determine if pair (two doors) based on door_type or hw_heading
-          const hwSet = setMap.get(opening.hw_set)
-          const heading = (hwSet?.heading || '').toLowerCase()
-          const doorType = (doorInfo?.door_type || '').toLowerCase()
-          const isPair = heading.includes('pair') || heading.includes('double') ||
-                         doorType.includes('pr') || doorType.includes('pair')
-
-          // Add door(s) only when door_type is known
-          const doorModel = doorInfo?.door_type?.trim() || null
-          if (doorModel) {
-            if (isPair) {
-              allHardwareRows.push({
-                opening_id: opening.id,
-                name: `Door (Active Leaf)`,
-                qty: 1,
-                manufacturer: null,
-                model: doorModel,
-                finish: null,
-                sort_order: sortOrder++,
-              })
-              allHardwareRows.push({
-                opening_id: opening.id,
-                name: `Door (Inactive Leaf)`,
-                qty: 1,
-                manufacturer: null,
-                model: doorModel,
-                finish: null,
-                sort_order: sortOrder++,
-              })
-            } else {
-              allHardwareRows.push({
-                opening_id: opening.id,
-                name: `Door`,
-                qty: 1,
-                manufacturer: null,
-                model: doorModel,
-                finish: null,
-                sort_order: sortOrder++,
-              })
-            }
-          }
-
-          // Frame — only when frame_type is known
-          const frameModel = doorInfo?.frame_type?.trim() || null
-          if (frameModel) {
-            allHardwareRows.push({
-              opening_id: opening.id,
-              name: `Frame`,
-              qty: 1,
-              manufacturer: null,
-              model: frameModel,
-              finish: null,
-              sort_order: sortOrder++,
-            })
-          }
-
-          if (hwSet?.items?.length) {
-            for (const item of hwSet.items) {
-              allHardwareRows.push({
-                opening_id: opening.id,
-                name: item.name,
-                qty: item.qty || 1,
-                manufacturer: item.manufacturer || null,
-                model: item.model || null,
-                finish: item.finish || null,
-                sort_order: sortOrder++,
-              })
-            }
-          }
-        }
-
-        let itemsInserted = 0
-        for (let i = 0; i < allHardwareRows.length; i += CHUNK_SIZE) {
-          const chunk = allHardwareRows.slice(i, i + CHUNK_SIZE)
-          const progress = 77 + Math.round((i / allHardwareRows.length) * 18)
-          if (i % 400 === 0) {
-            send(progress, `Loading hardware items ${i + 1}–${Math.min(i + CHUNK_SIZE, allHardwareRows.length)} of ${allHardwareRows.length}...`)
-          }
-
-          const { data, error } = await (supabase as any)
-            .from('hardware_items')
-            .insert(chunk as any)
-            .select('id')
-
-          if (error) {
-            console.error(`Error inserting hardware items chunk at ${i}:`, error)
-          } else if (data) {
-            itemsInserted += data.length
-          }
-        }
-
-        // Check for unmatched sets
-        const unmatchedSets: string[] = []
-        for (const door of allDoors) {
-          if (door.hw_set && !setMap.has(door.hw_set) && !unmatchedSets.includes(door.hw_set)) {
-            unmatchedSets.push(door.hw_set)
-          }
-        }
-
-        if (unmatchedSets.length > 0) {
-          console.warn(`Unmatched hardware sets: ${unmatchedSets.join(', ')}`)
-        }
-
-        console.debug(`PDF parse complete: ${insertedOpenings.length} openings, ${itemsInserted} hardware items`)
-
-        const warnings: string[] = []
-        if (unmatchedSets.length > 0) {
-          warnings.push(`${unmatchedSets.length} hardware set(s) not found: ${unmatchedSets.join(', ')}`)
-        }
-
-        const summary = warnings.length > 0
-          ? `Done! ${insertedOpenings.length} doors, ${itemsInserted} items. ⚠ ${warnings.join('; ')}`
-          : `Done! ${insertedOpenings.length} doors, ${itemsInserted} hardware items loaded.`
-
-        send(100, summary, undefined, {
-          success: true,
-          openingsCount: insertedOpenings.length,
-          itemsCount: itemsInserted,
-          hardwareSets: setCount,
-          unmatchedSets: unmatchedSets.length > 0 ? unmatchedSets : undefined,
-          reviewNotes: corrections.notes,
-          punchyObservations,
-        })
-
-        // Auto-trigger submittal sync (fire-and-forget)
-        const syncBaseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
-        fetch(`${syncBaseUrl}/api/projects/${projectId}/sync-submittal`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-        }).catch(() => {})
-      } catch (error) {
-        console.error('PDF parsing error:', error)
-        const message = error instanceof Error ? error.message : 'Internal server error'
-        const event = JSON.stringify({ progress: 0, status: 'Error', error: message })
-        controller.enqueue(encoder.encode(event + '\n'))
-      } finally {
-        controller.close()
-      }
-    },
-  })
-
-  return new Response(stream, {
-    headers: {
-      'Content-Type': 'text/plain; charset=utf-8',
-      'Transfer-Encoding': 'chunked',
-      'Cache-Control': 'no-cache',
-    },
-  })
 }
