@@ -11,6 +11,7 @@ import type {
 } from '@/lib/types'
 import {
   callPdfplumber,
+  callPunchyColumnReview,
   callPunchyPostExtraction,
   callPunchyQuantityCheck,
   applyCorrections,
@@ -48,7 +49,10 @@ async function extractFromPDF(base64: string, filteredPdfBase64?: string, userCo
   // Pass through qty metadata fields as-is.
   let hardwareSets: HardwareSet[] = (pdfplumberResult?.hardware_sets || []).map(s => ({
     set_id: s.set_id,
+    generic_set_id: s.generic_set_id,
     heading: s.heading,
+    heading_door_count: s.heading_door_count,
+    heading_leaf_count: s.heading_leaf_count,
     items: (s.items ?? []).map(i => ({
       qty: i.qty,
       qty_total: i.qty_total,
@@ -63,14 +67,39 @@ async function extractFromPDF(base64: string, filteredPdfBase64?: string, userCo
 
   let allDoors: DoorEntry[] = pdfplumberResult?.openings || []
 
-  // ==========================================
-  // Punchy Checkpoint 2: Post-Extraction Review
-  // ==========================================
   const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
   const punchyObservations: PunchyObservation[] = []
 
   // Use filtered PDF for Punchy review if available (fewer pages = cheaper + faster)
   const reviewPdf = filteredPdfBase64 ?? base64
+
+  // ==========================================
+  // Punchy Checkpoint 1: Column Mapping Review
+  // ==========================================
+  if (userColumnMapping) {
+    try {
+      const columnReview = await callPunchyColumnReview(client, reviewPdf, userColumnMapping)
+      if ((columnReview.unmapped_fields?.length ?? 0) > 0 || (columnReview.mapping_issues?.length ?? 0) > 0) {
+        punchyObservations.push({
+          checkpoint: 'column_mapping',
+          message: columnReview.notes ?? 'Column mapping review complete',
+          confidence: (columnReview.unmapped_fields?.length ?? 0) > 0 ? 'medium' : 'high',
+          field_suggestions: (columnReview.unmapped_fields ?? []).map(f => ({
+            field: f.field,
+            suggestion: f.suggestion,
+            confidence: f.confidence,
+          })),
+        })
+      }
+      console.debug(`Punchy column review: ${columnReview.unmapped_fields?.length ?? 0} unmapped fields, ${columnReview.mapping_issues?.length ?? 0} issues`)
+    } catch (err) {
+      console.error('Punchy column review error:', err instanceof Error ? err.message : String(err))
+    }
+  }
+
+  // ==========================================
+  // Punchy Checkpoint 2: Post-Extraction Review
+  // ==========================================
   const corrections = await callPunchyPostExtraction(client, reviewPdf, pdfplumberResult ?? {
     success: false,
     openings: [],

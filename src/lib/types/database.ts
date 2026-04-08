@@ -477,3 +477,60 @@ export type DeliveryUpdate = Database['public']['Tables']['deliveries']['Update'
 export type SmartsheetRowMap = Database['public']['Tables']['smartsheet_row_map']['Row']
 export type SmartsheetWebhook = Database['public']['Tables']['smartsheet_webhooks']['Row']
 export type SmartsheetPortfolio = Database['public']['Tables']['smartsheet_portfolio']['Row']
+
+// --- Shared composite types ---
+
+/** HardwareItem joined with its checklist_progress row. */
+export interface HardwareItemWithProgress extends HardwareItem {
+  progress?: ChecklistProgress
+}
+
+/** HardwareItem row shape returned by Supabase joins that embed checklist_progress. */
+export interface HardwareItemRow {
+  id: string
+  install_type: 'bench' | 'field' | null
+  checklist_progress: Array<{
+    received: boolean
+    pre_install: boolean
+    installed: boolean
+    qa_qc: boolean
+  }>
+}
+
+/** Opening row shape returned by Supabase joins that embed hardware_items. */
+export interface OpeningRow {
+  id: string
+  door_number: string
+  hw_set: string | null
+  hw_heading: string | null
+  location: string | null
+  door_type: string | null
+  frame_type: string | null
+  fire_rating: string | null
+  hand: string | null
+  hardware_items: HardwareItemRow[]
+}
+
+/** Opening row shape with full hardware items for CSV export. */
+export interface OpeningWithHardware {
+  id: string
+  door_number: string
+  hw_set: string | null
+  hw_heading: string | null
+  location: string | null
+  door_type: string | null
+  frame_type: string | null
+  fire_rating: string | null
+  hand: string | null
+  notes: string | null
+  hardware_items: Array<{
+    id: string
+    name: string
+    qty: number
+    manufacturer: string | null
+    model: string | null
+    finish: string | null
+    sort_order: number
+    checklist_progress: Array<{ checked: boolean }>
+  }>
+}

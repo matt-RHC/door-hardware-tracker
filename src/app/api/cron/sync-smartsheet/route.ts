@@ -8,6 +8,7 @@ import {
 } from '@/lib/smartsheet/client'
 import { PROJECT_SHEET_COLUMNS } from '@/lib/smartsheet/columns'
 import { pushSync, buildColumnMap, getColId, WORKSPACE_ID, FOLDER_NAME } from '@/lib/smartsheet/sync-engine'
+import type { HardwareItemRow, OpeningRow } from '@/lib/types/database'
 
 export const maxDuration = 300
 
@@ -17,30 +18,6 @@ function verifyCronAuth(request: NextRequest): boolean {
   const cronSecret = process.env.CRON_SECRET
   if (!cronSecret) return false
   return authHeader === `Bearer ${cronSecret}`
-}
-
-interface HardwareItemRow {
-  id: string
-  install_type: 'bench' | 'field' | null
-  checklist_progress: Array<{
-    received: boolean
-    pre_install: boolean
-    installed: boolean
-    qa_qc: boolean
-  }>
-}
-
-interface OpeningRow {
-  id: string
-  door_number: string
-  hw_set: string | null
-  hw_heading: string | null
-  location: string | null
-  door_type: string | null
-  frame_type: string | null
-  fire_rating: string | null
-  hand: string | null
-  hardware_items: HardwareItemRow[]
 }
 
 function computeOpeningStatus(opening: OpeningRow) {
