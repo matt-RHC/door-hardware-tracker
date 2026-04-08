@@ -2,7 +2,7 @@
   "pdf_name": "CAA_Nashville_Yards.pdf",
   "catalog_key": "CAA",
   "format": "grid",
-  "expected_door_count": 78,
+  "expected_door_count": 91,
   "expected_set_count": 25,
   "verified": true,
   "expected_set_ids": [

@@ -2,7 +2,7 @@
   "pdf_name": "RPL10_NW_Data_Center.pdf",
   "catalog_key": "RPL10",
   "format": "grid",
-  "expected_door_count": 130,
+  "expected_door_count": 131,
   "expected_set_count": 31,
   "verified": true,
   "expected_set_ids": [
