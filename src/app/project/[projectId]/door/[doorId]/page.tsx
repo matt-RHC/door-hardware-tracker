@@ -507,14 +507,14 @@ export default function DoorDetailPage() {
 
         {/* Hardware Tab */}
         {activeTab === 'hardware' && !editingOpening && (
-          <div className="space-y-3 mb-8">
+          <div className="space-y-5 mb-8">
             {opening.hardware_items.length === 0 ? (
               <p className="text-[var(--text-secondary)] text-center py-8">No hardware items yet</p>
             ) : (
               opening.hardware_items.map((item) => (
                 <div
                   key={item.id}
-                  className={`bg-[var(--surface)] border rounded-xl p-3.5 transition-colors hover:bg-[var(--surface-hover)] hover:border-[var(--border-hover)] ${
+                  className={`bg-[var(--surface)] border rounded-xl p-4 shadow-sm transition-colors hover:bg-[var(--surface-hover)] hover:border-[var(--border-hover)] ${
                     item.install_type === 'bench'
                       ? 'border-l-[3px] border-l-[var(--purple)] border-white/[0.08]'
                       : item.install_type === 'field'
