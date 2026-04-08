@@ -295,12 +295,25 @@ export async function callDeepExtraction(
   client: Anthropic,
   base64: string,
   emptySets: Array<{ set_id: string; heading: string }>,
+  goldenSample?: { set_id: string; items: ExtractedHardwareItem[] } | null,
 ): Promise<DeepExtractResult[]> {
   const systemPrompt = getDeepExtractionPrompt()
 
   const setsDescription = emptySets
     .map(s => `- Set "${s.set_id}" (${s.heading || 'no heading'})`)
     .join('\n')
+
+  // Build the user message — include golden sample as few-shot if available
+  let userText = ''
+  if (goldenSample && (goldenSample.items?.length ?? 0) > 0) {
+    const sampleItems = goldenSample.items.map(i => ({
+      qty: i.qty, name: i.name, manufacturer: i.manufacturer, model: i.model, finish: i.finish,
+    }))
+    userText += `Here is a VERIFIED example from this same submittal. Set "${goldenSample.set_id}" was confirmed by the user:\n\n`
+    userText += JSON.stringify(sampleItems, null, 2)
+    userText += '\n\nUse the same format, level of detail, and naming conventions for the remaining sets.\n\n'
+  }
+  userText += `The following hardware sets were identified in this PDF but our automated reader could not extract their items. Please read the items directly from the PDF for each set:\n\n${setsDescription}\n\nReturn a JSON array of objects with set_id and items.`
 
   try {
     const response = await client.messages.create({
@@ -318,7 +331,7 @@ export async function callDeepExtraction(
             },
             {
               type: 'text',
-              text: `The following hardware sets were identified in this PDF but our automated reader could not extract their items. Please read the items directly from the PDF for each set:\n\n${setsDescription}\n\nReturn a JSON array of objects with set_id and items.`,
+              text: userText,
             },
           ],
         },
