@@ -106,6 +106,10 @@ export default function StepUpload({
           page_number: p.index,
           page_type: p.type as ClassifyPagesResponse["pages"][0]["page_type"],
           confidence: p.confidence ?? 1,
+          section_labels: p.section_labels ?? [],
+          hw_set_ids: p.hw_set_ids ?? [],
+          has_door_numbers: p.has_door_numbers ?? false,
+          is_scanned: p.is_scanned ?? false,
         })),
         summary: {
           total_pages: raw.total_pages ?? pageClassifications.length,
@@ -118,10 +122,16 @@ export default function StepUpload({
           submittal_pages: pageClassifications
             .filter((p) => p.type === "reference")
             .map((p) => p.index),
-          other_pages: pageClassifications
-            .filter((p) => p.type === "other" || p.type === "cover")
+          cover_pages: pageClassifications
+            .filter((p) => p.type === "cover")
             .map((p) => p.index),
+          other_pages: pageClassifications
+            .filter((p) => p.type === "other")
+            .map((p) => p.index),
+          scanned_pages: raw.summary?.scanned_pages ?? 0,
         },
+        profile: raw.profile ?? undefined,
+        extraction_strategy: raw.extraction_strategy ?? undefined,
       };
       setClassifyResult(result);
       setProgress(70);

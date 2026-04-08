@@ -157,6 +157,10 @@ export interface PunchyQuantityCheck {
 /** Classification of a single PDF page. */
 export interface PageClassification {
   page_number: number
-  page_type: 'door_schedule' | 'hardware_sets' | 'reference' | 'cover' | 'other'
+  page_type: 'door_schedule' | 'hardware_set' | 'hardware_sets' | 'reference' | 'cover' | 'other'
   confidence: number
+  section_labels?: string[]
+  hw_set_ids?: string[]
+  has_door_numbers?: boolean
+  is_scanned?: boolean
 }

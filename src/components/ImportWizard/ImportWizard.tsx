@@ -13,6 +13,7 @@ import {
   type HardwareSet,
 } from "./types";
 import StepUpload from "./StepUpload";
+import StepScanResults from "./StepScanResults";
 import StepMapColumns from "./StepMapColumns";
 import StepTriage from "./StepTriage";
 import StepReview from "./StepReview";
@@ -35,6 +36,7 @@ import {
 // All steps with their enum values. Compare is conditionally shown for revisions.
 const ALL_STEPS: Array<{ label: string; step: WizardStep }> = [
   { label: "Upload", step: WizardStep.Upload },
+  { label: "Scan Results", step: WizardStep.ScanResults },
   { label: "Map Columns", step: WizardStep.MapColumns },
   { label: "Triage", step: WizardStep.Triage },
   { label: "Review", step: WizardStep.Review },
@@ -170,12 +172,16 @@ export default function ImportWizard({
   const punchMessages: PunchMessage[] = useMemo(() => {
     switch (state.currentStep) {
       case WizardStep.Upload: {
+        return [];
+      }
+      case WizardStep.ScanResults: {
         if (!state.classifyResult) return [];
         const summary = state.classifyResult.summary;
         return classifyMessages({
           totalPages: summary.total_pages,
           doorSchedulePages: summary.door_schedule_pages.length,
           hardwareSetPages: summary.hardware_set_pages.length,
+          scannedPages: summary.scanned_pages ?? 0,
         });
       }
       case WizardStep.MapColumns: {
@@ -253,7 +259,7 @@ export default function ImportWizard({
     [patch]
   );
 
-  // ─── Step 1 complete: file classified ───
+  // ─── Step 1 complete: file classified → show scan results ───
   const onUploadComplete = useCallback(
     (
       file: File,
@@ -264,7 +270,7 @@ export default function ImportWizard({
         file,
         classifyResult,
         hasExistingData,
-        currentStep: WizardStep.MapColumns,
+        currentStep: WizardStep.ScanResults,
       });
     },
     [patch]
@@ -358,12 +364,20 @@ export default function ImportWizard({
               />
             )}
 
+            {state.currentStep === WizardStep.ScanResults && state.classifyResult && (
+              <StepScanResults
+                classifyResult={state.classifyResult}
+                onNext={() => goToStep(WizardStep.MapColumns)}
+                onBack={() => goToStep(WizardStep.Upload)}
+              />
+            )}
+
             {state.currentStep === WizardStep.MapColumns && (
               <StepMapColumns
                 file={state.file!}
                 classifyResult={state.classifyResult!}
                 onComplete={onMapColumnsComplete}
-                onBack={() => goToStep(WizardStep.Upload)}
+                onBack={() => goToStep(WizardStep.ScanResults)}
                 onError={(err) => patch({ error: err })}
               />
             )}
