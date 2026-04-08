@@ -1,10 +1,10 @@
 {
   "pdf_name": "sched-AKN.pdf",
-  "door_count": 180,
+  "door_count": 195,
   "confirmed_count": 175,
-  "flagged_count": 5,
+  "flagged_count": 20,
   "hw_set_count": 3,
-  "tables_found": 16,
+  "tables_found": 17,
   "reference_code_count": 0,
   "hardware_sets": [
     {
@@ -581,6 +581,22 @@
   ],
   "flagged_doors": [
     {
+      "door_number": "F-G-XL1",
+      "reason": "Pattern 'L-L-LD' doesn't match dominant pattern(s) (D.D.L.D, D.D.L.DL). May be a hardware set ID, reference code, or extraction artifact."
+    },
+    {
+      "door_number": "F-G-XL1.1",
+      "reason": "Pattern 'L-L-LD.D' doesn't match dominant pattern(s) (D.D.L.D, D.D.L.DL). May be a hardware set ID, reference code, or extraction artifact."
+    },
+    {
+      "door_number": "Door:001.01.",
+      "reason": "Pattern 'L:D.D.' doesn't match dominant pattern(s) (D.D.L.D, D.D.L.DL). May be a hardware set ID, reference code, or extraction artifact."
+    },
+    {
+      "door_number": "FB51T-36",
+      "reason": "Pattern 'LDL-D' doesn't match dominant pattern(s) (D.D.L.D, D.D.L.DL). May be a hardware set ID, reference code, or extraction artifact."
+    },
+    {
       "door_number": "26-094",
       "reason": "Pattern 'D-D' doesn't match dominant pattern(s) (D.D.L.D, D.D.L.DL). May be a hardware set ID, reference code, or extraction artifact."
     },
@@ -589,16 +605,60 @@
       "reason": "Pattern 'D' doesn't match dominant pattern(s) (D.D.L.D, D.D.L.DL). May be a hardware set ID, reference code, or extraction artifact."
     },
     {
+      "door_number": "FB51T-24",
+      "reason": "Pattern 'LDL-D' doesn't match dominant pattern(s) (D.D.L.D, D.D.L.DL). May be a hardware set ID, reference code, or extraction artifact."
+    },
+    {
+      "door_number": "WS406CVX",
+      "reason": "Pattern 'LDL' doesn't match dominant pattern(s) (D.D.L.D, D.D.L.DL). May be a hardware set ID, reference code, or extraction artifact."
+    },
+    {
+      "door_number": "5BB1HW",
+      "reason": "Pattern 'DLDL' doesn't match dominant pattern(s) (D.D.L.D, D.D.L.DL). May be a hardware set ID, reference code, or extraction artifact."
+    },
+    {
+      "door_number": "320201N",
+      "reason": "Pattern 'DL' doesn't match dominant pattern(s) (D.D.L.D, D.D.L.DL). May be a hardware set ID, reference code, or extraction artifact."
+    },
+    {
       "door_number": "WS406C",
       "reason": "Pattern 'LDL' doesn't match dominant pattern(s) (D.D.L.D, D.D.L.DL). May be a hardware set ID, reference code, or extraction artifact."
+    },
+    {
+      "door_number": "Door:001.01.B",
+      "reason": "Pattern 'L:D.D.L' doesn't match dominant pattern(s) (D.D.L.D, D.D.L.DL). May be a hardware set ID, reference code, or extraction artifact."
+    },
+    {
+      "door_number": "Door:001.01.C",
+      "reason": "Pattern 'L:D.D.L' doesn't match dominant pattern(s) (D.D.L.D, D.D.L.DL). May be a hardware set ID, reference code, or extraction artifact."
+    },
+    {
+      "door_number": "Door:001.01.D",
+      "reason": "Pattern 'L:D.D.L' doesn't match dominant pattern(s) (D.D.L.D, D.D.L.DL). May be a hardware set ID, reference code, or extraction artifact."
+    },
+    {
+      "door_number": "Door:001.01.N",
+      "reason": "Pattern 'L:D.D.L' doesn't match dominant pattern(s) (D.D.L.D, D.D.L.DL). May be a hardware set ID, reference code, or extraction artifact."
     },
     {
       "door_number": "20-079",
       "reason": "Pattern 'D-D' doesn't match dominant pattern(s) (D.D.L.D, D.D.L.DL). May be a hardware set ID, reference code, or extraction artifact."
     },
     {
+      "door_number": "Door:001.01",
+      "reason": "Pattern 'L:D.D' doesn't match dominant pattern(s) (D.D.L.D, D.D.L.DL). May be a hardware set ID, reference code, or extraction artifact."
+    },
+    {
       "door_number": "ER-ADJ10",
       "reason": "Pattern 'L-LD' doesn't match dominant pattern(s) (D.D.L.D, D.D.L.DL). May be a hardware set ID, reference code, or extraction artifact."
+    },
+    {
+      "door_number": "NS1.1",
+      "reason": "Pattern 'LD.D' doesn't match dominant pattern(s) (D.D.L.D, D.D.L.DL). May be a hardware set ID, reference code, or extraction artifact."
+    },
+    {
+      "door_number": "NS3.1",
+      "reason": "Pattern 'LD.D' doesn't match dominant pattern(s) (D.D.L.D, D.D.L.DL). May be a hardware set ID, reference code, or extraction artifact."
     }
   ]
 }

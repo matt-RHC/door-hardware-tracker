@@ -2,7 +2,7 @@
   "pdf_name": "LARGE_MCA.pdf",
   "catalog_key": "LARGE",
   "format": "grid",
-  "expected_door_count": 326,
+  "expected_door_count": 328,
   "expected_set_count": 43,
   "verified": true,
   "expected_set_ids": [

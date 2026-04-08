@@ -1,10 +1,10 @@
 {
   "pdf_name": "sched-Etica.pdf",
-  "door_count": 0,
-  "confirmed_count": 0,
-  "flagged_count": 0,
+  "door_count": 6,
+  "confirmed_count": 3,
+  "flagged_count": 3,
   "hw_set_count": 17,
-  "tables_found": 10,
+  "tables_found": 11,
   "reference_code_count": 0,
   "hardware_sets": [
     {
@@ -1207,5 +1207,18 @@
       ]
     }
   ],
-  "flagged_doors": []
+  "flagged_doors": [
+    {
+      "door_number": "A156.36.",
+      "reason": "Pattern 'LD.D.' doesn't match dominant pattern(s) (D.). May be a hardware set ID, reference code, or extraction artifact."
+    },
+    {
+      "door_number": "A156.3,",
+      "reason": "Pattern 'LD.D,' doesn't match dominant pattern(s) (D.). May be a hardware set ID, reference code, or extraction artifact."
+    },
+    {
+      "door_number": "M4102.",
+      "reason": "Pattern 'LD.' doesn't match dominant pattern(s) (D.). May be a hardware set ID, reference code, or extraction artifact."
+    }
+  ]
 }

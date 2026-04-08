@@ -2,7 +2,7 @@
   "pdf_name": "MEDIUM_306169.pdf",
   "catalog_key": "MEDIUM",
   "format": "grid",
-  "expected_door_count": 107,
+  "expected_door_count": 104,
   "expected_set_count": 35,
   "verified": true,
   "expected_set_ids": [
