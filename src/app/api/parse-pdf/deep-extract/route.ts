@@ -15,9 +15,10 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { pdfBase64, emptySets } = body as {
+    const { pdfBase64, emptySets, goldenSample } = body as {
       pdfBase64: string
       emptySets: Array<{ set_id: string; heading: string }>
+      goldenSample?: { set_id: string; items: Array<{ qty: number; name: string; manufacturer: string; model: string; finish: string }> } | null
     }
 
     if (!pdfBase64) {
@@ -33,6 +34,7 @@ export async function POST(request: NextRequest) {
       client,
       pdfBase64,
       emptySets,
+      goldenSample,
     )
 
     const totalItems = results.reduce(

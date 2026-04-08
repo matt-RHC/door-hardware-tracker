@@ -63,6 +63,12 @@ export default function StepTriage({
   const [doors, setDoors] = useState<DoorEntry[]>([]);
   const [hardwareSets, setHardwareSets] = useState<HardwareSet[]>([]);
   const [deepExtracting, setDeepExtracting] = useState(false);
+  const [goldenSample, setGoldenSample] = useState<{
+    set_id: string;
+    heading: string;
+    items: HardwareSet["items"];
+    confirmed: boolean;
+  } | null>(null);
 
   // Keep refs to latest answers and generated questions
   const answersRef = useRef(questionAnswers);
@@ -104,6 +110,26 @@ export default function StepTriage({
     if (totalItems === 0 || emptySets.length === hardwareSets.length)
       grade = "critical";
 
+    // Auto-select the best sample opening for calibration.
+    // Pick the populated set with the most items — it's the richest reference.
+    let bestSample: { set_id: string; heading: string; items: HardwareSet["items"]; door: DoorEntry | null } | null = null;
+    if (populatedSets.length > 0) {
+      const sorted = [...populatedSets].sort(
+        (a, b) => (b.items?.length ?? 0) - (a.items?.length ?? 0)
+      );
+      const best = sorted[0];
+      // Find a representative door that belongs to this set
+      const sampleDoor = doors.find(
+        (d) => (d.hw_set ?? "").toUpperCase() === best.set_id.toUpperCase()
+      ) ?? null;
+      bestSample = {
+        set_id: best.set_id,
+        heading: best.heading ?? "",
+        items: best.items ?? [],
+        door: sampleDoor,
+      };
+    }
+
     return {
       totalItems,
       emptySets,
@@ -112,6 +138,7 @@ export default function StepTriage({
       unassignedDoors: doors.length - assignedDoors,
       missingSetIds,
       grade,
+      bestSample,
     };
   }, [doors, hardwareSets]);
 
@@ -293,7 +320,16 @@ export default function StepTriage({
       const resp = await fetch("/api/parse-pdf/deep-extract", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pdfBase64, emptySets }),
+        body: JSON.stringify({
+          pdfBase64,
+          emptySets,
+          goldenSample: goldenSample?.confirmed ? {
+            set_id: goldenSample.set_id,
+            items: (goldenSample.items ?? []).map((i) => ({
+              qty: i.qty, name: i.name, manufacturer: i.manufacturer, model: i.model, finish: i.finish,
+            })),
+          } : undefined,
+        }),
       });
 
       if (!resp.ok) {
@@ -352,7 +388,7 @@ export default function StepTriage({
     } finally {
       setDeepExtracting(false);
     }
-  }, [hardwareSets, file, classifyResult]);
+  }, [hardwareSets, file, classifyResult, goldenSample]);
 
   // ─── Phase 3: Run triage classification ───
   const runTriageClassification = useCallback(async () => {
@@ -651,6 +687,79 @@ export default function StepTriage({
               )}
             </div>
           </div>
+
+          {/* ── Sample Opening Calibration ── */}
+          {extractionHealth.bestSample && extractionHealth.emptySets.length > 0 && !goldenSample?.confirmed && (
+            <div className="bg-white/[0.03] border border-[rgba(10,132,255,0.25)] rounded-xl p-3">
+              <div className="text-[10px] text-[#0a84ff] uppercase tracking-wide mb-2 font-semibold">
+                Verify Sample Opening
+              </div>
+              <p className="text-[#a1a1a6] text-xs mb-3">
+                We extracted items for set <span className="text-[#0a84ff] font-mono font-medium">{extractionHealth.bestSample.set_id}</span> successfully.
+                Confirm it looks correct — we&apos;ll use it as a reference when extracting the empty sets.
+              </p>
+              {/* Sample door info */}
+              {extractionHealth.bestSample.door && (
+                <div className="flex gap-3 mb-2 text-xs">
+                  <span className="text-[#a1a1a6]">Door:</span>
+                  <span className="text-[#f5f5f7] font-mono">{extractionHealth.bestSample.door.door_number}</span>
+                  {extractionHealth.bestSample.door.location && (
+                    <>
+                      <span className="text-[#a1a1a6]">Location:</span>
+                      <span className="text-[#f5f5f7]">{extractionHealth.bestSample.door.location}</span>
+                    </>
+                  )}
+                </div>
+              )}
+              {/* Item list preview */}
+              <div className="space-y-0.5 max-h-40 overflow-y-auto mb-3">
+                {(extractionHealth.bestSample.items ?? []).map((item, i) => (
+                  <div
+                    key={`${item.name}-${i}`}
+                    className="flex items-center gap-2 px-2 py-1 rounded bg-white/[0.02] text-xs"
+                  >
+                    <span className="text-[#6e6e73] w-6 text-right">{item.qty}x</span>
+                    <span className="text-[#f5f5f7] flex-1">{item.name}</span>
+                    <span className="text-[#6e6e73]">{item.manufacturer}</span>
+                    <span className="text-[#6e6e73]">{item.model}</span>
+                    <span className="text-[#6e6e73]">{item.finish}</span>
+                  </div>
+                ))}
+              </div>
+              {/* Actions */}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() =>
+                    setGoldenSample({
+                      set_id: extractionHealth.bestSample!.set_id,
+                      heading: extractionHealth.bestSample!.heading,
+                      items: extractionHealth.bestSample!.items,
+                      confirmed: true,
+                    })
+                  }
+                  className="px-4 py-1.5 bg-[#0a84ff] hover:bg-[#0975de] text-white rounded-lg transition-colors font-semibold text-xs"
+                >
+                  Looks Good
+                </button>
+                <span className="text-[10px] text-[#6e6e73]">
+                  or edit items in the Review step after import
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Confirmed sample badge */}
+          {goldenSample?.confirmed && (
+            <div className="flex items-center gap-2 px-3 py-2 bg-[rgba(48,209,88,0.08)] border border-[rgba(48,209,88,0.2)] rounded-lg">
+              <span className="text-[#30d158] text-sm">&#10003;</span>
+              <span className="text-[#30d158] text-xs font-semibold">
+                Sample verified: {goldenSample.set_id}
+              </span>
+              <span className="text-[#a1a1a6] text-xs">
+                ({goldenSample.items?.length ?? 0} items) — will be used as reference for AI extraction
+              </span>
+            </div>
+          )}
 
           {/* ── Missing sets warning ── */}
           {extractionHealth.missingSetIds.length > 0 && (
