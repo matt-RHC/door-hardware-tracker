@@ -14,11 +14,12 @@ export type { DoorEntry, ExtractedHardwareItem, HardwareSet, FlaggedDoor, PageCl
 /** The steps the wizard progresses through. Compare is only shown for revisions. */
 export enum WizardStep {
   Upload = 0,
-  MapColumns = 1,
-  Triage = 2,
-  Review = 3,
-  Compare = 4,
-  Confirm = 5,
+  ScanResults = 1,
+  MapColumns = 2,
+  Triage = 3,
+  Review = 4,
+  Compare = 5,
+  Confirm = 6,
 }
 
 // ─── API response types ───
@@ -31,7 +32,9 @@ export interface ClassifyPagesResponse {
     door_schedule_pages: number[];
     hardware_set_pages: number[];
     submittal_pages: number[];
+    cover_pages: number[];
     other_pages: number[];
+    scanned_pages?: number;
   };
   profile?: {
     source: string;
@@ -42,6 +45,7 @@ export interface ClassifyPagesResponse {
     door_schedule_pages: number;
     has_reference_tables: boolean;
   };
+  extraction_strategy?: string;
 }
 
 /** Response from /api/detect-mapping */
