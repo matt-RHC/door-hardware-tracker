@@ -135,10 +135,33 @@ classify-pages.py → detect-mapping.py → ColumnMapperWizard (user)
 
 ## Testing
 
-- **Golden test PDFs** in `test-pdfs/`: small (3pg), medium (44pg), large (82pg)
-- Always test extraction changes against all three
+### Golden PDF Test Suite
+- **15 training PDFs** in `test-pdfs/training/`: 5 grid-format, 8 schedule-format, 1 kinship, 1 mixed
+- **Test fixtures** symlinked in `tests/fixtures/` (e.g., `SMALL_081113.pdf` → `../../test-pdfs/training/grid-MCN.pdf`)
+- **Baselines** in `tests/baselines/` — JSON snapshots of expected pipeline output per PDF
+- **Ground truth** in `tests/ground-truth/` — human-verified expected door/set counts per PDF
 - Python endpoint health check: `/api/extract-tables.py` has text-layer detection
 - Known limitation: pdfplumber does not work on image-based/scanned PDFs
+
+### Two-Layer Test Strategy
+1. **Baseline tests** (`tests/test_baselines.py`): pdfplumber-only, no API calls. Validates door counts, set counts, set IDs, item quantities. Run with `python -m pytest tests/test_baselines.py -v`. Currently 51 tests across 13 PDFs.
+2. **Punchy AI review tests** (`tests/test_pipeline_funnel.py`): Sends extraction results through Punchy (Claude Haiku) for domain-expert review. Requires `ANTHROPIC_API_KEY` env var and `--run-ai-review` flag. Run with `python -m pytest tests/test_pipeline_funnel.py -v --run-ai-review`.
+
+### Mandatory Test Protocol
+- **Any pipeline change** must be tested against ALL 13 golden PDFs (not just the 3 original ones)
+- **After running tests**, log results to Smartsheet Metrics Log (2206493777547140) with: session ID, PDF name, expected vs extracted doors/sets, accuracy %, pipeline duration, build commit, and notes
+- **Regenerating baselines**: Run `python tests/create_expected.py <PDF_NAME>` for each fixture, then copy to the `-baseline.json` naming convention the tests expect
+- **When counts change**, update both `tests/baselines/` and `tests/ground-truth/` files, and update any hardcoded assertions (e.g., `test_107_doors`)
+
+### Metrics Tracking & Trend Analysis
+**HARD RULE.** Every test run must be logged to the Smartsheet Metrics Log (2206493777547140). This enables:
+- **Trend detection**: Track whether door/set accuracy improves or regresses across sessions
+- **Regression alerts**: Compare current run against previous session's metrics — flag any accuracy drops
+- **Positive signal tracking**: Note which code changes produced accuracy improvements and why
+- **Schedule-format progress**: Track the gap between expected=0 and extracted=N for schedule PDFs as the inline parser improves
+- **Punchy effectiveness**: When AI review tests run, note whether Punchy caught issues that pdfplumber missed
+
+At session start, read the last 2-3 runs from the Metrics Log to understand the current accuracy baseline. At session end, compare your test results against those baselines and call out trends in the session summary. If any PDF's accuracy dropped, flag it immediately — do not wait for session end.
 
 ## Session Protocol
 
@@ -150,14 +173,16 @@ Every session must follow this protocol. These rules are non-negotiable and shou
 3. **Check for unmerged work.** If there's an active plan or open PR from the last session, work on THAT first.
 
 ### During Session
-4. **Track extraction metrics.** Any pipeline change must be tested against golden PDFs. Log results to the metrics sheet (2206493777547140).
-5. **Datestamp everything.** Memory files, session entries, project plan updates, and commit messages include dates (YYYY-MM-DD).
-6. **Preserve data.** Never delete from memory files, docs, or Smartsheet rows without asking. Append and datestamp instead of overwriting.
+4. **Track extraction metrics.** Any pipeline change must be tested against ALL 13 golden PDFs and logged to the metrics sheet (2206493777547140). See "Testing > Metrics Tracking & Trend Analysis" for full protocol.
+5. **Compare against prior metrics.** Before logging new test results, read the most recent metrics run and compare. Flag accuracy regressions immediately. Note positive trends in session summary.
+6. **Datestamp everything.** Memory files, session entries, project plan updates, and commit messages include dates (YYYY-MM-DD).
+7. **Preserve data.** Never delete from memory files, docs, or Smartsheet rows without asking. Append and datestamp instead of overwriting.
 
 ### Session End
-7. **Update Smartsheet session log.** Add or update session row with: topics, decisions, tasks completed, pending items, status.
-8. **Update project plan.** Mark resolved items Done with date. Add new findings as Open rows.
-9. **Update memory.** If anything was learned about the user, project, or workflow that future sessions need, save it.
+8. **Update Smartsheet session log.** Add or update session row with: topics, decisions, tasks completed, pending items, status.
+9. **Update project plan.** Mark resolved items Done with date. Add new findings as Open rows.
+10. **Update memory.** If anything was learned about the user, project, or workflow that future sessions need, save it.
+11. **Summarize test trends.** If tests were run this session, include a brief trend comparison vs. the prior metrics run in the session summary (e.g., "MEDIUM door accuracy stable at 100% since S-072; sched-DT FPs reduced from 116→112").
 
 ## Output Transparency (MANDATORY)
 
