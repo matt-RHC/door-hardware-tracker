@@ -20,7 +20,11 @@ import { PDFDocument } from 'pdf-lib';
 const BASE_URL = 'http://localhost:3000';
 const CHUNK_SIZE_THRESHOLD = 3 * 1024 * 1024; // 3MB
 const PAGES_PER_CHUNK = 35;
-const SERVICE_ROLE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImpmZWNkbm9zcndhcXJla29yeXF0Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NDkyNjQzMywiZXhwIjoyMDkwNTAyNDMzfQ.imQKaxz_hQNGHi6aSMC-MJwxnq10342RSRKAaKXoy1I';
+const SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+if (!SERVICE_ROLE_KEY) {
+  console.error('ERROR: SUPABASE_SERVICE_ROLE_KEY env var is required. Set it before running.');
+  process.exit(1);
+}
 
 // ── PDF Catalog (sorted by size ascending) ──
 const PDF_DIR = resolve(import.meta.dirname, '..', 'test-pdfs', 'training');
