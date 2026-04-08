@@ -62,6 +62,7 @@ export default function StepTriage({
   const [triageErrorAcknowledged, setTriageErrorAcknowledged] = useState(false);
   const [doors, setDoors] = useState<DoorEntry[]>([]);
   const [hardwareSets, setHardwareSets] = useState<HardwareSet[]>([]);
+  const [deepExtracting, setDeepExtracting] = useState(false);
 
   // Keep refs to latest answers and generated questions
   const answersRef = useRef(questionAnswers);
@@ -263,6 +264,96 @@ export default function StepTriage({
     }
   }, [doors, onQuestionsGenerated]);
 
+  // ─── Deep Extract: LLM-based item extraction for empty sets ───
+  const handleDeepExtract = useCallback(async () => {
+    const emptySets = hardwareSets
+      .filter((s) => (s.items?.length ?? 0) === 0)
+      .map((s) => ({ set_id: s.set_id, heading: s.heading ?? "" }));
+
+    if (emptySets.length === 0) return;
+
+    setDeepExtracting(true);
+    setStatus(`Extracting items for ${emptySets.length} empty set${emptySets.length !== 1 ? "s" : ""} with AI...`);
+
+    try {
+      // Build filtered PDF with ONLY hardware set pages
+      const hwPages = classifyResult.summary.hardware_set_pages ?? [];
+      let pdfBase64 = "";
+      if (hwPages.length > 0) {
+        const arrayBuffer = await file.arrayBuffer();
+        const chunks = await splitPDFByPages(arrayBuffer, [hwPages], []);
+        pdfBase64 = chunks[0] ?? "";
+      }
+      if (!pdfBase64) {
+        // Fallback: send full PDF
+        const arrayBuffer = await file.arrayBuffer();
+        pdfBase64 = arrayBufferToBase64(arrayBuffer);
+      }
+
+      const resp = await fetch("/api/parse-pdf/deep-extract", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pdfBase64, emptySets }),
+      });
+
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({}));
+        console.error("Deep extract failed:", err.error);
+        setStatus("Deep extraction failed. You can still continue.");
+        setDeepExtracting(false);
+        return;
+      }
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const result: any = await resp.json();
+      const extractedSets: Array<{
+        set_id: string;
+        items: Array<{
+          qty: number;
+          name: string;
+          manufacturer: string;
+          model: string;
+          finish: string;
+          qty_source?: string;
+        }>;
+      }> = result.sets ?? [];
+
+      // Merge extracted items into existing hardware sets
+      if (extractedSets.length > 0) {
+        setHardwareSets((prev) => {
+          const updated = [...prev];
+          for (const extracted of extractedSets) {
+            const idx = updated.findIndex(
+              (s) => s.set_id === extracted.set_id
+            );
+            if (idx >= 0 && (updated[idx].items?.length ?? 0) === 0) {
+              updated[idx] = {
+                ...updated[idx],
+                items: extracted.items ?? [],
+              };
+            }
+          }
+          return updated;
+        });
+
+        const totalNewItems = extractedSets.reduce(
+          (sum, s) => sum + (s.items?.length ?? 0),
+          0,
+        );
+        setStatus(
+          `Deep extract found ${totalNewItems} item${totalNewItems !== 1 ? "s" : ""} across ${extractedSets.length} set${extractedSets.length !== 1 ? "s" : ""}.`
+        );
+      } else {
+        setStatus("Deep extract returned no items. You can still continue.");
+      }
+    } catch (err) {
+      console.error("Deep extract error:", err);
+      setStatus("Deep extraction failed. You can still continue.");
+    } finally {
+      setDeepExtracting(false);
+    }
+  }, [hardwareSets, file, classifyResult]);
+
   // ─── Phase 3: Run triage classification ───
   const runTriageClassification = useCallback(async () => {
     setPhase("triaging");
@@ -281,6 +372,22 @@ export default function StepTriage({
         });
       }
 
+      // Build filtered PDF (door schedule + hardware set pages only) so the
+      // triage LLM can see the actual PDF content, not just text metadata.
+      let filteredPdfBase64: string | undefined;
+      const schedulePages = classifyResult.summary.door_schedule_pages ?? [];
+      const hwPages = classifyResult.summary.hardware_set_pages ?? [];
+      const relevantPages = [...schedulePages, ...hwPages];
+      if (relevantPages.length > 0) {
+        try {
+          const arrayBuffer = await file.arrayBuffer();
+          const chunks = await splitPDFByPages(arrayBuffer, [relevantPages], []);
+          filteredPdfBase64 = chunks[0];
+        } catch (err) {
+          console.warn("Failed to build filtered PDF for triage:", err);
+        }
+      }
+
       const triageResp = await fetch("/api/parse-pdf/triage", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -295,6 +402,7 @@ export default function StepTriage({
             location: d.location || null,
             page_number: null,
           })),
+          filteredPdfBase64,
           userHints: userHints.length > 0 ? userHints : undefined,
         }),
       });
@@ -357,7 +465,7 @@ export default function StepTriage({
     } catch (err) {
       onError(err instanceof Error ? err.message : "Triage failed");
     }
-  }, [doors, onError]);
+  }, [doors, file, classifyResult, onError]);
 
   // Start extraction on mount
   useEffect(() => {
@@ -566,37 +674,64 @@ export default function StepTriage({
             </div>
           )}
 
-          {/* ── Critical: all sets empty ── */}
-          {extractionHealth.grade === "critical" && hardwareSets.length > 0 && (
-            <div className="p-3 bg-[rgba(255,69,58,0.1)] border border-[rgba(255,69,58,0.3)] rounded-xl">
-              <div className="flex items-start gap-2">
-                <span className="text-[#ff453a] text-lg leading-none">&#x26A0;</span>
+          {/* ── Empty sets: Deep Extract offer ── */}
+          {extractionHealth.emptySets.length > 0 && (
+            <div className={`p-3 rounded-xl ${
+              extractionHealth.grade === "critical"
+                ? "bg-[rgba(255,69,58,0.1)] border border-[rgba(255,69,58,0.3)]"
+                : "bg-[rgba(255,149,0,0.08)] border border-[rgba(255,149,0,0.2)]"
+            }`}>
+              <div className="flex items-start gap-2 mb-2">
+                <span className={`text-lg leading-none ${
+                  extractionHealth.grade === "critical" ? "text-[#ff453a]" : "text-[#ff9500]"
+                }`}>&#x26A0;</span>
                 <div>
-                  <p className="text-[#ff453a] text-sm font-semibold mb-1">
-                    No hardware items extracted
+                  <p className={`text-sm font-semibold mb-1 ${
+                    extractionHealth.grade === "critical" ? "text-[#ff453a]" : "text-[#ff9500]"
+                  }`}>
+                    {extractionHealth.emptySets.length === hardwareSets.length
+                      ? "No hardware items extracted"
+                      : `${extractionHealth.emptySets.length} set${extractionHealth.emptySets.length !== 1 ? "s" : ""} missing items`}
                   </p>
                   <p className="text-[#a1a1a6] text-xs">
-                    Hardware sets were identified but no items could be read from
-                    them. This usually means the PDF table format wasn&apos;t
-                    recognized. You can still proceed — doors will be imported
-                    without hardware items and you can add them manually, or go
-                    back and try remapping columns.
+                    Our table reader couldn&apos;t parse the items for
+                    {extractionHealth.emptySets.length === 1
+                      ? ` set ${extractionHealth.emptySets[0]?.set_id ?? "unknown"}`
+                      : ` ${extractionHealth.emptySets.length} sets`}.
+                    You can try AI-powered extraction, go back to remap columns,
+                    or continue without items and add them manually later.
                   </p>
                 </div>
               </div>
+              <button
+                onClick={handleDeepExtract}
+                disabled={deepExtracting}
+                className="ml-6 px-4 py-2 bg-[rgba(10,132,255,0.15)] border border-[rgba(10,132,255,0.3)] hover:bg-[rgba(10,132,255,0.25)] text-[#4BA3E3] rounded-lg transition-colors font-semibold text-sm disabled:opacity-50"
+              >
+                {deepExtracting
+                  ? "Extracting..."
+                  : `Extract Items with AI (${extractionHealth.emptySets.length} set${extractionHealth.emptySets.length !== 1 ? "s" : ""})`}
+              </button>
             </div>
+          )}
+
+          {/* ── Status message (shown after deep extract) ── */}
+          {phase === "results" && status && !deepExtracting && status !== "Extraction complete. Review results below." && (
+            <p className="text-[#a1a1a6] text-xs italic">{status}</p>
           )}
 
           {/* ── Action buttons ── */}
           <div className="flex items-center justify-between pt-2">
             <button
               onClick={onBack}
-              className="px-4 py-2 bg-white/[0.04] border border-white/[0.08] hover:bg-white/[0.08] text-[#a1a1a6] rounded-lg transition-colors text-sm"
+              disabled={deepExtracting}
+              className="px-4 py-2 bg-white/[0.04] border border-white/[0.08] hover:bg-white/[0.08] disabled:opacity-50 text-[#a1a1a6] rounded-lg transition-colors text-sm"
             >
               Back to Columns
             </button>
             <button
               onClick={handleAcceptResults}
+              disabled={deepExtracting}
               className="px-6 py-2 bg-[#0a84ff] hover:bg-[#0975de] text-white rounded-lg transition-colors font-semibold text-sm"
             >
               {extractionHealth.grade === "critical"

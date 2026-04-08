@@ -7,6 +7,7 @@ import {
   getColumnMappingReviewPrompt,
   getPostExtractionReviewPrompt,
   getQuantityCheckPrompt,
+  getDeepExtractionPrompt,
 } from '@/lib/punchy-prompts'
 import type {
   DoorEntry,
@@ -280,6 +281,97 @@ export async function callPunchyQuantityCheck(
   } catch (err) {
     console.error('Punchy quantity check failed:', err instanceof Error ? err.message : String(err))
     return { flags: [], compliance_issues: [], notes: `Punchy quantity check failed: ${err instanceof Error ? err.message : String(err)}` }
+  }
+}
+
+// --- Deep Extraction: LLM-based item extraction for empty sets ---
+
+export interface DeepExtractResult {
+  set_id: string
+  items: ExtractedHardwareItem[]
+}
+
+export async function callDeepExtraction(
+  client: Anthropic,
+  base64: string,
+  emptySets: Array<{ set_id: string; heading: string }>,
+): Promise<DeepExtractResult[]> {
+  const systemPrompt = getDeepExtractionPrompt()
+
+  const setsDescription = emptySets
+    .map(s => `- Set "${s.set_id}" (${s.heading || 'no heading'})`)
+    .join('\n')
+
+  try {
+    const response = await client.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 8192,
+      system: [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }],
+      messages: [
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'document',
+              source: { type: 'base64', media_type: 'application/pdf', data: base64 },
+              cache_control: { type: 'ephemeral' },
+            },
+            {
+              type: 'text',
+              text: `The following hardware sets were identified in this PDF but our automated reader could not extract their items. Please read the items directly from the PDF for each set:\n\n${setsDescription}\n\nReturn a JSON array of objects with set_id and items.`,
+            },
+          ],
+        },
+      ],
+    })
+
+    const textBlock = response.content.find((b: { type: string }) => b.type === 'text')
+    if (!textBlock || textBlock.type !== 'text') {
+      console.warn('Deep extraction returned no text')
+      return []
+    }
+
+    let text = textBlock.text.trim()
+    if (text.startsWith('```')) {
+      text = text.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '')
+    }
+
+    const parsed = extractJSON(text)
+    // Handle both array and { sets: [...] } response shapes
+    const results: DeepExtractResult[] = Array.isArray(parsed)
+      ? parsed
+      : (parsed as { sets?: DeepExtractResult[] }).sets ?? []
+
+    // Normalize items: ensure qty is a number, default to 1
+    for (const result of results) {
+      for (const item of result.items ?? []) {
+        if (typeof item.qty !== 'number' || item.qty < 1) item.qty = 1
+        item.name = item.name ?? ''
+        item.manufacturer = item.manufacturer ?? ''
+        item.model = item.model ?? ''
+        item.finish = item.finish ?? ''
+        item.qty_source = 'deep_extract'
+      }
+    }
+
+    // Log cache usage
+    const usage = response.usage as unknown as Record<string, unknown>
+    if (usage?.cache_creation_input_tokens || usage?.cache_read_input_tokens) {
+      console.debug(
+        `Deep extract cache: created=${usage.cache_creation_input_tokens ?? 0}, ` +
+        `read=${usage.cache_read_input_tokens ?? 0}`
+      )
+    }
+
+    console.debug(
+      `Deep extraction: ${results.length} sets returned, ` +
+      `${results.reduce((sum, r) => sum + (r.items?.length ?? 0), 0)} total items`
+    )
+
+    return results
+  } catch (err) {
+    console.error('Deep extraction failed:', err instanceof Error ? err.message : String(err))
+    return []
   }
 }
 

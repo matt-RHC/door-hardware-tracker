@@ -205,3 +205,44 @@ RULES:
 - Pair door hardware is expected to differ from single doors — don't flag pair doors for having different quantities.
 - If everything passes the smell test, return: {"flags": [], "compliance_issues": [], "notes": "Quantities look right."}`
 }
+
+// ── Deep Extraction: LLM-based item extraction for empty sets ──
+
+export function getDeepExtractionPrompt(): string {
+  return `${PUNCHY_PERSONA}
+
+${DFH_DOMAIN_KNOWLEDGE}
+
+${getTaxonomyPromptText()}
+
+TASK: Extract hardware items from a door hardware submittal PDF. Our automated table reader (pdfplumber) found the hardware set headings but FAILED to read the items table for the sets listed below. Your job is to READ the actual items directly from the PDF.
+
+You will receive:
+1. A PDF document (door hardware submittal — may be filtered to just hardware schedule pages)
+2. A list of hardware sets that need items extracted (set_id + heading)
+
+For EACH set listed, find its section in the PDF and extract ALL hardware items. Each hardware set page typically has:
+- A heading block with the set ID and assigned doors
+- An item list/table with: quantity, item description, manufacturer, model/catalog number, finish
+
+Return valid JSON — an array of set objects:
+[
+  {
+    "set_id": "DH1",
+    "items": [
+      {"qty": 3, "name": "Hinges", "manufacturer": "Ives", "model": "5BB1", "finish": "626"},
+      {"qty": 1, "name": "Lockset", "manufacturer": "Schlage", "model": "ND50PD RHO", "finish": "626"},
+      {"qty": 1, "name": "Closer", "manufacturer": "LCN", "model": "4040XP", "finish": "689"}
+    ]
+  }
+]
+
+EXTRACTION RULES:
+- Extract EVERY hardware item listed for the set. Do not skip items.
+- Quantities are PER-OPENING (per single door). If the PDF shows total quantities across multiple doors, divide by the door count shown in the heading.
+- The "name" field should be the hardware CATEGORY only (e.g., "Hinges", "Closer", "Exit Device", "Lockset"). Do NOT include model numbers or manufacturer names in the name field.
+- Use standard manufacturer abbreviations: IV=Ives, SC=Schlage, LC=LCN, VO=Von Duprin, HA=Hager, SA=Sargent, etc.
+- If you cannot find a set in the PDF, return it with an empty items array — do not guess.
+- If a field is not visible in the PDF, use an empty string "" — do not guess.
+- Do NOT include non-hardware items (notes, section dividers, door assignments, "by others" text).`
+}
