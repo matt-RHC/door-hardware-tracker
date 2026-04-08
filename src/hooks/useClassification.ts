@@ -1,9 +1,5 @@
 import { useState, useCallback } from 'react'
-import { HardwareItem, ChecklistProgress } from '@/lib/types/database'
-
-interface HardwareItemWithProgress extends HardwareItem {
-  progress?: ChecklistProgress
-}
+import { HardwareItemWithProgress } from '@/lib/types/database'
 
 export interface ClassifyPrompt {
   itemId: string

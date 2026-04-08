@@ -2,20 +2,16 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { extractFireRatings } from '@/lib/fire-rating'
-import {
-  getColumnMappingReviewPrompt,
-} from '@/lib/punchy-prompts'
 import type {
   DoorEntry,
   HardwareSet,
   PdfplumberFlaggedDoor,
   PunchyQuantityCheck,
-  PunchyColumnReview,
   PunchyObservation,
 } from '@/lib/types'
-import { extractJSON } from '@/lib/extractJSON'
 import {
   callPdfplumber,
+  callPunchyColumnReview,
   callPunchyPostExtraction,
   callPunchyQuantityCheck,
   applyCorrections,
@@ -25,60 +21,6 @@ import {
 
 // Vercel Fluid Compute: 800s timeout (Pro plan max)
 export const maxDuration = 800
-
-// ── Punchy Checkpoint 1: Column Mapping Review ───────────────────
-// (Chunk-only — only runs on first chunk when user provides a mapping)
-
-async function callPunchyColumnReview(
-  client: Anthropic,
-  base64: string,
-  columnMapping: Record<string, number> | null | undefined,
-): Promise<PunchyColumnReview> {
-  const systemPrompt = getColumnMappingReviewPrompt()
-
-  const mappingSummary = columnMapping
-    ? JSON.stringify(columnMapping, null, 2)
-    : 'No column mapping provided (auto-detection will be used)'
-
-  try {
-    const response = await client.messages.create({
-      model: 'claude-haiku-4-5-20251001',
-      max_tokens: 4096,
-      system: [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }],
-      messages: [
-        {
-          role: 'user',
-          content: [
-            {
-              type: 'document',
-              source: { type: 'base64', media_type: 'application/pdf', data: base64 },
-              cache_control: { type: 'ephemeral' },
-            },
-            {
-              type: 'text',
-              text: `Here is the user's column mapping for the opening list table:\n\n${mappingSummary}\n\nReview the PDF and check if any expected fields are unmapped or incorrectly mapped. Return corrections as JSON.`,
-            },
-          ],
-        },
-      ],
-    })
-
-    const textBlock = response.content.find((b: { type: string }) => b.type === 'text')
-    if (!textBlock || textBlock.type !== 'text') {
-      return { unmapped_fields: [], mapping_issues: [], notes: 'Punchy returned no text' }
-    }
-
-    let text = textBlock.text.trim()
-    if (text.startsWith('```')) {
-      text = text.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '')
-    }
-
-    return extractJSON(text) as PunchyColumnReview
-  } catch (err) {
-    console.error('Punchy column review failed:', err instanceof Error ? err.message : String(err))
-    return { unmapped_fields: [], mapping_issues: [], notes: `Punchy column review failed: ${err instanceof Error ? err.message : String(err)}` }
-  }
-}
 
 // --- Chunk handler: processes one PDF chunk, returns JSON (no DB writes) ---
 
@@ -128,7 +70,10 @@ export async function POST(request: NextRequest) {
     // Convert pdfplumber result to our types — Python layer handles qty normalization
     let hardwareSets: HardwareSet[] = (pdfplumberResult?.hardware_sets || []).map(s => ({
       set_id: s.set_id,
+      generic_set_id: s.generic_set_id,
       heading: s.heading,
+      heading_door_count: s.heading_door_count,
+      heading_leaf_count: s.heading_leaf_count,
       items: (s.items ?? []).map(i => ({
         qty: i.qty,
         qty_total: i.qty_total,

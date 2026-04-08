@@ -9,15 +9,11 @@ import FileViewer from "@/components/FileViewer";
 import IssueReportModal from "@/components/IssueReportModal";
 import { createClient } from "@/lib/supabase/client";
 import { initDB, cacheOpening, getCachedOpening } from "@/lib/offline/db";
-import { Opening, HardwareItem, ChecklistProgress, Attachment } from "@/lib/types/database";
+import { Opening, Attachment, HardwareItemWithProgress } from "@/lib/types/database";
 import { playSuccess, playToggle } from "@/lib/sounds";
 import { useItemEditing } from "@/hooks/useItemEditing";
 import { useOpeningEditing } from "@/hooks/useOpeningEditing";
 import { useClassification } from "@/hooks/useClassification";
-
-interface HardwareItemWithProgress extends HardwareItem {
-  progress?: ChecklistProgress;
-}
 
 interface OpeningDetail extends Opening {
   hardware_items: HardwareItemWithProgress[];

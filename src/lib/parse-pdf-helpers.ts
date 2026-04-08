@@ -4,6 +4,7 @@
  */
 import Anthropic from '@anthropic-ai/sdk'
 import {
+  getColumnMappingReviewPrompt,
   getPostExtractionReviewPrompt,
   getQuantityCheckPrompt,
 } from '@/lib/punchy-prompts'
@@ -12,6 +13,7 @@ import type {
   ExtractedHardwareItem,
   HardwareSet,
   PdfplumberFlaggedDoor,
+  PunchyColumnReview,
   PunchyCorrections,
   PunchyQuantityCheck,
 } from '@/lib/types'
@@ -24,7 +26,10 @@ export interface PdfplumberResult {
   openings: DoorEntry[]
   hardware_sets: Array<{
     set_id: string
+    generic_set_id?: string
     heading: string
+    heading_door_count?: number
+    heading_leaf_count?: number
     items: Array<{
       qty: number
       qty_total?: number
@@ -47,6 +52,8 @@ export interface PdfplumberResult {
   hw_sets_found: number
   method: string
   error: string
+  confidence?: string
+  extraction_notes?: string[]
 }
 
 // --- Pipeline helpers ---
@@ -90,6 +97,57 @@ export async function callPdfplumber(
     throw err
   } finally {
     clearTimeout(timeout)
+  }
+}
+
+export async function callPunchyColumnReview(
+  client: Anthropic,
+  base64: string,
+  columnMapping: Record<string, number> | null | undefined,
+): Promise<PunchyColumnReview> {
+  const systemPrompt = getColumnMappingReviewPrompt()
+
+  const mappingSummary = columnMapping
+    ? JSON.stringify(columnMapping, null, 2)
+    : 'No column mapping provided (auto-detection will be used)'
+
+  try {
+    const response = await client.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 4096,
+      system: [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }],
+      messages: [
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'document',
+              source: { type: 'base64', media_type: 'application/pdf', data: base64 },
+              cache_control: { type: 'ephemeral' },
+            },
+            {
+              type: 'text',
+              text: `Here is the user's column mapping for the opening list table:\n\n${mappingSummary}\n\nReview the PDF and check if any expected fields are unmapped or incorrectly mapped. Return corrections as JSON.`,
+            },
+          ],
+        },
+      ],
+    })
+
+    const textBlock = response.content.find((b: { type: string }) => b.type === 'text')
+    if (!textBlock || textBlock.type !== 'text') {
+      return { unmapped_fields: [], mapping_issues: [], notes: 'Punchy returned no text' }
+    }
+
+    let text = textBlock.text.trim()
+    if (text.startsWith('```')) {
+      text = text.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '')
+    }
+
+    return extractJSON(text) as PunchyColumnReview
+  } catch (err) {
+    console.error('Punchy column review failed:', err instanceof Error ? err.message : String(err))
+    return { unmapped_fields: [], mapping_issues: [], notes: `Punchy column review failed: ${err instanceof Error ? err.message : String(err)}` }
   }
 }
 

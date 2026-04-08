@@ -10,30 +10,7 @@ import { PROJECT_SHEET_COLUMNS } from '@/lib/smartsheet/columns'
 import { SmartsheetColumn } from '@/lib/smartsheet/types'
 import { pushSync, buildColumnMap, getColId, WORKSPACE_ID, FOLDER_NAME } from '@/lib/smartsheet/sync-engine'
 import { registerWebhook } from '@/lib/smartsheet/webhook'
-
-interface HardwareItemRow {
-  id: string
-  install_type: 'bench' | 'field' | null
-  checklist_progress: Array<{
-    received: boolean
-    pre_install: boolean
-    installed: boolean
-    qa_qc: boolean
-  }>
-}
-
-interface OpeningRow {
-  id: string
-  door_number: string
-  hw_set: string | null
-  hw_heading: string | null
-  location: string | null
-  door_type: string | null
-  frame_type: string | null
-  fire_rating: string | null
-  hand: string | null
-  hardware_items: HardwareItemRow[]
-}
+import type { HardwareItemRow, OpeningRow } from '@/lib/types/database'
 
 function computeOpeningStatus(opening: OpeningRow) {
   const items = opening.hardware_items || []

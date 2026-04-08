@@ -1,30 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
-
-interface HardwareItem {
-  id: string
-  name: string
-  qty: number
-  manufacturer: string | null
-  model: string | null
-  finish: string | null
-  sort_order: number
-  checklist_progress: Array<{ checked: boolean }>
-}
-
-interface OpeningWithHardware {
-  id: string
-  door_number: string
-  hw_set: string | null
-  hw_heading: string | null
-  location: string | null
-  door_type: string | null
-  frame_type: string | null
-  fire_rating: string | null
-  hand: string | null
-  notes: string | null
-  hardware_items: HardwareItem[]
-}
+import type { OpeningWithHardware } from '@/lib/types/database'
 
 function escapeCSV(value: string | null | undefined): string {
   if (value == null || value === '') return ''
