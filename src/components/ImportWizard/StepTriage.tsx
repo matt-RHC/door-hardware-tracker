@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import type {
   ClassifyPagesResponse,
   ColumnMapping,
@@ -20,7 +20,11 @@ import {
   FALLBACK_PAGES_PER_CHUNK,
 } from "@/lib/pdf-utils";
 
-type TriagePhase = "extracting" | "questions" | "triaging" | "done";
+/**
+ * Phases: extracting → results → questions → triaging → done
+ * "results" is the NEW Extraction Health Dashboard phase.
+ */
+type TriagePhase = "extracting" | "results" | "questions" | "triaging" | "done";
 
 interface StepTriageProps {
   projectId: string;
@@ -63,6 +67,52 @@ export default function StepTriage({
   const answersRef = useRef(questionAnswers);
   answersRef.current = questionAnswers;
   const generatedQuestionsRef = useRef<PunchQuestion[]>([]);
+
+  // ─── Extraction Health Stats (computed) ───
+  const extractionHealth = useMemo(() => {
+    const totalItems = hardwareSets.reduce(
+      (sum, s) => sum + (s.items?.length ?? 0),
+      0
+    );
+    const emptySets = hardwareSets.filter(
+      (s) => (s.items?.length ?? 0) === 0
+    );
+    const populatedSets = hardwareSets.filter(
+      (s) => (s.items?.length ?? 0) > 0
+    );
+
+    // Door-to-set assignment coverage
+    const assignedDoors = doors.filter(
+      (d) => d.hw_set && d.hw_set.trim() !== ""
+    ).length;
+
+    // Check for sets referenced by doors but not in extraction
+    const doorSetIds = new Set(
+      doors.map((d) => (d.hw_set ?? "").toUpperCase()).filter(Boolean)
+    );
+    const extractedSetIds = new Set(
+      hardwareSets.map((s) => s.set_id.toUpperCase())
+    );
+    const missingSetIds = [...doorSetIds].filter(
+      (id) => !extractedSetIds.has(id)
+    );
+
+    // Overall health grade
+    let grade: "good" | "warning" | "critical" = "good";
+    if (emptySets.length > 0 || missingSetIds.length > 0) grade = "warning";
+    if (totalItems === 0 || emptySets.length === hardwareSets.length)
+      grade = "critical";
+
+    return {
+      totalItems,
+      emptySets,
+      populatedSets,
+      assignedDoors,
+      unassignedDoors: doors.length - assignedDoors,
+      missingSetIds,
+      grade,
+    };
+  }, [doors, hardwareSets]);
 
   // ─── Phase 1: Run extraction on mount ───
   const runExtraction = useCallback(async () => {
@@ -190,23 +240,30 @@ export default function StepTriage({
       setHardwareSets(extractedSets);
       setProgress(60);
 
-      // Generate validation questions
-      const questions = generateTriageQuestions(extractedDoors);
-      generatedQuestionsRef.current = questions;
-      if (questions.length > 0) {
-        onQuestionsGenerated(questions);
-        setPhase("questions");
-        setStatus("Review flagged items in the sidebar, then continue.");
-      } else {
-        // No questions — go straight to triage
-        setPhase("triaging");
-      }
+      // Show extraction results dashboard BEFORE questions or triage
+      setPhase("results");
+      setStatus("Extraction complete. Review results below.");
     } catch (err) {
       onError(err instanceof Error ? err.message : "Extraction failed");
     }
-  }, [file, columnMappings, classifyResult, onError, onQuestionsGenerated]);
+  }, [file, columnMappings, classifyResult, onError]);
 
-  // ─── Phase 2: Run triage classification ───
+  // ─── Phase 2: User reviews extraction results, then continues ───
+  const handleAcceptResults = useCallback(() => {
+    // Generate validation questions
+    const questions = generateTriageQuestions(doors);
+    generatedQuestionsRef.current = questions;
+    if (questions.length > 0) {
+      onQuestionsGenerated(questions);
+      setPhase("questions");
+      setStatus("Review flagged items in the sidebar, then continue.");
+    } else {
+      // No questions — go straight to triage
+      setPhase("triaging");
+    }
+  }, [doors, onQuestionsGenerated]);
+
+  // ─── Phase 3: Run triage classification ───
   const runTriageClassification = useCallback(async () => {
     setPhase("triaging");
     setStatus("Running triage...");
@@ -269,9 +326,6 @@ export default function StepTriage({
           );
           return !c || c.class === "door";
         });
-        // Flag by_others doors and low-confidence non-door classifications.
-        // Don't flag class="door" items — if triage failed, all doors come back
-        // as class="door" + confidence="low" and flagging them all is useless.
         const flagged = classifications
           .filter((c) => c.class === "by_others" || (c.confidence === "low" && c.class !== "door"))
           .map((c) => ({
@@ -332,10 +386,13 @@ export default function StepTriage({
 
   return (
     <div className="max-w-2xl mx-auto">
-      <h3 className="text-[#f5f5f7] font-semibold mb-2">Step 3: Triage</h3>
+      <h3 className="text-[#f5f5f7] font-semibold mb-2">Step 3: Extract &amp; Triage</h3>
       <p className="text-[#a1a1a6] text-sm mb-4">
-        Extracting door schedule data and running triage to identify accepted,
-        by-others, and rejected doors.
+        {phase === "extracting"
+          ? "Extracting door schedule data from your PDF..."
+          : phase === "results"
+          ? "Review what was extracted before continuing to triage."
+          : "Classifying doors as accepted, by-others, or rejected."}
       </p>
 
       {/* Progress */}
@@ -350,6 +407,202 @@ export default function StepTriage({
               className="h-full rounded-full transition-all duration-500 ease-out bg-[#0a84ff]"
               style={{ width: `${progress}%` }}
             />
+          </div>
+        </div>
+      )}
+
+      {/* ═══════════════════════════════════════════════════════════════
+          EXTRACTION HEALTH DASHBOARD — shown after extraction, before triage.
+          This is the key new UI that gives users visibility into what was extracted.
+         ═══════════════════════════════════════════════════════════════ */}
+      {phase === "results" && (
+        <div className="space-y-4 mb-4">
+          {/* ── Top-level summary cards ── */}
+          <div className="grid grid-cols-3 gap-2">
+            <div className="bg-white/[0.04] border border-white/[0.06] rounded-xl p-3 text-center">
+              <div className="text-xl font-bold text-[#30d158]">
+                {doors.length}
+              </div>
+              <div className="text-[9px] text-[#6e6e73] uppercase tracking-wide">
+                Doors
+              </div>
+            </div>
+            <div className="bg-white/[0.04] border border-white/[0.06] rounded-xl p-3 text-center">
+              <div className="text-xl font-bold text-[#0a84ff]">
+                {hardwareSets.length}
+              </div>
+              <div className="text-[9px] text-[#6e6e73] uppercase tracking-wide">
+                HW Sets
+              </div>
+            </div>
+            <div
+              className={`bg-white/[0.04] border rounded-xl p-3 text-center ${
+                extractionHealth.grade === "critical"
+                  ? "border-[rgba(255,69,58,0.4)]"
+                  : extractionHealth.grade === "warning"
+                  ? "border-[rgba(255,149,0,0.3)]"
+                  : "border-white/[0.06]"
+              }`}
+            >
+              <div
+                className={`text-xl font-bold ${
+                  extractionHealth.grade === "critical"
+                    ? "text-[#ff453a]"
+                    : extractionHealth.grade === "warning"
+                    ? "text-[#ff9500]"
+                    : "text-[#30d158]"
+                }`}
+              >
+                {extractionHealth.totalItems}
+              </div>
+              <div className="text-[9px] text-[#6e6e73] uppercase tracking-wide">
+                HW Items
+              </div>
+            </div>
+          </div>
+
+          {/* ── Assignment coverage ── */}
+          <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-3">
+            <div className="text-[10px] text-[#6e6e73] uppercase tracking-wide mb-2 font-semibold">
+              Coverage
+            </div>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
+              <span className="text-[#a1a1a6]">Doors with HW set</span>
+              <span className="text-[#f5f5f7]">
+                {extractionHealth.assignedDoors} / {doors.length}
+                {extractionHealth.unassignedDoors > 0 && (
+                  <span className="text-[#ff9500] ml-1">
+                    ({extractionHealth.unassignedDoors} unassigned)
+                  </span>
+                )}
+              </span>
+              <span className="text-[#a1a1a6]">Sets with items</span>
+              <span className="text-[#f5f5f7]">
+                {extractionHealth.populatedSets.length} / {hardwareSets.length}
+                {extractionHealth.emptySets.length > 0 && (
+                  <span className="text-[#ff453a] ml-1">
+                    ({extractionHealth.emptySets.length} empty)
+                  </span>
+                )}
+              </span>
+              <span className="text-[#a1a1a6]">Avg items per set</span>
+              <span className="text-[#f5f5f7]">
+                {hardwareSets.length > 0
+                  ? (extractionHealth.totalItems / hardwareSets.length).toFixed(1)
+                  : "0"}
+              </span>
+            </div>
+          </div>
+
+          {/* ── Per-set item breakdown ── */}
+          <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-3">
+            <div className="text-[10px] text-[#6e6e73] uppercase tracking-wide mb-2 font-semibold">
+              Hardware Sets
+            </div>
+            <div className="space-y-1 max-h-48 overflow-y-auto">
+              {hardwareSets.map((set) => {
+                const itemCount = set.items?.length ?? 0;
+                const isEmpty = itemCount === 0;
+                return (
+                  <div
+                    key={set.set_id}
+                    className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs ${
+                      isEmpty
+                        ? "bg-[rgba(255,69,58,0.08)] border border-[rgba(255,69,58,0.2)]"
+                        : "bg-white/[0.02] border border-white/[0.04]"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span
+                        className={`font-mono font-medium ${
+                          isEmpty ? "text-[#ff453a]" : "text-[#0a84ff]"
+                        }`}
+                      >
+                        {set.set_id}
+                      </span>
+                      {set.heading && (
+                        <span className="text-[#6e6e73] truncate max-w-[180px]">
+                          {set.heading}
+                        </span>
+                      )}
+                    </div>
+                    <span
+                      className={`font-semibold whitespace-nowrap ${
+                        isEmpty ? "text-[#ff453a]" : "text-[#a1a1a6]"
+                      }`}
+                    >
+                      {isEmpty ? "0 items" : `${itemCount} item${itemCount !== 1 ? "s" : ""}`}
+                    </span>
+                  </div>
+                );
+              })}
+              {hardwareSets.length === 0 && (
+                <p className="text-[#ff453a] text-xs py-2">
+                  No hardware sets were extracted from the PDF.
+                </p>
+              )}
+            </div>
+          </div>
+
+          {/* ── Missing sets warning ── */}
+          {extractionHealth.missingSetIds.length > 0 && (
+            <div className="p-3 bg-[rgba(255,149,0,0.08)] border border-[rgba(255,149,0,0.2)] rounded-xl">
+              <div className="text-[#ff9500] text-xs font-semibold mb-1">
+                Missing Hardware Sets
+              </div>
+              <p className="text-[#a1a1a6] text-xs mb-1.5">
+                These sets are referenced by doors but were not found in the hardware schedule pages:
+              </p>
+              <div className="flex flex-wrap gap-1.5">
+                {extractionHealth.missingSetIds.map((id) => (
+                  <span
+                    key={id}
+                    className="font-mono text-[11px] px-2 py-0.5 rounded bg-[rgba(255,149,0,0.12)] text-[#ff9500] border border-[rgba(255,149,0,0.2)]"
+                  >
+                    {id}
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* ── Critical: all sets empty ── */}
+          {extractionHealth.grade === "critical" && hardwareSets.length > 0 && (
+            <div className="p-3 bg-[rgba(255,69,58,0.1)] border border-[rgba(255,69,58,0.3)] rounded-xl">
+              <div className="flex items-start gap-2">
+                <span className="text-[#ff453a] text-lg leading-none">&#x26A0;</span>
+                <div>
+                  <p className="text-[#ff453a] text-sm font-semibold mb-1">
+                    No hardware items extracted
+                  </p>
+                  <p className="text-[#a1a1a6] text-xs">
+                    Hardware sets were identified but no items could be read from
+                    them. This usually means the PDF table format wasn&apos;t
+                    recognized. You can still proceed — doors will be imported
+                    without hardware items and you can add them manually, or go
+                    back and try remapping columns.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* ── Action buttons ── */}
+          <div className="flex items-center justify-between pt-2">
+            <button
+              onClick={onBack}
+              className="px-4 py-2 bg-white/[0.04] border border-white/[0.08] hover:bg-white/[0.08] text-[#a1a1a6] rounded-lg transition-colors text-sm"
+            >
+              Back to Columns
+            </button>
+            <button
+              onClick={handleAcceptResults}
+              className="px-6 py-2 bg-[#0a84ff] hover:bg-[#0975de] text-white rounded-lg transition-colors font-semibold text-sm"
+            >
+              {extractionHealth.grade === "critical"
+                ? "Continue Anyway"
+                : "Continue to Triage"}
+            </button>
           </div>
         </div>
       )}
@@ -466,23 +719,25 @@ export default function StepTriage({
         </>
       )}
 
-      {/* Navigation */}
-      <div className="flex justify-between mt-6">
-        <button
-          onClick={onBack}
-          disabled={isLoading}
-          className="px-4 py-2 bg-white/[0.04] border border-white/[0.08] hover:bg-white/[0.08] disabled:opacity-50 text-[#a1a1a6] rounded-lg transition-colors"
-        >
-          Back
-        </button>
-        <button
-          onClick={handleNext}
-          disabled={isLoading || !triageResult || (triageResult?.triage_error === true && !triageErrorAcknowledged)}
-          className="px-6 py-2 bg-[#0a84ff] hover:bg-[#0975de] text-white rounded-lg transition-colors font-semibold disabled:opacity-50"
-        >
-          Next
-        </button>
-      </div>
+      {/* Navigation (shown for questions, triaging, and done phases — results has its own buttons) */}
+      {phase !== "results" && (
+        <div className="flex justify-between mt-6">
+          <button
+            onClick={onBack}
+            disabled={isLoading}
+            className="px-4 py-2 bg-white/[0.04] border border-white/[0.08] hover:bg-white/[0.08] disabled:opacity-50 text-[#a1a1a6] rounded-lg transition-colors"
+          >
+            Back
+          </button>
+          <button
+            onClick={handleNext}
+            disabled={isLoading || !triageResult || (triageResult?.triage_error === true && !triageErrorAcknowledged)}
+            className="px-6 py-2 bg-[#0a84ff] hover:bg-[#0975de] text-white rounded-lg transition-colors font-semibold disabled:opacity-50"
+          >
+            Next
+          </button>
+        </div>
+      )}
     </div>
   );
 }

@@ -227,8 +227,8 @@ export default function PunchAssistant({
       {drawerState !== 'collapsed' && (
         <div
           ref={listRef}
-          className="flex-1 overflow-y-auto px-4 pb-4"
-          style={{ maxHeight: drawerState === 'full' ? 'calc(60vh - 80px)' : '140px' }}
+          className="flex-1 overflow-y-auto px-4 pb-4 overscroll-contain"
+          style={{ maxHeight: drawerState === 'full' ? 'min(calc(60vh - 80px), 400px)' : '120px' }}
         >
           {sidebarMessages.length === 0 && (
             <p className="text-[#6B7280] text-sm">

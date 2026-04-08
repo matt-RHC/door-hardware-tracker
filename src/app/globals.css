@@ -630,10 +630,23 @@ body {
   border-radius: var(--radius) var(--radius) 0 0;
   transition: transform 0.25s ease-out;
   z-index: 40;
+  /* Prevent content from expanding beyond viewport on mobile */
+  max-height: 70vh;
 }
 .drawer--collapsed { transform: translateY(calc(100% - 48px)); }
 .drawer--peek { transform: translateY(calc(100% - 200px)); }
 .drawer--full { transform: translateY(calc(100% - 60vh)); }
+
+/* Mobile: smaller drawer to leave more room for wizard content */
+@media (max-height: 700px) {
+  .drawer--peek { transform: translateY(calc(100% - 160px)); }
+  .drawer--full { transform: translateY(calc(100% - 50vh)); }
+}
+@media (max-width: 640px) {
+  .drawer--peek { transform: translateY(calc(100% - 160px)); }
+  .drawer--full { transform: translateY(calc(100% - 50vh)); }
+}
+
 .drawer__handle {
   width: 32px;
   height: 4px;

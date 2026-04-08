@@ -353,9 +353,9 @@ export default function ImportWizard({
         </div>
       )}
 
-      {/* Step content (full-width, Punch drawer is fixed at bottom) */}
-      <div className="flex-1 overflow-y-auto min-h-0 px-6 py-4 pb-16">
-        <PunchHighlightProvider activeKeys={activeKeys}>
+      {/* Step content — drawer is OUTSIDE the scroller to avoid mobile clipping */}
+      <PunchHighlightProvider activeKeys={activeKeys}>
+        <div className="flex-1 overflow-y-auto min-h-0 px-6 py-4 pb-56 sm:pb-52">
             {state.currentStep === WizardStep.Upload && (
               <StepUpload
                 projectId={projectId}
@@ -429,16 +429,16 @@ export default function ImportWizard({
                 onError={(err) => patch({ error: err })}
               />
             )}
+        </div>
 
-          {/* Punch assistant bottom drawer */}
-          <PunchAssistant
-            messages={punchMessages}
-            questions={triageQuestions}
-            onAnswer={handleQuestionAnswer}
-            onDismiss={handleQuestionDismiss}
-          />
-        </PunchHighlightProvider>
-      </div>
+        {/* Punch assistant — fixed at bottom, OUTSIDE the scroller */}
+        <PunchAssistant
+          messages={punchMessages}
+          questions={triageQuestions}
+          onAnswer={handleQuestionAnswer}
+          onDismiss={handleQuestionDismiss}
+        />
+      </PunchHighlightProvider>
     </div>
   );
 }
