@@ -132,6 +132,26 @@ export interface PunchyColumnReview {
 
 /** Quantity sanity check result from Punchy (Checkpoint 3). */
 export interface PunchyQuantityCheck {
+  /** HIGH confidence corrections — safe to auto-apply. */
+  auto_corrections?: Array<{
+    set_id: string
+    item_name: string
+    from_qty: number
+    to_qty: number
+    reason: string
+    confidence: 'high'
+  }>
+  /** MEDIUM confidence issues — need user input. */
+  questions?: Array<{
+    id: string
+    set_id: string
+    item_name: string
+    text: string
+    options: string[]
+    current_qty: number
+    context: string
+  }>
+  /** LOW confidence observations (backward-compat). */
   flags: Array<{
     set_id: string
     item_name: string
@@ -142,6 +162,7 @@ export interface PunchyQuantityCheck {
     regulation?: string
     confidence?: PunchyConfidence
   }>
+  /** Code/regulation compliance issues. */
   compliance_issues: Array<{
     set_id: string
     issue: string

@@ -161,30 +161,60 @@ If the extraction is accurate and complete, return: {"overall_confidence": "high
 
 // ── Checkpoint 3: Quantity Sanity Check ──────────────────────────
 
-export function getQuantityCheckPrompt(): string {
+export function getQuantityCheckPrompt(goldenSample?: {
+  set_id: string
+  items: Array<{ qty: number; name: string; manufacturer?: string; model?: string; finish?: string }>
+}): string {
+  const goldenSampleSection = goldenSample
+    ? `\n\nGOLDEN SAMPLE (user-verified baseline):\nThe user confirmed set "${goldenSample.set_id}" has correct quantities:\n${JSON.stringify(goldenSample.items, null, 2)}\nUse this as the baseline for this submittal's quantity conventions. If other sets follow the same pattern, treat those quantities as correct.`
+    : ''
+
   return `${PUNCHY_PERSONA}
 
 ${DFH_DOMAIN_KNOWLEDGE}
 
 ${getTaxonomyPromptText()}
 
-TASK: Review normalized hardware quantities for a door hardware submittal. Quantities have already been divided from PDF totals to per-opening values. Your job is to flag anything that doesn't meet DFH standards or code requirements.
+TASK: Review normalized hardware quantities for a door hardware submittal. Quantities have already been divided from PDF totals to per-opening values. Your job is to correct, question, or flag quantity issues using THREE confidence tiers.
 
 You will receive:
 1. A PDF document (door hardware submittal)
 2. Normalized hardware sets with per-opening quantities
-3. Door list with types, ratings, and set assignments
+3. Door list with types, ratings, and set assignments${goldenSampleSection}
 
-Return valid JSON:
+Return valid JSON with these sections:
+
 {
-  "flags": [
+  "auto_corrections": [
     {
       "set_id": "DH1",
       "item_name": "Hinges",
-      "current_qty": 2,
-      "expected_qty": 3,
-      "reason": "Standard 3'0\"x7'0\" door needs 3 hinges (1 per 30\" + 1), not 2",
+      "from_qty": 6,
+      "to_qty": 3,
+      "reason": "6 hinges ÷ 2 leaves = 3 per leaf (standard). Division was missed.",
       "confidence": "high"
+    }
+  ],
+  "questions": [
+    {
+      "id": "qty-DH5-hinge",
+      "set_id": "DH5",
+      "item_name": "Hinges",
+      "text": "Set DH5 shows 8 hinges for 1 pair door. Is that 4 per leaf (tall/heavy door) or should it be 3?",
+      "options": ["4 per leaf (tall/heavy)", "3 per leaf (standard)", "Other"],
+      "current_qty": 8,
+      "context": "Pair door, 2 leaves. Standard would be 6 total (3 per leaf)."
+    }
+  ],
+  "flags": [
+    {
+      "set_id": "DH2",
+      "item_name": "Closer",
+      "current_qty": 0,
+      "expected_qty": 1,
+      "message": "No closer specified for this opening",
+      "reason": "Every commercial door opening needs a closer",
+      "confidence": "low"
     }
   ],
   "compliance_issues": [
@@ -198,12 +228,17 @@ Return valid JSON:
   "notes": "Punchy's overall quantity assessment"
 }
 
+CONFIDENCE TIERS:
+- HIGH confidence → "auto_corrections": You are certain the quantity is wrong AND know the correct value. Examples: obvious division errors (6 hinges on pair = 3 per leaf), duplicate items, zero quantities for required items.
+- MEDIUM confidence → "questions": Something looks off but you need the user to confirm. Provide specific options. Examples: non-standard hinge counts (4 or 5 per leaf), unusual closer configurations.
+- LOW confidence → "flags": Something to note but may be intentional. Examples: slightly unusual quantities that could be project-specific.
+
 RULES:
-- DO NOT flag quantities that are correct per the submittal. The submittal was prepared by a hardware consultant and approved by the architect — respect their specifications.
-- Only flag quantities that are CLEARLY wrong (e.g., 0 hinges, 8 closers per opening) or that violate code requirements.
 - Fire rating compliance is mandatory — always check that rated openings have required hardware.
-- Pair door hardware is expected to differ from single doors — don't flag pair doors for having different quantities.
-- If everything passes the smell test, return: {"flags": [], "compliance_issues": [], "notes": "Quantities look right."}`
+- Pair door hardware is expected to differ from single doors — account for leaf counts.
+- If everything looks correct, return: {"auto_corrections": [], "questions": [], "flags": [], "compliance_issues": [], "notes": "Quantities look right."}
+- Keep questions specific and actionable — provide 2-3 concrete options, not open-ended asks.
+- When a golden sample is provided, use it as the authoritative baseline for this submittal's conventions.`
 }
 
 // ── Deep Extraction: LLM-based item extraction for empty sets ──
