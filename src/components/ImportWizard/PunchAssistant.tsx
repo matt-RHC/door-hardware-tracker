@@ -191,7 +191,7 @@ export default function PunchAssistant({
       {/* Drag handle */}
       <div
         onClick={toggleDrawer}
-        className="cursor-pointer py-2"
+        className="cursor-pointer pt-2 pb-1"
       >
         <div className="drawer__handle" />
       </div>
@@ -199,27 +199,29 @@ export default function PunchAssistant({
       {/* Pill bar (always visible) */}
       <div
         onClick={toggleDrawer}
-        className="flex items-center gap-3 px-4 pb-2 cursor-pointer"
+        className="flex items-center gap-3 px-4 pb-3 cursor-pointer select-none"
       >
         <PunchAvatar size="sm" state={avatarState} />
-        <span className="text-sm font-medium text-[#E4E6EB]">
+        <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
           Punch
         </span>
-        <span className="text-xs text-[#6B7280]">
-          {totalCount} observation{totalCount !== 1 ? 's' : ''}
-        </span>
+        {totalCount > 0 && (
+          <span className="text-xs px-2.5 py-0.5 rounded-full font-medium" style={{ background: 'var(--blue-dim)', color: 'var(--text-secondary)' }}>
+            {totalCount} observation{totalCount !== 1 ? 's' : ''}
+          </span>
+        )}
         {warningCount > 0 && (
-          <span className="text-xs bg-[rgba(232,129,26,0.15)] text-[#E8811A] px-2 py-0.5 rounded-full font-semibold">
+          <span className="text-xs px-2.5 py-0.5 rounded-full font-semibold" style={{ background: 'var(--orange-dim)', color: 'var(--orange)' }}>
             {warningCount} warning{warningCount !== 1 ? 's' : ''}
           </span>
         )}
         {activeQuestionCount > 0 && (
-          <span className="text-xs bg-[rgba(10,132,255,0.15)] text-[#4BA3E3] px-2 py-0.5 rounded-full font-semibold">
+          <span className="text-xs px-2.5 py-0.5 rounded-full font-semibold animate-pulse" style={{ background: 'var(--blue-dim)', color: 'var(--blue)' }}>
             {activeQuestionCount} question{activeQuestionCount !== 1 ? 's' : ''}
           </span>
         )}
-        <span className="ml-auto text-xs text-[#6B7280]">
-          {drawerState === 'collapsed' ? 'View all ▴' : drawerState === 'peek' ? 'Expand ▴' : 'Collapse ▾'}
+        <span className="ml-auto text-xs font-medium" style={{ color: 'var(--blue)' }}>
+          {drawerState === 'collapsed' ? 'Expand \u25B4' : drawerState === 'peek' ? 'Full \u25B4' : 'Collapse \u25BE'}
         </span>
       </div>
 
