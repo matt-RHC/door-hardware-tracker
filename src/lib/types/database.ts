@@ -19,6 +19,10 @@ export type Database = {
           smartsheet_delivery_sheet_id: number | null
           smartsheet_issues_sheet_id: number | null
           smartsheet_folder_id: number | null
+          last_pdf_hash: string | null
+          last_pdf_uploaded_at: string | null
+          pdf_storage_path: string | null
+          pdf_page_count: number | null
         }
         Insert: {
           id?: string
@@ -37,6 +41,10 @@ export type Database = {
           smartsheet_delivery_sheet_id?: number | null
           smartsheet_issues_sheet_id?: number | null
           smartsheet_folder_id?: number | null
+          last_pdf_hash?: string | null
+          last_pdf_uploaded_at?: string | null
+          pdf_storage_path?: string | null
+          pdf_page_count?: number | null
         }
         Update: {
           id?: string
@@ -55,6 +63,10 @@ export type Database = {
           smartsheet_delivery_sheet_id?: number | null
           smartsheet_issues_sheet_id?: number | null
           smartsheet_folder_id?: number | null
+          last_pdf_hash?: string | null
+          last_pdf_uploaded_at?: string | null
+          pdf_storage_path?: string | null
+          pdf_page_count?: number | null
         }
       }
       project_members: {

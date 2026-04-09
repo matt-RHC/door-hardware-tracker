@@ -11,7 +11,8 @@ interface StepUploadProps {
   onComplete: (
     file: File,
     classifyResult: ClassifyPagesResponse,
-    hasExistingData: boolean
+    hasExistingData: boolean,
+    pdfStoragePath: string | null,
   ) => void;
   onError: (msg: string) => void;
 }
@@ -98,7 +99,8 @@ export default function StepUpload({
       // TS expects:     { pages: [{page_number, page_type, confidence}], summary: {door_schedule_pages: number[], ...} }
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const raw: any = await resp.json();
-      const pageClassifications: Array<{ index: number; type: string; confidence?: number }> =
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const pageClassifications: Array<{ index: number; type: string; confidence?: number; section_labels?: string[]; hw_set_ids?: string[]; has_door_numbers?: boolean; is_scanned?: boolean }> =
         raw.page_classifications ?? [];
 
       const result: ClassifyPagesResponse = {
@@ -154,11 +156,33 @@ export default function StepUpload({
         // Treat as no existing data
       }
 
+      // Upload PDF to Supabase Storage for server-side access
+      setProgress(90);
+      setStatus("Saving PDF...");
+      let storagePath: string | null = null;
+      try {
+        const uploadForm = new FormData();
+        uploadForm.append("file", file);
+        uploadForm.append("pageCount", String(result.summary.total_pages));
+        const uploadResp = await fetch(`/api/projects/${projectId}/pdf`, {
+          method: "POST",
+          body: uploadForm,
+        });
+        if (uploadResp.ok) {
+          const uploadData = await uploadResp.json();
+          storagePath = uploadData.storagePath ?? null;
+        } else {
+          console.warn("PDF storage upload failed — continuing with in-memory file");
+        }
+      } catch {
+        console.warn("PDF storage upload failed — continuing with in-memory file");
+      }
+
       setProgress(100);
       setStatus("Ready to proceed.");
       setLoading(false);
 
-      onComplete(file, result, hasExisting);
+      onComplete(file, result, hasExisting, storagePath);
     } catch (err) {
       setLoading(false);
       setProgress(0);

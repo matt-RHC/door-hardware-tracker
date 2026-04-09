@@ -29,6 +29,7 @@ type TriagePhase = "extracting" | "results" | "questions" | "triaging" | "done";
 interface StepTriageProps {
   projectId: string;
   file: File;
+  pdfStoragePath: string | null;
   columnMappings: ColumnMapping[];
   classifyResult: ClassifyPagesResponse;
   /** Current question answers (managed by parent). */
@@ -47,6 +48,7 @@ interface StepTriageProps {
 export default function StepTriage({
   projectId,
   file,
+  pdfStoragePath,
   columnMappings,
   classifyResult,
   questionAnswers,
@@ -226,18 +228,22 @@ export default function StepTriage({
         extractedDoors = mergeDoors(allDoors);
         extractedSets = mergeHardwareSets(allSets);
       } else {
-        const pdfBase64 = arrayBufferToBase64(arrayBuffer);
-
         setProgress(20);
         setStatus("Running extraction...");
+
+        // If PDF is in storage, send projectId so the server fetches it directly (no payload limit).
+        // Otherwise, fall back to sending base64 in the body.
+        const parseBody: Record<string, unknown> = { userColumnMapping: mappingPayload };
+        if (pdfStoragePath) {
+          parseBody.projectId = projectId;
+        } else {
+          parseBody.pdfBase64 = arrayBufferToBase64(arrayBuffer);
+        }
 
         const parseResp = await fetch("/api/parse-pdf?parseOnly=true", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            pdfBase64,
-            userColumnMapping: mappingPayload,
-          }),
+          body: JSON.stringify(parseBody),
         });
 
         if (!parseResp.ok) {
@@ -274,7 +280,7 @@ export default function StepTriage({
     } catch (err) {
       onError(err instanceof Error ? err.message : "Extraction failed");
     }
-  }, [file, columnMappings, classifyResult, onError]);
+  }, [file, pdfStoragePath, projectId, columnMappings, classifyResult, onError]);
 
   // ─── Phase 2: User reviews extraction results, then continues ───
   const handleAcceptResults = useCallback(() => {
@@ -303,33 +309,40 @@ export default function StepTriage({
     setStatus(`Extracting items for ${emptySets.length} empty set${emptySets.length !== 1 ? "s" : ""} with AI...`);
 
     try {
-      // Build filtered PDF with ONLY hardware set pages
-      const hwPages = classifyResult.summary.hardware_set_pages ?? [];
-      let pdfBase64 = "";
-      if (hwPages.length > 0) {
-        const arrayBuffer = await file.arrayBuffer();
-        const chunks = await splitPDFByPages(arrayBuffer, [hwPages], []);
-        pdfBase64 = chunks[0] ?? "";
-      }
-      if (!pdfBase64) {
-        // Fallback: send full PDF
-        const arrayBuffer = await file.arrayBuffer();
-        pdfBase64 = arrayBufferToBase64(arrayBuffer);
+      // Build deep extract request body.
+      // If PDF is in storage, send projectId so the server fetches directly.
+      // Otherwise, build filtered PDF with HW set pages (or full PDF fallback).
+      const deepExtractBody: Record<string, unknown> = {
+        emptySets,
+        goldenSample: goldenSample?.confirmed ? {
+          set_id: goldenSample.set_id,
+          items: (goldenSample.items ?? []).map((i) => ({
+            qty: i.qty, name: i.name, manufacturer: i.manufacturer, model: i.model, finish: i.finish,
+          })),
+        } : undefined,
+      };
+
+      if (pdfStoragePath) {
+        deepExtractBody.projectId = projectId;
+      } else {
+        const hwPages = classifyResult.summary.hardware_set_pages ?? [];
+        let pdfBase64 = "";
+        if (hwPages.length > 0) {
+          const arrayBuffer = await file.arrayBuffer();
+          const chunks = await splitPDFByPages(arrayBuffer, [hwPages], []);
+          pdfBase64 = chunks[0] ?? "";
+        }
+        if (!pdfBase64) {
+          const arrayBuffer = await file.arrayBuffer();
+          pdfBase64 = arrayBufferToBase64(arrayBuffer);
+        }
+        deepExtractBody.pdfBase64 = pdfBase64;
       }
 
       const resp = await fetch("/api/parse-pdf/deep-extract", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          pdfBase64,
-          emptySets,
-          goldenSample: goldenSample?.confirmed ? {
-            set_id: goldenSample.set_id,
-            items: (goldenSample.items ?? []).map((i) => ({
-              qty: i.qty, name: i.name, manufacturer: i.manufacturer, model: i.model, finish: i.finish,
-            })),
-          } : undefined,
-        }),
+        body: JSON.stringify(deepExtractBody),
       });
 
       if (!resp.ok) {
@@ -388,7 +401,7 @@ export default function StepTriage({
     } finally {
       setDeepExtracting(false);
     }
-  }, [hardwareSets, file, classifyResult, goldenSample]);
+  }, [hardwareSets, file, pdfStoragePath, projectId, classifyResult, goldenSample]);
 
   // ─── Phase 3: Run triage classification ───
   const runTriageClassification = useCallback(async () => {
@@ -439,6 +452,7 @@ export default function StepTriage({
             page_number: null,
           })),
           filteredPdfBase64,
+          projectId: pdfStoragePath ? projectId : undefined,
           userHints: userHints.length > 0 ? userHints : undefined,
         }),
       });
@@ -501,7 +515,7 @@ export default function StepTriage({
     } catch (err) {
       onError(err instanceof Error ? err.message : "Triage failed");
     }
-  }, [doors, file, classifyResult, onError]);
+  }, [doors, file, pdfStoragePath, projectId, classifyResult, onError]);
 
   // Start extraction on mount
   useEffect(() => {

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import Anthropic from '@anthropic-ai/sdk'
+import { fetchProjectPdfBase64 } from '@/lib/pdf-storage'
 import { callDeepExtraction, type DeepExtractResult } from '@/lib/parse-pdf-helpers'
 
 // Haiku is fast — 300s is generous
@@ -15,14 +16,24 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { pdfBase64, emptySets, goldenSample } = body as {
-      pdfBase64: string
+    const { emptySets, goldenSample } = body as {
+      pdfBase64?: string
+      projectId?: string
       emptySets: Array<{ set_id: string; heading: string }>
       goldenSample?: { set_id: string; items: Array<{ qty: number; name: string; manufacturer: string; model: string; finish: string }> } | null
     }
 
+    // Resolve PDF: prefer server-side storage fetch via projectId, fallback to base64 in body
+    let pdfBase64: string = body.pdfBase64 ?? ''
+    if (!pdfBase64 && body.projectId) {
+      try {
+        pdfBase64 = await fetchProjectPdfBase64(body.projectId)
+      } catch (err) {
+        console.error('Failed to fetch PDF from storage:', err instanceof Error ? err.message : String(err))
+      }
+    }
     if (!pdfBase64) {
-      return NextResponse.json({ error: 'Missing pdfBase64' }, { status: 400 })
+      return NextResponse.json({ error: 'Missing pdfBase64 or projectId' }, { status: 400 })
     }
     if (!emptySets || emptySets.length === 0) {
       return NextResponse.json({ error: 'No empty sets provided' }, { status: 400 })

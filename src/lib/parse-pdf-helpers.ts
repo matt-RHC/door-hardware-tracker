@@ -19,6 +19,31 @@ import type {
   PunchyQuantityCheck,
 } from '@/lib/types'
 import { extractJSON } from '@/lib/extractJSON'
+import { HARDWARE_TAXONOMY, type InstallScope } from '@/lib/hardware-taxonomy'
+
+// --- Category classification for quantity normalization ---
+
+/** Compiled regex cache for hardware taxonomy name patterns. */
+const _taxonomyRegexCache: Array<{ id: string; install_scope: InstallScope; patterns: RegExp[] }> =
+  HARDWARE_TAXONOMY.map(cat => ({
+    id: cat.id,
+    install_scope: cat.install_scope,
+    patterns: cat.name_patterns.map(p => new RegExp(p, 'i')),
+  }))
+
+/**
+ * Classify a hardware item name into a taxonomy category.
+ * Returns the install_scope for the matched category, or null if unrecognized.
+ * Mirrors Python's _classify_hardware_item() at extract-tables.py:173.
+ */
+function classifyItemScope(name: string): InstallScope | null {
+  for (const cat of _taxonomyRegexCache) {
+    for (const rx of cat.patterns) {
+      if (rx.test(name)) return cat.install_scope
+    }
+  }
+  return null
+}
 
 // --- Shared types ---
 
@@ -218,16 +243,23 @@ export async function callPunchyQuantityCheck(
   base64: string,
   hardwareSets: HardwareSet[],
   doors: DoorEntry[],
+  goldenSample?: {
+    set_id: string
+    items: Array<{ qty: number; name: string; manufacturer?: string; model?: string; finish?: string }>
+  } | null,
 ): Promise<PunchyQuantityCheck> {
-  const systemPrompt = getQuantityCheckPrompt()
+  const systemPrompt = getQuantityCheckPrompt(goldenSample ?? undefined)
 
   const dataSummary = JSON.stringify({
     hardware_sets: hardwareSets.map(s => ({
       set_id: s.set_id,
       heading: s.heading,
+      heading_door_count: s.heading_door_count,
+      heading_leaf_count: s.heading_leaf_count,
       items: (s.items ?? []).map(i => ({
         name: i.name,
         qty: i.qty,
+        qty_total: i.qty_total,
         qty_source: i.qty_source,
         manufacturer: i.manufacturer,
         model: i.model,
@@ -260,7 +292,7 @@ export async function callPunchyQuantityCheck(
             },
             {
               type: 'text',
-              text: `Here are the normalized hardware quantities and door assignments. Check quantities against DFH standards and flag any compliance issues:\n\n${dataSummary}`,
+              text: `Review the normalized hardware quantities and door assignments. Return auto_corrections for high-confidence fixes, questions for ambiguous cases, and flags/compliance_issues for other observations:\n\n${dataSummary}`,
             },
           ],
         },
@@ -277,7 +309,15 @@ export async function callPunchyQuantityCheck(
       text = text.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '')
     }
 
-    return extractJSON(text) as PunchyQuantityCheck
+    const parsed = extractJSON(text) as PunchyQuantityCheck
+    // Ensure backward compat: default missing arrays
+    return {
+      auto_corrections: parsed.auto_corrections ?? [],
+      questions: parsed.questions ?? [],
+      flags: parsed.flags ?? [],
+      compliance_issues: parsed.compliance_issues ?? [],
+      notes: parsed.notes,
+    }
   } catch (err) {
     console.error('Punchy quantity check failed:', err instanceof Error ? err.message : String(err))
     return { flags: [], compliance_issues: [], notes: `Punchy quantity check failed: ${err instanceof Error ? err.message : String(err)}` }
@@ -473,9 +513,20 @@ export function applyCorrections(
 }
 
 /**
- * Post-Punchy quantity re-normalization.
+ * Post-Punchy quantity re-normalization (category-aware).
+ *
  * Punchy may revert normalized quantities back to PDF totals.
- * This re-divides them using the Opening List door counts as ground truth.
+ * This re-divides them using the Opening List door counts as ground truth,
+ * with division strategy based on hardware taxonomy install_scope:
+ *
+ *   per_leaf    → divide by leafCount first (hinges, pivots)
+ *   per_opening → divide by doorCount only (closers, locksets)
+ *   per_pair    → never divide (coordinators, astragals)
+ *   per_frame   → never divide (thresholds, seals)
+ *   unknown     → legacy behavior: try leaf then door (backward compat)
+ *
+ * Mirrors Python's normalize_quantities() DIVISION_PREFERENCE logic
+ * at extract-tables.py:127-147.
  */
 export function normalizeQuantities(
   hardwareSets: HardwareSet[],
@@ -498,6 +549,29 @@ export function normalizeQuantities(
       if (item.qty_source === 'divided' || item.qty_source === 'flagged' || item.qty_source === 'capped') {
         continue
       }
+
+      const scope = classifyItemScope(item.name)
+
+      // per_pair / per_frame → never divide (one per opening/frame regardless of leaf count)
+      if (scope === 'per_pair' || scope === 'per_frame') {
+        continue
+      }
+
+      // per_opening → divide by doorCount only (skip leafCount)
+      if (scope === 'per_opening') {
+        if (doorCount > 1 && item.qty >= doorCount) {
+          const perOpening = item.qty / doorCount
+          if (Number.isInteger(perOpening)) {
+            item.qty_total = item.qty
+            item.qty_door_count = doorCount
+            item.qty = perOpening
+            item.qty_source = 'divided'
+          }
+        }
+        continue
+      }
+
+      // per_leaf (or unknown/null fallback) → try leafCount first, then doorCount
       let divided = false
       if (leafCount > 1 && item.qty >= leafCount) {
         const perLeaf = item.qty / leafCount
