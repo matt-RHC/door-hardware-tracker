@@ -233,6 +233,14 @@ CONFIDENCE TIERS:
 - MEDIUM confidence → "questions": Something looks off but you need the user to confirm. Provide specific options. Examples: non-standard hinge counts (4 or 5 per leaf), unusual closer configurations.
 - LOW confidence → "flags": Something to note but may be intentional. Examples: slightly unusual quantities that could be project-specific.
 
+HINGE QUANTITY RULES (DHI / BHMA standards — use when evaluating hinge counts):
+- Door height up to 7'6" (90"): 3 hinges per leaf (standard commercial)
+- Door height 7'6" to 10'0" (120"): 4 hinges per leaf (tall doors)
+- Door height over 10'0": 4 + 1 per additional 30" of height
+- Doors over 200 lbs or heavy-duty spec: +1 hinge regardless of height
+- If you see 4+ hinges per leaf, ask whether it's a tall or heavy door — don't auto-correct to 3.
+- If the heading mentions dimensions (e.g., "3070", "3'0\"x8'0\""), use them to validate hinge count.
+
 RULES:
 - Fire rating compliance is mandatory — always check that rated openings have required hardware.
 - Pair door hardware is expected to differ from single doors — account for leaf counts.
