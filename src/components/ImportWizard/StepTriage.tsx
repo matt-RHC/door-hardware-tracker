@@ -8,8 +8,10 @@ import type {
   DoorEntry,
   HardwareSet,
 } from "./types";
+import type { PunchyQuantityCheck } from "@/lib/types";
 import { scoreExtraction } from "@/lib/confidence-scoring";
 import { generateTriageQuestions, type PunchQuestion } from "@/lib/punch-messages";
+import { buildDecisionFromAnswer, propagateQuantityDecision } from "@/lib/quantity-propagation";
 import {
   arrayBufferToBase64,
   splitPDFByPages,
@@ -21,10 +23,11 @@ import {
 } from "@/lib/pdf-utils";
 
 /**
- * Phases: extracting → results → questions → triaging → done
- * "results" is the NEW Extraction Health Dashboard phase.
+ * Phases: extracting → results → qty_review → questions → triaging → done
+ * "results" = Extraction Health Dashboard
+ * "qty_review" = Punchy quantity corrections + questions
  */
-type TriagePhase = "extracting" | "results" | "questions" | "triaging" | "done";
+type TriagePhase = "extracting" | "results" | "qty_review" | "questions" | "triaging" | "done";
 
 interface StepTriageProps {
   projectId: string;
@@ -71,6 +74,9 @@ export default function StepTriage({
     items: HardwareSet["items"];
     confirmed: boolean;
   } | null>(null);
+  const [qtyCheck, setQtyCheck] = useState<PunchyQuantityCheck | null>(null);
+  const [qtyCorrectionsApplied, setQtyCorrectionsApplied] = useState(false);
+  const [qtyReviewRunning, setQtyReviewRunning] = useState(false);
 
   // Keep refs to latest answers and generated questions
   const answersRef = useRef(questionAnswers);
@@ -257,6 +263,11 @@ export default function StepTriage({
         const parseResult: any = await parseResp.json();
         extractedDoors = parseResult.doors ?? [];
         extractedSets = parseResult.sets ?? [];
+
+        // Capture Punchy quantity check for the qty_review phase
+        if (parseResult.punchyQuantityCheck) {
+          setQtyCheck(parseResult.punchyQuantityCheck);
+        }
       }
 
       if (extractedDoors.length === 0) {
@@ -284,18 +295,81 @@ export default function StepTriage({
 
   // ─── Phase 2: User reviews extraction results, then continues ───
   const handleAcceptResults = useCallback(() => {
-    // Generate validation questions
-    const questions = generateTriageQuestions(doors);
-    generatedQuestionsRef.current = questions;
-    if (questions.length > 0) {
-      onQuestionsGenerated(questions);
-      setPhase("questions");
-      setStatus("Review flagged items in the sidebar, then continue.");
+    // Check if Punchy has quantity findings to review
+    const hasQtyFindings = qtyCheck &&
+      (((qtyCheck.auto_corrections?.length ?? 0) > 0) ||
+       ((qtyCheck.questions?.length ?? 0) > 0) ||
+       ((qtyCheck.flags?.length ?? 0) > 0) ||
+       ((qtyCheck.compliance_issues?.length ?? 0) > 0));
+
+    if (hasQtyFindings) {
+      setPhase("qty_review");
+      setStatus("Review quantity corrections from Punchy.");
     } else {
-      // No questions — go straight to triage
+      // No qty findings — skip to validation questions
+      const questions = generateTriageQuestions(doors);
+      generatedQuestionsRef.current = questions;
+      if (questions.length > 0) {
+        onQuestionsGenerated(questions);
+        setPhase("questions");
+        setStatus("Review flagged items in the sidebar, then continue.");
+      } else {
+        setPhase("triaging");
+      }
+    }
+  }, [doors, qtyCheck, onQuestionsGenerated]);
+
+  // ─── Apply auto-corrections to hardwareSets ───
+  const applyAutoCorrections = useCallback(() => {
+    const corrections = qtyCheck?.auto_corrections ?? [];
+    if (corrections.length === 0) return;
+
+    setHardwareSets((prev) => {
+      const updated = prev.map((set) => {
+        const setCorrections = corrections.filter(c => c.set_id === set.set_id);
+        if (setCorrections.length === 0) return set;
+
+        const updatedItems = (set.items ?? []).map((item) => {
+          const corr = setCorrections.find(c =>
+            c.item_name.toLowerCase() === item.name.toLowerCase()
+          );
+          if (corr) {
+            return { ...item, qty: corr.to_qty, qty_source: 'auto_corrected' as const };
+          }
+          return item;
+        });
+        return { ...set, items: updatedItems };
+      });
+      return updated;
+    });
+    setQtyCorrectionsApplied(true);
+  }, [qtyCheck]);
+
+  // ─── Continue from qty_review to questions/triage ───
+  const handleAcceptQtyReview = useCallback(() => {
+    // Apply auto-corrections if not already applied
+    if (!qtyCorrectionsApplied && (qtyCheck?.auto_corrections?.length ?? 0) > 0) {
+      applyAutoCorrections();
+    }
+
+    // Convert Punchy quantity questions to PunchQuestion format and merge with triage questions
+    const triageQs = generateTriageQuestions(doors);
+    const qtyQuestions: PunchQuestion[] = (qtyCheck?.questions ?? []).map(q => ({
+      id: q.id,
+      text: `[${q.set_id}] ${q.text}`,
+      options: q.options,
+    }));
+    const allQuestions = [...qtyQuestions, ...triageQs];
+
+    generatedQuestionsRef.current = allQuestions;
+    if (allQuestions.length > 0) {
+      onQuestionsGenerated(allQuestions);
+      setPhase("questions");
+      setStatus("Review quantity and validation questions, then continue.");
+    } else {
       setPhase("triaging");
     }
-  }, [doors, onQuestionsGenerated]);
+  }, [doors, qtyCheck, qtyCorrectionsApplied, applyAutoCorrections, onQuestionsGenerated]);
 
   // ─── Deep Extract: LLM-based item extraction for empty sets ───
   const handleDeepExtract = useCallback(async () => {
@@ -517,6 +591,37 @@ export default function StepTriage({
     }
   }, [doors, file, pdfStoragePath, projectId, classifyResult, onError]);
 
+  // ─── Quantity answer propagation ───
+  // When a quantity question (prefixed with [SET_ID]) is answered,
+  // propagate the answer across all matching items in other sets.
+  const prevAnswersRef = useRef<Record<string, string>>({});
+  useEffect(() => {
+    const prev = prevAnswersRef.current;
+    const qtyQuestions = qtyCheck?.questions ?? [];
+    if (qtyQuestions.length === 0) return;
+
+    for (const [qId, answer] of Object.entries(questionAnswers)) {
+      if (prev[qId] === answer) continue; // Already processed
+
+      // Find the matching Punchy quantity question
+      const punchyQ = qtyQuestions.find(q => q.id === qId);
+      if (!punchyQ) continue;
+
+      const decision = buildDecisionFromAnswer(punchyQ.set_id, punchyQ.item_name, answer);
+      if (!decision) continue;
+
+      const result = propagateQuantityDecision(decision, hardwareSets);
+      if (result.appliedCount > 0) {
+        setHardwareSets(result.updatedSets);
+        console.debug(
+          `[qty-propagation] "${answer}" for ${punchyQ.set_id}/${punchyQ.item_name} → ` +
+          `applied to ${result.appliedCount} items in sets: ${result.modifiedSetIds.join(', ')}`
+        );
+      }
+    }
+    prevAnswersRef.current = { ...questionAnswers };
+  }, [questionAnswers, qtyCheck, hardwareSets]);
+
   // Start extraction on mount
   useEffect(() => {
     runExtraction();
@@ -550,6 +655,8 @@ export default function StepTriage({
           ? "Extracting door schedule data from your PDF..."
           : phase === "results"
           ? "Review what was extracted before continuing to triage."
+          : phase === "qty_review"
+          ? "Punchy reviewed quantities. Apply corrections and answer questions."
           : "Classifying doors as accepted, by-others, or rejected."}
       </p>
 
@@ -860,6 +967,133 @@ export default function StepTriage({
               {extractionHealth.grade === "critical"
                 ? "Continue Anyway"
                 : "Continue to Triage"}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ═══════════════════════════════════════════════════════════════
+          QUANTITY REVIEW — Punchy's auto-corrections + questions
+         ═══════════════════════════════════════════════════════════════ */}
+      {phase === "qty_review" && qtyCheck && (
+        <div className="space-y-4 mb-4">
+          <h4 className="text-[#f5f5f7] font-semibold text-sm">Quantity Review</h4>
+          <p className="text-[#a1a1a6] text-xs">
+            Punchy reviewed the extracted quantities against DFH standards.
+          </p>
+
+          {/* Auto-corrections (HIGH confidence) */}
+          {(qtyCheck.auto_corrections?.length ?? 0) > 0 && (
+            <div className="bg-[rgba(48,209,88,0.06)] border border-[rgba(48,209,88,0.2)] rounded-xl p-3">
+              <div className="text-[10px] text-[#30d158] uppercase tracking-wide mb-2 font-semibold">
+                Auto-Corrections ({qtyCheck.auto_corrections?.length ?? 0})
+              </div>
+              <div className="space-y-1.5">
+                {(qtyCheck.auto_corrections ?? []).map((c, i) => (
+                  <div key={`ac-${i}`} className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-[rgba(48,209,88,0.08)] text-xs">
+                    <span className="text-[#30d158]">&#10003;</span>
+                    <span className="text-[#0a84ff] font-mono font-medium">{c.set_id}</span>
+                    <span className="text-[#f5f5f7]">{c.item_name}:</span>
+                    <span className="text-[#ff453a] line-through">{c.from_qty}</span>
+                    <span className="text-[#a1a1a6]">&rarr;</span>
+                    <span className="text-[#30d158] font-semibold">{c.to_qty}</span>
+                    <span className="text-[#6e6e73] truncate flex-1">{c.reason}</span>
+                  </div>
+                ))}
+              </div>
+              {!qtyCorrectionsApplied && (
+                <button
+                  onClick={applyAutoCorrections}
+                  className="mt-2 px-4 py-1.5 bg-[#30d158] hover:bg-[#28b84d] text-black rounded-lg transition-colors font-semibold text-xs"
+                >
+                  Apply All Corrections
+                </button>
+              )}
+              {qtyCorrectionsApplied && (
+                <p className="mt-2 text-[#30d158] text-xs font-semibold">&#10003; Corrections applied</p>
+              )}
+            </div>
+          )}
+
+          {/* Quantity questions (MEDIUM confidence) */}
+          {(qtyCheck.questions?.length ?? 0) > 0 && (
+            <div className="bg-[rgba(10,132,255,0.06)] border border-[rgba(10,132,255,0.2)] rounded-xl p-3">
+              <div className="text-[10px] text-[#0a84ff] uppercase tracking-wide mb-2 font-semibold">
+                Needs Your Input ({qtyCheck.questions?.length ?? 0})
+              </div>
+              <p className="text-[#a1a1a6] text-xs mb-2">
+                These will appear in the sidebar after you continue.
+              </p>
+              <div className="space-y-1.5">
+                {(qtyCheck.questions ?? []).map((q, i) => (
+                  <div key={`qq-${i}`} className="px-2.5 py-1.5 rounded-lg bg-[rgba(10,132,255,0.08)] text-xs">
+                    <div className="flex items-center gap-2">
+                      <span className="text-[#0a84ff] font-mono font-medium">{q.set_id}</span>
+                      <span className="text-[#f5f5f7]">{q.item_name}</span>
+                      <span className="text-[#6e6e73]">(currently {q.current_qty})</span>
+                    </div>
+                    <p className="text-[#a1a1a6] mt-0.5">{q.text}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Flags (LOW confidence) */}
+          {(qtyCheck.flags?.length ?? 0) > 0 && (
+            <div className="bg-[rgba(255,149,0,0.06)] border border-[rgba(255,149,0,0.2)] rounded-xl p-3">
+              <div className="text-[10px] text-[#ff9500] uppercase tracking-wide mb-2 font-semibold">
+                Observations ({qtyCheck.flags?.length ?? 0})
+              </div>
+              <div className="space-y-1">
+                {(qtyCheck.flags ?? []).map((f, i) => (
+                  <div key={`fl-${i}`} className="text-xs text-[#a1a1a6] px-2.5 py-1">
+                    <span className="text-[#ff9500] font-mono mr-1">{f.set_id}</span>
+                    {f.message ?? f.reason ?? ''}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Compliance issues */}
+          {(qtyCheck.compliance_issues?.length ?? 0) > 0 && (
+            <div className="bg-[rgba(255,69,58,0.06)] border border-[rgba(255,69,58,0.2)] rounded-xl p-3">
+              <div className="text-[10px] text-[#ff453a] uppercase tracking-wide mb-2 font-semibold">
+                Compliance Issues ({qtyCheck.compliance_issues?.length ?? 0})
+              </div>
+              <div className="space-y-1">
+                {(qtyCheck.compliance_issues ?? []).map((ci, i) => (
+                  <div key={`ci-${i}`} className="text-xs px-2.5 py-1">
+                    <span className="text-[#ff453a] font-mono mr-1">{ci.set_id}</span>
+                    <span className="text-[#f5f5f7]">{ci.issue}</span>
+                    {ci.regulation && (
+                      <span className="text-[#6e6e73] ml-1">({ci.regulation})</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Punchy notes */}
+          {qtyCheck.notes && (
+            <p className="text-[#6e6e73] text-xs italic px-1">{qtyCheck.notes}</p>
+          )}
+
+          {/* Action buttons */}
+          <div className="flex items-center justify-between pt-2">
+            <button
+              onClick={() => setPhase("results")}
+              className="px-4 py-2 bg-white/[0.04] border border-white/[0.08] hover:bg-white/[0.08] text-[#a1a1a6] rounded-lg transition-colors text-sm"
+            >
+              Back to Results
+            </button>
+            <button
+              onClick={handleAcceptQtyReview}
+              className="px-6 py-2 bg-[#0a84ff] hover:bg-[#0975de] text-white rounded-lg transition-colors font-semibold text-sm"
+            >
+              Continue to Triage
             </button>
           </div>
         </div>
