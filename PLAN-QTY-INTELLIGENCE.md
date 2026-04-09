@@ -215,24 +215,102 @@ On re-import (revision):
 ### Files to create:
 - `src/app/api/projects/[projectId]/decisions/route.ts` — GET/POST for decisions
 
+## Change 7: PDF Storage (Phase 0 — Do First)
+
+### Why Before Everything Else
+Currently PDFs are ephemeral (held in browser memory, re-encoded to base64 per API call).
+This creates payload size limits, prevents multi-pass processing, and makes re-imports
+require re-uploading. Saving to Supabase Storage fixes all of this and unlocks:
+- Server-side PDF fetching (no request body limits)
+- Multi-pass analysis (pdfplumber → Deep Extract → page re-read)
+- Re-import without re-upload
+- Background/async processing
+- Page-level rendering for Sample Calibration UI
+
+### Infrastructure Already Exists
+Supabase Storage is already working for attachments:
+- `src/app/api/openings/[openingId]/attachments/route.ts:137-154` — full working upload example
+- `attachments` bucket exists with RLS
+- Server + admin clients both configured in `src/lib/supabase/server.ts`
+
+### Implementation
+
+**A. Create `submittals` storage bucket** in Supabase dashboard (private, signed URLs)
+
+**B. Add columns to `projects` table:**
+```sql
+ALTER TABLE projects
+  ADD COLUMN pdf_storage_path text,
+  ADD COLUMN pdf_hash text,
+  ADD COLUMN pdf_page_count int,
+  ADD COLUMN pdf_uploaded_at timestamptz;
+```
+
+**C. New upload endpoint:** `POST /api/projects/[projectId]/pdf`
+- Accept FormData with File (same pattern as attachments/route.ts)
+- Compute SHA-256 hash, check for dedup against `projects.pdf_hash`
+- Upload to `submittals/{projectId}/{hash}.pdf`
+- Update `projects` row with storage path + hash + page count + timestamp
+- Return storage path
+
+**D. Server-side fetch helper:** `src/lib/pdf-storage.ts`
+```typescript
+export async function fetchProjectPdf(projectId: string): Promise<Buffer> {
+  const supabase = createAdminSupabaseClient()
+  const { data: project } = await supabase
+    .from('projects').select('pdf_storage_path').eq('id', projectId).single()
+  const { data } = await supabase.storage
+    .from('submittals').download(project.pdf_storage_path)
+  return Buffer.from(await data.arrayBuffer())
+}
+
+export async function fetchProjectPdfBase64(projectId: string): Promise<string> {
+  const buf = await fetchProjectPdf(projectId)
+  return buf.toString('base64')
+}
+```
+
+**E. Modify wizard flow:**
+- `StepUpload`: After classification, upload PDF to storage. Pass `storageKey` instead of `File` to subsequent steps.
+- API routes (parse-pdf, triage, deep-extract): Accept `projectId` + fetch from storage server-side, OR accept base64 as fallback for backward compat.
+- This eliminates base64 payload size limits entirely.
+
+**F. Modify `StepTriage` and API routes:**
+- Deep Extract: fetch from storage instead of building base64 client-side
+- Triage: fetch filtered pages from storage instead of sending in request body
+- Parse-PDF: fetch from storage instead of requiring base64 in body
+
+---
+
 ## Implementation Order
 
-Phase 1 (this session or next):
-1. Change 5: Category-aware TS normalization (quick win, fixes blind division)
-2. Change 2: Modify Punchy prompt to return corrections + questions
+Phase 0 (foundation — do first):
+1. **Change 7: PDF Storage** — Save PDFs to Supabase Storage, add server-side fetch helper
 
-Phase 2:
-3. Change 3: Quantity review sub-phase in wizard + wire questions
-4. Change 4: Propagation engine
+Phase 1 (quick wins):
+2. Change 5: Category-aware TS normalization (fixes blind division)
+3. Change 2: Modify Punchy prompt to return corrections + questions
 
-Phase 3:
-5. Change 1: Database table + RLS
-6. Change 6: Persist and retrieve decisions
+Phase 2 (wizard integration):
+4. Change 3: Quantity review sub-phase in wizard + wire questions
+5. Change 4: Propagation engine
+
+Phase 3 (persistence):
+6. Change 1: `extraction_decisions` database table + RLS
+7. Change 6: Persist and retrieve decisions, load on re-import
 
 ## Files Summary
 
 | File | Action | What Changes |
 |------|--------|-------------|
+| `src/lib/pdf-storage.ts` | **Create** | Server-side PDF fetch from Supabase Storage |
+| `src/app/api/projects/[projectId]/pdf/route.ts` | **Create** | PDF upload endpoint |
+| `src/lib/types/database.ts` | Modify | Add pdf fields to projects type |
+| Supabase migration | **Create** | Add pdf columns to projects table |
+| `src/components/ImportWizard/StepUpload.tsx` | Modify | Upload PDF to storage after classification |
+| `src/app/api/parse-pdf/route.ts` | Modify | Accept projectId, fetch PDF from storage |
+| `src/app/api/parse-pdf/triage/route.ts` | Modify | Fetch filtered PDF from storage |
+| `src/app/api/parse-pdf/deep-extract/route.ts` | Modify | Fetch PDF from storage |
 | `src/lib/parse-pdf-helpers.ts` | Modify | Category-aware normalizeQuantities() + goldenSample in qty check |
 | `src/lib/punchy-prompts.ts` | Modify | Quantity check prompt: corrections + questions output |
 | `src/lib/types/index.ts` | Modify | PunchyQuantityCheck type: add auto_corrections + questions |
@@ -247,6 +325,7 @@ Phase 3:
 
 The key insight: **Every submittal is a new puzzle, but most pieces are standard.**
 
+- Saving the PDF unlocks multi-pass processing and eliminates payload limits
 - 90% of quantities follow domain rules (3 hinges, 1 closer, 1 lockset)
 - 10% are project-specific (tall doors, heavy doors, special hardware)
 - The golden sample resolves the 90% case in one click

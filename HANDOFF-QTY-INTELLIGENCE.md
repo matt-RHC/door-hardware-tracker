@@ -28,7 +28,91 @@
 
 ---
 
-## What Needs to Be Built: Quantity Intelligence (Plan at `/root/.claude/plans/qty-intelligence.md`)
+## What Needs to Be Built First: PDF Storage (Phase 0)
+
+### Why This Matters
+Currently, PDFs are **ephemeral** — held in browser memory as a `File` object, re-encoded to base64 for every API call, and never persisted. This creates three problems:
+1. **Payload size limits** — Sending a filtered PDF as base64 in a JSON body can hit Vercel's limits on large submittals
+2. **No multi-pass processing** — Each API call gets one shot at the PDF. Can't do: pdfplumber pass → Deep Extract pass → targeted page re-read
+3. **No re-import** — User must re-upload the same file to re-run the wizard
+4. **No background processing** — Everything must complete within the request lifecycle
+
+### The Good News: Infrastructure Already Exists
+Supabase Storage is **already in use** for the `attachments` bucket (floor plans, door drawings). The pattern is proven:
+- `src/app/api/openings/[openingId]/attachments/route.ts:137-154` — full working upload example
+- Uses `supabase.storage.from('attachments').upload(path, buffer)` + `.getPublicUrl(path)`
+- Auth via server-side Supabase client with session cookies
+- File metadata stored in the `attachments` table
+
+### What to Build
+
+**1. Create a `submittals` storage bucket** in Supabase (or use `attachments` with a prefix):
+- Bucket: `submittals` (private — use signed URLs, not public)
+- Path: `{projectId}/{hash}.pdf` (hash for dedup)
+- RLS: project members only
+
+**2. Add columns to `projects` table:**
+```sql
+ALTER TABLE projects
+  ADD COLUMN pdf_storage_path text,
+  ADD COLUMN pdf_hash text,
+  ADD COLUMN pdf_page_count int,
+  ADD COLUMN pdf_uploaded_at timestamptz;
+```
+
+**3. New upload endpoint:** `POST /api/projects/[projectId]/pdf`
+- Accept FormData with File (same pattern as attachments route)
+- Compute SHA-256 hash for dedup (compare against `projects.pdf_hash`)
+- Upload to `submittals` bucket
+- Update `projects` row with storage path + hash + page count
+- Return the storage path
+
+**4. Modify the wizard to upload-then-reference:**
+- `StepUpload`: After classification, upload the PDF to storage
+- All subsequent steps reference the storage path instead of re-encoding base64
+- API routes (parse-pdf, triage, deep-extract) fetch the PDF from storage server-side
+- This eliminates base64 payload size limits entirely
+
+**5. Server-side PDF fetching helper:**
+```typescript
+// New helper in src/lib/pdf-storage.ts
+export async function fetchProjectPdf(projectId: string): Promise<ArrayBuffer> {
+  const supabase = await createAdminSupabaseClient()
+  const { data: project } = await supabase
+    .from('projects')
+    .select('pdf_storage_path')
+    .eq('id', projectId)
+    .single()
+  
+  const { data, error } = await supabase.storage
+    .from('submittals')
+    .download(project.pdf_storage_path)
+  
+  return await data.arrayBuffer()
+}
+```
+
+### Key Files to Reference
+| File | What It Shows |
+|------|--------------|
+| `src/app/api/openings/[openingId]/attachments/route.ts:74-186` | Complete Supabase Storage upload pattern |
+| `src/lib/supabase/server.ts:6-37` | Server + admin client creation |
+| `src/lib/types/database.ts:4-59` | Projects table type (needs pdf fields added) |
+| `next.config.ts:12` | Server actions body size limit: 25MB |
+| `src/components/ImportWizard/StepUpload.tsx:76-78` | Current base64 encoding (will change to storage upload) |
+
+### What This Unlocks
+- **No payload limits** — Server fetches PDF from storage, not from request body
+- **Multi-pass analysis** — Deep Extract, Punchy review, and page-level re-reads can each fetch independently
+- **Page-level caching** — Extract individual pages on demand without re-processing the full PDF
+- **Re-import without re-upload** — Re-run wizard against the stored PDF with different mappings
+- **Background processing** — Kick off extraction async, notify when done
+- **Revision tracking** — Store both original and revised PDFs by storage path
+- **Sample page preview** — Render specific pages in the Sample Calibration UI from storage
+
+---
+
+## What Needs to Be Built: Quantity Intelligence (Plan at `PLAN-QTY-INTELLIGENCE.md`)
 
 The plan file has full details. Here's the essence:
 
