@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { extractFireRatings } from '@/lib/fire-rating'
+import { fetchProjectPdfBase64 } from '@/lib/pdf-storage'
 import type {
   DoorEntry,
   HardwareSet,
@@ -177,9 +178,18 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const base64 = body.pdfBase64
+
+    // Resolve PDF: prefer server-side storage fetch via projectId, fallback to base64 in body
+    let base64: string = body.pdfBase64 ?? ''
+    if (!base64 && body.projectId) {
+      try {
+        base64 = await fetchProjectPdfBase64(body.projectId)
+      } catch (err) {
+        console.error('Failed to fetch PDF from storage:', err instanceof Error ? err.message : String(err))
+      }
+    }
     if (!base64) {
-      return NextResponse.json({ error: 'Missing pdfBase64' }, { status: 400 })
+      return NextResponse.json({ error: 'Missing pdfBase64 or projectId' }, { status: 400 })
     }
 
     // Client may send a filtered PDF (opening list + hardware schedule pages only)

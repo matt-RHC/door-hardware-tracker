@@ -95,6 +95,7 @@ export interface WizardState {
 
   // Step 1: Upload
   file: File | null;
+  pdfStoragePath: string | null;
   classifyResult: ClassifyPagesResponse | null;
   profile?: ClassifyPagesResponse['profile'];
   hasExistingData: boolean;
@@ -124,6 +125,7 @@ export interface WizardState {
 export const INITIAL_WIZARD_STATE: WizardState = {
   currentStep: WizardStep.Upload,
   file: null,
+  pdfStoragePath: null,
   classifyResult: null,
   hasExistingData: false,
   detectResult: null,

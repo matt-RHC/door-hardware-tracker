@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import Anthropic from '@anthropic-ai/sdk'
+import { fetchProjectPdfBase64 } from '@/lib/pdf-storage'
 
 // Bump to 800s — large door lists (100+) with Sonnet can take several minutes
 export const maxDuration = 800
@@ -75,10 +76,21 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { candidates, filteredPdfBase64, userHints } = body as {
+    const { candidates, userHints } = body as {
       candidates: TriageCandidate[]
       filteredPdfBase64?: string
+      projectId?: string
       userHints?: Array<{ question_id: string; question_text: string; answer: string }>
+    }
+
+    // Resolve filtered PDF: prefer client-sent filtered pages, fallback to full PDF from storage
+    let filteredPdfBase64: string | undefined = body.filteredPdfBase64
+    if (!filteredPdfBase64 && body.projectId) {
+      try {
+        filteredPdfBase64 = await fetchProjectPdfBase64(body.projectId)
+      } catch (err) {
+        console.error('Failed to fetch PDF from storage for triage:', err instanceof Error ? err.message : String(err))
+      }
     }
 
     if (!candidates || candidates.length === 0) {

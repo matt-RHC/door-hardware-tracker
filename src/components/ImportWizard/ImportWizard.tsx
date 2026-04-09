@@ -264,10 +264,12 @@ export default function ImportWizard({
     (
       file: File,
       classifyResult: ClassifyPagesResponse,
-      hasExistingData: boolean
+      hasExistingData: boolean,
+      pdfStoragePath: string | null,
     ) => {
       patch({
         file,
+        pdfStoragePath,
         classifyResult,
         hasExistingData,
         currentStep: WizardStep.ScanResults,
@@ -386,6 +388,7 @@ export default function ImportWizard({
               <StepTriage
                 projectId={projectId}
                 file={state.file!}
+                pdfStoragePath={state.pdfStoragePath}
                 columnMappings={state.columnMappings}
                 classifyResult={state.classifyResult!}
                 questionAnswers={questionAnswers}
