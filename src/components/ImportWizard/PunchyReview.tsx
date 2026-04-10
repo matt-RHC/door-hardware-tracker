@@ -174,14 +174,41 @@ export default function PunchyReview({
         }>;
         if (decisions.length === 0) return;
 
-        // Auto-apply prior answers to matching cards
+        // Auto-apply prior answers to matching cards by item category.
+        // This is the key for re-imports: "hinges = 3 per leaf" from PDF #1
+        // auto-applies to hinge questions in PDF #2.
         const priorAnswers: Record<string, string> = {};
         for (const d of decisions) {
           if (d.decision_type === 'qty_answer' && d.item_category) {
-            // Find matching question cards by item category
             for (const card of cards) {
-              if (card.kind === 'question' || card.kind === 'question_batch') {
-                priorAnswers[card.id] = d.answer;
+              // Match individual question cards by item category
+              if (card.kind === 'question') {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const q = card.payload.question as any;
+                const cardCategory = classifyItemCategory(q?.item_name ?? '');
+                if (cardCategory === d.item_category) {
+                  priorAnswers[card.id] = d.answer;
+                }
+              }
+              // Match batch cards by representative item category
+              if (card.kind === 'question_batch') {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                const rep = card.payload.representative as any;
+                const cardCategory = classifyItemCategory(rep?.item_name ?? '');
+                if (cardCategory === d.item_category) {
+                  priorAnswers[card.id] = d.answer;
+                }
+              }
+            }
+          }
+          // Also apply prior auto-corrections knowledge
+          if (d.decision_type === 'qty_correction' && d.item_category) {
+            // If we previously auto-corrected hinges, and there's a new
+            // auto_correction card, pre-flag it as known
+            for (const card of cards) {
+              if (card.kind === 'auto_correction') {
+                // Auto-corrections are already batched — just log awareness
+                console.debug(`[decisions] Prior correction for ${d.item_category} found`);
               }
             }
           }
