@@ -149,10 +149,17 @@ export async function writeStagingData(
   runId: string,
   projectId: string,
   openings: StagingOpening[],
-  hardwareSets: Array<{ set_id: string; heading: string; items: StagingHardwareItem[] }>
+  hardwareSets: Array<{ set_id: string; generic_set_id?: string; heading: string; items: StagingHardwareItem[] }>
 ): Promise<{ openingsCount: number; itemsCount: number }> {
-  // Build set lookup
-  const setMap = new Map(hardwareSets.map(s => [s.set_id, s]))
+  // Build set lookup — register under BOTH set_id and generic_set_id
+  // because doors may be assigned to either (heading "DH1.01" vs set "DH1-10")
+  const setMap = new Map<string, typeof hardwareSets[number]>()
+  for (const s of hardwareSets) {
+    setMap.set(s.set_id, s)
+    if (s.generic_set_id && s.generic_set_id !== s.set_id) {
+      setMap.set(s.generic_set_id, s)
+    }
+  }
 
   // Insert staging openings in chunks
   const CHUNK_SIZE = 50

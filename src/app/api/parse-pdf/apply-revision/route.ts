@@ -57,6 +57,9 @@ export async function POST(request: NextRequest) {
     const setMap = new Map<string, HardwareSet>()
     for (const set of hardwareSets) {
       setMap.set(set.set_id, set)
+      if (set.generic_set_id && set.generic_set_id !== set.set_id) {
+        setMap.set(set.generic_set_id, set)
+      }
     }
 
     // --- Quantity correction (heading-based, same strategy as save/route.ts) ---

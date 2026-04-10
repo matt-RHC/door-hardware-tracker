@@ -175,9 +175,14 @@ export default function StepReview({
 
   // ─── Group by hardware set ───
   const groups: DoorGroup[] = useMemo(() => {
+    // Register sets under BOTH set_id and generic_set_id — doors may be
+    // assigned to either depending on heading format (e.g., "DH1.01" vs "DH1-10")
     const setMap = new Map<string, HardwareSet>();
     for (const set of hardwareSets) {
       setMap.set(set.set_id, set);
+      if (set.generic_set_id && set.generic_set_id !== set.set_id) {
+        setMap.set(set.generic_set_id, set);
+      }
     }
 
     const groupMap = new Map<string, DoorGroup>();
