@@ -357,7 +357,7 @@ export default function ImportWizard({
 
       {/* Step content — drawer is OUTSIDE the scroller to avoid mobile clipping */}
       <PunchHighlightProvider activeKeys={activeKeys}>
-        <div className="flex-1 overflow-y-auto min-h-0 px-6 py-4 pb-56 sm:pb-52">
+        <div className={`flex-1 overflow-y-auto min-h-0 px-6 py-4 ${state.currentStep === WizardStep.Triage ? 'pb-6' : 'pb-56 sm:pb-52'}`}>
             {state.currentStep === WizardStep.Upload && (
               <StepUpload
                 projectId={projectId}

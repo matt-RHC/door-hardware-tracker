@@ -70,7 +70,8 @@ export default function PunchyReview({
   const [correctionsApplied, setCorrectionsApplied] = useState(false);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [sampleConfirmed, setSampleConfirmed] = useState(false);
-  const [setsExpanded, setSetsExpanded] = useState(false);
+  // Auto-expand set list for small projects (≤ 10 sets)
+  const [setsExpanded, setSetsExpanded] = useState(initialSets.length <= 10);
 
   // Keep hardwareSets in sync if parent updates (e.g., deep extract fills empty sets)
   useEffect(() => {
@@ -101,6 +102,16 @@ export default function PunchyReview({
   const goBack = useCallback(() => {
     setCurrentIdx(i => Math.max(i - 1, 0));
   }, []);
+
+  const skipToEnd = useCallback(() => {
+    // Jump to the "ready" card (last one)
+    setCurrentIdx(cards.length - 1);
+  }, [cards.length]);
+
+  // Count remaining required cards the user hasn't addressed yet
+  const remainingRequired = useMemo(() => {
+    return cards.filter((c, i) => i > currentIdx && c.required && c.kind !== 'ready').length;
+  }, [cards, currentIdx]);
 
   // ── Handlers ──
 
@@ -336,7 +347,9 @@ export default function PunchyReview({
       />
     ) : null;
 
-  return renderCard(currentCard, {
+  return (
+    <div>
+      {renderCard(currentCard, {
     cards,
     currentIdx,
     pdfPreview,
@@ -350,13 +363,28 @@ export default function PunchyReview({
     goNext,
     goBack,
     onBack,
+    skipToEnd,
+    remainingRequired,
     setSetsExpanded,
     handleApplyCorrections,
     handleAnswerQuestion,
     handleConfirmSample,
     handleFinish,
     onDeepExtract,
-  });
+  })}
+      {/* Skip to Triage shortcut — shown when no required cards remain */}
+      {currentCard.kind !== 'summary' && currentCard.kind !== 'ready' && remainingRequired === 0 && (
+        <div className="text-center mt-3">
+          <button
+            onClick={handleFinish}
+            className="text-xs text-accent hover:text-accent/80 underline transition-colors"
+          >
+            Skip remaining and go to Triage
+          </button>
+        </div>
+      )}
+    </div>
+  );
 }
 
 // ── Card renderer (separate function to keep component clean) ──
@@ -375,6 +403,8 @@ interface RenderContext {
   goNext: () => void;
   goBack: () => void;
   onBack: () => void;
+  skipToEnd: () => void;
+  remainingRequired: number;
   setSetsExpanded: (v: boolean) => void;
   handleApplyCorrections: () => void;
   handleAnswerQuestion: (id: string, answer: string, setId?: string, itemName?: string) => void;
