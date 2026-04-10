@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useMemo, useEffect } from "react";
+import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import type {
   DoorEntry,
   HardwareSet,
@@ -16,6 +16,7 @@ import {
 import {
   buildDecisionFromAnswer,
   propagateQuantityDecision,
+  classifyItemCategory,
 } from "@/lib/quantity-propagation";
 import PunchCard from "./PunchCard";
 import PDFPagePreview from "./PDFPagePreview";
@@ -57,6 +58,7 @@ export default function PunchyReview({
   qtyCheck,
   pages,
   pdfBuffer,
+  projectId,
   onGoldenSampleConfirmed,
   onDeepExtract,
   deepExtracting,
@@ -152,7 +154,132 @@ export default function PunchyReview({
     });
   }, [health.bestSample, onGoldenSampleConfirmed]);
 
+  // ─── Load prior decisions on mount (for re-imports) ───
+  const priorDecisionsLoaded = useRef(false);
+  useEffect(() => {
+    if (priorDecisionsLoaded.current) return;
+    priorDecisionsLoaded.current = true;
+
+    async function loadPrior() {
+      try {
+        const resp = await fetch(`/api/projects/${projectId}/decisions`);
+        if (!resp.ok) return;
+        const data = await resp.json();
+        const decisions = data.decisions as Array<{
+          decision_type: string;
+          item_category: string | null;
+          set_id: string | null;
+          answer: string;
+          resolved_value: Record<string, unknown> | null;
+        }>;
+        if (decisions.length === 0) return;
+
+        // Auto-apply prior answers to matching cards
+        const priorAnswers: Record<string, string> = {};
+        for (const d of decisions) {
+          if (d.decision_type === 'qty_answer' && d.item_category) {
+            // Find matching question cards by item category
+            for (const card of cards) {
+              if (card.kind === 'question' || card.kind === 'question_batch') {
+                priorAnswers[card.id] = d.answer;
+              }
+            }
+          }
+        }
+        if (Object.keys(priorAnswers).length > 0) {
+          setAnswers(prev => ({ ...priorAnswers, ...prev }));
+          console.debug(`[decisions] Loaded ${Object.keys(priorAnswers).length} prior decisions`);
+        }
+      } catch {
+        // Non-critical — just skip loading prior decisions
+      }
+    }
+    loadPrior();
+  }, [projectId, cards]);
+
+  // ─── Save decisions to API ───
+  const saveDecisions = useCallback(async () => {
+    const decisionsToSave: Array<Record<string, unknown>> = [];
+
+    // Save auto-corrections
+    if (correctionsApplied) {
+      for (const c of qtyCheck?.auto_corrections ?? []) {
+        decisionsToSave.push({
+          decision_type: 'qty_correction',
+          item_category: classifyItemCategory(c.item_name),
+          set_id: c.set_id,
+          item_name: c.item_name,
+          answer: 'auto_applied',
+          resolved_value: { from_qty: c.from_qty, to_qty: c.to_qty, reason: c.reason },
+          applied_count: 1,
+        });
+      }
+    }
+
+    // Save user answers to quantity questions
+    for (const card of cards) {
+      if (card.kind === 'question' && answers[card.id]) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const q = card.payload.question as any;
+        decisionsToSave.push({
+          decision_type: 'qty_answer',
+          item_category: classifyItemCategory(q.item_name ?? ''),
+          set_id: q.set_id,
+          item_name: q.item_name,
+          question_text: q.text,
+          answer: answers[card.id],
+          resolved_value: { current_qty: q.current_qty },
+          applied_count: 1,
+        });
+      }
+      if (card.kind === 'question_batch' && answers[card.id]) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const rep = card.payload.representative as any;
+        const setIds = (card.payload.setIds ?? []) as string[];
+        decisionsToSave.push({
+          decision_type: 'qty_answer',
+          item_category: classifyItemCategory(rep.item_name ?? ''),
+          item_name: rep.item_name,
+          question_text: rep.text,
+          answer: answers[card.id],
+          applied_count: setIds.length,
+        });
+      }
+    }
+
+    // Save golden sample verification
+    if (sampleConfirmed && health.bestSample) {
+      decisionsToSave.push({
+        decision_type: 'sample_verification',
+        set_id: health.bestSample.set_id,
+        answer: 'confirmed',
+        resolved_value: {
+          items: (health.bestSample.items ?? []).map(i => ({
+            name: i.name, qty: i.qty,
+          })),
+        },
+        applied_count: 1,
+      });
+    }
+
+    if (decisionsToSave.length === 0) return;
+
+    try {
+      await fetch(`/api/projects/${projectId}/decisions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ decisions: decisionsToSave }),
+      });
+      console.debug(`[decisions] Saved ${decisionsToSave.length} decisions`);
+    } catch (err) {
+      console.error('Failed to save decisions:', err);
+    }
+  }, [cards, answers, correctionsApplied, sampleConfirmed, qtyCheck, health, projectId]);
+
   const handleFinish = useCallback(() => {
+    // Save decisions asynchronously (non-blocking)
+    saveDecisions();
+
     // Collect triage questions from cards (now batched)
     const triageQs: PunchQuestion[] = cards
       .filter(c => c.kind === "triage_question")
@@ -166,7 +293,7 @@ export default function PunchyReview({
       questionsAnswered: answers,
       triageQuestions: triageQs,
     });
-  }, [cards, answers, hardwareSets, onComplete]);
+  }, [cards, answers, hardwareSets, onComplete, saveDecisions]);
 
   // ── Card renderers ──
 
