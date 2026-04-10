@@ -96,6 +96,8 @@ export interface WizardState {
   // Step 1: Upload
   file: File | null;
   pdfStoragePath: string | null;
+  /** PDF bytes — cached once for use in PDFPagePreview (StepReview, PunchyReview). */
+  pdfBuffer: ArrayBuffer | null;
   classifyResult: ClassifyPagesResponse | null;
   profile?: ClassifyPagesResponse['profile'];
   hasExistingData: boolean;
@@ -126,6 +128,7 @@ export const INITIAL_WIZARD_STATE: WizardState = {
   currentStep: WizardStep.Upload,
   file: null,
   pdfStoragePath: null,
+  pdfBuffer: null,
   classifyResult: null,
   hasExistingData: false,
   detectResult: null,

@@ -2,7 +2,9 @@
 
 import { useState, useCallback, useMemo } from "react";
 import { usePunchHighlight } from "./usePunchHighlight";
-import type { DoorEntry, HardwareSet } from "./types";
+import type { DoorEntry, HardwareSet, ClassifyPagesResponse } from "./types";
+import PDFPagePreview from "./PDFPagePreview";
+import { findPageForSet } from "@/lib/punch-cards";
 
 // ─── Confidence scoring ───
 
@@ -71,6 +73,10 @@ interface StepReviewProps {
   doors: DoorEntry[];
   hardwareSets: HardwareSet[];
   hasExistingData: boolean;
+  /** For PDF preview per set. */
+  classifyResult: ClassifyPagesResponse | null;
+  /** PDF file buffer for rendering page previews. */
+  pdfBuffer: ArrayBuffer | null;
   onComplete: (doors: DoorEntry[], hardwareSets: HardwareSet[]) => void;
   onBack: () => void;
   onRemapColumns?: () => void;
@@ -80,12 +86,16 @@ export default function StepReview({
   doors: initialDoors,
   hardwareSets,
   hasExistingData,
+  classifyResult,
+  pdfBuffer,
   onComplete,
   onBack,
   onRemapColumns,
 }: StepReviewProps) {
   const { registerRef } = usePunchHighlight();
   const [doors, setDoors] = useState<DoorEntry[]>(initialDoors);
+  // Which set groups have their PDF preview open (lazy-mounted when expanded)
+  const [previewOpen, setPreviewOpen] = useState<Set<string>>(new Set());
   const [editingCell, setEditingCell] = useState<{
     row: number;
     field: DoorStringField;
@@ -175,9 +185,14 @@ export default function StepReview({
 
   // ─── Group by hardware set ───
   const groups: DoorGroup[] = useMemo(() => {
+    // Register sets under BOTH set_id and generic_set_id — doors may be
+    // assigned to either depending on heading format (e.g., "DH1.01" vs "DH1-10")
     const setMap = new Map<string, HardwareSet>();
     for (const set of hardwareSets) {
       setMap.set(set.set_id, set);
+      if (set.generic_set_id && set.generic_set_id !== set.set_id) {
+        setMap.set(set.generic_set_id, set);
+      }
     }
 
     const groupMap = new Map<string, DoorGroup>();
@@ -225,6 +240,15 @@ export default function StepReview({
 
   const toggleGroup = useCallback((setId: string) => {
     setCollapsedGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(setId)) next.delete(setId);
+      else next.add(setId);
+      return next;
+    });
+  }, []);
+
+  const togglePreview = useCallback((setId: string) => {
+    setPreviewOpen((prev) => {
       const next = new Set(prev);
       if (next.has(setId)) next.delete(setId);
       else next.add(setId);
@@ -337,6 +361,20 @@ export default function StepReview({
 
         {groups.map((group) => {
           const isCollapsed = collapsedGroups.has(group.setId);
+          const isPreviewOpen = previewOpen.has(group.setId);
+          // Find the PDF page that contains this set's definition
+          const pdfPageIdx =
+            classifyResult?.pages && pdfBuffer
+              ? (findPageForSet(group.setId, classifyResult.pages) ??
+                 // Fall back: look by the underlying HardwareSet.generic_set_id
+                 (() => {
+                   const set = hardwareSets.find(
+                     (s) => s.set_id === group.setId || s.generic_set_id === group.setId,
+                   );
+                   const altId = set?.generic_set_id ?? set?.set_id;
+                   return altId ? findPageForSet(altId, classifyResult.pages) : null;
+                 })())
+              : null;
           return (
             <div key={group.setId} className="mb-3">
               {/* Group header */}
@@ -371,6 +409,31 @@ export default function StepReview({
                   )}
                 </span>
               </button>
+
+              {/* PDF preview toggle — only when we have PDF data and a valid page */}
+              {pdfBuffer && pdfPageIdx != null && (
+                <div className="mb-1">
+                  <button
+                    onClick={() => togglePreview(group.setId)}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-accent-dim border border-accent text-accent text-[11px] font-medium hover:bg-tint-strong transition-colors min-h-9 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+                    aria-label={isPreviewOpen ? "Hide PDF page" : "View PDF page"}
+                  >
+                    <span aria-hidden="true">{isPreviewOpen ? "\u25BE" : "\u25B8"}</span>
+                    <span>{isPreviewOpen ? "Hide" : "View"} PDF page {pdfPageIdx + 1}</span>
+                  </button>
+                </div>
+              )}
+
+              {/* PDF page preview (lazy-mounted to save memory) */}
+              {isPreviewOpen && pdfBuffer && pdfPageIdx != null && (
+                <div className="mb-2 max-w-full md:max-w-2xl">
+                  <PDFPagePreview
+                    pdfBuffer={pdfBuffer}
+                    pageIndex={pdfPageIdx}
+                    label={`${group.setId} — Hardware set definition`}
+                  />
+                </div>
+              )}
 
               {/* Group table */}
               {!isCollapsed && (

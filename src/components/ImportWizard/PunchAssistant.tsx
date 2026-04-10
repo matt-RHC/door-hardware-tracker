@@ -188,18 +188,10 @@ export default function PunchAssistant({
           : 'drawer--full'
       }`}
     >
-      {/* Drag handle */}
+      {/* Pill bar (always visible) — sits at the top since drawer expands down */}
       <div
         onClick={toggleDrawer}
-        className="cursor-pointer pt-2 pb-1"
-      >
-        <div className="drawer__handle" />
-      </div>
-
-      {/* Pill bar (always visible) */}
-      <div
-        onClick={toggleDrawer}
-        className="flex items-center gap-3 px-4 pb-3 cursor-pointer select-none"
+        className="flex items-center gap-3 px-4 pt-3 pb-2 cursor-pointer select-none"
       >
         <PunchAvatar size="sm" state={avatarState} />
         <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
@@ -221,7 +213,7 @@ export default function PunchAssistant({
           </span>
         )}
         <span className="ml-auto text-xs font-medium" style={{ color: 'var(--blue)' }}>
-          {drawerState === 'collapsed' ? 'Expand \u25B4' : drawerState === 'peek' ? 'Full \u25B4' : 'Collapse \u25BE'}
+          {drawerState === 'collapsed' ? 'Expand \u25BE' : drawerState === 'peek' ? 'Full \u25BE' : 'Collapse \u25B4'}
         </span>
       </div>
 
@@ -354,6 +346,14 @@ export default function PunchAssistant({
           )}
         </div>
       )}
+
+      {/* Drag handle at the bottom — drawer expands downward */}
+      <div
+        onClick={toggleDrawer}
+        className="cursor-pointer pt-1 pb-2 mt-auto"
+      >
+        <div className="drawer__handle" />
+      </div>
     </div>
   );
 }

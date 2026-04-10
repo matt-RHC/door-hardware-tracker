@@ -41,10 +41,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Missing projectId or doors' }, { status: 400 })
     }
 
-    // Build set lookup map
+    // Build set lookup map — register under BOTH set_id and generic_set_id
+    // because doors may be assigned to either (e.g., heading "DH1.01" vs set "DH1-10")
     const setMap = new Map<string, HardwareSet>()
     for (const set of hardwareSets) {
       setMap.set(set.set_id, set)
+      if (set.generic_set_id && set.generic_set_id !== set.set_id) {
+        setMap.set(set.generic_set_id, set)
+      }
     }
 
     // --- Final qty normalization safety net ---
