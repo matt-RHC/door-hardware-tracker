@@ -233,7 +233,8 @@ export default function PunchyReview({
       }
     }
     loadPrior();
-  }, [projectId, cards]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectId]);
 
   // ─── Save decisions to API ───
   const saveDecisions = useCallback(async () => {
@@ -588,7 +589,7 @@ function renderCard(card: PunchCardData, ctx: RenderContext) {
             </div>
             {ctx.sampleConfirmed && (
               <div className="flex items-center gap-2 text-success text-xs font-semibold">
-                <span>&#10003;</span> Sample verified
+                <span aria-label="Checkmark">✓</span> Sample verified
               </div>
             )}
           </div>
@@ -628,7 +629,7 @@ function renderCard(card: PunchCardData, ctx: RenderContext) {
             ))}
             {ctx.correctionsApplied && (
               <div className="flex items-center gap-2 text-success text-xs font-semibold mt-2">
-                <span>&#10003;</span> {corrections.length} correction{corrections.length !== 1 ? "s" : ""} applied
+                <span aria-label="Checkmark">✓</span> {corrections.length} correction{corrections.length !== 1 ? "s" : ""} applied
               </div>
             )}
           </div>
@@ -675,7 +676,7 @@ function renderCard(card: PunchCardData, ctx: RenderContext) {
             </div>
             {answered && (
               <div className="flex items-center gap-2 text-success text-xs font-semibold">
-                <span>&#10003;</span> Answered: {answered}
+                <span aria-label="Checkmark">✓</span> Answered: {answered}
               </div>
             )}
           </div>
@@ -741,7 +742,7 @@ function renderCard(card: PunchCardData, ctx: RenderContext) {
             </div>
             {answered && (
               <div className="flex items-center gap-2 text-success text-xs font-semibold">
-                <span>&#10003;</span> Applied to {setIds.length} sets: {answered}
+                <span aria-label="Checkmark">✓</span> Applied to {setIds.length} sets: {answered}
               </div>
             )}
           </div>
@@ -789,7 +790,7 @@ function renderCard(card: PunchCardData, ctx: RenderContext) {
             })}
             {allAnswered && (
               <div className="flex items-center gap-2 text-success text-xs font-semibold">
-                <span>&#10003;</span> All {questions.length} questions answered
+                <span aria-label="Checkmark">✓</span> All {questions.length} questions answered
               </div>
             )}
           </div>

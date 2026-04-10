@@ -537,11 +537,11 @@ export default function StepTriage({
         />
       )}
 
-      {/* Triage-failed warning{/* Triage-failed warning: backend signaled triage_error */}
+      {/* Triage-failed warning: backend signaled triage_error */}
       {triageResult?.triage_error && (
         <div className="mb-4 p-4 bg-danger-dim border border-danger rounded-xl">
           <div className="flex items-start gap-2 mb-3">
-            <span className="text-danger text-lg leading-none">&#x26A0;</span>
+            <span className="text-danger text-lg leading-none" aria-label="Warning">&#x26A0;</span>
             <p className="text-danger text-sm font-semibold">
               AI triage failed &mdash; all doors were auto-accepted. Please
               review each entry carefully before proceeding.

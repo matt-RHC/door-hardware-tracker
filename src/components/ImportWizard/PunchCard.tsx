@@ -125,14 +125,15 @@ export default function PunchCard({
         </div>
       )}
 
-      {/* Actions */}
-      <div className="flex items-center justify-between pt-2">
+      {/* Actions — min-h-11 ensures 44px touch targets (WCAG) */}
+      <div className="flex items-center justify-between pt-3">
         <div>
           {secondaryAction && (
             <button
               onClick={secondaryAction.onClick}
               disabled={secondaryAction.disabled}
-              className={`px-4 py-2 rounded-lg transition-colors font-medium text-sm disabled:opacity-50 ${variantClasses(secondaryAction.variant ?? "ghost")}`}
+              aria-label={secondaryAction.label}
+              className={`px-4 py-2.5 min-h-11 rounded-lg transition-colors font-medium text-sm disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${variantClasses(secondaryAction.variant ?? "ghost")}`}
             >
               {secondaryAction.label}
             </button>
@@ -140,7 +141,8 @@ export default function PunchCard({
           {!required && !secondaryAction && onSkip && (
             <button
               onClick={onSkip}
-              className="px-4 py-2 rounded-lg transition-colors font-medium text-sm bg-tint border border-border-dim hover:bg-tint-strong text-tertiary"
+              aria-label="Skip this card"
+              className="px-4 py-2.5 min-h-11 rounded-lg transition-colors font-medium text-sm bg-tint border border-border-dim hover:bg-tint-strong text-tertiary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
             >
               Skip
             </button>
@@ -150,7 +152,8 @@ export default function PunchCard({
           <button
             onClick={primaryAction.onClick}
             disabled={primaryAction.disabled}
-            className={`px-6 py-2 rounded-lg transition-colors font-semibold text-sm disabled:opacity-50 ${variantClasses(primaryAction.variant ?? "primary")}`}
+            aria-label={primaryAction.label}
+            className={`px-6 py-2.5 min-h-11 rounded-lg transition-colors font-semibold text-sm disabled:opacity-50 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${variantClasses(primaryAction.variant ?? "primary")}`}
           >
             {primaryAction.label}
           </button>
