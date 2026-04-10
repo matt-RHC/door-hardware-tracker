@@ -477,13 +477,19 @@ export function applyCorrections(
     }
   }
 
-  // Add missing sets
+  // Add missing sets — also check generic_set_id to avoid duplicating a set
+  // when Punchy suggests the generic ID (e.g., "DH4A") while we already have
+  // its sub-headings (DH4A.0, DH4A.1) extracted.
   if (corrections.missing_sets) {
     for (const newSet of corrections.missing_sets) {
-      if (!hardwareSets.some(s => s.set_id === newSet.set_id)) {
+      const alreadyPresent = hardwareSets.some(
+        s => s.set_id === newSet.set_id || s.generic_set_id === newSet.set_id,
+      )
+      if (!alreadyPresent) {
         hardwareSets.push({
           set_id: newSet.set_id,
           heading: newSet.heading,
+          heading_doors: [],
           items: newSet.items ?? [],
         })
       }
@@ -596,16 +602,62 @@ export function normalizeQuantities(
   }
 }
 
+// --- Door number normalization + doorToSetMap ---
+
+/**
+ * Normalize a door number for matching across Opening List and Hardware
+ * Schedule extraction. Both sources should produce the same format, but
+ * whitespace and case differences are possible.
+ *
+ * Examples:
+ *   "110-02A"   → "110-02A"
+ *   " 110-02a " → "110-02A"
+ *   "110 02A"   → "11002A"  (spaces collapsed)
+ */
+export function normalizeDoorNumber(s: string): string {
+  return (s ?? '').trim().toUpperCase().replace(/\s+/g, '')
+}
+
+/**
+ * Build a door-number → specific-sub-set lookup map.
+ *
+ * Handles the multi-heading case where one generic_set_id (e.g., "DH4A")
+ * has multiple sub-headings (DH4A.0, DH4A.1) with different item lists.
+ * Each door is assigned to the sub-set whose heading block lists it.
+ *
+ * First-wins semantics: if a door appears in multiple heading_doors lists
+ * (shouldn't happen but possible with PDF parser bugs), the earliest one wins.
+ */
+export function buildDoorToSetMap(
+  hardwareSets: HardwareSet[],
+): Map<string, HardwareSet> {
+  const map = new Map<string, HardwareSet>()
+  for (const set of hardwareSets) {
+    for (const doorNum of set.heading_doors ?? []) {
+      const key = normalizeDoorNumber(doorNum)
+      if (key && !map.has(key)) {
+        map.set(key, set)
+      }
+    }
+  }
+  return map
+}
+
 // --- Hardware item builder (Phase 3) ---
 
 /**
  * Build per-opening hardware item rows (Door/Frame + set items).
  * Used by save/route.ts and apply-revision/route.ts.
+ *
+ * Resolves the correct sub-set for each opening in this order:
+ *  1. doorToSetMap lookup by specific door_number (handles multi-heading)
+ *  2. Legacy setMap lookup by opening.hw_set (handles single-heading + fallback)
  */
 export function buildPerOpeningItems(
   openings: Array<{ id: string; door_number: string; hw_set: string | null }>,
   doorInfoMap: Map<string, { door_type: string; frame_type: string }>,
   setMap: Map<string, HardwareSet>,
+  doorToSetMap: Map<string, HardwareSet>,
   fkColumn: 'opening_id' | 'staging_opening_id' = 'opening_id',
   extraFields?: Record<string, unknown>,
 ): Array<Record<string, unknown>> {
@@ -616,8 +668,11 @@ export function buildPerOpeningItems(
     const doorInfo = doorInfoMap.get(opening.door_number)
     const base = { [fkColumn]: opening.id, ...extraFields }
 
-    // Determine if pair (two doors) based on door_type or hw_heading
-    const hwSet = setMap.get(opening.hw_set ?? '')
+    // Resolve the specific sub-set: door-number lookup takes priority over
+    // hw_set lookup, so multi-heading sub-sets (DH4A.0 vs DH4A.1) correctly
+    // route their items to the right openings.
+    const doorKey = normalizeDoorNumber(opening.door_number)
+    const hwSet = doorToSetMap.get(doorKey) ?? setMap.get(opening.hw_set ?? '')
     const heading = (hwSet?.heading ?? '').toLowerCase()
     const doorType = (doorInfo?.door_type ?? '').toLowerCase()
     const isPair = heading.includes('pair') || heading.includes('double') ||

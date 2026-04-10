@@ -57,8 +57,18 @@ export default function PDFPagePreview({
       // Scale to fit container or maxWidth
       const containerWidth = containerRef.current?.offsetWidth ?? maxWidth ?? 600;
       const targetWidth = Math.min(containerWidth, maxWidth ?? containerWidth);
-      const scale = targetWidth / baseViewport.width;
-      const viewport = page.getViewport({ scale });
+
+      // High-DPI rendering: multiply scale by devicePixelRatio so the canvas
+      // backing store has enough resolution for crisp text on Retina/mobile.
+      // The <img> at display size does the downscaling for us.
+      // Cap DPR at 2.5 to avoid runaway memory on 3x displays.
+      const dpr = Math.min(
+        typeof window !== "undefined" ? (window.devicePixelRatio || 1) : 1,
+        2.5,
+      );
+      const displayScale = targetWidth / baseViewport.width;
+      const renderScale = displayScale * dpr;
+      const viewport = page.getViewport({ scale: renderScale });
 
       const canvas = document.createElement("canvas");
       canvas.width = viewport.width;
@@ -71,7 +81,7 @@ export default function PDFPagePreview({
       }
 
       await page.render({ canvasContext: ctx, canvas, viewport }).promise;
-      const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+      const dataUrl = canvas.toDataURL("image/jpeg", 0.92);
       canvas.width = 0;
       canvas.height = 0;
 

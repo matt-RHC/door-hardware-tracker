@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest'
-import { normalizeQuantities } from './parse-pdf-helpers'
+import {
+  normalizeQuantities,
+  normalizeDoorNumber,
+  buildDoorToSetMap,
+} from './parse-pdf-helpers'
 import type { HardwareSet, DoorEntry } from '@/lib/types'
 
 /**
@@ -332,5 +336,110 @@ describe('normalizeQuantities — category-aware division', () => {
     // qty stays at 2 — 2 < 4 so division is skipped
     expect(sets[0].items[0].qty).toBe(2)
     expect(sets[0].items[0].qty_source).toBeUndefined()
+  })
+})
+
+// ─── normalizeDoorNumber ───
+
+describe('normalizeDoorNumber', () => {
+  it('leaves clean door numbers unchanged', () => {
+    expect(normalizeDoorNumber('110-02A')).toBe('110-02A')
+    expect(normalizeDoorNumber('DH1.01')).toBe('DH1.01')
+  })
+
+  it('uppercases lowercase characters', () => {
+    expect(normalizeDoorNumber('110-02a')).toBe('110-02A')
+    expect(normalizeDoorNumber('dh1.01')).toBe('DH1.01')
+  })
+
+  it('strips leading/trailing whitespace', () => {
+    expect(normalizeDoorNumber('  110-02A ')).toBe('110-02A')
+  })
+
+  it('collapses internal whitespace', () => {
+    expect(normalizeDoorNumber('110 02A')).toBe('11002A')
+    expect(normalizeDoorNumber('110  02 A')).toBe('11002A')
+  })
+
+  it('handles empty/nullish input', () => {
+    expect(normalizeDoorNumber('')).toBe('')
+    // @ts-expect-error — runtime guard accepts null
+    expect(normalizeDoorNumber(null)).toBe('')
+    // @ts-expect-error — runtime guard accepts undefined
+    expect(normalizeDoorNumber(undefined)).toBe('')
+  })
+})
+
+// ─── buildDoorToSetMap ───
+
+describe('buildDoorToSetMap', () => {
+  function makeSetWithDoors(
+    set_id: string,
+    heading_doors: string[],
+    generic_set_id?: string,
+  ): HardwareSet {
+    return {
+      set_id,
+      generic_set_id,
+      heading: '',
+      heading_doors,
+      items: [],
+    }
+  }
+
+  it('returns an empty map when hardwareSets is empty', () => {
+    const map = buildDoorToSetMap([])
+    expect(map.size).toBe(0)
+  })
+
+  it('maps each door to its specific sub-set (multi-heading case)', () => {
+    const dh4a0 = makeSetWithDoors('DH4A.0', ['110-08A', '110A-04A', '110A-05A'], 'DH4A')
+    const dh4a1 = makeSetWithDoors('DH4A.1', ['110-02A', '110-02B', '110-03A'], 'DH4A')
+    const map = buildDoorToSetMap([dh4a0, dh4a1])
+
+    expect(map.get('110-08A')).toBe(dh4a0)
+    expect(map.get('110A-04A')).toBe(dh4a0)
+    expect(map.get('110-02A')).toBe(dh4a1)
+    expect(map.get('110-03A')).toBe(dh4a1)
+    expect(map.size).toBe(6)
+  })
+
+  it('normalizes door number keys (case + whitespace)', () => {
+    const set = makeSetWithDoors('DH1', ['110-02a ', ' 110-02b'])
+    const map = buildDoorToSetMap([set])
+
+    // Lookup works with either format
+    expect(map.get('110-02A')).toBe(set)
+    expect(map.get('110-02B')).toBe(set)
+  })
+
+  it('uses first-wins semantics for duplicate door numbers', () => {
+    const first = makeSetWithDoors('DH1', ['110-02A'])
+    const second = makeSetWithDoors('DH2', ['110-02A'])
+    const map = buildDoorToSetMap([first, second])
+
+    expect(map.get('110-02A')).toBe(first)
+  })
+
+  it('handles sets without heading_doors gracefully', () => {
+    const setWith = makeSetWithDoors('DH1', ['110-02A'])
+    const setWithout: HardwareSet = {
+      set_id: 'DH2',
+      heading: '',
+      items: [],
+      // no heading_doors field
+    }
+    const map = buildDoorToSetMap([setWith, setWithout])
+
+    expect(map.get('110-02A')).toBe(setWith)
+    expect(map.size).toBe(1)
+  })
+
+  it('ignores empty door strings in heading_doors', () => {
+    const set = makeSetWithDoors('DH1', ['', '110-02A', '   '])
+    const map = buildDoorToSetMap([set])
+
+    expect(map.size).toBe(1)
+    expect(map.get('110-02A')).toBe(set)
   })
 })

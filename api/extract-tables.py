@@ -46,11 +46,12 @@ class HardwareItem(BaseModel):
 
 
 class HardwareSetDef(BaseModel):
-    set_id: str              # heading-level ID (e.g., "I2S-1E:WI")
-    generic_set_id: str = "" # set-level ID (e.g., "I2S-1E") for UI grouping
+    set_id: str              # heading-level ID (e.g., "I2S-1E:WI" or "DH4A.0")
+    generic_set_id: str = "" # set-level ID (e.g., "I2S-1E" or "DH4A") for UI grouping
     heading: str = ""
     heading_door_count: int = 0   # openings listed in heading block
     heading_leaf_count: int = 0   # total leaves (pairs × 2, singles × 1)
+    heading_doors: list[str] = [] # specific door numbers listed under this sub-heading
     items: list[HardwareItem] = []
 
 
@@ -1739,6 +1740,12 @@ def parse_hw_set_id_from_text(text: str) -> tuple[str, str, str]:
                 heading = re.sub(r"\(set\s*#?\s*[A-Z0-9][A-Z0-9.\-]*\)\s*$", "", heading, flags=re.IGNORECASE).strip()
             break
 
+    # Defensive: reject heading descriptions that look like numbered list items
+    # (e.g. "5. Tags 110A-02B, 110A-03B: ..."). These come from body content lines
+    # that happened to match HW_SET_HEADING_PATTERN due to an embedded ID.
+    if heading and re.match(r"^\d+\.\s", heading):
+        heading = ""
+
     return (heading_id, generic_set_id, heading)
 
 
@@ -1778,6 +1785,31 @@ def count_heading_doors(page_text: str) -> tuple[int, int]:
         opening_count += qty
         leaf_count += qty * (2 if is_pair else 1)
     return (opening_count, leaf_count)
+
+
+def extract_heading_door_numbers(section_text: str) -> list[str]:
+    """
+    Extract specific door numbers listed under a hardware set heading block.
+
+    Uses HEADING_DOOR_WITH_NUMBER regex to parse lines like:
+      "1 Pair Doors #110-02A  Corridor 1203 from Gallery 1"
+      "1 Single Door #09-15AREV1 SOCIAL HUB"
+
+    Returns normalized door numbers (stripped, uppercased), preserving
+    insertion order and skipping duplicates.
+
+    This is used to populate HardwareSetDef.heading_doors so that the
+    TypeScript layer can match doors to specific sub-sets (e.g., DH4A.0
+    vs DH4A.1) instead of collapsing them by generic_set_id.
+    """
+    doors: list[str] = []
+    seen: set[str] = set()
+    for m in HEADING_DOOR_WITH_NUMBER.finditer(section_text):
+        door_num = m.group(3).strip().rstrip(",;:").upper()
+        if door_num and door_num not in seen and is_valid_door_number(door_num):
+            seen.add(door_num)
+            doors.append(door_num)
+    return doors
 
 
 def extract_doors_from_set_headings(pdf) -> list[DoorEntry]:
@@ -2203,6 +2235,7 @@ def extract_hardware_sets_from_page(page, page_text: str, heading_format: str = 
             heading=heading,
             heading_door_count=door_count,
             heading_leaf_count=leaf_count,
+            heading_doors=extract_heading_door_numbers(page_text),
             items=items,
         ))
         return sets
@@ -2258,6 +2291,7 @@ def extract_hardware_sets_from_page(page, page_text: str, heading_format: str = 
                     heading=sec_heading,
                     heading_door_count=sec_door_count,
                     heading_leaf_count=sec_leaf_count,
+                    heading_doors=extract_heading_door_numbers(section_text),
                     items=sec_items,
                 ))
         return sets
@@ -2445,6 +2479,7 @@ def extract_hardware_sets_from_page(page, page_text: str, heading_format: str = 
             heading=heading,
             heading_door_count=heading_door_count,
             heading_leaf_count=heading_leaf_count,
+            heading_doors=extract_heading_door_numbers(page_text),
             items=items,
         ))
 
@@ -2497,12 +2532,20 @@ def extract_all_hardware_sets(pdf: pdfplumber.PDF) -> list[HardwareSetDef]:
     Extract all hardware set definitions from the entire PDF.
     Scans each page for hardware set headings and extracts items.
 
-    Sub-headings (.PR4 pair variants, :1 continuations) are merged into
-    their parent set using generic_set_id. The resulting set_id is the
-    generic_set_id (e.g., "04" not "04.PR4").
+    Merge semantics (EXACT set_id matching only):
+    - If the same set_id appears on multiple pages (e.g., "04" continuing
+      from page 5 to page 6), merge them — this is a true continuation.
+    - If DIFFERENT set_ids share a generic_set_id (e.g., "DH4A.0" and
+      "DH4A.1"), keep them as separate sub-variants. Each has its own
+      heading_doors, counts, and items list. The TypeScript layer uses
+      heading_doors to match openings to their specific sub-set.
+
+    This avoids the silent item-loss bug that occurred when the previous
+    generic_set_id-based merge called deduplicate_hardware_items() across
+    sub-variants with different door counts.
     """
     all_sets: list[HardwareSetDef] = []
-    seen_generic_ids: dict[str, int] = {}  # generic_set_id → index in all_sets
+    seen_set_ids: dict[str, int] = {}  # exact set_id → index in all_sets
 
     for page_num, page in enumerate(pdf.pages):
         text = page.extract_text() or ""
@@ -2513,19 +2556,21 @@ def extract_all_hardware_sets(pdf: pdfplumber.PDF) -> list[HardwareSetDef]:
         page_sets = extract_hardware_sets_from_page(page, text)
 
         for hw_set in page_sets:
-            merge_key = hw_set.generic_set_id or hw_set.set_id
-            if merge_key in seen_generic_ids:
-                # Merge items into existing set (continuation or sub-heading)
-                existing = all_sets[seen_generic_ids[merge_key]]
+            # Exact set_id match only (preserves .0/.1/.PR4 suffixes as distinct)
+            if hw_set.set_id in seen_set_ids:
+                # Continuation of the SAME sub-set on a later page
+                existing = all_sets[seen_set_ids[hw_set.set_id]]
                 existing.items.extend(hw_set.items)
                 existing.items = deduplicate_hardware_items(existing.items)
-                # Accumulate door/leaf counts from sub-headings
                 existing.heading_door_count += hw_set.heading_door_count
                 existing.heading_leaf_count += hw_set.heading_leaf_count
+                # Merge heading_doors lists (avoid duplicates)
+                for dn in hw_set.heading_doors:
+                    if dn not in existing.heading_doors:
+                        existing.heading_doors.append(dn)
             else:
-                # First occurrence — normalize set_id to generic_set_id
-                hw_set.set_id = merge_key
-                seen_generic_ids[merge_key] = len(all_sets)
+                # First occurrence of this specific set_id (preserve suffix)
+                seen_set_ids[hw_set.set_id] = len(all_sets)
                 all_sets.append(hw_set)
 
     return all_sets

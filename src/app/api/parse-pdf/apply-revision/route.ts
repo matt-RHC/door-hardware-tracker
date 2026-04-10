@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import type { DoorEntry, HardwareSet } from '@/lib/types'
-import { buildPerOpeningItems } from '@/lib/parse-pdf-helpers'
+import { buildPerOpeningItems, buildDoorToSetMap } from '@/lib/parse-pdf-helpers'
 
 // User decisions from the wizard
 interface RemovedDecision {
@@ -61,9 +61,12 @@ export async function POST(request: NextRequest) {
         setMap.set(set.generic_set_id, set)
       }
     }
+    const doorToSetMap = buildDoorToSetMap(hardwareSets)
 
     // --- Quantity correction (heading-based, same strategy as save/route.ts) ---
-    for (const [setId, set] of setMap) {
+    // Iterate hardwareSets directly to avoid double-iteration from setMap
+    // having each set under both set_id and generic_set_id keys.
+    for (const set of hardwareSets) {
       const leafCount = (set.heading_leaf_count ?? 0) > 1 ? (set.heading_leaf_count ?? 0) : 0
       const doorCount = (set.heading_door_count ?? 0) > 1 ? (set.heading_door_count ?? 0) : 0
       if (leafCount <= 1 && doorCount <= 1) continue
@@ -75,6 +78,7 @@ export async function POST(request: NextRequest) {
           const perLeaf = item.qty / leafCount
           if (Number.isInteger(perLeaf)) {
             item.qty = perLeaf
+            item.qty_source = 'divided'  // prevent re-division
             divided = true
           }
         }
@@ -82,6 +86,7 @@ export async function POST(request: NextRequest) {
           const perOpening = item.qty / doorCount
           if (Number.isInteger(perOpening)) {
             item.qty = perOpening
+            item.qty_source = 'divided'
           }
         }
       }
@@ -168,6 +173,7 @@ export async function POST(request: NextRequest) {
           [{ id: decision.existing_id, door_number: parsedDoor.door_number, hw_set: parsedDoor.hw_set ?? null }],
           doorInfoMap,
           setMap,
+          doorToSetMap,
         )
         if (newItems.length > 0) {
           await (supabase as any)
@@ -225,7 +231,7 @@ export async function POST(request: NextRequest) {
           frame_type: door.frame_type || '',
         })
       }
-      const allHardwareRows = buildPerOpeningItems(insertedOpenings, newDoorInfoMap, setMap)
+      const allHardwareRows = buildPerOpeningItems(insertedOpenings, newDoorInfoMap, setMap, doorToSetMap)
 
       for (let i = 0; i < allHardwareRows.length; i += CHUNK_SIZE) {
         const chunk = allHardwareRows.slice(i, i + CHUNK_SIZE)
