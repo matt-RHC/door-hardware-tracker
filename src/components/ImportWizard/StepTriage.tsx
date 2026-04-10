@@ -232,19 +232,25 @@ export default function StepTriage({
 
   // ─── Deep Extract: LLM-based item extraction for empty sets ───
   const handleDeepExtract = useCallback(async () => {
-    const emptySets = hardwareSets
+    // Use PunchyReview's internal hardwareSets if available (passed via the component),
+    // but fall back to StepTriage's state. PunchyReview maintains its own copy.
+    const setsToCheck = hardwareSets;
+    const emptySets = setsToCheck
       .filter((s) => (s.items?.length ?? 0) === 0)
       .map((s) => ({ set_id: s.set_id, heading: s.heading ?? "" }));
 
-    if (emptySets.length === 0) return;
+    if (emptySets.length === 0) {
+      console.warn("[deep-extract] No empty sets found — skipping");
+      return;
+    }
 
     setDeepExtracting(true);
     setStatus(`Extracting items for ${emptySets.length} empty set${emptySets.length !== 1 ? "s" : ""} with AI...`);
 
     try {
       // Build deep extract request body.
-      // If PDF is in storage, send projectId so the server fetches directly.
-      // Otherwise, build filtered PDF with HW set pages (or full PDF fallback).
+      // Always send projectId for server-side PDF fetch when storage path exists.
+      // Also send pdfBase64 as fallback.
       const deepExtractBody: Record<string, unknown> = {
         emptySets,
         goldenSample: goldenSample?.confirmed ? {
@@ -257,7 +263,11 @@ export default function StepTriage({
 
       if (pdfStoragePath) {
         deepExtractBody.projectId = projectId;
-      } else {
+      }
+
+      // Always include base64 as fallback — ensures the API has PDF data
+      // even if storage fetch fails server-side
+      if (!pdfStoragePath) {
         const hwPages = classifyResult.summary.hardware_set_pages ?? [];
         let pdfBase64 = "";
         if (hwPages.length > 0) {
@@ -272,6 +282,8 @@ export default function StepTriage({
         deepExtractBody.pdfBase64 = pdfBase64;
       }
 
+      console.debug(`[deep-extract] Sending request for ${emptySets.length} empty sets, projectId=${pdfStoragePath ? projectId : 'none'}`);
+
       const resp = await fetch("/api/parse-pdf/deep-extract", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -279,9 +291,9 @@ export default function StepTriage({
       });
 
       if (!resp.ok) {
-        const err = await resp.json().catch(() => ({}));
-        console.error("Deep extract failed:", err.error);
-        setStatus("Deep extraction failed. You can still continue.");
+        const err = await resp.json().catch(() => ({ error: `HTTP ${resp.status}` }));
+        console.error("Deep extract failed:", err.error ?? err);
+        setStatus(`Deep extraction failed: ${err.error ?? resp.status}. You can still continue.`);
         setDeepExtracting(false);
         return;
       }

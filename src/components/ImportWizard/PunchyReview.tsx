@@ -502,6 +502,12 @@ function renderCard(card: PunchCardData, ctx: RenderContext) {
                 </span>
               ))}
             </div>
+            {ctx.deepExtracting && (
+              <div className="flex items-center gap-2 py-2">
+                <div className="w-4 h-4 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+                <span className="text-accent text-xs">Punchy is reading the PDF and extracting items...</span>
+              </div>
+            )}
           </div>
         </PunchCard>
       );
