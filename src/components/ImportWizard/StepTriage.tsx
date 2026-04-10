@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import type {
   ClassifyPagesResponse,
   ColumnMapping,
@@ -10,8 +10,7 @@ import type {
 } from "./types";
 import type { PunchyQuantityCheck } from "@/lib/types";
 import { scoreExtraction } from "@/lib/confidence-scoring";
-import { generateTriageQuestions, type PunchQuestion } from "@/lib/punch-messages";
-import { buildDecisionFromAnswer, propagateQuantityDecision } from "@/lib/quantity-propagation";
+import { type PunchQuestion } from "@/lib/punch-messages";
 import {
   arrayBufferToBase64,
   splitPDFByPages,
@@ -21,13 +20,13 @@ import {
   CHUNK_SIZE_THRESHOLD,
   FALLBACK_PAGES_PER_CHUNK,
 } from "@/lib/pdf-utils";
+import PunchyReview from "./PunchyReview";
 
 /**
- * Phases: extracting → results → qty_review → questions → triaging → done
- * "results" = Extraction Health Dashboard
- * "qty_review" = Punchy quantity corrections + questions
+ * Phases: extracting → punchy_review → triaging → done
+ * "punchy_review" = Punchy card-by-card review (replaces old results/qty_review/questions)
  */
-type TriagePhase = "extracting" | "results" | "qty_review" | "questions" | "triaging" | "done";
+type TriagePhase = "extracting" | "punchy_review" | "triaging" | "done";
 
 interface StepTriageProps {
   projectId: string;
@@ -75,80 +74,12 @@ export default function StepTriage({
     confirmed: boolean;
   } | null>(null);
   const [qtyCheck, setQtyCheck] = useState<PunchyQuantityCheck | null>(null);
-  const [qtyCorrectionsApplied, setQtyCorrectionsApplied] = useState(false);
-  const [qtyReviewRunning, setQtyReviewRunning] = useState(false);
+  const [pdfBuffer, setPdfBuffer] = useState<ArrayBuffer | null>(null);
 
   // Keep refs to latest answers and generated questions
   const answersRef = useRef(questionAnswers);
   answersRef.current = questionAnswers;
   const generatedQuestionsRef = useRef<PunchQuestion[]>([]);
-
-  // ─── Extraction Health Stats (computed) ───
-  const extractionHealth = useMemo(() => {
-    const totalItems = hardwareSets.reduce(
-      (sum, s) => sum + (s.items?.length ?? 0),
-      0
-    );
-    const emptySets = hardwareSets.filter(
-      (s) => (s.items?.length ?? 0) === 0
-    );
-    const populatedSets = hardwareSets.filter(
-      (s) => (s.items?.length ?? 0) > 0
-    );
-
-    // Door-to-set assignment coverage
-    const assignedDoors = doors.filter(
-      (d) => d.hw_set && d.hw_set.trim() !== ""
-    ).length;
-
-    // Check for sets referenced by doors but not in extraction
-    const doorSetIds = new Set(
-      doors.map((d) => (d.hw_set ?? "").toUpperCase()).filter(Boolean)
-    );
-    const extractedSetIds = new Set(
-      hardwareSets.map((s) => s.set_id.toUpperCase())
-    );
-    const missingSetIds = [...doorSetIds].filter(
-      (id) => !extractedSetIds.has(id)
-    );
-
-    // Overall health grade
-    let grade: "good" | "warning" | "critical" = "good";
-    if (emptySets.length > 0 || missingSetIds.length > 0) grade = "warning";
-    if (totalItems === 0 || emptySets.length === hardwareSets.length)
-      grade = "critical";
-
-    // Auto-select the best sample opening for calibration.
-    // Pick the populated set with the most items — it's the richest reference.
-    let bestSample: { set_id: string; heading: string; items: HardwareSet["items"]; door: DoorEntry | null } | null = null;
-    if (populatedSets.length > 0) {
-      const sorted = [...populatedSets].sort(
-        (a, b) => (b.items?.length ?? 0) - (a.items?.length ?? 0)
-      );
-      const best = sorted[0];
-      // Find a representative door that belongs to this set
-      const sampleDoor = doors.find(
-        (d) => (d.hw_set ?? "").toUpperCase() === best.set_id.toUpperCase()
-      ) ?? null;
-      bestSample = {
-        set_id: best.set_id,
-        heading: best.heading ?? "",
-        items: best.items ?? [],
-        door: sampleDoor,
-      };
-    }
-
-    return {
-      totalItems,
-      emptySets,
-      populatedSets,
-      assignedDoors,
-      unassignedDoors: doors.length - assignedDoors,
-      missingSetIds,
-      grade,
-      bestSample,
-    };
-  }, [doors, hardwareSets]);
 
   // ─── Phase 1: Run extraction on mount ───
   const runExtraction = useCallback(async () => {
@@ -285,91 +216,19 @@ export default function StepTriage({
       setHardwareSets(extractedSets);
       setProgress(60);
 
-      // Show extraction results dashboard BEFORE questions or triage
-      setPhase("results");
-      setStatus("Extraction complete. Review results below.");
+      // Cache PDF buffer for page previews in PunchyReview
+      try {
+        const buf = await file.arrayBuffer();
+        setPdfBuffer(buf);
+      } catch { /* non-critical */ }
+
+      // Transition to Punchy card-by-card review
+      setPhase("punchy_review");
+      setStatus("Punchy is reviewing your extraction.");
     } catch (err) {
       onError(err instanceof Error ? err.message : "Extraction failed");
     }
   }, [file, pdfStoragePath, projectId, columnMappings, classifyResult, onError]);
-
-  // ─── Phase 2: User reviews extraction results, then continues ───
-  const handleAcceptResults = useCallback(() => {
-    // Check if Punchy has quantity findings to review
-    const hasQtyFindings = qtyCheck &&
-      (((qtyCheck.auto_corrections?.length ?? 0) > 0) ||
-       ((qtyCheck.questions?.length ?? 0) > 0) ||
-       ((qtyCheck.flags?.length ?? 0) > 0) ||
-       ((qtyCheck.compliance_issues?.length ?? 0) > 0));
-
-    if (hasQtyFindings) {
-      setPhase("qty_review");
-      setStatus("Review quantity corrections from Punchy.");
-    } else {
-      // No qty findings — skip to validation questions
-      const questions = generateTriageQuestions(doors);
-      generatedQuestionsRef.current = questions;
-      if (questions.length > 0) {
-        onQuestionsGenerated(questions);
-        setPhase("questions");
-        setStatus("Review flagged items in the sidebar, then continue.");
-      } else {
-        setPhase("triaging");
-      }
-    }
-  }, [doors, qtyCheck, onQuestionsGenerated]);
-
-  // ─── Apply auto-corrections to hardwareSets ───
-  const applyAutoCorrections = useCallback(() => {
-    const corrections = qtyCheck?.auto_corrections ?? [];
-    if (corrections.length === 0) return;
-
-    setHardwareSets((prev) => {
-      const updated = prev.map((set) => {
-        const setCorrections = corrections.filter(c => c.set_id === set.set_id);
-        if (setCorrections.length === 0) return set;
-
-        const updatedItems = (set.items ?? []).map((item) => {
-          const corr = setCorrections.find(c =>
-            c.item_name.toLowerCase() === item.name.toLowerCase()
-          );
-          if (corr) {
-            return { ...item, qty: corr.to_qty, qty_source: 'auto_corrected' as const };
-          }
-          return item;
-        });
-        return { ...set, items: updatedItems };
-      });
-      return updated;
-    });
-    setQtyCorrectionsApplied(true);
-  }, [qtyCheck]);
-
-  // ─── Continue from qty_review to questions/triage ───
-  const handleAcceptQtyReview = useCallback(() => {
-    // Apply auto-corrections if not already applied
-    if (!qtyCorrectionsApplied && (qtyCheck?.auto_corrections?.length ?? 0) > 0) {
-      applyAutoCorrections();
-    }
-
-    // Convert Punchy quantity questions to PunchQuestion format and merge with triage questions
-    const triageQs = generateTriageQuestions(doors);
-    const qtyQuestions: PunchQuestion[] = (qtyCheck?.questions ?? []).map(q => ({
-      id: q.id,
-      text: `[${q.set_id}] ${q.text}`,
-      options: q.options,
-    }));
-    const allQuestions = [...qtyQuestions, ...triageQs];
-
-    generatedQuestionsRef.current = allQuestions;
-    if (allQuestions.length > 0) {
-      onQuestionsGenerated(allQuestions);
-      setPhase("questions");
-      setStatus("Review quantity and validation questions, then continue.");
-    } else {
-      setPhase("triaging");
-    }
-  }, [doors, qtyCheck, qtyCorrectionsApplied, applyAutoCorrections, onQuestionsGenerated]);
 
   // ─── Deep Extract: LLM-based item extraction for empty sets ───
   const handleDeepExtract = useCallback(async () => {
@@ -591,37 +450,6 @@ export default function StepTriage({
     }
   }, [doors, file, pdfStoragePath, projectId, classifyResult, onError]);
 
-  // ─── Quantity answer propagation ───
-  // When a quantity question (prefixed with [SET_ID]) is answered,
-  // propagate the answer across all matching items in other sets.
-  const prevAnswersRef = useRef<Record<string, string>>({});
-  useEffect(() => {
-    const prev = prevAnswersRef.current;
-    const qtyQuestions = qtyCheck?.questions ?? [];
-    if (qtyQuestions.length === 0) return;
-
-    for (const [qId, answer] of Object.entries(questionAnswers)) {
-      if (prev[qId] === answer) continue; // Already processed
-
-      // Find the matching Punchy quantity question
-      const punchyQ = qtyQuestions.find(q => q.id === qId);
-      if (!punchyQ) continue;
-
-      const decision = buildDecisionFromAnswer(punchyQ.set_id, punchyQ.item_name, answer);
-      if (!decision) continue;
-
-      const result = propagateQuantityDecision(decision, hardwareSets);
-      if (result.appliedCount > 0) {
-        setHardwareSets(result.updatedSets);
-        console.debug(
-          `[qty-propagation] "${answer}" for ${punchyQ.set_id}/${punchyQ.item_name} → ` +
-          `applied to ${result.appliedCount} items in sets: ${result.modifiedSetIds.join(', ')}`
-        );
-      }
-    }
-    prevAnswersRef.current = { ...questionAnswers };
-  }, [questionAnswers, qtyCheck, hardwareSets]);
-
   // Start extraction on mount
   useEffect(() => {
     runExtraction();
@@ -633,11 +461,6 @@ export default function StepTriage({
       runTriageClassification();
     }
   }, [phase, doors.length, triageResult, runTriageClassification]);
-
-  // ─── Advance ───
-  const handleContinueToTriage = () => {
-    setPhase("triaging");
-  };
 
   // Pass only triage-accepted doors to the next step, not all extracted doors.
   const handleNext = () => {
@@ -653,10 +476,8 @@ export default function StepTriage({
       <p className="text-secondary text-sm mb-4">
         {phase === "extracting"
           ? "Extracting door schedule data from your PDF..."
-          : phase === "results"
-          ? "Review what was extracted before continuing to triage."
-          : phase === "qty_review"
-          ? "Punchy reviewed quantities. Apply corrections and answer questions."
+          : phase === "punchy_review"
+          ? "Punchy is walking you through the extraction results."
           : "Classifying doors as accepted, by-others, or rejected."}
       </p>
 
@@ -677,445 +498,34 @@ export default function StepTriage({
       )}
 
       {/* ═══════════════════════════════════════════════════════════════
-          EXTRACTION HEALTH DASHBOARD — shown after extraction, before triage.
-          This is the key new UI that gives users visibility into what was extracted.
+          PUNCHY CARD-BY-CARD REVIEW
+          Replaces old dashboard + qty_review + questions phases.
          ═══════════════════════════════════════════════════════════════ */}
-      {phase === "results" && (
-        <div className="space-y-4 mb-4">
-          {/* ── Top-level summary cards ── */}
-          <div className="grid grid-cols-3 gap-2">
-            <div className="bg-tint border border-border-dim rounded-xl p-3 text-center">
-              <div className="text-xl font-bold text-success">
-                {doors.length}
-              </div>
-              <div className="text-[9px] text-tertiary uppercase tracking-wide">
-                Doors
-              </div>
-            </div>
-            <div className="bg-tint border border-border-dim rounded-xl p-3 text-center">
-              <div className="text-xl font-bold text-accent">
-                {hardwareSets.length}
-              </div>
-              <div className="text-[9px] text-tertiary uppercase tracking-wide">
-                HW Sets
-              </div>
-            </div>
-            <div
-              className={`bg-tint border rounded-xl p-3 text-center ${
-                extractionHealth.grade === "critical"
-                  ? "border-danger"
-                  : extractionHealth.grade === "warning"
-                  ? "border-warning"
-                  : "border-border-dim"
-              }`}
-            >
-              <div
-                className={`text-xl font-bold ${
-                  extractionHealth.grade === "critical"
-                    ? "text-danger"
-                    : extractionHealth.grade === "warning"
-                    ? "text-warning"
-                    : "text-success"
-                }`}
-              >
-                {extractionHealth.totalItems}
-              </div>
-              <div className="text-[9px] text-tertiary uppercase tracking-wide">
-                HW Items
-              </div>
-            </div>
-          </div>
-
-          {/* ── Assignment coverage ── */}
-          <div className="bg-tint border border-border-dim rounded-xl p-3">
-            <div className="text-[10px] text-tertiary uppercase tracking-wide mb-2 font-semibold">
-              Coverage
-            </div>
-            <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
-              <span className="text-secondary">Doors with HW set</span>
-              <span className="text-primary">
-                {extractionHealth.assignedDoors} / {doors.length}
-                {extractionHealth.unassignedDoors > 0 && (
-                  <span className="text-warning ml-1">
-                    ({extractionHealth.unassignedDoors} unassigned)
-                  </span>
-                )}
-              </span>
-              <span className="text-secondary">Sets with items</span>
-              <span className="text-primary">
-                {extractionHealth.populatedSets.length} / {hardwareSets.length}
-                {extractionHealth.emptySets.length > 0 && (
-                  <span className="text-danger ml-1">
-                    ({extractionHealth.emptySets.length} empty)
-                  </span>
-                )}
-              </span>
-              <span className="text-secondary">Avg items per set</span>
-              <span className="text-primary">
-                {hardwareSets.length > 0
-                  ? (extractionHealth.totalItems / hardwareSets.length).toFixed(1)
-                  : "0"}
-              </span>
-            </div>
-          </div>
-
-          {/* ── Per-set item breakdown ── */}
-          <div className="bg-tint border border-border-dim rounded-xl p-3">
-            <div className="text-[10px] text-tertiary uppercase tracking-wide mb-2 font-semibold">
-              Hardware Sets
-            </div>
-            <div className="space-y-1 max-h-48 overflow-y-auto">
-              {hardwareSets.map((set) => {
-                const itemCount = set.items?.length ?? 0;
-                const isEmpty = itemCount === 0;
-                return (
-                  <div
-                    key={set.set_id}
-                    className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs ${
-                      isEmpty
-                        ? "bg-danger-dim border border-danger"
-                        : "bg-tint border border-border-dim"
-                    }`}
-                  >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span
-                        className={`font-mono font-medium ${
-                          isEmpty ? "text-danger" : "text-accent"
-                        }`}
-                      >
-                        {set.set_id}
-                      </span>
-                      {set.heading && (
-                        <span className="text-tertiary truncate max-w-[180px]">
-                          {set.heading}
-                        </span>
-                      )}
-                    </div>
-                    <span
-                      className={`font-semibold whitespace-nowrap ${
-                        isEmpty ? "text-danger" : "text-secondary"
-                      }`}
-                    >
-                      {isEmpty ? "0 items" : `${itemCount} item${itemCount !== 1 ? "s" : ""}`}
-                    </span>
-                  </div>
-                );
-              })}
-              {hardwareSets.length === 0 && (
-                <p className="text-danger text-xs py-2">
-                  No hardware sets were extracted from the PDF.
-                </p>
-              )}
-            </div>
-          </div>
-
-          {/* ── Sample Opening Calibration ── */}
-          {extractionHealth.bestSample && extractionHealth.emptySets.length > 0 && !goldenSample?.confirmed && (
-            <div className="bg-tint border border-accent rounded-xl p-3">
-              <div className="text-[10px] text-accent uppercase tracking-wide mb-2 font-semibold">
-                Verify Sample Opening
-              </div>
-              <p className="text-secondary text-xs mb-3">
-                We extracted items for set <span className="text-accent font-mono font-medium">{extractionHealth.bestSample.set_id}</span> successfully.
-                Confirm it looks correct — we&apos;ll use it as a reference when extracting the empty sets.
-              </p>
-              {/* Sample door info */}
-              {extractionHealth.bestSample.door && (
-                <div className="flex gap-3 mb-2 text-xs">
-                  <span className="text-secondary">Door:</span>
-                  <span className="text-primary font-mono">{extractionHealth.bestSample.door.door_number}</span>
-                  {extractionHealth.bestSample.door.location && (
-                    <>
-                      <span className="text-secondary">Location:</span>
-                      <span className="text-primary">{extractionHealth.bestSample.door.location}</span>
-                    </>
-                  )}
-                </div>
-              )}
-              {/* Item list preview */}
-              <div className="space-y-0.5 max-h-40 overflow-y-auto mb-3">
-                {(extractionHealth.bestSample.items ?? []).map((item, i) => (
-                  <div
-                    key={`${item.name}-${i}`}
-                    className="flex items-center gap-2 px-2 py-1 rounded bg-tint text-xs"
-                  >
-                    <span className="text-tertiary w-6 text-right">{item.qty}x</span>
-                    <span className="text-primary flex-1">{item.name}</span>
-                    <span className="text-tertiary">{item.manufacturer}</span>
-                    <span className="text-tertiary">{item.model}</span>
-                    <span className="text-tertiary">{item.finish}</span>
-                  </div>
-                ))}
-              </div>
-              {/* Actions */}
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() =>
-                    setGoldenSample({
-                      set_id: extractionHealth.bestSample!.set_id,
-                      heading: extractionHealth.bestSample!.heading,
-                      items: extractionHealth.bestSample!.items,
-                      confirmed: true,
-                    })
-                  }
-                  className="px-4 py-1.5 bg-accent hover:bg-accent/80 text-white rounded-lg transition-colors font-semibold text-xs"
-                >
-                  Looks Good
-                </button>
-                <span className="text-[10px] text-tertiary">
-                  or edit items in the Review step after import
-                </span>
-              </div>
-            </div>
-          )}
-
-          {/* Confirmed sample badge */}
-          {goldenSample?.confirmed && (
-            <div className="flex items-center gap-2 px-3 py-2 bg-success-dim border border-success rounded-lg">
-              <span className="text-success text-sm">&#10003;</span>
-              <span className="text-success text-xs font-semibold">
-                Sample verified: {goldenSample.set_id}
-              </span>
-              <span className="text-secondary text-xs">
-                ({goldenSample.items?.length ?? 0} items) — will be used as reference for AI extraction
-              </span>
-            </div>
-          )}
-
-          {/* ── Missing sets warning ── */}
-          {extractionHealth.missingSetIds.length > 0 && (
-            <div className="p-3 bg-warning-dim border border-warning rounded-xl">
-              <div className="text-warning text-xs font-semibold mb-1">
-                Missing Hardware Sets
-              </div>
-              <p className="text-secondary text-xs mb-1.5">
-                These sets are referenced by doors but were not found in the hardware schedule pages:
-              </p>
-              <div className="flex flex-wrap gap-1.5">
-                {extractionHealth.missingSetIds.map((id) => (
-                  <span
-                    key={id}
-                    className="font-mono text-[11px] px-2 py-0.5 rounded bg-warning-dim text-warning border border-warning"
-                  >
-                    {id}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* ── Empty sets: Deep Extract offer ── */}
-          {extractionHealth.emptySets.length > 0 && (
-            <div className={`p-3 rounded-xl ${
-              extractionHealth.grade === "critical"
-                ? "bg-danger-dim border border-danger"
-                : "bg-warning-dim border border-warning"
-            }`}>
-              <div className="flex items-start gap-2 mb-2">
-                <span className={`text-lg leading-none ${
-                  extractionHealth.grade === "critical" ? "text-danger" : "text-warning"
-                }`}>&#x26A0;</span>
-                <div>
-                  <p className={`text-sm font-semibold mb-1 ${
-                    extractionHealth.grade === "critical" ? "text-danger" : "text-warning"
-                  }`}>
-                    {extractionHealth.emptySets.length === hardwareSets.length
-                      ? "No hardware items extracted"
-                      : `${extractionHealth.emptySets.length} set${extractionHealth.emptySets.length !== 1 ? "s" : ""} missing items`}
-                  </p>
-                  <p className="text-secondary text-xs">
-                    Our table reader couldn&apos;t parse the items for
-                    {extractionHealth.emptySets.length === 1
-                      ? ` set ${extractionHealth.emptySets[0]?.set_id ?? "unknown"}`
-                      : ` ${extractionHealth.emptySets.length} sets`}.
-                    You can try AI-powered extraction, go back to remap columns,
-                    or continue without items and add them manually later.
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={handleDeepExtract}
-                disabled={deepExtracting}
-                className="ml-6 px-4 py-2 bg-accent-dim border border-accent hover:bg-accent-dim text-accent rounded-lg transition-colors font-semibold text-sm disabled:opacity-50"
-              >
-                {deepExtracting
-                  ? "Extracting..."
-                  : `Extract Items with AI (${extractionHealth.emptySets.length} set${extractionHealth.emptySets.length !== 1 ? "s" : ""})`}
-              </button>
-            </div>
-          )}
-
-          {/* ── Status message (shown after deep extract) ── */}
-          {phase === "results" && status && !deepExtracting && status !== "Extraction complete. Review results below." && (
-            <p className="text-secondary text-xs italic">{status}</p>
-          )}
-
-          {/* ── Action buttons ── */}
-          <div className="flex items-center justify-between pt-2">
-            <button
-              onClick={onBack}
-              disabled={deepExtracting}
-              className="px-4 py-2 bg-tint border border-border-dim-strong hover:bg-tint-strong disabled:opacity-50 text-secondary rounded-lg transition-colors text-sm"
-            >
-              Back to Columns
-            </button>
-            <button
-              onClick={handleAcceptResults}
-              disabled={deepExtracting}
-              className="px-6 py-2 bg-accent hover:bg-accent/80 text-white rounded-lg transition-colors font-semibold text-sm"
-            >
-              {extractionHealth.grade === "critical"
-                ? "Continue Anyway"
-                : "Continue to Triage"}
-            </button>
-          </div>
-        </div>
+      {phase === "punchy_review" && (
+        <PunchyReview
+          doors={doors}
+          hardwareSets={hardwareSets}
+          qtyCheck={qtyCheck}
+          pages={classifyResult.pages}
+          pdfBuffer={pdfBuffer}
+          projectId={projectId}
+          onGoldenSampleConfirmed={(sample) => setGoldenSample(sample)}
+          onDeepExtract={handleDeepExtract}
+          deepExtracting={deepExtracting}
+          onComplete={(updates) => {
+            setHardwareSets(updates.hardwareSets);
+            // Store triage questions for hints
+            generatedQuestionsRef.current = updates.triageQuestions;
+            if (updates.triageQuestions.length > 0) {
+              onQuestionsGenerated(updates.triageQuestions);
+            }
+            setPhase("triaging");
+          }}
+          onBack={onBack}
+        />
       )}
 
-      {/* ═══════════════════════════════════════════════════════════════
-          QUANTITY REVIEW — Punchy's auto-corrections + questions
-         ═══════════════════════════════════════════════════════════════ */}
-      {phase === "qty_review" && qtyCheck && (
-        <div className="space-y-4 mb-4">
-          <h4 className="text-primary font-semibold text-sm">Quantity Review</h4>
-          <p className="text-secondary text-xs">
-            Punchy reviewed the extracted quantities against DFH standards.
-          </p>
-
-          {/* Auto-corrections (HIGH confidence) */}
-          {(qtyCheck.auto_corrections?.length ?? 0) > 0 && (
-            <div className="bg-success-dim border border-success rounded-xl p-3">
-              <div className="text-[10px] text-success uppercase tracking-wide mb-2 font-semibold">
-                Auto-Corrections ({qtyCheck.auto_corrections?.length ?? 0})
-              </div>
-              <div className="space-y-1.5">
-                {(qtyCheck.auto_corrections ?? []).map((c, i) => (
-                  <div key={`ac-${i}`} className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-success-dim text-xs">
-                    <span className="text-success">&#10003;</span>
-                    <span className="text-accent font-mono font-medium">{c.set_id}</span>
-                    <span className="text-primary">{c.item_name}:</span>
-                    <span className="text-danger line-through">{c.from_qty}</span>
-                    <span className="text-secondary">&rarr;</span>
-                    <span className="text-success font-semibold">{c.to_qty}</span>
-                    <span className="text-tertiary truncate flex-1">{c.reason}</span>
-                  </div>
-                ))}
-              </div>
-              {!qtyCorrectionsApplied && (
-                <button
-                  onClick={applyAutoCorrections}
-                  className="mt-2 px-4 py-1.5 bg-success hover:bg-success/80 text-black rounded-lg transition-colors font-semibold text-xs"
-                >
-                  Apply All Corrections
-                </button>
-              )}
-              {qtyCorrectionsApplied && (
-                <p className="mt-2 text-success text-xs font-semibold">&#10003; Corrections applied</p>
-              )}
-            </div>
-          )}
-
-          {/* Quantity questions (MEDIUM confidence) */}
-          {(qtyCheck.questions?.length ?? 0) > 0 && (
-            <div className="bg-accent-dim border border-accent rounded-xl p-3">
-              <div className="text-[10px] text-accent uppercase tracking-wide mb-2 font-semibold">
-                Needs Your Input ({qtyCheck.questions?.length ?? 0})
-              </div>
-              <p className="text-secondary text-xs mb-2">
-                These will appear in the sidebar after you continue.
-              </p>
-              <div className="space-y-1.5">
-                {(qtyCheck.questions ?? []).map((q, i) => (
-                  <div key={`qq-${i}`} className="px-2.5 py-1.5 rounded-lg bg-accent-dim text-xs">
-                    <div className="flex items-center gap-2">
-                      <span className="text-accent font-mono font-medium">{q.set_id}</span>
-                      <span className="text-primary">{q.item_name}</span>
-                      <span className="text-tertiary">(currently {q.current_qty})</span>
-                    </div>
-                    <p className="text-secondary mt-0.5">{q.text}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Flags (LOW confidence) */}
-          {(qtyCheck.flags?.length ?? 0) > 0 && (
-            <div className="bg-warning-dim border border-warning rounded-xl p-3">
-              <div className="text-[10px] text-warning uppercase tracking-wide mb-2 font-semibold">
-                Observations ({qtyCheck.flags?.length ?? 0})
-              </div>
-              <div className="space-y-1">
-                {(qtyCheck.flags ?? []).map((f, i) => (
-                  <div key={`fl-${i}`} className="text-xs text-secondary px-2.5 py-1">
-                    <span className="text-warning font-mono mr-1">{f.set_id}</span>
-                    {f.message ?? f.reason ?? ''}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Compliance issues */}
-          {(qtyCheck.compliance_issues?.length ?? 0) > 0 && (
-            <div className="bg-danger-dim border border-danger rounded-xl p-3">
-              <div className="text-[10px] text-danger uppercase tracking-wide mb-2 font-semibold">
-                Compliance Issues ({qtyCheck.compliance_issues?.length ?? 0})
-              </div>
-              <div className="space-y-1">
-                {(qtyCheck.compliance_issues ?? []).map((ci, i) => (
-                  <div key={`ci-${i}`} className="text-xs px-2.5 py-1">
-                    <span className="text-danger font-mono mr-1">{ci.set_id}</span>
-                    <span className="text-primary">{ci.issue}</span>
-                    {ci.regulation && (
-                      <span className="text-tertiary ml-1">({ci.regulation})</span>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Punchy notes */}
-          {qtyCheck.notes && (
-            <p className="text-tertiary text-xs italic px-1">{qtyCheck.notes}</p>
-          )}
-
-          {/* Action buttons */}
-          <div className="flex items-center justify-between pt-2">
-            <button
-              onClick={() => setPhase("results")}
-              className="px-4 py-2 bg-tint border border-border-dim-strong hover:bg-tint-strong text-secondary rounded-lg transition-colors text-sm"
-            >
-              Back to Results
-            </button>
-            <button
-              onClick={handleAcceptQtyReview}
-              className="px-6 py-2 bg-accent hover:bg-accent/80 text-white rounded-lg transition-colors font-semibold text-sm"
-            >
-              Continue to Triage
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* Questions phase: prompt user to review sidebar */}
-      {phase === "questions" && (
-        <div className="mb-4 p-4 bg-accent-dim border border-accent rounded-xl">
-          <p className="text-accent text-sm mb-3">
-            Extracted {doors.length} doors. Check the sidebar for validation
-            questions, then continue to triage.
-          </p>
-          <button
-            onClick={handleContinueToTriage}
-            className="px-5 py-2 bg-accent hover:bg-accent/80 text-white rounded-lg transition-colors font-semibold text-sm"
-          >
-            Continue to Triage
-          </button>
-        </div>
-      )}
-
-      {/* Triage-failed warning: backend signaled triage_error */}
+      {/* Triage-failed warning{/* Triage-failed warning: backend signaled triage_error */}
       {triageResult?.triage_error && (
         <div className="mb-4 p-4 bg-danger-dim border border-danger rounded-xl">
           <div className="flex items-start gap-2 mb-3">
@@ -1211,8 +621,8 @@ export default function StepTriage({
         </>
       )}
 
-      {/* Navigation (shown for questions, triaging, and done phases — results has its own buttons) */}
-      {phase !== "results" && (
+      {/* Navigation (shown for triaging and done phases — punchy_review has its own buttons) */}
+      {phase !== "punchy_review" && phase !== "extracting" && (
         <div className="flex justify-between mt-6">
           <button
             onClick={onBack}

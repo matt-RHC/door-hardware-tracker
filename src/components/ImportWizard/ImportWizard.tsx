@@ -434,13 +434,15 @@ export default function ImportWizard({
             )}
         </div>
 
-        {/* Punch assistant — fixed at bottom, OUTSIDE the scroller */}
-        <PunchAssistant
-          messages={punchMessages}
-          questions={triageQuestions}
-          onAnswer={handleQuestionAnswer}
-          onDismiss={handleQuestionDismiss}
-        />
+        {/* Punch assistant — hidden during Triage (PunchyReview cards replace it) */}
+        {state.currentStep !== WizardStep.Triage && (
+          <PunchAssistant
+            messages={punchMessages}
+            questions={triageQuestions}
+            onAnswer={handleQuestionAnswer}
+            onDismiss={handleQuestionDismiss}
+          />
+        )}
       </PunchHighlightProvider>
     </div>
   );
