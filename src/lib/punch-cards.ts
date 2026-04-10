@@ -21,6 +21,7 @@ export type CardKind =
   | 'calibration'
   | 'auto_correction'
   | 'question'
+  | 'question_batch'
   | 'compliance'
   | 'flag'
   | 'triage_question'
@@ -211,29 +212,64 @@ export function generatePunchCards(input: {
     })
   }
 
-  // ── 5. Quantity questions (one per question) ──
-  for (const q of qtyCheck?.questions ?? []) {
-    const pageIdx = findPageForSet(q.set_id, pages)
-    cards.push({
-      id: q.id,
-      kind: 'question',
-      title: `${q.set_id}: ${q.item_name}`,
-      required: true,
-      pdfPageIndex: pageIdx,
-      payload: { question: q },
-    })
+  // ── 5. Quantity questions (batched by item category) ──
+  // Group questions that ask the same thing about different sets into one card.
+  // e.g., 8 sets with "hinge qty" questions → 1 card, 1 answer, 8 fixes.
+  const qtyQuestions = qtyCheck?.questions ?? []
+  if (qtyQuestions.length > 0) {
+    const groups = new Map<string, typeof qtyQuestions>()
+    for (const q of qtyQuestions) {
+      // Group key: item_name (lowercased) + same options = same question type
+      const key = `${q.item_name.toLowerCase()}|${q.options.join('|')}`
+      const group = groups.get(key) ?? []
+      group.push(q)
+      groups.set(key, group)
+    }
+
+    for (const [, group] of groups) {
+      const representative = group[0]
+      const setIds = group.map(q => q.set_id)
+      const pageIdx = findPageForSet(representative.set_id, pages)
+
+      if (group.length === 1) {
+        // Single question — show as individual card
+        cards.push({
+          id: representative.id,
+          kind: 'question',
+          title: `${representative.set_id}: ${representative.item_name}`,
+          required: true,
+          pdfPageIndex: pageIdx,
+          payload: { question: representative },
+        })
+      } else {
+        // Batch — one card for N sets with the same question
+        cards.push({
+          id: `batch-${representative.item_name.toLowerCase().replace(/\s+/g, '-')}`,
+          kind: 'question_batch',
+          title: `${representative.item_name} — ${group.length} sets`,
+          required: true,
+          pdfPageIndex: pageIdx,
+          payload: {
+            representative,
+            questions: group,
+            setIds,
+          },
+        })
+      }
+    }
   }
 
-  // ── 6. Compliance issues ──
-  for (const ci of qtyCheck?.compliance_issues ?? []) {
-    const pageIdx = findPageForSet(ci.set_id, pages)
+  // ── 6. Compliance issues (batched into one card) ──
+  const complianceIssues = qtyCheck?.compliance_issues ?? []
+  if (complianceIssues.length > 0) {
+    const firstPageIdx = findPageForSet(complianceIssues[0].set_id, pages)
     cards.push({
-      id: `compliance-${ci.set_id}-${ci.issue.slice(0, 20)}`,
+      id: 'compliance',
       kind: 'compliance',
-      title: `Compliance: ${ci.set_id}`,
+      title: `${complianceIssues.length} Compliance Issue${complianceIssues.length !== 1 ? 's' : ''}`,
       required: false,
-      pdfPageIndex: pageIdx,
-      payload: { issue: ci },
+      pdfPageIndex: firstPageIdx,
+      payload: { issues: complianceIssues },
     })
   }
 
@@ -250,16 +286,16 @@ export function generatePunchCards(input: {
     })
   }
 
-  // ── 8. Triage questions ──
+  // ── 8. Triage questions (batched into one card) ──
   const triageQs = generateTriageQuestions(doors)
-  for (const q of triageQs) {
+  if (triageQs.length > 0) {
     cards.push({
-      id: q.id,
+      id: 'triage-questions',
       kind: 'triage_question',
-      title: 'Validation Question',
+      title: `${triageQs.length} Validation Question${triageQs.length !== 1 ? 's' : ''}`,
       required: false,
       pdfPageIndex: null,
-      payload: { question: q },
+      payload: { questions: triageQs },
     })
   }
 

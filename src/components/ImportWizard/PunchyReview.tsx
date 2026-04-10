@@ -153,12 +153,12 @@ export default function PunchyReview({
   }, [health.bestSample, onGoldenSampleConfirmed]);
 
   const handleFinish = useCallback(() => {
-    // Collect triage questions from cards
+    // Collect triage questions from cards (now batched)
     const triageQs: PunchQuestion[] = cards
       .filter(c => c.kind === "triage_question")
-      .map(c => {
-        const q = c.payload.question as PunchQuestion;
-        return { ...q, answer: answers[q.id] };
+      .flatMap(c => {
+        const questions = (c.payload.questions ?? []) as PunchQuestion[];
+        return questions.map(q => ({ ...q, answer: answers[q.id] }));
       });
 
     onComplete({
@@ -493,27 +493,52 @@ function renderCard(card: PunchCardData, ctx: RenderContext) {
       );
     }
 
-    // ── Triage Question Card ──
-    case "triage_question": {
-      const q = card.payload.question as PunchQuestion;
-      const answered = ctx.answers[q.id];
+    // ── Batched Quantity Question Card ──
+    case "question_batch": {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const representative = card.payload.representative as any;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const questions = card.payload.questions as any[];
+      const setIds = (card.payload.setIds ?? []) as string[];
+      const answered = ctx.answers[card.id];
       return (
         <PunchCard
           type="question"
           title={card.title}
           current={current}
           total={total}
+          pdfPreview={ctx.pdfPreview}
           primaryAction={answered ? { label: "Continue", onClick: ctx.goNext } : undefined}
           secondaryAction={ctx.currentIdx > 0 ? { label: "Back", onClick: ctx.goBack, variant: "ghost" } : undefined}
-          onSkip={ctx.goNext}
+          required
         >
           <div className="space-y-3">
-            <p className="text-primary text-sm leading-relaxed">{q.text}</p>
+            <p className="text-primary text-sm leading-relaxed">{representative.text}</p>
+            {representative.context && <p className="text-tertiary text-xs">{representative.context}</p>}
+            <div className="bg-tint border border-border-dim rounded-lg p-2.5">
+              <div className="text-[10px] text-tertiary uppercase tracking-wide mb-1.5 font-semibold">
+                Affects {setIds.length} sets
+              </div>
+              <div className="flex flex-wrap gap-1">
+                {setIds.map((id: string) => (
+                  <span key={id} className="font-mono text-xs px-1.5 py-0.5 rounded bg-accent-dim text-accent">
+                    {id}
+                  </span>
+                ))}
+              </div>
+            </div>
             <div className="flex flex-wrap gap-2">
-              {q.options.map(opt => (
+              {(representative.options as string[]).map((opt: string) => (
                 <button
                   key={opt}
-                  onClick={() => ctx.handleAnswerQuestion(q.id, opt)}
+                  onClick={() => {
+                    // Answer the batch — apply to ALL questions in the group
+                    for (const q of questions) {
+                      ctx.handleAnswerQuestion(q.id, opt, q.set_id, q.item_name);
+                    }
+                    // Also store under the batch card ID for UI state
+                    ctx.handleAnswerQuestion(card.id, opt);
+                  }}
                   className={`px-3 py-2 rounded-lg border text-sm font-medium transition-colors ${
                     answered === opt
                       ? "bg-accent text-white border-accent"
@@ -526,7 +551,7 @@ function renderCard(card: PunchCardData, ctx: RenderContext) {
             </div>
             {answered && (
               <div className="flex items-center gap-2 text-success text-xs font-semibold">
-                <span>&#10003;</span> Answered: {answered}
+                <span>&#10003;</span> Applied to {setIds.length} sets: {answered}
               </div>
             )}
           </div>
@@ -534,9 +559,57 @@ function renderCard(card: PunchCardData, ctx: RenderContext) {
       );
     }
 
-    // ── Compliance Card ──
+    // ── Triage Questions Card (batched — all on one card) ──
+    case "triage_question": {
+      const questions = (card.payload.questions ?? []) as PunchQuestion[];
+      const allAnswered = questions.every(q => ctx.answers[q.id]);
+      return (
+        <PunchCard
+          type="question"
+          title={card.title}
+          current={current}
+          total={total}
+          primaryAction={{ label: "Continue", onClick: ctx.goNext }}
+          secondaryAction={ctx.currentIdx > 0 ? { label: "Back", onClick: ctx.goBack, variant: "ghost" } : undefined}
+          onSkip={ctx.goNext}
+        >
+          <div className="space-y-3">
+            {questions.map(q => {
+              const qAnswered = ctx.answers[q.id];
+              return (
+                <div key={q.id} className={`p-2.5 rounded-lg border ${qAnswered ? "bg-success-dim border-success" : "bg-tint border-border-dim"}`}>
+                  <p className="text-primary text-sm mb-2">{q.text}</p>
+                  <div className="flex flex-wrap gap-1.5">
+                    {q.options.map(opt => (
+                      <button
+                        key={opt}
+                        onClick={() => ctx.handleAnswerQuestion(q.id, opt)}
+                        className={`px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-colors ${
+                          qAnswered === opt
+                            ? "bg-accent text-white border-accent"
+                            : "bg-tint border-border-dim text-primary hover:bg-tint-strong"
+                        }`}
+                      >
+                        {opt}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              );
+            })}
+            {allAnswered && (
+              <div className="flex items-center gap-2 text-success text-xs font-semibold">
+                <span>&#10003;</span> All {questions.length} questions answered
+              </div>
+            )}
+          </div>
+        </PunchCard>
+      );
+    }
+
+    // ── Compliance Card (batched) ──
     case "compliance": {
-      const ci = card.payload.issue as NonNullable<PunchyQuantityCheck["compliance_issues"]>[number];
+      const issues = (card.payload.issues ?? [card.payload.issue].filter(Boolean)) as NonNullable<PunchyQuantityCheck["compliance_issues"]>;
       return (
         <PunchCard
           type="compliance"
@@ -548,12 +621,20 @@ function renderCard(card: PunchCardData, ctx: RenderContext) {
           secondaryAction={ctx.currentIdx > 0 ? { label: "Back", onClick: ctx.goBack, variant: "ghost" } : undefined}
         >
           <div className="space-y-2">
-            <div className="bg-danger-dim border border-danger rounded-lg p-3">
-              <p className="text-primary text-sm font-medium">{ci.issue}</p>
-              {ci.regulation && (
-                <p className="text-tertiary text-xs mt-1">{ci.regulation}</p>
-              )}
-            </div>
+            {issues.map((ci, i) => (
+              <div key={`ci-${i}`} className="bg-danger-dim border border-danger rounded-lg p-3">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-danger font-mono text-xs font-medium">{ci.set_id}</span>
+                  <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-semibold ${ci.severity === 'error' ? 'bg-danger-dim text-danger' : ci.severity === 'warning' ? 'bg-warning-dim text-warning' : 'bg-accent-dim text-accent'}`}>
+                    {ci.severity}
+                  </span>
+                </div>
+                <p className="text-primary text-sm">{ci.issue}</p>
+                {ci.regulation && (
+                  <p className="text-tertiary text-xs mt-1">{ci.regulation}</p>
+                )}
+              </div>
+            ))}
           </div>
         </PunchCard>
       );
