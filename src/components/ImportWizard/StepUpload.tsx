@@ -172,10 +172,12 @@ export default function StepUpload({
           const uploadData = await uploadResp.json();
           storagePath = uploadData.storagePath ?? null;
         } else {
-          console.warn("PDF storage upload failed — continuing with in-memory file");
+          console.warn("PDF storage upload failed:", uploadResp.status);
+          setStatus("PDF saved locally (cloud backup unavailable).");
         }
-      } catch {
-        console.warn("PDF storage upload failed — continuing with in-memory file");
+      } catch (uploadErr) {
+        console.warn("PDF storage upload failed:", uploadErr);
+        setStatus("PDF saved locally (cloud backup unavailable).");
       }
 
       setProgress(100);
