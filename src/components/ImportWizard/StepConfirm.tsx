@@ -129,28 +129,28 @@ export default function StepConfirm({
     return (
       <div className="max-w-lg mx-auto text-center py-8">
         <div className="text-5xl mb-4">&#x26A0;</div>
-        <h3 className="text-xl font-bold text-[#ff9500] mb-2">
+        <h3 className="text-xl font-bold text-warning mb-2">
           Promotion Failed
         </h3>
-        <p className="text-[#a1a1a6] text-sm mb-4">
+        <p className="text-secondary text-sm mb-4">
           Data saved to staging but final promotion failed. Your data is safe
           &mdash; contact support or retry.
         </p>
 
         <div className="grid grid-cols-2 gap-3 max-w-sm mx-auto text-sm mb-6">
-          <div className="bg-white/[0.04] border border-white/[0.06] rounded-xl p-3">
-            <div className="text-lg font-bold text-[#0a84ff]">
+          <div className="bg-tint border border-border-dim rounded-xl p-3">
+            <div className="text-lg font-bold text-accent">
               {saveResult.openingsCount}
             </div>
-            <div className="text-[9px] text-[#6e6e73] uppercase">
+            <div className="text-[9px] text-tertiary uppercase">
               Doors Staged
             </div>
           </div>
-          <div className="bg-white/[0.04] border border-white/[0.06] rounded-xl p-3">
-            <div className="text-lg font-bold text-[#ff9500]">
+          <div className="bg-tint border border-border-dim rounded-xl p-3">
+            <div className="text-lg font-bold text-warning">
               {saveResult.itemsCount}
             </div>
-            <div className="text-[9px] text-[#6e6e73] uppercase">
+            <div className="text-[9px] text-tertiary uppercase">
               Items Staged
             </div>
           </div>
@@ -158,7 +158,7 @@ export default function StepConfirm({
 
         <button
           onClick={onComplete}
-          className="px-8 py-2.5 bg-[#ff9500] hover:bg-[#e68600] text-white rounded-lg transition-colors font-semibold"
+          className="px-8 py-2.5 bg-warning hover:bg-warning/80 text-white rounded-lg transition-colors font-semibold"
         >
           Done
         </button>
@@ -171,31 +171,31 @@ export default function StepConfirm({
     return (
       <div className="max-w-lg mx-auto text-center py-8">
         <div className="text-5xl mb-4">&#x2713;</div>
-        <h3 className="text-xl font-bold text-[#30d158] mb-4">
+        <h3 className="text-xl font-bold text-success mb-4">
           Import Complete
         </h3>
 
         <div className="grid grid-cols-2 gap-3 max-w-sm mx-auto text-sm mb-6">
-          <div className="bg-white/[0.04] border border-white/[0.06] rounded-xl p-3">
-            <div className="text-lg font-bold text-[#0a84ff]">
+          <div className="bg-tint border border-border-dim rounded-xl p-3">
+            <div className="text-lg font-bold text-accent">
               {saveResult.openingsCount}
             </div>
-            <div className="text-[9px] text-[#6e6e73] uppercase">
+            <div className="text-[9px] text-tertiary uppercase">
               Doors Saved
             </div>
           </div>
-          <div className="bg-white/[0.04] border border-white/[0.06] rounded-xl p-3">
-            <div className="text-lg font-bold text-[#30d158]">
+          <div className="bg-tint border border-border-dim rounded-xl p-3">
+            <div className="text-lg font-bold text-success">
               {saveResult.itemsCount}
             </div>
-            <div className="text-[9px] text-[#6e6e73] uppercase">
+            <div className="text-[9px] text-tertiary uppercase">
               Hardware Items
             </div>
           </div>
         </div>
 
         {saveResult.unmatchedSets && saveResult.unmatchedSets.length > 0 && (
-          <div className="mb-4 p-3 bg-[rgba(255,149,0,0.1)] border border-[rgba(255,149,0,0.2)] rounded-xl text-[#ff9500] text-xs">
+          <div className="mb-4 p-3 bg-warning-dim border border-warning rounded-xl text-warning text-xs">
             {saveResult.unmatchedSets.length} unmatched set(s):{" "}
             {saveResult.unmatchedSets.join(", ")}
           </div>
@@ -203,7 +203,7 @@ export default function StepConfirm({
 
         <button
           onClick={onComplete}
-          className="px-8 py-2.5 bg-[#30d158] hover:bg-[#26c14a] text-white rounded-lg transition-colors font-semibold"
+          className="px-8 py-2.5 bg-success hover:bg-success/80 text-white rounded-lg transition-colors font-semibold"
         >
           Done
         </button>
@@ -214,33 +214,33 @@ export default function StepConfirm({
   // ─── Confirm state ───
   return (
     <div className="max-w-lg mx-auto">
-      <h3 className="text-[#f5f5f7] font-semibold mb-2">
+      <h3 className="text-primary font-semibold mb-2">
         Step 5: Confirm &amp; Save
       </h3>
-      <p className="text-[#a1a1a6] text-sm mb-4">
+      <p className="text-secondary text-sm mb-4">
         Review the summary below and save to your project.
       </p>
 
       {/* Summary */}
       <div className="space-y-2 mb-4">
-        <div className="bg-white/[0.04] border border-white/[0.06] rounded-xl p-3 flex justify-between">
-          <span className="text-[#a1a1a6]">Doors</span>
-          <span className="text-[#f5f5f7] font-mono">{doors.length}</span>
+        <div className="bg-tint border border-border-dim rounded-xl p-3 flex justify-between">
+          <span className="text-secondary">Doors</span>
+          <span className="text-primary font-mono">{doors.length}</span>
         </div>
-        <div className="bg-white/[0.04] border border-white/[0.06] rounded-xl p-3 flex justify-between">
-          <span className="text-[#a1a1a6]">Hardware Sets</span>
-          <span className="text-[#f5f5f7] font-mono">
+        <div className="bg-tint border border-border-dim rounded-xl p-3 flex justify-between">
+          <span className="text-secondary">Hardware Sets</span>
+          <span className="text-primary font-mono">
             {hardwareSets.length}
           </span>
         </div>
-        <div className="bg-white/[0.04] border border-white/[0.06] rounded-xl p-3 flex justify-between">
-          <span className="text-[#a1a1a6]">Total Hardware Items</span>
-          <span className="text-[#f5f5f7] font-mono">{totalItems}</span>
+        <div className="bg-tint border border-border-dim rounded-xl p-3 flex justify-between">
+          <span className="text-secondary">Total Hardware Items</span>
+          <span className="text-primary font-mono">{totalItems}</span>
         </div>
         {triageResult && triageResult.by_others > 0 && (
-          <div className="bg-white/[0.04] border border-white/[0.06] rounded-xl p-3 flex justify-between">
-            <span className="text-[#a1a1a6]">By Others (excluded)</span>
-            <span className="text-[#ff9500] font-mono">
+          <div className="bg-tint border border-border-dim rounded-xl p-3 flex justify-between">
+            <span className="text-secondary">By Others (excluded)</span>
+            <span className="text-warning font-mono">
               {triageResult.by_others}
             </span>
           </div>
@@ -249,8 +249,8 @@ export default function StepConfirm({
 
       {/* Blocking error: unmatched hardware sets */}
       {doorsWithUnmatchedSets.length > 0 && (
-        <div className="mb-4 p-3 bg-[rgba(255,69,58,0.1)] border border-[rgba(255,69,58,0.25)] rounded-xl">
-          <p className="text-[#ff453a] text-sm font-semibold">
+        <div className="mb-4 p-3 bg-danger-dim border border-danger rounded-xl">
+          <p className="text-danger text-sm font-semibold">
             Cannot save: {doorsWithUnmatchedSets.length} door(s) reference
             hardware sets that don&apos;t exist. Go back and fix the hw_set
             assignments.
@@ -259,7 +259,7 @@ export default function StepConfirm({
             <button
               type="button"
               onClick={() => setOverrideUnmatched(true)}
-              className="mt-1.5 text-[#ff9500] text-xs underline hover:text-[#ffb340] transition-colors"
+              className="mt-1.5 text-warning text-xs underline hover:text-warning/80 transition-colors"
             >
               Save anyway (power user override)
             </button>
@@ -273,7 +273,7 @@ export default function StepConfirm({
           {warnings.map((w, i) => (
             <div
               key={i}
-              className="p-3 bg-[rgba(255,149,0,0.08)] border border-[rgba(255,149,0,0.15)] rounded-xl text-[#ff9500] text-xs"
+              className="p-3 bg-warning-dim border border-warning rounded-xl text-warning text-xs"
             >
               {w}
             </div>
@@ -283,8 +283,8 @@ export default function StepConfirm({
 
       {/* Progress */}
       {loading && (
-        <div className="mb-4 flex items-center gap-2 text-[#0a84ff] text-sm">
-          <div className="w-4 h-4 border-2 border-[#0a84ff] border-t-transparent rounded-full animate-spin" />
+        <div className="mb-4 flex items-center gap-2 text-accent text-sm">
+          <div className="w-4 h-4 border-2 border-accent border-t-transparent rounded-full animate-spin" />
           {status}
         </div>
       )}
@@ -294,14 +294,14 @@ export default function StepConfirm({
         <button
           onClick={onBack}
           disabled={loading}
-          className="px-4 py-2 bg-white/[0.04] border border-white/[0.08] hover:bg-white/[0.08] disabled:opacity-50 text-[#a1a1a6] rounded-lg transition-colors"
+          className="px-4 py-2 bg-tint border border-border-dim-strong hover:bg-tint-strong disabled:opacity-50 text-secondary rounded-lg transition-colors"
         >
           Back
         </button>
         <button
           onClick={handleSave}
           disabled={loading || saveBlocked}
-          className="px-6 py-2 bg-[#30d158] hover:bg-[#26c14a] text-white rounded-lg transition-colors font-semibold disabled:opacity-50"
+          className="px-6 py-2 bg-success hover:bg-success/80 text-white rounded-lg transition-colors font-semibold disabled:opacity-50"
         >
           {loading ? "Saving..." : "Save"}
         </button>

@@ -58,24 +58,24 @@ function StepIndicator({ currentStep, hasExistingData }: { currentStep: WizardSt
             <span
               className={`text-xs transition-colors ${
                 step < currentStep
-                  ? "text-[#6e6e73]"
+                  ? "text-tertiary"
                   : step === currentStep
-                  ? "text-[#0a84ff] font-semibold"
-                  : "text-[#6e6e73]/50"
+                  ? "text-accent font-semibold"
+                  : "text-tertiary/50"
               }`}
             >
               {step < currentStep ? `\u2713 ${label}` : label}
             </span>
             {i < visibleSteps.length - 1 && (
-              <span className="text-[#6e6e73]/30 text-xs">\u2192</span>
+              <span className="text-tertiary/30 text-xs">\u2192</span>
             )}
           </div>
         ))}
       </div>
       {/* Mobile: current step only */}
       <div className="flex sm:hidden items-center gap-2 text-xs">
-        <span className="text-[#6e6e73]">{currentIdx + 1}/{visibleSteps.length}</span>
-        <span className="text-[#0a84ff] font-semibold">{currentLabel}</span>
+        <span className="text-tertiary">{currentIdx + 1}/{visibleSteps.length}</span>
+        <span className="text-accent font-semibold">{currentLabel}</span>
       </div>
     </>
   );
@@ -333,15 +333,15 @@ export default function ImportWizard({
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-lg flex flex-col z-50">
       {/* Header */}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-white/[0.08]">
-        <h2 className="text-lg font-semibold text-[#f5f5f7]">
+      <div className="flex items-center justify-between px-6 py-4 border-b border-border-dim-strong">
+        <h2 className="text-lg font-semibold text-primary">
           Import Wizard
         </h2>
         <div className="flex items-center gap-4">
           <StepIndicator currentStep={state.currentStep} hasExistingData={state.hasExistingData} />
           <button
             onClick={onClose}
-            className="text-[#6e6e73] hover:text-[#f5f5f7] text-xl leading-none transition-colors ml-4"
+            className="text-tertiary hover:text-primary text-xl leading-none transition-colors ml-4"
           >
             &times;
           </button>
@@ -350,7 +350,7 @@ export default function ImportWizard({
 
       {/* Error banner */}
       {state.error && (
-        <div className="mx-6 mt-4 p-3 bg-[rgba(255,69,58,0.1)] border border-[rgba(255,69,58,0.2)] rounded-xl text-[#ff6961] text-sm">
+        <div className="mx-6 mt-4 p-3 bg-danger-dim border border-danger rounded-xl text-danger text-sm">
           {state.error}
         </div>
       )}

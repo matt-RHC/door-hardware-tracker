@@ -395,8 +395,8 @@ export default function FileViewer({ attachment, onClose }: FileViewerProps) {
       if (pdfLoading && !currentPage) {
         return (
           <div className="flex flex-col items-center justify-center gap-3">
-            <div className="w-8 h-8 border-2 border-[#0a84ff] border-t-transparent rounded-full animate-spin" />
-            <p className="text-[13px] text-[#a1a1a6]">
+            <div className="w-8 h-8 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+            <p className="text-[13px] text-secondary">
               Loading page {pdfPageNum}...
             </p>
           </div>
@@ -405,13 +405,13 @@ export default function FileViewer({ attachment, onClose }: FileViewerProps) {
       if (pdfError && !currentPage) {
         return (
           <div className="text-center p-8">
-            <p className="text-[15px] text-[#f5f5f7] mb-2">PDF Preview Error</p>
-            <p className="text-[13px] text-[#6e6e73] mb-4">{pdfError}</p>
+            <p className="text-[15px] text-primary mb-2">PDF Preview Error</p>
+            <p className="text-[13px] text-tertiary mb-4">{pdfError}</p>
             <a
               href={attachment.file_url}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-block px-5 py-2.5 bg-[#0a84ff] text-white rounded-lg text-[15px] font-medium"
+              className="inline-block px-5 py-2.5 bg-accent text-white rounded-lg text-[15px] font-medium"
             >
               Open in Browser
             </a>
@@ -454,18 +454,18 @@ export default function FileViewer({ attachment, onClose }: FileViewerProps) {
     // Unsupported type fallback
     return (
       <div className="text-center p-8">
-        <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-white/[0.04] border border-white/[0.08] flex items-center justify-center">
-          <svg className="w-8 h-8 text-[#6e6e73]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-tint border border-border-dim-strong flex items-center justify-center">
+          <svg className="w-8 h-8 text-tertiary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
           </svg>
         </div>
-        <p className="text-[15px] text-[#f5f5f7] mb-2">Preview unavailable</p>
-        <p className="text-[13px] text-[#6e6e73] mb-4">{attachment.file_name}</p>
+        <p className="text-[15px] text-primary mb-2">Preview unavailable</p>
+        <p className="text-[13px] text-tertiary mb-4">{attachment.file_name}</p>
         <a
           href={attachment.file_url}
           target="_blank"
           rel="noopener noreferrer"
-          className="inline-block px-5 py-2.5 bg-[#0a84ff] text-white rounded-lg text-[15px] font-medium"
+          className="inline-block px-5 py-2.5 bg-accent text-white rounded-lg text-[15px] font-medium"
         >
           Open in Browser
         </a>
@@ -476,10 +476,10 @@ export default function FileViewer({ attachment, onClose }: FileViewerProps) {
   return (
     <div className="fixed inset-0 z-[100] bg-black/95 backdrop-blur-xl flex flex-col">
       {/* ── Top bar ── */}
-      <div className="flex-shrink-0 flex items-center justify-between px-4 py-3 bg-black/80 border-b border-white/[0.08]">
+      <div className="flex-shrink-0 flex items-center justify-between px-4 py-3 bg-black/80 border-b border-border-dim-strong">
         <button
           onClick={onClose}
-          className="text-[#0a84ff] text-[15px] font-medium flex items-center gap-1 min-w-[60px]"
+          className="text-accent text-[15px] font-medium flex items-center gap-1 min-w-[60px]"
         >
           <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -487,7 +487,7 @@ export default function FileViewer({ attachment, onClose }: FileViewerProps) {
           Back
         </button>
 
-        <h2 className="text-[13px] text-[#a1a1a6] truncate max-w-[50%] text-center">
+        <h2 className="text-[13px] text-secondary truncate max-w-[50%] text-center">
           {attachment.file_name}
         </h2>
 
@@ -495,7 +495,7 @@ export default function FileViewer({ attachment, onClose }: FileViewerProps) {
           href={attachment.file_url}
           target="_blank"
           rel="noopener noreferrer"
-          className="text-[#0a84ff] text-[13px] font-medium min-w-[60px] text-right"
+          className="text-accent text-[13px] font-medium min-w-[60px] text-right"
         >
           Open
         </a>
@@ -544,12 +544,12 @@ export default function FileViewer({ attachment, onClose }: FileViewerProps) {
       </div>
 
       {/* ── Bottom control bar ── */}
-      <div className="flex-shrink-0 bg-black/80 border-t border-white/[0.08] px-4 py-3">
+      <div className="flex-shrink-0 bg-black/80 border-t border-border-dim-strong px-4 py-3">
         <div className="flex items-center justify-center gap-2 sm:gap-3 max-w-[480px] mx-auto">
           {/* Zoom out */}
           <button
             onClick={zoomOut}
-            className="w-11 h-11 rounded-full bg-white/[0.07] border border-white/[0.12] flex items-center justify-center text-[#f5f5f7] active:bg-white/[0.14] transition-colors"
+            className="w-11 h-11 rounded-full bg-white/[0.07] border border-border-dim-strong flex items-center justify-center text-primary active:bg-white/[0.14] transition-colors"
             aria-label="Zoom out"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -563,7 +563,7 @@ export default function FileViewer({ attachment, onClose }: FileViewerProps) {
               <button
                 onClick={prevPage}
                 disabled={pdfPageNum <= 1}
-                className="w-11 h-11 rounded-full bg-white/[0.07] border border-white/[0.12] flex items-center justify-center text-[#f5f5f7] active:bg-white/[0.14] transition-colors disabled:opacity-30"
+                className="w-11 h-11 rounded-full bg-white/[0.07] border border-border-dim-strong flex items-center justify-center text-primary active:bg-white/[0.14] transition-colors disabled:opacity-30"
                 aria-label="Previous page"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -577,10 +577,10 @@ export default function FileViewer({ attachment, onClose }: FileViewerProps) {
                   setPageJumpValue(String(pdfPageNum));
                   setShowPageJump(true);
                 }}
-                className="h-11 px-3 rounded-full bg-white/[0.07] border border-white/[0.12] flex items-center justify-center active:bg-white/[0.14] transition-colors min-w-[4.5rem]"
+                className="h-11 px-3 rounded-full bg-white/[0.07] border border-border-dim-strong flex items-center justify-center active:bg-white/[0.14] transition-colors min-w-[4.5rem]"
                 aria-label="Jump to page"
               >
-                <span className="text-[13px] text-[#a1a1a6] tabular-nums">
+                <span className="text-[13px] text-secondary tabular-nums">
                   {pdfPageNum} / {pdfTotalPages}
                 </span>
               </button>
@@ -588,7 +588,7 @@ export default function FileViewer({ attachment, onClose }: FileViewerProps) {
               <button
                 onClick={nextPage}
                 disabled={pdfPageNum >= pdfTotalPages}
-                className="w-11 h-11 rounded-full bg-white/[0.07] border border-white/[0.12] flex items-center justify-center text-[#f5f5f7] active:bg-white/[0.14] transition-colors disabled:opacity-30"
+                className="w-11 h-11 rounded-full bg-white/[0.07] border border-border-dim-strong flex items-center justify-center text-primary active:bg-white/[0.14] transition-colors disabled:opacity-30"
                 aria-label="Next page"
               >
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -603,8 +603,8 @@ export default function FileViewer({ attachment, onClose }: FileViewerProps) {
             onClick={fitToScreen}
             className={`h-11 px-4 rounded-full flex items-center justify-center gap-1.5 text-[13px] font-medium transition-colors active:bg-white/[0.14] ${
               isFitted
-                ? "bg-[rgba(48,209,88,0.15)] border border-[#30d158] text-[#30d158]"
-                : "bg-white/[0.07] border border-white/[0.12] text-[#f5f5f7]"
+                ? "bg-success-dim border border-success text-success"
+                : "bg-white/[0.07] border border-border-dim-strong text-primary"
             }`}
             aria-label="Fit to screen"
           >
@@ -617,7 +617,7 @@ export default function FileViewer({ attachment, onClose }: FileViewerProps) {
           {/* Zoom in */}
           <button
             onClick={zoomIn}
-            className="w-11 h-11 rounded-full bg-white/[0.07] border border-white/[0.12] flex items-center justify-center text-[#f5f5f7] active:bg-white/[0.14] transition-colors"
+            className="w-11 h-11 rounded-full bg-white/[0.07] border border-border-dim-strong flex items-center justify-center text-primary active:bg-white/[0.14] transition-colors"
             aria-label="Zoom in"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -628,7 +628,7 @@ export default function FileViewer({ attachment, onClose }: FileViewerProps) {
 
         {/* Swipe hint — shown once for first PDF view */}
         {isPdf && pdfTotalPages > 1 && isFitted && (
-          <p className="text-[11px] text-[#6e6e73] text-center mt-2">
+          <p className="text-[11px] text-tertiary text-center mt-2">
             Swipe left/right or double-tap to zoom
           </p>
         )}
@@ -641,13 +641,13 @@ export default function FileViewer({ attachment, onClose }: FileViewerProps) {
           onClick={() => setShowPageJump(false)}
         >
           <div
-            className="bg-[#1c1c1e] rounded-2xl p-6 w-[280px] border border-white/[0.12]"
+            className="bg-surface rounded-2xl p-6 w-[280px] border border-border-dim-strong"
             onClick={(e) => e.stopPropagation()}
           >
-            <p className="text-[15px] text-[#f5f5f7] font-medium mb-1 text-center">
+            <p className="text-[15px] text-primary font-medium mb-1 text-center">
               Go to Page
             </p>
-            <p className="text-[13px] text-[#6e6e73] mb-4 text-center">
+            <p className="text-[13px] text-tertiary mb-4 text-center">
               1 – {pdfTotalPages}
             </p>
             <input
@@ -661,20 +661,20 @@ export default function FileViewer({ attachment, onClose }: FileViewerProps) {
                 if (e.key === "Enter") handlePageJumpSubmit();
                 if (e.key === "Escape") setShowPageJump(false);
               }}
-              className="w-full h-12 bg-white/[0.07] border border-white/[0.12] rounded-xl text-center text-[20px] text-[#f5f5f7] tabular-nums outline-none focus:border-[#0a84ff] transition-colors"
+              className="w-full h-12 bg-white/[0.07] border border-border-dim-strong rounded-xl text-center text-[20px] text-primary tabular-nums outline-none focus:border-accent transition-colors"
               inputMode="numeric"
               pattern="[0-9]*"
             />
             <div className="flex gap-3 mt-4">
               <button
                 onClick={() => setShowPageJump(false)}
-                className="flex-1 h-11 rounded-xl bg-white/[0.07] text-[#f5f5f7] text-[15px] font-medium active:bg-white/[0.14] transition-colors"
+                className="flex-1 h-11 rounded-xl bg-white/[0.07] text-primary text-[15px] font-medium active:bg-white/[0.14] transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={handlePageJumpSubmit}
-                className="flex-1 h-11 rounded-xl bg-[#0a84ff] text-white text-[15px] font-medium active:bg-[#0a84ff]/80 transition-colors"
+                className="flex-1 h-11 rounded-xl bg-accent text-white text-[15px] font-medium active:bg-accent/80 transition-colors"
               >
                 Go
               </button>

@@ -80,6 +80,12 @@
   --glow-md: 0 0 8px;
   --glow-lg: 0 0 14px;
 
+  /* Surface tints — semi-transparent overlays for subtle bg variations */
+  --tint: rgba(255,255,255,0.04);
+  --tint-strong: rgba(255,255,255,0.08);
+  --border-dim: rgba(255,255,255,0.06);
+  --border-dim-strong: rgba(255,255,255,0.08);
+
   /* Radii */
   --radius: 10px;
   --radius-sm: 6px;
@@ -123,12 +129,52 @@
   --yellow-dim: rgba(146,108,0,0.08);
   --field: #AD5B00;
   --bench: #7C4DBC;
+
+  /* Surface tints — light mode uses dark overlays instead of white */
+  --tint: rgba(0,0,0,0.03);
+  --tint-strong: rgba(0,0,0,0.06);
+  --border-dim: rgba(0,0,0,0.06);
+  --border-dim-strong: rgba(0,0,0,0.10);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-inter);
+
+  /* Surfaces → bg-surface, bg-surface-hover, bg-surface-raised */
+  --color-surface: var(--surface);
+  --color-surface-hover: var(--surface-hover);
+  --color-surface-raised: var(--surface-raised);
+  --color-tint: var(--tint);
+  --color-tint-strong: var(--tint-strong);
+
+  /* Borders → border-th-border, border-th-border-hover */
+  --color-th-border: var(--border);
+  --color-th-border-hover: var(--border-hover);
+  --color-border-dim: var(--border-dim);
+  --color-border-dim-strong: var(--border-dim-strong);
+
+  /* Text → text-primary, text-secondary, text-tertiary */
+  --color-primary: var(--text-primary);
+  --color-secondary: var(--text-secondary);
+  --color-tertiary: var(--text-tertiary);
+
+  /* Accents → text-accent, bg-accent, border-accent */
+  --color-accent: var(--blue);
+  --color-accent-dim: var(--blue-dim);
+  --color-success: var(--green);
+  --color-success-dim: var(--green-dim);
+  --color-warning: var(--orange);
+  --color-warning-dim: var(--orange-dim);
+  --color-danger: var(--red);
+  --color-danger-dim: var(--red-dim);
+  --color-info: var(--cyan);
+  --color-info-dim: var(--cyan-dim);
+  --color-caution: var(--yellow);
+  --color-caution-dim: var(--yellow-dim);
+  --color-purple: var(--purple);
+  --color-purple-dim: var(--purple-dim);
 }
 
 * {
@@ -625,15 +671,16 @@ body {
   bottom: 0;
   left: 0;
   right: 0;
-  background: var(--surface);
-  border-top: 1px solid var(--border);
+  background: var(--surface-raised);
+  border-top: 2px solid var(--blue);
   border-radius: var(--radius) var(--radius) 0 0;
   transition: transform 0.25s ease-out;
   z-index: 40;
   /* Prevent content from expanding beyond viewport on mobile */
   max-height: 70vh;
+  box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.15), 0 -1px 8px rgba(0, 0, 0, 0.08);
 }
-.drawer--collapsed { transform: translateY(calc(100% - 48px)); }
+.drawer--collapsed { transform: translateY(calc(100% - 56px)); }
 .drawer--peek { transform: translateY(calc(100% - 200px)); }
 .drawer--full { transform: translateY(calc(100% - 60vh)); }
 
@@ -648,9 +695,10 @@ body {
 }
 
 .drawer__handle {
-  width: 32px;
+  width: 40px;
   height: 4px;
-  background: var(--border-hover);
+  background: var(--blue);
+  opacity: 0.5;
   border-radius: 2px;
   margin: 8px auto;
 }

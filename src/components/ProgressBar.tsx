@@ -15,12 +15,12 @@ export default function ProgressBar({
   // Determine gradient based on percentage
   const getGradient = () => {
     if (percentage < 25) {
-      return "bg-gradient-to-r from-[#ff453a] to-[#ff6961]";
+      return "bg-gradient-to-r from-danger to-danger/60";
     }
     if (percentage < 75) {
-      return "bg-gradient-to-r from-[#ff9f0a] to-[#ffcc00]";
+      return "bg-gradient-to-r from-warning to-caution";
     }
-    return "bg-gradient-to-r from-[#30d158] to-[#5ac8fa]";
+    return "bg-gradient-to-r from-success to-info";
   };
 
   // Determine height based on size
@@ -39,7 +39,7 @@ export default function ProgressBar({
     <div>
       <div
         className={`w-full rounded-full overflow-hidden ${getHeight()}`}
-        style={{ backgroundColor: "rgba(255, 255, 255, 0.06)" }}
+        style={{ backgroundColor: "var(--border-dim)" }}
       >
         <div
           className={`${getGradient()} ${getHeight()} rounded-full transition-all duration-300`}
@@ -47,7 +47,7 @@ export default function ProgressBar({
         />
       </div>
       {showLabel && (
-        <div className="mt-2 text-sm" style={{ color: "#a1a1a6" }}>
+        <div className="mt-2 text-sm" style={{ color: "var(--text-secondary)" }}>
           {percentage.toFixed(0)}% complete
         </div>
       )}

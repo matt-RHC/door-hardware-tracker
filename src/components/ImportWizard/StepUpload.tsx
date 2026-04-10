@@ -196,35 +196,35 @@ export default function StepUpload({
     const { summary } = result;
     return (
       <div className="grid grid-cols-2 gap-2 mt-4">
-        <div className="bg-white/[0.04] border border-white/[0.06] rounded-xl p-3 text-center">
-          <div className="text-lg font-bold text-[#0a84ff]">
+        <div className="bg-tint border border-border-dim rounded-xl p-3 text-center">
+          <div className="text-lg font-bold text-accent">
             {summary.total_pages}
           </div>
-          <div className="text-[9px] text-[#6e6e73] uppercase">
+          <div className="text-[9px] text-tertiary uppercase">
             Total Pages
           </div>
         </div>
-        <div className="bg-white/[0.04] border border-white/[0.06] rounded-xl p-3 text-center">
-          <div className="text-lg font-bold text-[#30d158]">
+        <div className="bg-tint border border-border-dim rounded-xl p-3 text-center">
+          <div className="text-lg font-bold text-success">
             {summary.door_schedule_pages.length}
           </div>
-          <div className="text-[9px] text-[#6e6e73] uppercase">
+          <div className="text-[9px] text-tertiary uppercase">
             Door Schedule
           </div>
         </div>
-        <div className="bg-white/[0.04] border border-white/[0.06] rounded-xl p-3 text-center">
-          <div className="text-lg font-bold text-[#ff9500]">
+        <div className="bg-tint border border-border-dim rounded-xl p-3 text-center">
+          <div className="text-lg font-bold text-warning">
             {summary.hardware_set_pages.length}
           </div>
-          <div className="text-[9px] text-[#6e6e73] uppercase">
+          <div className="text-[9px] text-tertiary uppercase">
             Hardware Sets
           </div>
         </div>
-        <div className="bg-white/[0.04] border border-white/[0.06] rounded-xl p-3 text-center">
-          <div className="text-lg font-bold text-[#6e6e73]">
+        <div className="bg-tint border border-border-dim rounded-xl p-3 text-center">
+          <div className="text-lg font-bold text-tertiary">
             {summary.other_pages.length}
           </div>
-          <div className="text-[9px] text-[#6e6e73] uppercase">Other</div>
+          <div className="text-[9px] text-tertiary uppercase">Other</div>
         </div>
       </div>
     );
@@ -232,10 +232,10 @@ export default function StepUpload({
 
   return (
     <div className="max-w-lg mx-auto">
-      <h3 className="text-[#f5f5f7] font-semibold mb-2">
+      <h3 className="text-primary font-semibold mb-2">
         Step 1: Upload PDF
       </h3>
-      <p className="text-[#a1a1a6] text-sm mb-4">
+      <p className="text-secondary text-sm mb-4">
         Select a door hardware submittal PDF. We&apos;ll classify each page to
         find door schedules and hardware sets.
       </p>
@@ -248,10 +248,10 @@ export default function StepUpload({
         onClick={() => fileInputRef.current?.click()}
         className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors ${
           dragOver
-            ? "border-[#0a84ff] bg-[rgba(10,132,255,0.05)]"
+            ? "border-accent bg-accent-dim"
             : file
-            ? "border-[#30d158]/30 bg-[rgba(48,209,88,0.03)]"
-            : "border-white/[0.12] hover:border-white/[0.2] bg-white/[0.02]"
+            ? "border-success/30 bg-success-dim"
+            : "border-white/[0.12] hover:border-white/[0.2] bg-tint"
         }`}
       >
         <input
@@ -265,19 +265,19 @@ export default function StepUpload({
 
         {file ? (
           <div>
-            <div className="text-[#30d158] text-2xl mb-2">&#x2713;</div>
-            <p className="text-[#f5f5f7] font-medium">{file.name}</p>
-            <p className="text-[#6e6e73] text-xs mt-1">
+            <div className="text-success text-2xl mb-2">&#x2713;</div>
+            <p className="text-primary font-medium">{file.name}</p>
+            <p className="text-tertiary text-xs mt-1">
               {(file.size / 1024 / 1024).toFixed(1)} MB
             </p>
           </div>
         ) : (
           <div>
-            <div className="text-[#6e6e73] text-3xl mb-2">&#x1F4C4;</div>
-            <p className="text-[#a1a1a6]">
+            <div className="text-tertiary text-3xl mb-2">&#x1F4C4;</div>
+            <p className="text-secondary">
               Drag &amp; drop a PDF here, or click to browse
             </p>
-            <p className="text-[#6e6e73] text-xs mt-1">
+            <p className="text-tertiary text-xs mt-1">
               Max 50 MB
             </p>
           </div>
@@ -291,12 +291,12 @@ export default function StepUpload({
       {loading && (
         <div className="mt-4">
           <div className="flex justify-between text-sm mb-1">
-            <span className="text-[#a1a1a6]">{status}</span>
-            <span className="text-[#6e6e73]">{progress}%</span>
+            <span className="text-secondary">{status}</span>
+            <span className="text-tertiary">{progress}%</span>
           </div>
-          <div className="w-full bg-white/[0.06] rounded-full h-2 overflow-hidden">
+          <div className="w-full bg-tint rounded-full h-2 overflow-hidden">
             <div
-              className="h-full rounded-full transition-all duration-500 ease-out bg-[#0a84ff]"
+              className="h-full rounded-full transition-all duration-500 ease-out bg-accent"
               style={{ width: `${progress}%` }}
             />
           </div>
@@ -308,7 +308,7 @@ export default function StepUpload({
         <button
           onClick={handleClassify}
           disabled={!file || loading}
-          className="px-6 py-2 bg-[#0a84ff] hover:bg-[#0975de] text-white rounded-lg transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+          className="px-6 py-2 bg-accent hover:bg-accent/80 text-white rounded-lg transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {loading ? "Processing..." : "Next"}
         </button>

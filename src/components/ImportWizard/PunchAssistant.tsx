@@ -9,17 +9,17 @@ import type { PunchMessage, PunchQuestion, PunchSeverity } from '@/lib/punch-mes
 // ── Helpers ──────────────────────────────────────────────────────────
 
 const severityColor: Record<PunchSeverity, string> = {
-  info:    '#4BA3E3',
-  success: '#2ECC71',
-  warning: '#E8811A',
-  error:   '#E04850',
+  info:    'var(--blue)',
+  success: 'var(--green)',
+  warning: 'var(--orange)',
+  error:   'var(--red)',
 };
 
 const severityBg: Record<PunchSeverity, string> = {
-  info:    'rgba(75,163,227,0.12)',
-  success: 'rgba(46,204,113,0.12)',
-  warning: 'rgba(232,129,26,0.12)',
-  error:   'rgba(224,72,80,0.12)',
+  info:    'var(--blue-dim)',
+  success: 'var(--green-dim)',
+  warning: 'var(--orange-dim)',
+  error:   'var(--red-dim)',
 };
 
 function avatarStateFromMessages(msgs: PunchMessage[]): PunchAvatarState {
@@ -71,16 +71,16 @@ interface QuestionCardProps {
 function QuestionCard({ question, onAnswer, onDismiss }: QuestionCardProps) {
   if (question.answer) {
     return (
-      <div className="py-1.5 px-2.5 rounded-lg bg-[rgba(46,204,113,0.10)] border-l-[3px] border-l-[#2ECC71] text-xs text-[#6B7280]">
-        <span className="text-[#a1a1a6]">{question.text}</span>
-        <span className="ml-1.5 text-[#2ECC71] font-semibold">→ {question.answer}</span>
+      <div className="py-1.5 px-2.5 rounded-lg bg-success-dim border-l-[3px] border-l-success text-xs text-tertiary">
+        <span className="text-secondary">{question.text}</span>
+        <span className="ml-1.5 text-success font-semibold">→ {question.answer}</span>
       </div>
     );
   }
 
   if (question.dismissed) {
     return (
-      <div className="py-1.5 px-2.5 rounded-lg bg-[rgba(107,114,128,0.08)] border-l-[3px] border-l-[#6B7280] text-xs text-[#6B7280]">
+      <div className="py-1.5 px-2.5 rounded-lg bg-tint-strong border-l-[3px] border-l-tertiary text-xs text-tertiary">
         <span>{question.text}</span>
         <span className="ml-1.5 italic">Skipped</span>
       </div>
@@ -88,7 +88,7 @@ function QuestionCard({ question, onAnswer, onDismiss }: QuestionCardProps) {
   }
 
   return (
-    <div className="p-2.5 rounded-lg bg-[rgba(10,132,255,0.10)] border border-[rgba(10,132,255,0.25)] text-[13px] text-[#E4E6EB]">
+    <div className="p-2.5 rounded-lg bg-accent-dim border border-accent text-[13px] text-primary">
       <p className="mb-2 leading-[18px]">{question.text}</p>
       <div className="flex flex-wrap gap-1.5">
         {question.options.map((opt) => (
@@ -96,7 +96,7 @@ function QuestionCard({ question, onAnswer, onDismiss }: QuestionCardProps) {
             key={opt}
             type="button"
             onClick={() => onAnswer(question.id, opt)}
-            className="px-2.5 py-1 rounded-md border border-[rgba(10,132,255,0.4)] bg-[rgba(10,132,255,0.15)] text-[#4BA3E3] text-xs font-semibold hover:bg-[rgba(10,132,255,0.3)] transition-colors"
+            className="px-2.5 py-1 rounded-md border border-accent bg-accent-dim text-accent text-xs font-semibold hover:bg-accent-dim transition-colors"
           >
             {opt}
           </button>
@@ -104,7 +104,7 @@ function QuestionCard({ question, onAnswer, onDismiss }: QuestionCardProps) {
         <button
           type="button"
           onClick={() => onDismiss(question.id)}
-          className="px-2.5 py-1 rounded-md border border-[rgba(107,114,128,0.3)] text-[#6B7280] text-xs hover:bg-[rgba(107,114,128,0.15)] transition-colors"
+          className="px-2.5 py-1 rounded-md border border-[var(--border-dim-strong)] text-tertiary text-xs hover:bg-tint-strong transition-colors"
         >
           Skip
         </button>
@@ -191,7 +191,7 @@ export default function PunchAssistant({
       {/* Drag handle */}
       <div
         onClick={toggleDrawer}
-        className="cursor-pointer py-2"
+        className="cursor-pointer pt-2 pb-1"
       >
         <div className="drawer__handle" />
       </div>
@@ -199,27 +199,29 @@ export default function PunchAssistant({
       {/* Pill bar (always visible) */}
       <div
         onClick={toggleDrawer}
-        className="flex items-center gap-3 px-4 pb-2 cursor-pointer"
+        className="flex items-center gap-3 px-4 pb-3 cursor-pointer select-none"
       >
         <PunchAvatar size="sm" state={avatarState} />
-        <span className="text-sm font-medium text-[#E4E6EB]">
+        <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
           Punch
         </span>
-        <span className="text-xs text-[#6B7280]">
-          {totalCount} observation{totalCount !== 1 ? 's' : ''}
-        </span>
+        {totalCount > 0 && (
+          <span className="text-xs px-2.5 py-0.5 rounded-full font-medium" style={{ background: 'var(--blue-dim)', color: 'var(--text-secondary)' }}>
+            {totalCount} observation{totalCount !== 1 ? 's' : ''}
+          </span>
+        )}
         {warningCount > 0 && (
-          <span className="text-xs bg-[rgba(232,129,26,0.15)] text-[#E8811A] px-2 py-0.5 rounded-full font-semibold">
+          <span className="text-xs px-2.5 py-0.5 rounded-full font-semibold" style={{ background: 'var(--orange-dim)', color: 'var(--orange)' }}>
             {warningCount} warning{warningCount !== 1 ? 's' : ''}
           </span>
         )}
         {activeQuestionCount > 0 && (
-          <span className="text-xs bg-[rgba(10,132,255,0.15)] text-[#4BA3E3] px-2 py-0.5 rounded-full font-semibold">
+          <span className="text-xs px-2.5 py-0.5 rounded-full font-semibold animate-pulse" style={{ background: 'var(--blue-dim)', color: 'var(--blue)' }}>
             {activeQuestionCount} question{activeQuestionCount !== 1 ? 's' : ''}
           </span>
         )}
-        <span className="ml-auto text-xs text-[#6B7280]">
-          {drawerState === 'collapsed' ? 'View all ▴' : drawerState === 'peek' ? 'Expand ▴' : 'Collapse ▾'}
+        <span className="ml-auto text-xs font-medium" style={{ color: 'var(--blue)' }}>
+          {drawerState === 'collapsed' ? 'Expand \u25B4' : drawerState === 'peek' ? 'Full \u25B4' : 'Collapse \u25BE'}
         </span>
       </div>
 
@@ -231,7 +233,7 @@ export default function PunchAssistant({
           style={{ maxHeight: drawerState === 'full' ? 'min(calc(60vh - 80px), 400px)' : '120px' }}
         >
           {sidebarMessages.length === 0 && (
-            <p className="text-[#6B7280] text-sm">
+            <p className="text-tertiary text-sm">
               Waiting for extraction results...
             </p>
           )}
@@ -245,7 +247,7 @@ export default function PunchAssistant({
                   <div
                     key={`${msg.severity}-${i}`}
                     onClick={refKey ? () => scrollToRef(refKey) : undefined}
-                    className={`py-1.5 px-2.5 rounded-lg text-xs leading-[18px] text-[#E4E6EB] ${refKey ? 'cursor-pointer hover:brightness-110' : ''}`}
+                    className={`py-1.5 px-2.5 rounded-lg text-xs leading-[18px] text-primary ${refKey ? 'cursor-pointer hover:brightness-110' : ''}`}
                     style={{
                       backgroundColor: severityBg[msg.severity],
                       borderLeft: `3px solid ${severityColor[msg.severity]}`,
@@ -258,7 +260,7 @@ export default function PunchAssistant({
               {sidebarMessages.length > 5 && (
                 <button
                   onClick={() => setDrawerState('full')}
-                  className="text-xs text-[#4BA3E3] hover:underline self-start"
+                  className="text-xs text-accent hover:underline self-start"
                 >
                   +{sidebarMessages.length - 5} more...
                 </button>
@@ -271,7 +273,7 @@ export default function PunchAssistant({
             <div className="flex flex-col gap-3">
               {errorMsgs.length > 0 && (
                 <div>
-                  <h4 className="text-xs font-semibold text-[#E04850] uppercase mb-1.5">Errors ({errorMsgs.length})</h4>
+                  <h4 className="text-xs font-semibold text-danger uppercase mb-1.5">Errors ({errorMsgs.length})</h4>
                   <div className="flex flex-col gap-1.5">
                     {errorMsgs.map((msg, i) => {
                       const refKey = msg.field ?? msg.rowId;
@@ -279,7 +281,7 @@ export default function PunchAssistant({
                         <div
                           key={`error-${i}`}
                           onClick={refKey ? () => scrollToRef(refKey) : undefined}
-                          className={`py-1.5 px-2.5 rounded-lg text-xs leading-[18px] text-[#E4E6EB] ${refKey ? 'cursor-pointer hover:brightness-110' : ''}`}
+                          className={`py-1.5 px-2.5 rounded-lg text-xs leading-[18px] text-primary ${refKey ? 'cursor-pointer hover:brightness-110' : ''}`}
                           style={{ backgroundColor: severityBg.error, borderLeft: `3px solid ${severityColor.error}` }}
                         >
                           {msg.text}
@@ -292,7 +294,7 @@ export default function PunchAssistant({
 
               {warningMsgs.length > 0 && (
                 <div>
-                  <h4 className="text-xs font-semibold text-[#E8811A] uppercase mb-1.5">Warnings ({warningMsgs.length})</h4>
+                  <h4 className="text-xs font-semibold text-warning uppercase mb-1.5">Warnings ({warningMsgs.length})</h4>
                   <div className="flex flex-col gap-1.5">
                     {warningMsgs.map((msg, i) => {
                       const refKey = msg.field ?? msg.rowId;
@@ -300,7 +302,7 @@ export default function PunchAssistant({
                         <div
                           key={`warn-${i}`}
                           onClick={refKey ? () => scrollToRef(refKey) : undefined}
-                          className={`py-1.5 px-2.5 rounded-lg text-xs leading-[18px] text-[#E4E6EB] ${refKey ? 'cursor-pointer hover:brightness-110' : ''}`}
+                          className={`py-1.5 px-2.5 rounded-lg text-xs leading-[18px] text-primary ${refKey ? 'cursor-pointer hover:brightness-110' : ''}`}
                           style={{ backgroundColor: severityBg.warning, borderLeft: `3px solid ${severityColor.warning}` }}
                         >
                           {msg.text}
@@ -313,7 +315,7 @@ export default function PunchAssistant({
 
               {infoMsgs.length > 0 && (
                 <div>
-                  <h4 className="text-xs font-semibold text-[#4BA3E3] uppercase mb-1.5">Info ({infoMsgs.length})</h4>
+                  <h4 className="text-xs font-semibold text-accent uppercase mb-1.5">Info ({infoMsgs.length})</h4>
                   <div className="flex flex-col gap-1.5">
                     {infoMsgs.map((msg, i) => {
                       const refKey = msg.field ?? msg.rowId;
@@ -321,7 +323,7 @@ export default function PunchAssistant({
                         <div
                           key={`info-${i}`}
                           onClick={refKey ? () => scrollToRef(refKey) : undefined}
-                          className={`py-1.5 px-2.5 rounded-lg text-xs leading-[18px] text-[#E4E6EB] ${refKey ? 'cursor-pointer hover:brightness-110' : ''}`}
+                          className={`py-1.5 px-2.5 rounded-lg text-xs leading-[18px] text-primary ${refKey ? 'cursor-pointer hover:brightness-110' : ''}`}
                           style={{ backgroundColor: severityBg.info, borderLeft: `3px solid ${severityColor.info}` }}
                         >
                           {msg.text}
@@ -335,7 +337,7 @@ export default function PunchAssistant({
               {/* Validation questions */}
               {questions.length > 0 && onAnswer && onDismiss && (
                 <div>
-                  <h4 className="text-xs font-semibold text-[#4BA3E3] uppercase mb-1.5">Questions</h4>
+                  <h4 className="text-xs font-semibold text-accent uppercase mb-1.5">Questions</h4>
                   <div className="flex flex-col gap-1.5">
                     {questions.map((q) => (
                       <QuestionCard

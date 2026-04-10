@@ -25,20 +25,20 @@ const MAPPABLE_FIELDS: { value: keyof DoorEntry | ""; label: string }[] = [
 function confidenceBadge(confidence: number) {
   if (confidence >= 0.8) {
     return (
-      <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded bg-[rgba(48,209,88,0.15)] text-[#30d158]">
+      <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded bg-success-dim text-success">
         {Math.round(confidence * 100)}%
       </span>
     );
   }
   if (confidence >= 0.5) {
     return (
-      <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded bg-[rgba(255,149,0,0.15)] text-[#ff9500]">
+      <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded bg-warning-dim text-warning">
         {Math.round(confidence * 100)}%
       </span>
     );
   }
   return (
-    <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded bg-[rgba(255,69,58,0.15)] text-[#ff453a]">
+    <span className="ml-2 text-[10px] px-1.5 py-0.5 rounded bg-danger-dim text-danger">
       {Math.round(confidence * 100)}%
     </span>
   );
@@ -176,17 +176,17 @@ export default function StepMapColumns({
 
   return (
     <div className="max-w-2xl mx-auto">
-      <h3 className="text-[#f5f5f7] font-semibold mb-2">
+      <h3 className="text-primary font-semibold mb-2">
         Step 2: Map Columns
       </h3>
-      <p className="text-[#a1a1a6] text-sm mb-4">
+      <p className="text-secondary text-sm mb-4">
         We detected the column headers from your door schedule. Review the
         mappings below and adjust any that look incorrect.
       </p>
 
       {loading && (
-        <div className="flex items-center gap-2 text-[#0a84ff] text-sm mb-4">
-          <div className="w-4 h-4 border-2 border-[#0a84ff] border-t-transparent rounded-full animate-spin" />
+        <div className="flex items-center gap-2 text-accent text-sm mb-4">
+          <div className="w-4 h-4 border-2 border-accent border-t-transparent rounded-full animate-spin" />
           {status}
         </div>
       )}
@@ -195,7 +195,7 @@ export default function StepMapColumns({
       {mappings.length > 0 && (
         <div className="space-y-2">
           {/* Header */}
-          <div className="grid grid-cols-[1fr_auto_1fr] gap-3 text-xs text-[#6e6e73] font-semibold uppercase px-3">
+          <div className="grid grid-cols-[1fr_auto_1fr] gap-3 text-xs text-tertiary font-semibold uppercase px-3">
             <div>Source Header</div>
             <div className="w-12 text-center">Conf.</div>
             <div>Maps To</div>
@@ -209,10 +209,10 @@ export default function StepMapColumns({
                 ref={(el) => {
                   if (detected?.mapped_field) registerRef(detected.mapped_field, el);
                 }}
-                className="grid grid-cols-[1fr_auto_1fr] gap-3 items-center bg-white/[0.04] border border-white/[0.08] rounded-xl px-3 py-2"
+                className="grid grid-cols-[1fr_auto_1fr] gap-3 items-center bg-tint border border-border-dim-strong rounded-xl px-3 py-2"
               >
                 {/* Source header */}
-                <div className="text-[#f5f5f7] text-sm font-mono truncate">
+                <div className="text-primary text-sm font-mono truncate">
                   {mapping.source_header}
                 </div>
 
@@ -230,7 +230,7 @@ export default function StepMapColumns({
                       e.target.value as keyof DoorEntry | ""
                     )
                   }
-                  className="bg-white/[0.06] border border-white/[0.08] rounded-lg px-2 py-1.5 text-sm text-[#f5f5f7] focus:outline-none focus:ring-1 focus:ring-[#0a84ff]"
+                  className="bg-tint border border-border-dim-strong rounded-lg px-2 py-1.5 text-sm text-primary focus:outline-none focus:ring-1 focus:ring-accent"
                 >
                   {MAPPABLE_FIELDS.map((field) => (
                     <option key={field.value} value={field.value}>
@@ -246,7 +246,7 @@ export default function StepMapColumns({
 
       {/* Raw headers info */}
       {detectResult && detectResult.raw_headers.length > 0 && (
-        <div className="mt-4 text-xs text-[#6e6e73]">
+        <div className="mt-4 text-xs text-tertiary">
           <span className="font-semibold">Raw headers found:</span>{" "}
           {detectResult.raw_headers.join(" | ")}
         </div>
@@ -257,14 +257,14 @@ export default function StepMapColumns({
         <button
           onClick={onBack}
           disabled={loading}
-          className="px-4 py-2 bg-white/[0.04] border border-white/[0.08] hover:bg-white/[0.08] disabled:opacity-50 text-[#a1a1a6] rounded-lg transition-colors"
+          className="px-4 py-2 bg-tint border border-border-dim-strong hover:bg-tint-strong disabled:opacity-50 text-secondary rounded-lg transition-colors"
         >
           Back
         </button>
         <button
           onClick={handleNext}
           disabled={loading || mappings.length === 0}
-          className="px-6 py-2 bg-[#0a84ff] hover:bg-[#0975de] text-white rounded-lg transition-colors font-semibold disabled:opacity-50"
+          className="px-6 py-2 bg-accent hover:bg-accent/80 text-white rounded-lg transition-colors font-semibold disabled:opacity-50"
         >
           Next
         </button>
