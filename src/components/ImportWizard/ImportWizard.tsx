@@ -355,9 +355,19 @@ export default function ImportWizard({
         </div>
       )}
 
-      {/* Step content — drawer is OUTSIDE the scroller to avoid mobile clipping */}
+      {/* Step content — drawer is now INSIDE the scroller, anchored to top */}
       <PunchHighlightProvider activeKeys={activeKeys}>
-        <div className={`flex-1 overflow-y-auto min-h-0 px-6 py-4 ${state.currentStep === WizardStep.Triage ? 'pb-6' : 'pb-56 sm:pb-52'}`}>
+        <div className="flex-1 overflow-y-auto min-h-0 flex flex-col">
+          {/* Punchy drawer sticks to top of content area during non-Triage steps */}
+          {state.currentStep !== WizardStep.Triage && (
+            <PunchAssistant
+              messages={punchMessages}
+              questions={triageQuestions}
+              onAnswer={handleQuestionAnswer}
+              onDismiss={handleQuestionDismiss}
+            />
+          )}
+          <div className="px-6 py-4 pb-6">
             {state.currentStep === WizardStep.Upload && (
               <StepUpload
                 projectId={projectId}
@@ -432,17 +442,8 @@ export default function ImportWizard({
                 onError={(err) => patch({ error: err })}
               />
             )}
+          </div>
         </div>
-
-        {/* Punch assistant — hidden during Triage (PunchyReview cards replace it) */}
-        {state.currentStep !== WizardStep.Triage && (
-          <PunchAssistant
-            messages={punchMessages}
-            questions={triageQuestions}
-            onAnswer={handleQuestionAnswer}
-            onDismiss={handleQuestionDismiss}
-          />
-        )}
       </PunchHighlightProvider>
     </div>
   );

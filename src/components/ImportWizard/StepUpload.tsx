@@ -193,45 +193,6 @@ export default function StepUpload({
     }
   };
 
-  // ─── Page type summary helper ───
-  const renderSummary = (result: ClassifyPagesResponse) => {
-    const { summary } = result;
-    return (
-      <div className="grid grid-cols-2 gap-2 mt-4">
-        <div className="bg-tint border border-border-dim rounded-xl p-3 text-center">
-          <div className="text-lg font-bold text-accent">
-            {summary.total_pages}
-          </div>
-          <div className="text-[9px] text-tertiary uppercase">
-            Total Pages
-          </div>
-        </div>
-        <div className="bg-tint border border-border-dim rounded-xl p-3 text-center">
-          <div className="text-lg font-bold text-success">
-            {summary.door_schedule_pages.length}
-          </div>
-          <div className="text-[9px] text-tertiary uppercase">
-            Door Schedule
-          </div>
-        </div>
-        <div className="bg-tint border border-border-dim rounded-xl p-3 text-center">
-          <div className="text-lg font-bold text-warning">
-            {summary.hardware_set_pages.length}
-          </div>
-          <div className="text-[9px] text-tertiary uppercase">
-            Hardware Sets
-          </div>
-        </div>
-        <div className="bg-tint border border-border-dim rounded-xl p-3 text-center">
-          <div className="text-lg font-bold text-tertiary">
-            {summary.other_pages.length}
-          </div>
-          <div className="text-[9px] text-tertiary uppercase">Other</div>
-        </div>
-      </div>
-    );
-  };
-
   return (
     <div className="max-w-lg mx-auto">
       <h3 className="text-primary font-semibold mb-2">
@@ -286,8 +247,7 @@ export default function StepUpload({
         )}
       </div>
 
-      {/* Classification result summary */}
-      {classifyResult && renderSummary(classifyResult)}
+      {/* Classification summary moved to StepScanResults — no flash screen here */}
 
       {/* Progress */}
       {loading && (
