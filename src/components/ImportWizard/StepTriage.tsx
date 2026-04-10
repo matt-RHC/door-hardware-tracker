@@ -649,8 +649,8 @@ export default function StepTriage({
 
   return (
     <div className="max-w-2xl mx-auto">
-      <h3 className="text-[#f5f5f7] font-semibold mb-2">Step 3: Extract &amp; Triage</h3>
-      <p className="text-[#a1a1a6] text-sm mb-4">
+      <h3 className="text-primary font-semibold mb-2">Step 3: Extract &amp; Triage</h3>
+      <p className="text-secondary text-sm mb-4">
         {phase === "extracting"
           ? "Extracting door schedule data from your PDF..."
           : phase === "results"
@@ -664,12 +664,12 @@ export default function StepTriage({
       {isLoading && (
         <div className="mb-4">
           <div className="flex justify-between text-sm mb-1">
-            <span className="text-[#a1a1a6]">{status}</span>
-            <span className="text-[#6e6e73]">{progress}%</span>
+            <span className="text-secondary">{status}</span>
+            <span className="text-tertiary">{progress}%</span>
           </div>
-          <div className="w-full bg-white/[0.06] rounded-full h-2 overflow-hidden">
+          <div className="w-full bg-tint rounded-full h-2 overflow-hidden">
             <div
-              className="h-full rounded-full transition-all duration-500 ease-out bg-[#0a84ff]"
+              className="h-full rounded-full transition-all duration-500 ease-out bg-accent"
               style={{ width: `${progress}%` }}
             />
           </div>
@@ -684,74 +684,74 @@ export default function StepTriage({
         <div className="space-y-4 mb-4">
           {/* ── Top-level summary cards ── */}
           <div className="grid grid-cols-3 gap-2">
-            <div className="bg-white/[0.04] border border-white/[0.06] rounded-xl p-3 text-center">
-              <div className="text-xl font-bold text-[#30d158]">
+            <div className="bg-tint border border-border-dim rounded-xl p-3 text-center">
+              <div className="text-xl font-bold text-success">
                 {doors.length}
               </div>
-              <div className="text-[9px] text-[#6e6e73] uppercase tracking-wide">
+              <div className="text-[9px] text-tertiary uppercase tracking-wide">
                 Doors
               </div>
             </div>
-            <div className="bg-white/[0.04] border border-white/[0.06] rounded-xl p-3 text-center">
-              <div className="text-xl font-bold text-[#0a84ff]">
+            <div className="bg-tint border border-border-dim rounded-xl p-3 text-center">
+              <div className="text-xl font-bold text-accent">
                 {hardwareSets.length}
               </div>
-              <div className="text-[9px] text-[#6e6e73] uppercase tracking-wide">
+              <div className="text-[9px] text-tertiary uppercase tracking-wide">
                 HW Sets
               </div>
             </div>
             <div
-              className={`bg-white/[0.04] border rounded-xl p-3 text-center ${
+              className={`bg-tint border rounded-xl p-3 text-center ${
                 extractionHealth.grade === "critical"
-                  ? "border-[rgba(255,69,58,0.4)]"
+                  ? "border-danger"
                   : extractionHealth.grade === "warning"
-                  ? "border-[rgba(255,149,0,0.3)]"
-                  : "border-white/[0.06]"
+                  ? "border-warning"
+                  : "border-border-dim"
               }`}
             >
               <div
                 className={`text-xl font-bold ${
                   extractionHealth.grade === "critical"
-                    ? "text-[#ff453a]"
+                    ? "text-danger"
                     : extractionHealth.grade === "warning"
-                    ? "text-[#ff9500]"
-                    : "text-[#30d158]"
+                    ? "text-warning"
+                    : "text-success"
                 }`}
               >
                 {extractionHealth.totalItems}
               </div>
-              <div className="text-[9px] text-[#6e6e73] uppercase tracking-wide">
+              <div className="text-[9px] text-tertiary uppercase tracking-wide">
                 HW Items
               </div>
             </div>
           </div>
 
           {/* ── Assignment coverage ── */}
-          <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-3">
-            <div className="text-[10px] text-[#6e6e73] uppercase tracking-wide mb-2 font-semibold">
+          <div className="bg-tint border border-border-dim rounded-xl p-3">
+            <div className="text-[10px] text-tertiary uppercase tracking-wide mb-2 font-semibold">
               Coverage
             </div>
             <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
-              <span className="text-[#a1a1a6]">Doors with HW set</span>
-              <span className="text-[#f5f5f7]">
+              <span className="text-secondary">Doors with HW set</span>
+              <span className="text-primary">
                 {extractionHealth.assignedDoors} / {doors.length}
                 {extractionHealth.unassignedDoors > 0 && (
-                  <span className="text-[#ff9500] ml-1">
+                  <span className="text-warning ml-1">
                     ({extractionHealth.unassignedDoors} unassigned)
                   </span>
                 )}
               </span>
-              <span className="text-[#a1a1a6]">Sets with items</span>
-              <span className="text-[#f5f5f7]">
+              <span className="text-secondary">Sets with items</span>
+              <span className="text-primary">
                 {extractionHealth.populatedSets.length} / {hardwareSets.length}
                 {extractionHealth.emptySets.length > 0 && (
-                  <span className="text-[#ff453a] ml-1">
+                  <span className="text-danger ml-1">
                     ({extractionHealth.emptySets.length} empty)
                   </span>
                 )}
               </span>
-              <span className="text-[#a1a1a6]">Avg items per set</span>
-              <span className="text-[#f5f5f7]">
+              <span className="text-secondary">Avg items per set</span>
+              <span className="text-primary">
                 {hardwareSets.length > 0
                   ? (extractionHealth.totalItems / hardwareSets.length).toFixed(1)
                   : "0"}
@@ -760,8 +760,8 @@ export default function StepTriage({
           </div>
 
           {/* ── Per-set item breakdown ── */}
-          <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-3">
-            <div className="text-[10px] text-[#6e6e73] uppercase tracking-wide mb-2 font-semibold">
+          <div className="bg-tint border border-border-dim rounded-xl p-3">
+            <div className="text-[10px] text-tertiary uppercase tracking-wide mb-2 font-semibold">
               Hardware Sets
             </div>
             <div className="space-y-1 max-h-48 overflow-y-auto">
@@ -773,27 +773,27 @@ export default function StepTriage({
                     key={set.set_id}
                     className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs ${
                       isEmpty
-                        ? "bg-[rgba(255,69,58,0.08)] border border-[rgba(255,69,58,0.2)]"
-                        : "bg-white/[0.02] border border-white/[0.04]"
+                        ? "bg-danger-dim border border-danger"
+                        : "bg-tint border border-border-dim"
                     }`}
                   >
                     <div className="flex items-center gap-2 min-w-0">
                       <span
                         className={`font-mono font-medium ${
-                          isEmpty ? "text-[#ff453a]" : "text-[#0a84ff]"
+                          isEmpty ? "text-danger" : "text-accent"
                         }`}
                       >
                         {set.set_id}
                       </span>
                       {set.heading && (
-                        <span className="text-[#6e6e73] truncate max-w-[180px]">
+                        <span className="text-tertiary truncate max-w-[180px]">
                           {set.heading}
                         </span>
                       )}
                     </div>
                     <span
                       className={`font-semibold whitespace-nowrap ${
-                        isEmpty ? "text-[#ff453a]" : "text-[#a1a1a6]"
+                        isEmpty ? "text-danger" : "text-secondary"
                       }`}
                     >
                       {isEmpty ? "0 items" : `${itemCount} item${itemCount !== 1 ? "s" : ""}`}
@@ -802,7 +802,7 @@ export default function StepTriage({
                 );
               })}
               {hardwareSets.length === 0 && (
-                <p className="text-[#ff453a] text-xs py-2">
+                <p className="text-danger text-xs py-2">
                   No hardware sets were extracted from the PDF.
                 </p>
               )}
@@ -811,23 +811,23 @@ export default function StepTriage({
 
           {/* ── Sample Opening Calibration ── */}
           {extractionHealth.bestSample && extractionHealth.emptySets.length > 0 && !goldenSample?.confirmed && (
-            <div className="bg-white/[0.03] border border-[rgba(10,132,255,0.25)] rounded-xl p-3">
-              <div className="text-[10px] text-[#0a84ff] uppercase tracking-wide mb-2 font-semibold">
+            <div className="bg-tint border border-accent rounded-xl p-3">
+              <div className="text-[10px] text-accent uppercase tracking-wide mb-2 font-semibold">
                 Verify Sample Opening
               </div>
-              <p className="text-[#a1a1a6] text-xs mb-3">
-                We extracted items for set <span className="text-[#0a84ff] font-mono font-medium">{extractionHealth.bestSample.set_id}</span> successfully.
+              <p className="text-secondary text-xs mb-3">
+                We extracted items for set <span className="text-accent font-mono font-medium">{extractionHealth.bestSample.set_id}</span> successfully.
                 Confirm it looks correct — we&apos;ll use it as a reference when extracting the empty sets.
               </p>
               {/* Sample door info */}
               {extractionHealth.bestSample.door && (
                 <div className="flex gap-3 mb-2 text-xs">
-                  <span className="text-[#a1a1a6]">Door:</span>
-                  <span className="text-[#f5f5f7] font-mono">{extractionHealth.bestSample.door.door_number}</span>
+                  <span className="text-secondary">Door:</span>
+                  <span className="text-primary font-mono">{extractionHealth.bestSample.door.door_number}</span>
                   {extractionHealth.bestSample.door.location && (
                     <>
-                      <span className="text-[#a1a1a6]">Location:</span>
-                      <span className="text-[#f5f5f7]">{extractionHealth.bestSample.door.location}</span>
+                      <span className="text-secondary">Location:</span>
+                      <span className="text-primary">{extractionHealth.bestSample.door.location}</span>
                     </>
                   )}
                 </div>
@@ -837,13 +837,13 @@ export default function StepTriage({
                 {(extractionHealth.bestSample.items ?? []).map((item, i) => (
                   <div
                     key={`${item.name}-${i}`}
-                    className="flex items-center gap-2 px-2 py-1 rounded bg-white/[0.02] text-xs"
+                    className="flex items-center gap-2 px-2 py-1 rounded bg-tint text-xs"
                   >
-                    <span className="text-[#6e6e73] w-6 text-right">{item.qty}x</span>
-                    <span className="text-[#f5f5f7] flex-1">{item.name}</span>
-                    <span className="text-[#6e6e73]">{item.manufacturer}</span>
-                    <span className="text-[#6e6e73]">{item.model}</span>
-                    <span className="text-[#6e6e73]">{item.finish}</span>
+                    <span className="text-tertiary w-6 text-right">{item.qty}x</span>
+                    <span className="text-primary flex-1">{item.name}</span>
+                    <span className="text-tertiary">{item.manufacturer}</span>
+                    <span className="text-tertiary">{item.model}</span>
+                    <span className="text-tertiary">{item.finish}</span>
                   </div>
                 ))}
               </div>
@@ -858,11 +858,11 @@ export default function StepTriage({
                       confirmed: true,
                     })
                   }
-                  className="px-4 py-1.5 bg-[#0a84ff] hover:bg-[#0975de] text-white rounded-lg transition-colors font-semibold text-xs"
+                  className="px-4 py-1.5 bg-accent hover:bg-accent/80 text-white rounded-lg transition-colors font-semibold text-xs"
                 >
                   Looks Good
                 </button>
-                <span className="text-[10px] text-[#6e6e73]">
+                <span className="text-[10px] text-tertiary">
                   or edit items in the Review step after import
                 </span>
               </div>
@@ -871,12 +871,12 @@ export default function StepTriage({
 
           {/* Confirmed sample badge */}
           {goldenSample?.confirmed && (
-            <div className="flex items-center gap-2 px-3 py-2 bg-[rgba(48,209,88,0.08)] border border-[rgba(48,209,88,0.2)] rounded-lg">
-              <span className="text-[#30d158] text-sm">&#10003;</span>
-              <span className="text-[#30d158] text-xs font-semibold">
+            <div className="flex items-center gap-2 px-3 py-2 bg-success-dim border border-success rounded-lg">
+              <span className="text-success text-sm">&#10003;</span>
+              <span className="text-success text-xs font-semibold">
                 Sample verified: {goldenSample.set_id}
               </span>
-              <span className="text-[#a1a1a6] text-xs">
+              <span className="text-secondary text-xs">
                 ({goldenSample.items?.length ?? 0} items) — will be used as reference for AI extraction
               </span>
             </div>
@@ -884,18 +884,18 @@ export default function StepTriage({
 
           {/* ── Missing sets warning ── */}
           {extractionHealth.missingSetIds.length > 0 && (
-            <div className="p-3 bg-[rgba(255,149,0,0.08)] border border-[rgba(255,149,0,0.2)] rounded-xl">
-              <div className="text-[#ff9500] text-xs font-semibold mb-1">
+            <div className="p-3 bg-warning-dim border border-warning rounded-xl">
+              <div className="text-warning text-xs font-semibold mb-1">
                 Missing Hardware Sets
               </div>
-              <p className="text-[#a1a1a6] text-xs mb-1.5">
+              <p className="text-secondary text-xs mb-1.5">
                 These sets are referenced by doors but were not found in the hardware schedule pages:
               </p>
               <div className="flex flex-wrap gap-1.5">
                 {extractionHealth.missingSetIds.map((id) => (
                   <span
                     key={id}
-                    className="font-mono text-[11px] px-2 py-0.5 rounded bg-[rgba(255,149,0,0.12)] text-[#ff9500] border border-[rgba(255,149,0,0.2)]"
+                    className="font-mono text-[11px] px-2 py-0.5 rounded bg-warning-dim text-warning border border-warning"
                   >
                     {id}
                   </span>
@@ -908,22 +908,22 @@ export default function StepTriage({
           {extractionHealth.emptySets.length > 0 && (
             <div className={`p-3 rounded-xl ${
               extractionHealth.grade === "critical"
-                ? "bg-[rgba(255,69,58,0.1)] border border-[rgba(255,69,58,0.3)]"
-                : "bg-[rgba(255,149,0,0.08)] border border-[rgba(255,149,0,0.2)]"
+                ? "bg-danger-dim border border-danger"
+                : "bg-warning-dim border border-warning"
             }`}>
               <div className="flex items-start gap-2 mb-2">
                 <span className={`text-lg leading-none ${
-                  extractionHealth.grade === "critical" ? "text-[#ff453a]" : "text-[#ff9500]"
+                  extractionHealth.grade === "critical" ? "text-danger" : "text-warning"
                 }`}>&#x26A0;</span>
                 <div>
                   <p className={`text-sm font-semibold mb-1 ${
-                    extractionHealth.grade === "critical" ? "text-[#ff453a]" : "text-[#ff9500]"
+                    extractionHealth.grade === "critical" ? "text-danger" : "text-warning"
                   }`}>
                     {extractionHealth.emptySets.length === hardwareSets.length
                       ? "No hardware items extracted"
                       : `${extractionHealth.emptySets.length} set${extractionHealth.emptySets.length !== 1 ? "s" : ""} missing items`}
                   </p>
-                  <p className="text-[#a1a1a6] text-xs">
+                  <p className="text-secondary text-xs">
                     Our table reader couldn&apos;t parse the items for
                     {extractionHealth.emptySets.length === 1
                       ? ` set ${extractionHealth.emptySets[0]?.set_id ?? "unknown"}`
@@ -936,7 +936,7 @@ export default function StepTriage({
               <button
                 onClick={handleDeepExtract}
                 disabled={deepExtracting}
-                className="ml-6 px-4 py-2 bg-[rgba(10,132,255,0.15)] border border-[rgba(10,132,255,0.3)] hover:bg-[rgba(10,132,255,0.25)] text-[#4BA3E3] rounded-lg transition-colors font-semibold text-sm disabled:opacity-50"
+                className="ml-6 px-4 py-2 bg-accent-dim border border-accent hover:bg-accent-dim text-accent rounded-lg transition-colors font-semibold text-sm disabled:opacity-50"
               >
                 {deepExtracting
                   ? "Extracting..."
@@ -947,7 +947,7 @@ export default function StepTriage({
 
           {/* ── Status message (shown after deep extract) ── */}
           {phase === "results" && status && !deepExtracting && status !== "Extraction complete. Review results below." && (
-            <p className="text-[#a1a1a6] text-xs italic">{status}</p>
+            <p className="text-secondary text-xs italic">{status}</p>
           )}
 
           {/* ── Action buttons ── */}
@@ -955,14 +955,14 @@ export default function StepTriage({
             <button
               onClick={onBack}
               disabled={deepExtracting}
-              className="px-4 py-2 bg-white/[0.04] border border-white/[0.08] hover:bg-white/[0.08] disabled:opacity-50 text-[#a1a1a6] rounded-lg transition-colors text-sm"
+              className="px-4 py-2 bg-tint border border-border-dim-strong hover:bg-tint-strong disabled:opacity-50 text-secondary rounded-lg transition-colors text-sm"
             >
               Back to Columns
             </button>
             <button
               onClick={handleAcceptResults}
               disabled={deepExtracting}
-              className="px-6 py-2 bg-[#0a84ff] hover:bg-[#0975de] text-white rounded-lg transition-colors font-semibold text-sm"
+              className="px-6 py-2 bg-accent hover:bg-accent/80 text-white rounded-lg transition-colors font-semibold text-sm"
             >
               {extractionHealth.grade === "critical"
                 ? "Continue Anyway"
@@ -977,62 +977,62 @@ export default function StepTriage({
          ═══════════════════════════════════════════════════════════════ */}
       {phase === "qty_review" && qtyCheck && (
         <div className="space-y-4 mb-4">
-          <h4 className="text-[#f5f5f7] font-semibold text-sm">Quantity Review</h4>
-          <p className="text-[#a1a1a6] text-xs">
+          <h4 className="text-primary font-semibold text-sm">Quantity Review</h4>
+          <p className="text-secondary text-xs">
             Punchy reviewed the extracted quantities against DFH standards.
           </p>
 
           {/* Auto-corrections (HIGH confidence) */}
           {(qtyCheck.auto_corrections?.length ?? 0) > 0 && (
-            <div className="bg-[rgba(48,209,88,0.06)] border border-[rgba(48,209,88,0.2)] rounded-xl p-3">
-              <div className="text-[10px] text-[#30d158] uppercase tracking-wide mb-2 font-semibold">
+            <div className="bg-success-dim border border-success rounded-xl p-3">
+              <div className="text-[10px] text-success uppercase tracking-wide mb-2 font-semibold">
                 Auto-Corrections ({qtyCheck.auto_corrections?.length ?? 0})
               </div>
               <div className="space-y-1.5">
                 {(qtyCheck.auto_corrections ?? []).map((c, i) => (
-                  <div key={`ac-${i}`} className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-[rgba(48,209,88,0.08)] text-xs">
-                    <span className="text-[#30d158]">&#10003;</span>
-                    <span className="text-[#0a84ff] font-mono font-medium">{c.set_id}</span>
-                    <span className="text-[#f5f5f7]">{c.item_name}:</span>
-                    <span className="text-[#ff453a] line-through">{c.from_qty}</span>
-                    <span className="text-[#a1a1a6]">&rarr;</span>
-                    <span className="text-[#30d158] font-semibold">{c.to_qty}</span>
-                    <span className="text-[#6e6e73] truncate flex-1">{c.reason}</span>
+                  <div key={`ac-${i}`} className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-success-dim text-xs">
+                    <span className="text-success">&#10003;</span>
+                    <span className="text-accent font-mono font-medium">{c.set_id}</span>
+                    <span className="text-primary">{c.item_name}:</span>
+                    <span className="text-danger line-through">{c.from_qty}</span>
+                    <span className="text-secondary">&rarr;</span>
+                    <span className="text-success font-semibold">{c.to_qty}</span>
+                    <span className="text-tertiary truncate flex-1">{c.reason}</span>
                   </div>
                 ))}
               </div>
               {!qtyCorrectionsApplied && (
                 <button
                   onClick={applyAutoCorrections}
-                  className="mt-2 px-4 py-1.5 bg-[#30d158] hover:bg-[#28b84d] text-black rounded-lg transition-colors font-semibold text-xs"
+                  className="mt-2 px-4 py-1.5 bg-success hover:bg-success/80 text-black rounded-lg transition-colors font-semibold text-xs"
                 >
                   Apply All Corrections
                 </button>
               )}
               {qtyCorrectionsApplied && (
-                <p className="mt-2 text-[#30d158] text-xs font-semibold">&#10003; Corrections applied</p>
+                <p className="mt-2 text-success text-xs font-semibold">&#10003; Corrections applied</p>
               )}
             </div>
           )}
 
           {/* Quantity questions (MEDIUM confidence) */}
           {(qtyCheck.questions?.length ?? 0) > 0 && (
-            <div className="bg-[rgba(10,132,255,0.06)] border border-[rgba(10,132,255,0.2)] rounded-xl p-3">
-              <div className="text-[10px] text-[#0a84ff] uppercase tracking-wide mb-2 font-semibold">
+            <div className="bg-accent-dim border border-accent rounded-xl p-3">
+              <div className="text-[10px] text-accent uppercase tracking-wide mb-2 font-semibold">
                 Needs Your Input ({qtyCheck.questions?.length ?? 0})
               </div>
-              <p className="text-[#a1a1a6] text-xs mb-2">
+              <p className="text-secondary text-xs mb-2">
                 These will appear in the sidebar after you continue.
               </p>
               <div className="space-y-1.5">
                 {(qtyCheck.questions ?? []).map((q, i) => (
-                  <div key={`qq-${i}`} className="px-2.5 py-1.5 rounded-lg bg-[rgba(10,132,255,0.08)] text-xs">
+                  <div key={`qq-${i}`} className="px-2.5 py-1.5 rounded-lg bg-accent-dim text-xs">
                     <div className="flex items-center gap-2">
-                      <span className="text-[#0a84ff] font-mono font-medium">{q.set_id}</span>
-                      <span className="text-[#f5f5f7]">{q.item_name}</span>
-                      <span className="text-[#6e6e73]">(currently {q.current_qty})</span>
+                      <span className="text-accent font-mono font-medium">{q.set_id}</span>
+                      <span className="text-primary">{q.item_name}</span>
+                      <span className="text-tertiary">(currently {q.current_qty})</span>
                     </div>
-                    <p className="text-[#a1a1a6] mt-0.5">{q.text}</p>
+                    <p className="text-secondary mt-0.5">{q.text}</p>
                   </div>
                 ))}
               </div>
@@ -1041,14 +1041,14 @@ export default function StepTriage({
 
           {/* Flags (LOW confidence) */}
           {(qtyCheck.flags?.length ?? 0) > 0 && (
-            <div className="bg-[rgba(255,149,0,0.06)] border border-[rgba(255,149,0,0.2)] rounded-xl p-3">
-              <div className="text-[10px] text-[#ff9500] uppercase tracking-wide mb-2 font-semibold">
+            <div className="bg-warning-dim border border-warning rounded-xl p-3">
+              <div className="text-[10px] text-warning uppercase tracking-wide mb-2 font-semibold">
                 Observations ({qtyCheck.flags?.length ?? 0})
               </div>
               <div className="space-y-1">
                 {(qtyCheck.flags ?? []).map((f, i) => (
-                  <div key={`fl-${i}`} className="text-xs text-[#a1a1a6] px-2.5 py-1">
-                    <span className="text-[#ff9500] font-mono mr-1">{f.set_id}</span>
+                  <div key={`fl-${i}`} className="text-xs text-secondary px-2.5 py-1">
+                    <span className="text-warning font-mono mr-1">{f.set_id}</span>
                     {f.message ?? f.reason ?? ''}
                   </div>
                 ))}
@@ -1058,17 +1058,17 @@ export default function StepTriage({
 
           {/* Compliance issues */}
           {(qtyCheck.compliance_issues?.length ?? 0) > 0 && (
-            <div className="bg-[rgba(255,69,58,0.06)] border border-[rgba(255,69,58,0.2)] rounded-xl p-3">
-              <div className="text-[10px] text-[#ff453a] uppercase tracking-wide mb-2 font-semibold">
+            <div className="bg-danger-dim border border-danger rounded-xl p-3">
+              <div className="text-[10px] text-danger uppercase tracking-wide mb-2 font-semibold">
                 Compliance Issues ({qtyCheck.compliance_issues?.length ?? 0})
               </div>
               <div className="space-y-1">
                 {(qtyCheck.compliance_issues ?? []).map((ci, i) => (
                   <div key={`ci-${i}`} className="text-xs px-2.5 py-1">
-                    <span className="text-[#ff453a] font-mono mr-1">{ci.set_id}</span>
-                    <span className="text-[#f5f5f7]">{ci.issue}</span>
+                    <span className="text-danger font-mono mr-1">{ci.set_id}</span>
+                    <span className="text-primary">{ci.issue}</span>
                     {ci.regulation && (
-                      <span className="text-[#6e6e73] ml-1">({ci.regulation})</span>
+                      <span className="text-tertiary ml-1">({ci.regulation})</span>
                     )}
                   </div>
                 ))}
@@ -1078,20 +1078,20 @@ export default function StepTriage({
 
           {/* Punchy notes */}
           {qtyCheck.notes && (
-            <p className="text-[#6e6e73] text-xs italic px-1">{qtyCheck.notes}</p>
+            <p className="text-tertiary text-xs italic px-1">{qtyCheck.notes}</p>
           )}
 
           {/* Action buttons */}
           <div className="flex items-center justify-between pt-2">
             <button
               onClick={() => setPhase("results")}
-              className="px-4 py-2 bg-white/[0.04] border border-white/[0.08] hover:bg-white/[0.08] text-[#a1a1a6] rounded-lg transition-colors text-sm"
+              className="px-4 py-2 bg-tint border border-border-dim-strong hover:bg-tint-strong text-secondary rounded-lg transition-colors text-sm"
             >
               Back to Results
             </button>
             <button
               onClick={handleAcceptQtyReview}
-              className="px-6 py-2 bg-[#0a84ff] hover:bg-[#0975de] text-white rounded-lg transition-colors font-semibold text-sm"
+              className="px-6 py-2 bg-accent hover:bg-accent/80 text-white rounded-lg transition-colors font-semibold text-sm"
             >
               Continue to Triage
             </button>
@@ -1101,14 +1101,14 @@ export default function StepTriage({
 
       {/* Questions phase: prompt user to review sidebar */}
       {phase === "questions" && (
-        <div className="mb-4 p-4 bg-[rgba(10,132,255,0.08)] border border-[rgba(10,132,255,0.2)] rounded-xl">
-          <p className="text-[#4BA3E3] text-sm mb-3">
+        <div className="mb-4 p-4 bg-accent-dim border border-accent rounded-xl">
+          <p className="text-accent text-sm mb-3">
             Extracted {doors.length} doors. Check the sidebar for validation
             questions, then continue to triage.
           </p>
           <button
             onClick={handleContinueToTriage}
-            className="px-5 py-2 bg-[#0a84ff] hover:bg-[#0975de] text-white rounded-lg transition-colors font-semibold text-sm"
+            className="px-5 py-2 bg-accent hover:bg-accent/80 text-white rounded-lg transition-colors font-semibold text-sm"
           >
             Continue to Triage
           </button>
@@ -1117,16 +1117,16 @@ export default function StepTriage({
 
       {/* Triage-failed warning: backend signaled triage_error */}
       {triageResult?.triage_error && (
-        <div className="mb-4 p-4 bg-[rgba(255,69,58,0.1)] border border-[rgba(255,69,58,0.3)] rounded-xl">
+        <div className="mb-4 p-4 bg-danger-dim border border-danger rounded-xl">
           <div className="flex items-start gap-2 mb-3">
-            <span className="text-[#ff453a] text-lg leading-none">&#x26A0;</span>
-            <p className="text-[#ff453a] text-sm font-semibold">
+            <span className="text-danger text-lg leading-none">&#x26A0;</span>
+            <p className="text-danger text-sm font-semibold">
               AI triage failed &mdash; all doors were auto-accepted. Please
               review each entry carefully before proceeding.
             </p>
           </div>
           {triageResult.triage_error_message && (
-            <p className="text-[#a1a1a6] text-xs mb-3 ml-6">
+            <p className="text-secondary text-xs mb-3 ml-6">
               {triageResult.triage_error_message}
             </p>
           )}
@@ -1135,9 +1135,9 @@ export default function StepTriage({
               type="checkbox"
               checked={triageErrorAcknowledged}
               onChange={(e) => setTriageErrorAcknowledged(e.target.checked)}
-              className="w-4 h-4 rounded border-white/20 bg-white/[0.06] accent-[#ff453a]"
+              className="w-4 h-4 rounded border-white/20 bg-tint accent-danger"
             />
-            <span className="text-[#f5f5f7] text-sm">
+            <span className="text-primary text-sm">
               I understand triage failed and will review all entries manually
             </span>
           </label>
@@ -1148,27 +1148,27 @@ export default function StepTriage({
       {triageResult && (
         <>
           <div className="grid grid-cols-3 gap-3 mb-4">
-            <div className="bg-white/[0.04] border border-white/[0.06] rounded-xl p-3 text-center">
-              <div className="text-xl font-bold text-[#30d158]">
+            <div className="bg-tint border border-border-dim rounded-xl p-3 text-center">
+              <div className="text-xl font-bold text-success">
                 {triageResult.doors_found}
               </div>
-              <div className="text-[9px] text-[#6e6e73] uppercase">
+              <div className="text-[9px] text-tertiary uppercase">
                 Doors Found
               </div>
             </div>
-            <div className="bg-white/[0.04] border border-white/[0.06] rounded-xl p-3 text-center">
-              <div className="text-xl font-bold text-[#ff9500]">
+            <div className="bg-tint border border-border-dim rounded-xl p-3 text-center">
+              <div className="text-xl font-bold text-warning">
                 {triageResult.by_others}
               </div>
-              <div className="text-[9px] text-[#6e6e73] uppercase">
+              <div className="text-[9px] text-tertiary uppercase">
                 By Others
               </div>
             </div>
-            <div className="bg-white/[0.04] border border-white/[0.06] rounded-xl p-3 text-center">
-              <div className="text-xl font-bold text-[#ff453a]">
+            <div className="bg-tint border border-border-dim rounded-xl p-3 text-center">
+              <div className="text-xl font-bold text-danger">
                 {triageResult.rejected}
               </div>
-              <div className="text-[9px] text-[#6e6e73] uppercase">
+              <div className="text-[9px] text-tertiary uppercase">
                 Rejected
               </div>
             </div>
@@ -1177,28 +1177,28 @@ export default function StepTriage({
           {/* Flagged items */}
           {triageResult.flagged.length > 0 && (
             <div className="mb-4">
-              <h4 className="text-[#ff9500] text-sm font-semibold mb-2">
+              <h4 className="text-warning text-sm font-semibold mb-2">
                 Flagged Items ({triageResult.flagged.length})
               </h4>
               <div className="space-y-1">
                 {triageResult.flagged.map((flag) => (
                   <div
                     key={flag.door_number}
-                    className="flex items-center justify-between bg-white/[0.04] border border-white/[0.08] rounded-lg px-3 py-2 text-sm"
+                    className="flex items-center justify-between bg-tint border border-border-dim-strong rounded-lg px-3 py-2 text-sm"
                   >
-                    <span className="text-[#f5f5f7] font-mono">
+                    <span className="text-primary font-mono">
                       {flag.door_number}
                     </span>
-                    <span className="text-[#a1a1a6] text-xs">
+                    <span className="text-secondary text-xs">
                       {flag.reason}
                     </span>
                     <span
                       className={`text-[10px] px-1.5 py-0.5 rounded ${
                         flag.confidence >= 0.8
-                          ? "bg-[rgba(48,209,88,0.15)] text-[#30d158]"
+                          ? "bg-success-dim text-success"
                           : flag.confidence >= 0.5
-                          ? "bg-[rgba(255,149,0,0.15)] text-[#ff9500]"
-                          : "bg-[rgba(255,69,58,0.15)] text-[#ff453a]"
+                          ? "bg-warning-dim text-warning"
+                          : "bg-danger-dim text-danger"
                       }`}
                     >
                       {Math.round(flag.confidence * 100)}%
@@ -1217,14 +1217,14 @@ export default function StepTriage({
           <button
             onClick={onBack}
             disabled={isLoading}
-            className="px-4 py-2 bg-white/[0.04] border border-white/[0.08] hover:bg-white/[0.08] disabled:opacity-50 text-[#a1a1a6] rounded-lg transition-colors"
+            className="px-4 py-2 bg-tint border border-border-dim-strong hover:bg-tint-strong disabled:opacity-50 text-secondary rounded-lg transition-colors"
           >
             Back
           </button>
           <button
             onClick={handleNext}
             disabled={isLoading || !triageResult || (triageResult?.triage_error === true && !triageErrorAcknowledged)}
-            className="px-6 py-2 bg-[#0a84ff] hover:bg-[#0975de] text-white rounded-lg transition-colors font-semibold disabled:opacity-50"
+            className="px-6 py-2 bg-accent hover:bg-accent/80 text-white rounded-lg transition-colors font-semibold disabled:opacity-50"
           >
             Next
           </button>

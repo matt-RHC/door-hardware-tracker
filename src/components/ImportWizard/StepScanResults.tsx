@@ -10,11 +10,11 @@ interface StepScanResultsProps {
 
 /** Friendly labels and colors for each page type. */
 const PAGE_TYPE_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
-  door_schedule: { label: "Door Schedule", color: "#30d158", bg: "rgba(48,209,88,0.08)" },
-  hardware_set: { label: "Hardware Set", color: "#ff9500", bg: "rgba(255,149,0,0.08)" },
-  reference:    { label: "Reference / Cut Sheet", color: "#bf5af2", bg: "rgba(191,90,242,0.08)" },
-  cover:        { label: "Cover / TOC", color: "#6e6e73", bg: "rgba(110,110,115,0.08)" },
-  other:        { label: "Other", color: "#48484a", bg: "rgba(72,72,74,0.08)" },
+  door_schedule: { label: "Door Schedule", color: "var(--green)", bg: "var(--green-dim)" },
+  hardware_set: { label: "Hardware Set", color: "var(--orange)", bg: "var(--orange-dim)" },
+  reference:    { label: "Reference / Cut Sheet", color: "var(--purple)", bg: "var(--purple-dim)" },
+  cover:        { label: "Cover / TOC", color: "var(--text-tertiary)", bg: "var(--tint)" },
+  other:        { label: "Other", color: "var(--text-tertiary)", bg: "var(--tint)" },
 };
 
 /** Collapse consecutive page numbers into "3-7" style range strings. */
@@ -65,36 +65,36 @@ export default function StepScanResults({
 
   return (
     <div className="max-w-lg mx-auto">
-      <h3 className="text-[#f5f5f7] font-semibold mb-1">
+      <h3 className="text-primary font-semibold mb-1">
         Step 2: Scan Results
       </h3>
-      <p className="text-[#a1a1a6] text-sm mb-4">
+      <p className="text-secondary text-sm mb-4">
         Review what we found in your PDF before continuing.
       </p>
 
       {/* ── Summary cards ── */}
       <div className="grid grid-cols-3 gap-2 mb-4">
-        <div className="bg-white/[0.04] border border-white/[0.06] rounded-xl p-3 text-center">
-          <div className="text-lg font-bold text-[#0a84ff]">
+        <div className="bg-tint border border-border-dim rounded-xl p-3 text-center">
+          <div className="text-lg font-bold text-accent">
             {summary.total_pages}
           </div>
-          <div className="text-[9px] text-[#6e6e73] uppercase tracking-wide">
+          <div className="text-[9px] text-tertiary uppercase tracking-wide">
             Total Pages
           </div>
         </div>
-        <div className="bg-white/[0.04] border border-white/[0.06] rounded-xl p-3 text-center">
-          <div className="text-lg font-bold text-[#30d158]">
+        <div className="bg-tint border border-border-dim rounded-xl p-3 text-center">
+          <div className="text-lg font-bold text-success">
             {summary.door_schedule_pages.length}
           </div>
-          <div className="text-[9px] text-[#6e6e73] uppercase tracking-wide">
+          <div className="text-[9px] text-tertiary uppercase tracking-wide">
             Door Schedule
           </div>
         </div>
-        <div className="bg-white/[0.04] border border-white/[0.06] rounded-xl p-3 text-center">
-          <div className="text-lg font-bold text-[#ff9500]">
+        <div className="bg-tint border border-border-dim rounded-xl p-3 text-center">
+          <div className="text-lg font-bold text-warning">
             {allSetIds.length > 0 ? allSetIds.length : summary.hardware_set_pages.length}
           </div>
-          <div className="text-[9px] text-[#6e6e73] uppercase tracking-wide">
+          <div className="text-[9px] text-tertiary uppercase tracking-wide">
             {allSetIds.length > 0 ? "Hardware Sets" : "HW Set Pages"}
           </div>
         </div>
@@ -102,33 +102,33 @@ export default function StepScanResults({
 
       {/* ── Document profile (if detected) ── */}
       {profile && (
-        <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-3 mb-4">
-          <div className="text-[10px] text-[#6e6e73] uppercase tracking-wide mb-2 font-semibold">
+        <div className="bg-tint border border-border-dim rounded-xl p-3 mb-4">
+          <div className="text-[10px] text-tertiary uppercase tracking-wide mb-2 font-semibold">
             Document Profile
           </div>
           <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs">
             {profile.source && profile.source !== "unknown" && (
               <>
-                <span className="text-[#a1a1a6]">Source</span>
-                <span className="text-[#f5f5f7] capitalize">{profile.source}</span>
+                <span className="text-secondary">Source</span>
+                <span className="text-primary capitalize">{profile.source}</span>
               </>
             )}
             {profile.heading_format && profile.heading_format !== "unknown" && (
               <>
-                <span className="text-[#a1a1a6]">Format</span>
-                <span className="text-[#f5f5f7] capitalize">{profile.heading_format.replace(/_/g, " ")}</span>
+                <span className="text-secondary">Format</span>
+                <span className="text-primary capitalize">{profile.heading_format.replace(/_/g, " ")}</span>
               </>
             )}
             {profile.table_strategy && profile.table_strategy !== "unknown" && (
               <>
-                <span className="text-[#a1a1a6]">Table Type</span>
-                <span className="text-[#f5f5f7] capitalize">{profile.table_strategy === "lines" ? "Ruled lines" : "Text-aligned"}</span>
+                <span className="text-secondary">Table Type</span>
+                <span className="text-primary capitalize">{profile.table_strategy === "lines" ? "Ruled lines" : "Text-aligned"}</span>
               </>
             )}
             {extraction_strategy && (
               <>
-                <span className="text-[#a1a1a6]">Extraction</span>
-                <span className="text-[#f5f5f7] capitalize">{extraction_strategy.replace(/_/g, " ")}</span>
+                <span className="text-secondary">Extraction</span>
+                <span className="text-primary capitalize">{extraction_strategy.replace(/_/g, " ")}</span>
               </>
             )}
           </div>
@@ -137,14 +137,14 @@ export default function StepScanResults({
 
       {/* ── Scanned page warning ── */}
       {(summary.scanned_pages ?? 0) > 0 && (
-        <div className="bg-[rgba(255,69,58,0.08)] border border-[rgba(255,69,58,0.2)] rounded-xl p-3 mb-4 text-xs text-[#ff6961]">
+        <div className="bg-danger-dim border border-danger rounded-xl p-3 mb-4 text-xs text-danger">
           {summary.scanned_pages} scanned page{(summary.scanned_pages ?? 0) > 1 ? "s" : ""} detected — text extraction may be limited on these pages.
         </div>
       )}
 
       {/* ── Page classification breakdown ── */}
-      <div className="bg-white/[0.03] border border-white/[0.06] rounded-xl p-3 mb-4">
-        <div className="text-[10px] text-[#6e6e73] uppercase tracking-wide mb-3 font-semibold">
+      <div className="bg-tint border border-border-dim rounded-xl p-3 mb-4">
+        <div className="text-[10px] text-tertiary uppercase tracking-wide mb-3 font-semibold">
           Page Classification
         </div>
         <div className="space-y-2">
@@ -192,20 +192,20 @@ export default function StepScanResults({
                       {cfg.label}
                     </span>
                   </div>
-                  <span className="text-xs text-[#6e6e73]">
+                  <span className="text-xs text-tertiary">
                     {pagesInGroup.length} page{pagesInGroup.length !== 1 ? "s" : ""}
                   </span>
                 </div>
-                <div className="text-[11px] text-[#a1a1a6] ml-4">
+                <div className="text-[11px] text-secondary ml-4">
                   Pages {rangeStr}
                 </div>
                 {setIds.length > 0 && (
-                  <div className="text-[10px] text-[#a1a1a6]/70 ml-4 mt-0.5">
+                  <div className="text-[10px] text-secondary/70 ml-4 mt-0.5">
                     Sets: {setIds.join(", ")}
                   </div>
                 )}
                 {labels.length > 0 && (
-                  <div className="text-[10px] text-[#a1a1a6]/70 ml-4 mt-0.5">
+                  <div className="text-[10px] text-secondary/70 ml-4 mt-0.5">
                     {labels.join(", ")}
                   </div>
                 )}
@@ -219,13 +219,13 @@ export default function StepScanResults({
       <div className="flex justify-between mt-6">
         <button
           onClick={onBack}
-          className="px-4 py-2 text-[#a1a1a6] hover:text-[#f5f5f7] transition-colors text-sm"
+          className="px-4 py-2 text-secondary hover:text-primary transition-colors text-sm"
         >
           Back
         </button>
         <button
           onClick={onNext}
-          className="px-6 py-2 bg-[#0a84ff] hover:bg-[#0975de] text-white rounded-lg transition-colors font-semibold"
+          className="px-6 py-2 bg-accent hover:bg-accent/80 text-white rounded-lg transition-colors font-semibold"
         >
           Next
         </button>

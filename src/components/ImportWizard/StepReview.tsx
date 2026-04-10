@@ -255,13 +255,13 @@ export default function StepReview({
   return (
     <div className="flex flex-col h-full max-w-5xl mx-auto">
       {/* ── Summary Stats Bar ── */}
-      <div className="mb-4 p-3 bg-white/[0.02] border border-white/[0.06] rounded-xl">
+      <div className="mb-4 p-3 bg-tint border border-border-dim rounded-xl">
         <div className="flex items-center justify-between mb-2">
-          <span className="text-sm text-[#f5f5f7] font-medium">
+          <span className="text-sm text-primary font-medium">
             {totalDoors} doors extracted
           </span>
           {hasExistingData && (
-            <span className="text-xs bg-[rgba(255,149,0,0.12)] text-[#ff9500] px-2 py-0.5 rounded-full">
+            <span className="text-xs bg-warning-dim text-warning px-2 py-0.5 rounded-full">
               Revision
             </span>
           )}
@@ -291,9 +291,9 @@ export default function StepReview({
 
         {/* Human labels */}
         <div className="flex items-center gap-4 text-xs mb-3">
-          <span className="text-[#30d158]">{highCount} ready</span>
-          <span className="text-[#ff9500]">{medCount} need review</span>
-          <span className="text-[#ff453a]">{lowCount} missing data</span>
+          <span className="text-success">{highCount} ready</span>
+          <span className="text-warning">{medCount} need review</span>
+          <span className="text-danger">{lowCount} missing data</span>
         </div>
 
         {/* Filter chips + search */}
@@ -310,8 +310,8 @@ export default function StepReview({
               onClick={() => setFilterLevel(level)}
               className={`text-xs px-3 py-1 rounded-full transition-colors ${
                 filterLevel === level
-                  ? "bg-[#0a84ff] text-white"
-                  : "bg-white/[0.04] border border-white/[0.08] text-[#a1a1a6] hover:bg-white/[0.08]"
+                  ? "bg-accent text-white"
+                  : "bg-tint border border-border-dim-strong text-secondary hover:bg-tint-strong"
               }`}
             >
               {label}
@@ -322,7 +322,7 @@ export default function StepReview({
             placeholder="Search doors..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="ml-auto text-xs px-3 py-1.5 bg-white/[0.04] border border-white/[0.08] rounded-lg text-[#f5f5f7] placeholder-[#6e6e73] focus:border-[#0a84ff] focus:outline-none w-48"
+            className="ml-auto text-xs px-3 py-1.5 bg-tint border border-border-dim-strong rounded-lg text-primary placeholder-tertiary focus:border-accent focus:outline-none w-48"
           />
         </div>
       </div>
@@ -330,7 +330,7 @@ export default function StepReview({
       {/* ── Grouped Table ── */}
       <div className="flex-1 overflow-y-auto min-h-0">
         {groups.length === 0 && (
-          <p className="text-[#6e6e73] text-sm text-center py-8">
+          <p className="text-tertiary text-sm text-center py-8">
             No doors match your filters.
           </p>
         )}
@@ -344,18 +344,18 @@ export default function StepReview({
                 onClick={() => toggleGroup(group.setId)}
                 className="group-header w-full mb-0.5"
               >
-                <span className="text-[#6e6e73] text-xs transition-transform inline-block" style={{ transform: isCollapsed ? "rotate(-90deg)" : "rotate(0deg)" }}>
+                <span className="text-tertiary text-xs transition-transform inline-block" style={{ transform: isCollapsed ? "rotate(-90deg)" : "rotate(0deg)" }}>
                   ▾
                 </span>
-                <span className="text-[#0a84ff] font-mono text-sm font-medium">
+                <span className="text-accent font-mono text-sm font-medium">
                   {group.setId}
                 </span>
                 {group.heading && (
-                  <span className="text-[#6e6e73] text-xs truncate">
+                  <span className="text-tertiary text-xs truncate">
                     {group.heading}
                   </span>
                 )}
-                <span className="ml-auto text-[#6e6e73] text-xs">
+                <span className="ml-auto text-tertiary text-xs">
                   {group.doors.length} doors
                 </span>
                 {/* Mini confidence dots */}
@@ -374,19 +374,19 @@ export default function StepReview({
 
               {/* Group table */}
               {!isCollapsed && (
-                <div className="overflow-x-auto border border-white/[0.06] rounded-lg">
+                <div className="overflow-x-auto border border-border-dim rounded-lg">
                   <table className="w-full">
                     <thead>
-                      <tr className="bg-white/[0.03] sticky top-0 z-10 shadow-[0_1px_0_rgba(255,255,255,0.06)]">
+                      <tr className="bg-tint sticky top-0 z-10 shadow-[0_1px_0_var(--border-dim)]">
                         {FIELD_KEYS.map((field) => (
                           <th
                             key={field}
                             onClick={() => handleSort(field)}
-                            className="px-3 py-2 text-left text-[11px] text-[#6e6e73] uppercase font-semibold cursor-pointer hover:text-[#a1a1a6] select-none"
+                            className="px-3 py-2 text-left text-[11px] text-tertiary uppercase font-semibold cursor-pointer hover:text-secondary select-none"
                           >
                             {FIELD_LABELS[field]}
                             {sortField === field && (
-                              <span className="ml-1 text-[#0a84ff]">
+                              <span className="ml-1 text-accent">
                                 {sortDir === "asc" ? "▲" : "▼"}
                               </span>
                             )}
@@ -403,7 +403,7 @@ export default function StepReview({
                               if (door.door_number)
                                 registerRef(door.door_number, el);
                             }}
-                            className={`${confBorder(door)} border-t border-white/[0.04] hover:bg-white/[0.04] transition-colors duration-150 ${
+                            className={`${confBorder(door)} border-t border-border-dim hover:bg-tint transition-colors duration-150 ${
                               i % 2 === 1 ? "bg-white/[0.015]" : ""
                             }`}
                             style={{ minHeight: "40px" }}
@@ -430,7 +430,7 @@ export default function StepReview({
                                         if (e.key === "Enter") commitEdit();
                                         if (e.key === "Escape") cancelEdit();
                                       }}
-                                      className="w-full bg-white/[0.08] border border-[#0a84ff] rounded px-2 py-1 text-[#f5f5f7] text-[13px] focus:outline-none"
+                                      className="w-full bg-tint-strong border border-accent rounded px-2 py-1 text-primary text-[13px] focus:outline-none"
                                     />
                                   ) : (
                                     <span
@@ -439,8 +439,8 @@ export default function StepReview({
                                       }
                                       className={`cursor-pointer text-[13px] font-mono ${
                                         door[field]
-                                          ? "text-[#f5f5f7]"
-                                          : "text-[#6e6e73] border-b border-dashed border-[#6e6e73]/30"
+                                          ? "text-primary"
+                                          : "text-tertiary border-b border-dashed border-tertiary/30"
                                       }`}
                                     >
                                       {door[field] || "\u00A0"}
@@ -462,18 +462,18 @@ export default function StepReview({
       </div>
 
       {/* ── Navigation ── */}
-      <div className="flex justify-between mt-4 pt-4 border-t border-white/[0.08]">
+      <div className="flex justify-between mt-4 pt-4 border-t border-border-dim-strong">
         <div className="flex items-center gap-2">
           <button
             onClick={onBack}
-            className="px-4 py-2 bg-white/[0.04] border border-white/[0.08] hover:bg-white/[0.08] text-[#a1a1a6] rounded-lg transition-colors"
+            className="px-4 py-2 bg-tint border border-border-dim-strong hover:bg-tint-strong text-secondary rounded-lg transition-colors"
           >
             Back
           </button>
           {onRemapColumns && (
             <button
               onClick={onRemapColumns}
-              className="px-3 py-2 bg-[rgba(255,149,0,0.15)] border border-[rgba(255,149,0,0.3)] hover:bg-[rgba(255,149,0,0.25)] text-[#ff9500] rounded-lg transition-colors text-sm"
+              className="px-3 py-2 bg-warning-dim border border-warning hover:bg-warning-dim text-warning rounded-lg transition-colors text-sm"
             >
               Remap Columns
             </button>
@@ -481,7 +481,7 @@ export default function StepReview({
         </div>
         <button
           onClick={() => onComplete(doors, hardwareSets)}
-          className="px-6 py-2 bg-[#0a84ff] hover:bg-[#0975de] text-white rounded-lg transition-colors font-semibold"
+          className="px-6 py-2 bg-accent hover:bg-accent/80 text-white rounded-lg transition-colors font-semibold"
         >
           Next
         </button>
