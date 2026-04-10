@@ -241,6 +241,7 @@ export default function StepTriage({
 
     if (emptySets.length === 0) {
       console.warn("[deep-extract] No empty sets found — skipping");
+      setStatus("All sets already have items — nothing to extract.");
       return;
     }
 
@@ -278,6 +279,11 @@ export default function StepTriage({
         if (!pdfBase64) {
           const arrayBuffer = await file.arrayBuffer();
           pdfBase64 = arrayBufferToBase64(arrayBuffer);
+        }
+        if (!pdfBase64) {
+          setStatus("Deep extract failed: couldn't read PDF data.");
+          setDeepExtracting(false);
+          return;
         }
         deepExtractBody.pdfBase64 = pdfBase64;
       }

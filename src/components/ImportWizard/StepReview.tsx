@@ -247,11 +247,23 @@ export default function StepReview({
     });
   }, []);
 
+  // Max simultaneous PDF previews — protects mobile memory. On very large
+  // projects (35+ sets), rendering all canvases at once can crash the tab.
+  const MAX_OPEN_PREVIEWS = 3;
+
   const togglePreview = useCallback((setId: string) => {
     setPreviewOpen((prev) => {
       const next = new Set(prev);
-      if (next.has(setId)) next.delete(setId);
-      else next.add(setId);
+      if (next.has(setId)) {
+        next.delete(setId);
+      } else {
+        // If already at max, close the oldest (first inserted) preview
+        if (next.size >= MAX_OPEN_PREVIEWS) {
+          const oldest = next.values().next().value;
+          if (oldest !== undefined) next.delete(oldest);
+        }
+        next.add(setId);
+      }
       return next;
     });
   }, []);

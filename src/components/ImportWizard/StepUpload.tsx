@@ -186,10 +186,12 @@ export default function StepUpload({
 
       onComplete(file, result, hasExisting, storagePath);
     } catch (err) {
+      // Reset state so user can retry the upload from a clean slate
       setLoading(false);
       setProgress(0);
       setStatus("");
-      onError(err instanceof Error ? err.message : "Classification failed");
+      setClassifyResult(null);
+      onError(err instanceof Error ? err.message : "Classification failed. Please try again.");
     }
   };
 
