@@ -167,6 +167,17 @@ export default function ImportWizard({
     }
   }, [state.currentStep]);
 
+  // Cache PDF buffer once (for PDFPagePreview in StepReview + elsewhere)
+  useEffect(() => {
+    if (state.file && !state.pdfBuffer) {
+      state.file.arrayBuffer().then((buf) => {
+        setState((prev) => ({ ...prev, pdfBuffer: buf }));
+      }).catch((err) => {
+        console.warn("Failed to cache PDF buffer:", err);
+      });
+    }
+  }, [state.file, state.pdfBuffer]);
+
   // ─── Punch messages derived from wizard state ───
 
   const punchMessages: PunchMessage[] = useMemo(() => {
@@ -414,6 +425,8 @@ export default function ImportWizard({
                 doors={state.doors}
                 hardwareSets={state.hardwareSets}
                 hasExistingData={state.hasExistingData}
+                classifyResult={state.classifyResult}
+                pdfBuffer={state.pdfBuffer}
                 onComplete={onReviewComplete}
                 onBack={() => goToStep(WizardStep.Triage)}
                 onRemapColumns={() => goToStep(WizardStep.MapColumns)}
