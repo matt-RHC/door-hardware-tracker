@@ -149,13 +149,20 @@ export async function writeStagingData(
   runId: string,
   projectId: string,
   openings: StagingOpening[],
-  hardwareSets: Array<{ set_id: string; generic_set_id?: string; heading: string; items: StagingHardwareItem[] }>
+  hardwareSets: Array<{ set_id: string; generic_set_id?: string; heading: string; heading_doors?: string[]; items: StagingHardwareItem[] }>
 ): Promise<{ openingsCount: number; itemsCount: number }> {
   // Build set lookup — register under BOTH set_id and generic_set_id
   // because doors may be assigned to either (heading "DH1.01" vs set "DH1-10")
   const setMap = new Map<string, typeof hardwareSets[number]>()
+  // Door-number lookup for multi-heading sub-sets (DH4A.0 vs DH4A.1)
+  const doorToSetMap = new Map<string, typeof hardwareSets[number]>()
+  const normalizeDoor = (s: string) => (s ?? '').trim().toUpperCase().replace(/\s+/g, '')
   for (const s of hardwareSets) {
     setMap.set(s.set_id, s)
+    for (const dn of s.heading_doors ?? []) {
+      const key = normalizeDoor(dn)
+      if (key && !doorToSetMap.has(key)) doorToSetMap.set(key, s)
+    }
     if (s.generic_set_id && s.generic_set_id !== s.set_id) {
       setMap.set(s.generic_set_id, s)
     }
@@ -199,7 +206,10 @@ export async function writeStagingData(
   const allItems: Array<Record<string, unknown>> = []
 
   for (const opening of insertedOpenings) {
-    const hwSet = setMap.get(opening.hw_set ?? '')
+    // Try door-number lookup first (handles multi-heading sub-sets),
+    // fall back to hw_set lookup for legacy/single-heading cases.
+    const doorKey = normalizeDoor(opening.door_number)
+    const hwSet = doorToSetMap.get(doorKey) ?? setMap.get(opening.hw_set ?? '')
     if (!hwSet?.items?.length) continue
 
     for (const item of hwSet.items) {

@@ -5,6 +5,7 @@ import { usePunchHighlight } from "./usePunchHighlight";
 import type { DoorEntry, HardwareSet, ClassifyPagesResponse } from "./types";
 import PDFPagePreview from "./PDFPagePreview";
 import { findPageForSet } from "@/lib/punch-cards";
+import { buildDoorToSetMap, normalizeDoorNumber } from "@/lib/parse-pdf-helpers";
 
 // ─── Confidence scoring ───
 
@@ -194,12 +195,20 @@ export default function StepReview({
         setMap.set(set.generic_set_id, set);
       }
     }
+    // Door-number → specific sub-set lookup (handles multi-heading cases
+    // like DH4A.0 vs DH4A.1 that share a generic_set_id but have different items)
+    const doorToSetMap = buildDoorToSetMap(hardwareSets);
 
     const groupMap = new Map<string, DoorGroup>();
     for (const item of sortedDoors) {
-      const setId = item.door.hw_set || "(unassigned)";
+      // Resolve the specific sub-set via door_number lookup first.
+      // This splits DH4A into DH4A.0 and DH4A.1 visually when the PDF has
+      // multiple headings under the same generic set ID.
+      const doorKey = normalizeDoorNumber(item.door.door_number);
+      const specificSet = doorToSetMap.get(doorKey);
+      const setId = specificSet?.set_id ?? item.door.hw_set ?? "(unassigned)";
       if (!groupMap.has(setId)) {
-        const set = setMap.get(setId);
+        const set = specificSet ?? setMap.get(setId);
         groupMap.set(setId, {
           setId,
           heading: set?.heading ?? "",

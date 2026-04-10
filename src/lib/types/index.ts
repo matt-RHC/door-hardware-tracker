@@ -40,6 +40,10 @@ export interface HardwareSet {
   heading: string
   heading_door_count?: number
   heading_leaf_count?: number
+  /** Specific door numbers listed under this sub-heading. Used to match
+   *  openings to their exact sub-set when multiple sub-headings share a
+   *  generic_set_id (e.g., DH4A.0 and DH4A.1 under "DH4A"). */
+  heading_doors?: string[]
   items: ExtractedHardwareItem[]
 }
 

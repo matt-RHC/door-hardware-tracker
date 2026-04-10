@@ -262,16 +262,33 @@ TASK: Extract hardware items from a door hardware submittal PDF. Our automated t
 
 You will receive:
 1. A PDF document (door hardware submittal — may be filtered to just hardware schedule pages)
-2. A list of hardware sets that need items extracted (set_id + heading)
+2. A list of hardware sets that need items extracted (set_id + heading + optionally heading_doors)
 
-For EACH set listed, find its section in the PDF and extract ALL hardware items. Each hardware set page typically has:
-- A heading block with the set ID and assigned doors
+SET ID FORMATS — IMPORTANT:
+Set IDs may include sub-variant suffixes indicating different door variations that
+share a common "generic" set name. Examples:
+- "DH4A.0" and "DH4A.1" are TWO DISTINCT sub-sets under generic "DH4A" —
+  one may be for 90Min fire-rated pair doors, the other for 45Min pair doors
+- "DH1.01" (Set #DH1-10) — the heading has one ID, the assigned set has another
+- "DH4-R-NOCR" — a variant with suffix indicating configuration
+Each sub-variant has its OWN distinct door list and item quantities. Do NOT merge them.
+
+SEARCH STRATEGY — use ALL of these clues to find the right section:
+1. Search for the EXACT set_id text in page headings (including the suffix)
+2. If provided, search for the specific door numbers from heading_doors in page text —
+   their presence confirms you're looking at the right sub-heading block
+3. If the heading text is garbled or truncated, rely on the set_id and door numbers
+4. Search multiple pages if needed — sub-variants may be on different pages
+
+For EACH set listed, find ITS SPECIFIC section in the PDF and extract ALL hardware items.
+Each hardware set page typically has:
+- A heading block with the set ID and assigned door numbers
 - An item list/table with: quantity, item description, manufacturer, model/catalog number, finish
 
-Return valid JSON — an array of set objects:
+Return valid JSON — an array of set objects, one per input set (preserve the exact set_id including suffix):
 [
   {
-    "set_id": "DH1",
+    "set_id": "DH4A.0",
     "items": [
       {"qty": 3, "name": "Hinges", "manufacturer": "Ives", "model": "5BB1", "finish": "626"},
       {"qty": 1, "name": "Lockset", "manufacturer": "Schlage", "model": "ND50PD RHO", "finish": "626"},
@@ -285,6 +302,7 @@ EXTRACTION RULES:
 - Quantities are PER-OPENING (per single door). If the PDF shows total quantities across multiple doors, divide by the door count shown in the heading.
 - The "name" field should be the hardware CATEGORY only (e.g., "Hinges", "Closer", "Exit Device", "Lockset"). Do NOT include model numbers or manufacturer names in the name field.
 - Use standard manufacturer abbreviations: IV=Ives, SC=Schlage, LC=LCN, VO=Von Duprin, HA=Hager, SA=Sargent, etc.
+- **Preserve the full set_id in your response, including any suffix (.0, .1, -R-NOCR, etc.)**
 - If you cannot find a set in the PDF, return it with an empty items array — do not guess.
 - If a field is not visible in the PDF, use an empty string "" — do not guess.
 - Do NOT include non-hardware items (notes, section dividers, door assignments, "by others" text).`

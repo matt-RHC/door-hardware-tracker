@@ -3,7 +3,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { createExtractionRun, updateExtractionRun, writeStagingData, promoteExtraction } from '@/lib/extraction-staging'
 import type { StagingOpening } from '@/lib/extraction-staging'
 import type { DoorEntry, HardwareSet } from '@/lib/types'
-import { buildPerOpeningItems } from '@/lib/parse-pdf-helpers'
+import { buildPerOpeningItems, buildDoorToSetMap } from '@/lib/parse-pdf-helpers'
 
 // --- Shared: check for unmatched sets ---
 
@@ -50,6 +50,9 @@ export async function POST(request: NextRequest) {
         setMap.set(set.generic_set_id, set)
       }
     }
+    // Door-number → specific sub-set map (handles multi-heading sub-sets
+    // like DH4A.0 vs DH4A.1 that share a generic_set_id)
+    const doorToSetMap = buildDoorToSetMap(hardwareSets)
 
     // --- Final qty normalization safety net ---
     // Python does primary normalization. Only re-divide items the LLM may
@@ -61,7 +64,11 @@ export async function POST(request: NextRequest) {
       if (setKey) doorsPerSet.set(setKey, (doorsPerSet.get(setKey) ?? 0) + 1)
     }
 
-    for (const [setId, set] of setMap) {
+    // Iterate hardwareSets directly (not setMap) to avoid double-iteration —
+    // each set is registered under both set_id and generic_set_id in setMap,
+    // which would cause items to be divided twice.
+    for (const set of hardwareSets) {
+      const setId = set.set_id
       const leafCount = (set.heading_leaf_count ?? 0) > 1 ? (set.heading_leaf_count ?? 0) : 0
       // S-064: Fall back to doorsPerSet when heading_door_count is missing
       const headingDoorCount = (set.heading_door_count ?? 0) > 1 ? (set.heading_door_count ?? 0) : 0
@@ -78,6 +85,7 @@ export async function POST(request: NextRequest) {
           if (Number.isInteger(perLeaf)) {
             console.debug(`[save-qty-norm] ${setId}: "${item.name}" qty ${item.qty} ÷ ${leafCount} leaves = ${perLeaf}`)
             item.qty = perLeaf
+            item.qty_source = 'divided'  // prevent re-division downstream
             divided = true
           }
         }
@@ -86,6 +94,7 @@ export async function POST(request: NextRequest) {
           if (Number.isInteger(perOpening)) {
             console.debug(`[save-qty-norm] ${setId}: "${item.name}" qty ${item.qty} ÷ ${doorCount} openings = ${perOpening}`)
             item.qty = perOpening
+            item.qty_source = 'divided'
           }
         }
       }
@@ -137,6 +146,7 @@ export async function POST(request: NextRequest) {
       stagingOpeningRows ?? [],
       doorInfoMap,
       setMap,
+      doorToSetMap,
       'staging_opening_id',
       { extraction_run_id: runId },
     )
