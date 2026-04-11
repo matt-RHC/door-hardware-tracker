@@ -108,6 +108,7 @@ export type Database = {
           fire_rating: string | null
           hand: string | null
           notes: string | null
+          pdf_page: number | null
           created_at: string
         }
         Insert: {
@@ -122,6 +123,7 @@ export type Database = {
           fire_rating?: string | null
           hand?: string | null
           notes?: string | null
+          pdf_page?: number | null
           created_at?: string
         }
         Update: {
@@ -136,6 +138,7 @@ export type Database = {
           fire_rating?: string | null
           hand?: string | null
           notes?: string | null
+          pdf_page?: number | null
           created_at?: string
         }
       }

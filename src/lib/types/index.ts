@@ -44,6 +44,11 @@ export interface HardwareSet {
    *  openings to their exact sub-set when multiple sub-headings share a
    *  generic_set_id (e.g., DH4A.0 and DH4A.1 under "DH4A"). */
   heading_doors?: string[]
+  /** 0-based PDF page index where this set's definition lives. Populated
+   *  at wizard extraction time via findPageForSet() and persisted to
+   *  openings.pdf_page on save. null if the set could not be matched to a
+   *  page in the classify-pages result. */
+  pdf_page?: number | null
   items: ExtractedHardwareItem[]
 }
 

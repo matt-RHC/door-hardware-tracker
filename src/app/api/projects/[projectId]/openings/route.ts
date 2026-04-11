@@ -13,6 +13,7 @@ interface OpeningWithCounts {
   fire_rating: string | null
   hand: string | null
   notes: string | null
+  pdf_page: number | null
   created_at: string
   hardware_items: Array<{ id: string }>
   checklist_progress: Array<{ id: string; checked: boolean }>
@@ -63,6 +64,7 @@ export async function GET(
         fire_rating,
         hand,
         notes,
+        pdf_page,
         created_at,
         hardware_items:hardware_items(id),
         checklist_progress(id, checked)
