@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useToast } from "@/components/ToastProvider";
 
 interface Delivery {
   id: string;
@@ -30,6 +31,7 @@ export default function DeliveryTrackerPanel({
 }: {
   projectId: string;
 }) {
+  const { showToast } = useToast();
   const [deliveries, setDeliveries] = useState<Delivery[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -52,11 +54,13 @@ export default function DeliveryTrackerPanel({
   const fetchDeliveries = async () => {
     try {
       const res = await fetch(`/api/projects/${projectId}/deliveries`);
-      if (res.ok) {
-        const data = await res.json();
-        setDeliveries(data);
-      }
-    } catch {} finally {
+      if (!res.ok) throw new Error(`Fetch failed: HTTP ${res.status}`);
+      const data = await res.json();
+      setDeliveries(data);
+    } catch (err) {
+      console.error("Failed to fetch deliveries:", err);
+      showToast("error", "Failed to load deliveries. Check your connection and try again.");
+    } finally {
       setLoading(false);
     }
   };
@@ -73,21 +77,23 @@ export default function DeliveryTrackerPanel({
           quantity: formData.quantity ? parseInt(formData.quantity) : null,
         }),
       });
-      if (res.ok) {
-        setShowForm(false);
-        setFormData({
-          po_number: "",
-          vendor: "",
-          description: "",
-          items_summary: "",
-          quantity: "",
-          expected_date: "",
-          tracking_number: "",
-          notes: "",
-        });
-        fetchDeliveries();
-      }
-    } catch {} finally {
+      if (!res.ok) throw new Error(`Add failed: HTTP ${res.status}`);
+      setShowForm(false);
+      setFormData({
+        po_number: "",
+        vendor: "",
+        description: "",
+        items_summary: "",
+        quantity: "",
+        expected_date: "",
+        tracking_number: "",
+        notes: "",
+      });
+      fetchDeliveries();
+    } catch (err) {
+      console.error("Failed to add delivery:", err);
+      showToast("error", "Failed to add delivery. Check your connection and try again.");
+    } finally {
       setSubmitting(false);
     }
   };
