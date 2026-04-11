@@ -347,8 +347,9 @@ export default function StepTriage({
         setStatus("Deep extract returned no items. You can still continue.");
       }
     } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
       console.error("Deep extract error:", err);
-      setStatus("Deep extraction failed. You can still continue.");
+      setStatus(`Deep extraction failed: ${message}. You can still continue.`);
     } finally {
       setDeepExtracting(false);
     }

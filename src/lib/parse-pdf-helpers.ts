@@ -331,12 +331,25 @@ export interface DeepExtractResult {
   items: ExtractedHardwareItem[]
 }
 
+/**
+ * Outcome of a deep-extraction call.
+ *
+ * - `ok: true` — the LLM responded successfully. `results` may still be an
+ *   empty array if the model legitimately found no items.
+ * - `ok: false` — the call failed (network, LLM error, parse error, empty
+ *   response, etc.). `error` carries the reason so callers can surface it
+ *   to the user instead of silently rendering "0 items".
+ */
+export type DeepExtractOutcome =
+  | { ok: true; results: DeepExtractResult[] }
+  | { ok: false; error: string }
+
 export async function callDeepExtraction(
   client: Anthropic,
   base64: string,
   emptySets: Array<{ set_id: string; heading: string }>,
   goldenSample?: { set_id: string; items: ExtractedHardwareItem[] } | null,
-): Promise<DeepExtractResult[]> {
+): Promise<DeepExtractOutcome> {
   const systemPrompt = getDeepExtractionPrompt()
 
   const setsDescription = emptySets
@@ -380,8 +393,8 @@ export async function callDeepExtraction(
 
     const textBlock = response.content.find((b: { type: string }) => b.type === 'text')
     if (!textBlock || textBlock.type !== 'text') {
-      console.warn('Deep extraction returned no text')
-      return []
+      console.error('Deep extraction returned no text content from LLM')
+      return { ok: false, error: 'LLM response had no text content' }
     }
 
     let text = textBlock.text.trim()
@@ -389,11 +402,19 @@ export async function callDeepExtraction(
       text = text.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '')
     }
 
-    const parsed = extractJSON(text)
+    let parsed: unknown
+    try {
+      parsed = extractJSON(text)
+    } catch (parseErr) {
+      const message = parseErr instanceof Error ? parseErr.message : String(parseErr)
+      console.error('Deep extraction JSON parse failed:', message, '\nRaw text:', text.slice(0, 500))
+      return { ok: false, error: `Could not parse LLM response as JSON: ${message}` }
+    }
+
     // Handle both array and { sets: [...] } response shapes
     const results: DeepExtractResult[] = Array.isArray(parsed)
       ? parsed
-      : (parsed as { sets?: DeepExtractResult[] }).sets ?? []
+      : (parsed as { sets?: DeepExtractResult[] })?.sets ?? []
 
     // Normalize items: ensure qty is a number, default to 1
     for (const result of results) {
@@ -421,10 +442,11 @@ export async function callDeepExtraction(
       `${results.reduce((sum, r) => sum + (r.items?.length ?? 0), 0)} total items`
     )
 
-    return results
+    return { ok: true, results }
   } catch (err) {
-    console.error('Deep extraction failed:', err instanceof Error ? err.message : String(err))
-    return []
+    const message = err instanceof Error ? err.message : String(err)
+    console.error('Deep extraction failed:', message)
+    return { ok: false, error: message }
   }
 }
 
