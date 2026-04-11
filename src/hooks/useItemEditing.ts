@@ -74,6 +74,7 @@ export function useItemEditing({ projectId, doorId, opening, fetchOpeningData }:
       if (!response.ok) throw new Error('Failed to bulk update items')
     } catch (err) {
       console.error('Error bulk updating items:', err)
+      alert('Failed to apply the edit to all matching items. Check your connection and try again.')
     } finally {
       setEditApplyAllLoading(false)
       setEditApplyAllPrompt(null)
@@ -108,6 +109,7 @@ export function useItemEditing({ projectId, doorId, opening, fetchOpeningData }:
       setOriginalItemName(null)
     } catch (err) {
       console.error('Error saving item:', err)
+      alert('Failed to save item. Check your connection and try again.')
     } finally {
       setSavingItem(false)
     }
