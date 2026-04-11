@@ -15,6 +15,7 @@ import { useItemEditing } from "@/hooks/useItemEditing";
 import { useOpeningEditing } from "@/hooks/useOpeningEditing";
 import { useClassification } from "@/hooks/useClassification";
 import { useToast } from "@/components/ToastProvider";
+import { openProjectPdfAtPage } from "@/lib/pdf-page-link";
 
 interface OpeningDetail extends Opening {
   hardware_items: HardwareItemWithProgress[];
@@ -194,6 +195,14 @@ export default function DoorDetailPage() {
       setSavingNotes(false);
     }
   };
+
+  const handleViewPdfPage = useCallback(async () => {
+    if (opening?.pdf_page == null) return;
+    const result = await openProjectPdfAtPage(projectId, opening.pdf_page);
+    if (!result.ok) {
+      showToast("error", `Couldn't open PDF page: ${result.error}`);
+    }
+  }, [opening, projectId, showToast]);
 
   const handleFileUpload = async (file: File) => {
     setAttachmentLoading(true);
@@ -469,6 +478,16 @@ export default function DoorDetailPage() {
                 <span className="text-[11px] font-medium uppercase text-[var(--text-tertiary)] bg-[var(--surface)] border border-[var(--border)] px-2 py-1 rounded-full">
                   {opening.hand}
                 </span>
+              )}
+              {opening.pdf_page != null && (
+                <button
+                  type="button"
+                  onClick={handleViewPdfPage}
+                  className="text-[11px] font-medium uppercase text-accent bg-accent-dim border border-accent px-2 py-1 rounded-full hover:opacity-80 transition-opacity"
+                  title={`Open submittal PDF at page ${opening.pdf_page + 1}`}
+                >
+                  PDF p.{opening.pdf_page + 1}
+                </button>
               )}
             </div>
           </div>

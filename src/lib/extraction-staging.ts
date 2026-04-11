@@ -60,6 +60,10 @@ export interface StagingOpening {
   fire_rating?: string
   hand?: string
   notes?: string
+  /** 0-based PDF page index where this opening's hardware set is defined.
+   *  Populated from HardwareSet.pdf_page at save time. Copied to
+   *  openings.pdf_page on promote_extraction(). */
+  pdf_page?: number | null
   is_flagged?: boolean
   flag_reason?: string
   field_confidence?: Record<string, number>
@@ -149,7 +153,7 @@ export async function writeStagingData(
   runId: string,
   projectId: string,
   openings: StagingOpening[],
-  hardwareSets: Array<{ set_id: string; generic_set_id?: string; heading: string; heading_doors?: string[]; items: StagingHardwareItem[] }>
+  hardwareSets: Array<{ set_id: string; generic_set_id?: string; heading: string; heading_doors?: string[]; pdf_page?: number | null; items: StagingHardwareItem[] }>
 ): Promise<{ openingsCount: number; itemsCount: number }> {
   // Build set lookup — register under BOTH set_id and generic_set_id
   // because doors may be assigned to either (heading "DH1.01" vs set "DH1-10")
@@ -185,6 +189,7 @@ export async function writeStagingData(
       fire_rating: o.fire_rating ?? null,
       hand: o.hand ?? null,
       notes: o.notes ?? null,
+      pdf_page: o.pdf_page ?? setMap.get(o.hw_set ?? '')?.pdf_page ?? null,
       is_flagged: o.is_flagged ?? false,
       flag_reason: o.flag_reason ?? null,
       field_confidence: o.field_confidence ?? null,

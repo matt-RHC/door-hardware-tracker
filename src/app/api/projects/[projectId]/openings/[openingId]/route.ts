@@ -59,6 +59,7 @@ export async function GET(
         fire_rating,
         hand,
         notes,
+        pdf_page,
         created_at,
         hardware_items(
           id,

@@ -144,6 +144,7 @@ export async function POST(request: NextRequest) {
           frame_type: parsedDoor.frame_type || null,
           fire_rating: parsedDoor.fire_rating || null,
           hand: parsedDoor.hand || null,
+          pdf_page: hwSet?.pdf_page ?? null,
         })
         .eq('id', decision.existing_id)
 
@@ -205,6 +206,7 @@ export async function POST(request: NextRequest) {
         frame_type: door.frame_type || null,
         fire_rating: door.fire_rating || null,
         hand: door.hand || null,
+        pdf_page: setMap.get(door.hw_set)?.pdf_page ?? null,
       }))
 
       const insertedOpenings: Array<{ id: string; door_number: string; hw_set: string }> = []

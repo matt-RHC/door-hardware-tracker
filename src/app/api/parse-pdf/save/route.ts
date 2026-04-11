@@ -125,6 +125,9 @@ export async function POST(request: NextRequest) {
       frame_type: d.frame_type || undefined,
       fire_rating: d.fire_rating || undefined,
       hand: d.hand || undefined,
+      // Issue #8: carry the set's PDF page through to the staging opening
+      // so it lands on openings.pdf_page after promote_extraction().
+      pdf_page: setMap.get(d.hw_set ?? '')?.pdf_page ?? null,
       field_confidence: d.field_confidence || undefined,
     }))
 

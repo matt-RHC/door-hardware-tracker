@@ -1,10 +1,12 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useRouter, useParams } from "next/navigation";
 import OfflineIndicator from "@/components/OfflineIndicator";
 import ProgressBar from "@/components/ProgressBar";
 import ImportWizard from "@/components/ImportWizard/ImportWizard";
+import { useToast } from "@/components/ToastProvider";
+import { openProjectPdfAtPage } from "@/lib/pdf-page-link";
 
 interface OpeningWithProgress {
   id: string;
@@ -17,6 +19,7 @@ interface OpeningWithProgress {
   frame_type: string | null;
   fire_rating: string | null;
   hand: string | null;
+  pdf_page: number | null;
   created_at: string;
   total_items: number;
   checked_items: number;
@@ -45,6 +48,7 @@ export default function ProjectDetailPage() {
   const projectId = params.projectId as string;
   const router = useRouter();
 
+  const { showToast } = useToast();
   const [openings, setOpenings] = useState<OpeningWithProgress[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -53,6 +57,16 @@ export default function ProjectDetailPage() {
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<{ success: boolean; message: string; permalink?: string } | null>(null);
+
+  const handleViewPdfPage = useCallback(
+    async (pageIndex: number) => {
+      const result = await openProjectPdfAtPage(projectId, pageIndex);
+      if (!result.ok) {
+        showToast("error", `Couldn't open PDF page: ${result.error}`);
+      }
+    },
+    [projectId, showToast],
+  );
 
   useEffect(() => {
     fetchProjectData();
@@ -405,9 +419,27 @@ export default function ProjectDetailPage() {
                     <h2 className="text-[17px] font-bold text-[var(--text-primary)] leading-tight">
                       {opening.door_number}
                     </h2>
-                    <span className="text-[11px] text-[var(--text-tertiary)] tabular-nums shrink-0 ml-2">
-                      {progressPercent.toFixed(0)}%
-                    </span>
+                    <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                      {opening.pdf_page != null && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleViewPdfPage(opening.pdf_page as number);
+                          }}
+                          className="inline-flex items-center justify-center w-7 h-7 rounded-full text-accent bg-accent-dim border border-accent hover:opacity-80 transition-opacity"
+                          aria-label={`Open submittal PDF at page ${opening.pdf_page + 1}`}
+                          title={`PDF page ${opening.pdf_page + 1}`}
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                          </svg>
+                        </button>
+                      )}
+                      <span className="text-[11px] text-[var(--text-tertiary)] tabular-nums">
+                        {progressPercent.toFixed(0)}%
+                      </span>
+                    </div>
                   </div>
 
                   {/* Badges */}

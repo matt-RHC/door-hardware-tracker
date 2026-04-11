@@ -11,6 +11,7 @@ import type {
   PunchyQuantityCheck,
   PageClassification,
 } from '@/lib/types'
+import { normalizeDoorNumber } from '@/lib/parse-pdf-helpers'
 import { generateTriageQuestions, type PunchQuestion } from '@/lib/punch-messages'
 
 // ── Card data types ──
@@ -71,6 +72,10 @@ export interface ExtractionHealth {
     heading: string
     items: HardwareSet['items']
     door?: DoorEntry
+    /** 0-based PDF page index for the set's definition, or null. Used
+     *  by the calibration card to render a PDF preview so the user can
+     *  verify Punchy's extraction against the source document. */
+    pdf_page?: number | null
   } | null
 }
 
@@ -101,20 +106,45 @@ export function computeExtractionHealth(
         ? 'warning'
         : 'good'
 
-  // Best sample: populated set with the most items
+  // Best sample: populated set with the most items.
+  //
+  // The sample door MUST come from this specific sub-heading's heading_doors
+  // list when available. Falling back to "any door whose hw_set matches the
+  // generic_set_id" was the previous behavior and caused wrong-door pairings
+  // when a parent set had multiple sub-headings (e.g., DH4A.0 pair doors and
+  // DH4A.1 single doors both share generic_set_id "DH4A"). The wizard would
+  // show a single door next to a pair-door item list, and normalization math
+  // would produce nonsense quantities.
   let bestSample: ExtractionHealth['bestSample'] = null
   if (populatedSets.length > 0) {
     const best = populatedSets.reduce((a, b) =>
       (a.items?.length ?? 0) >= (b.items?.length ?? 0) ? a : b,
     )
-    const sampleDoor = doors.find(
-      d => (d.hw_set ?? '').toUpperCase() === (best.generic_set_id ?? best.set_id).toUpperCase(),
+    const headingDoorKeys = new Set(
+      (best.heading_doors ?? [])
+        .map(d => normalizeDoorNumber(d).toUpperCase())
+        .filter(k => k.length > 0),
     )
+    let sampleDoor: DoorEntry | undefined = undefined
+    if (headingDoorKeys.size > 0) {
+      sampleDoor = doors.find(d =>
+        headingDoorKeys.has(normalizeDoorNumber(d.door_number).toUpperCase()),
+      )
+    }
+    if (!sampleDoor) {
+      // Fallback: heading_doors empty or no match — pick any door on the
+      // generic set id. This preserves the old behavior for single-heading
+      // sets where heading_doors was never populated.
+      sampleDoor = doors.find(
+        d => (d.hw_set ?? '').toUpperCase() === (best.generic_set_id ?? best.set_id).toUpperCase(),
+      )
+    }
     bestSample = {
       set_id: best.set_id,
       heading: best.heading,
       items: best.items,
       door: sampleDoor,
+      pdf_page: best.pdf_page ?? null,
     }
   }
 
@@ -186,7 +216,15 @@ export function generatePunchCards(input: {
 
   // ── 3. Sample calibration (if empty sets + good sample) ──
   if (health.emptySets.length > 0 && health.bestSample) {
-    const samplePageIdx = findPageForSet(health.bestSample.set_id, pages)
+    // Prefer the pdf_page value already computed on the HardwareSet by
+    // StepTriage (which uses the same generic_set_id fallback chain as
+    // StepReview). Fall back to findPageForSet on both the specific
+    // sub-set id and the generic set id so multi-heading sets like
+    // DH4A.0/DH4A.1 always resolve to a page when one is known.
+    const samplePageIdx =
+      health.bestSample.pdf_page ??
+      findPageForSet(health.bestSample.set_id, pages) ??
+      null
     cards.push({
       id: 'calibration',
       kind: 'calibration',

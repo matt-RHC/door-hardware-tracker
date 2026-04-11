@@ -10,6 +10,7 @@ import type {
 } from "./types";
 import type { PunchyQuantityCheck } from "@/lib/types";
 import { scoreExtraction } from "@/lib/confidence-scoring";
+import { findPageForSet } from "@/lib/punch-cards";
 import { type PunchQuestion } from "@/lib/punch-messages";
 import {
   arrayBufferToBase64,
@@ -210,6 +211,22 @@ export default function StepTriage({
       for (const door of extractedDoors) {
         const scores = perDoor.get(door.door_number);
         if (scores) door.field_confidence = scores;
+      }
+
+      // Populate pdf_page on each hardware set from classify-pages metadata.
+      // This is persisted to openings.pdf_page on save (issue #8) so that the
+      // door detail page and dashboard cards can link back to the PDF page
+      // where the set's definition lives. Uses generic_set_id first to match
+      // the lookup strategy in StepReview.tsx:391-397.
+      const classifyPages = classifyResult?.pages ?? [];
+      for (const set of extractedSets) {
+        const primaryKey = set.generic_set_id ?? set.set_id;
+        const page =
+          findPageForSet(primaryKey, classifyPages) ??
+          (set.generic_set_id && set.set_id !== set.generic_set_id
+            ? findPageForSet(set.set_id, classifyPages)
+            : null);
+        set.pdf_page = page;
       }
 
       setDoors(extractedDoors);
