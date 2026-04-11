@@ -21,7 +21,16 @@ export async function POST(request: NextRequest) {
       projectId?: string
       emptySets: Array<{ set_id: string; heading: string }>
       goldenSample?: { set_id: string; items: Array<{ qty: number; name: string; manufacturer: string; model: string; finish: string }> } | null
+      userHint?: string
     }
+
+    // Optional user hint — surfaced from the empty_sets card "Try with hint" flow.
+    // Only treat as a hint when it's a non-empty string (post-trim), otherwise omit.
+    const rawHint: unknown = body.userHint
+    const userHint: string | undefined =
+      typeof rawHint === 'string' && rawHint.trim().length > 0
+        ? rawHint.trim()
+        : undefined
 
     // Resolve PDF: prefer server-side storage fetch via projectId, fallback to base64 in body
     let pdfBase64: string = body.pdfBase64 ?? ''
@@ -46,6 +55,7 @@ export async function POST(request: NextRequest) {
       pdfBase64,
       emptySets,
       goldenSample,
+      userHint,
     )
 
     if (!outcome.ok) {
@@ -64,7 +74,8 @@ export async function POST(request: NextRequest) {
 
     console.debug(
       `[deep-extract] ${emptySets.length} empty sets → ${results.length} sets returned, ` +
-      `${totalItems} total items extracted`
+      `${totalItems} total items extracted, ` +
+      `userHint=${userHint != null ? `"${userHint.slice(0, 80)}"` : 'none'}`
     )
 
     return NextResponse.json({ sets: results })

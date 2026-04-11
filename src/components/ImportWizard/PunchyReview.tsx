@@ -37,8 +37,17 @@ interface PunchyReviewProps {
     items: HardwareSet["items"];
     confirmed: boolean;
   }) => void;
-  /** Called to trigger deep extract for empty sets. */
-  onDeepExtract: () => void;
+  /**
+   * Called to trigger deep extract for empty sets.
+   * - With no opts: extract all currently-empty sets (the bulk button).
+   * - With `targetSetIds`: limit to those set IDs (per-row retry).
+   * - With `userHint`: forward the hint to Punchy.
+   */
+  onDeepExtract: (opts?: { userHint?: string; targetSetIds?: string[] }) => void;
+  /** Remove a phantom set entirely and clear `hw_set` on referencing doors. */
+  onRemoveSet: (setId: string) => void;
+  /** Insert a manual-entry sentinel item so the user fills it in StepReview. */
+  onAddManualPlaceholder: (setId: string) => void;
   deepExtracting: boolean;
   /** Called when user finishes all cards and is ready for triage. */
   onComplete: (updates: {
@@ -61,6 +70,8 @@ export default function PunchyReview({
   projectId,
   onGoldenSampleConfirmed,
   onDeepExtract,
+  onRemoveSet,
+  onAddManualPlaceholder,
   deepExtracting,
   onComplete,
   onBack,
@@ -72,6 +83,11 @@ export default function PunchyReview({
   const [sampleConfirmed, setSampleConfirmed] = useState(false);
   // Auto-expand set list for small projects (≤ 10 sets)
   const [setsExpanded, setSetsExpanded] = useState(initialSets.length <= 10);
+  // Per-row state for the empty_sets card "Try with hint" flow.
+  // hintVisible: which set_ids currently have the inline hint input open.
+  // hintInputs:  the in-progress hint text per set_id.
+  const [hintVisible, setHintVisible] = useState<Set<string>>(new Set());
+  const [hintInputs, setHintInputs] = useState<Record<string, string>>({});
 
   // Keep hardwareSets in sync if parent updates (e.g., deep extract fills empty sets)
   useEffect(() => {
@@ -83,6 +99,15 @@ export default function PunchyReview({
     () => generatePunchCards({ doors, hardwareSets, qtyCheck, pages }),
     [doors, hardwareSets, qtyCheck, pages],
   );
+
+  // Defensive: when cards shrink (e.g., the empty_sets card disappears after
+  // the user resolves all empty sets), keep currentIdx in range so we don't
+  // render undefined or fall off the end of the wizard.
+  useEffect(() => {
+    if (currentIdx > cards.length - 1) {
+      setCurrentIdx(Math.max(0, cards.length - 1));
+    }
+  }, [cards.length, currentIdx]);
 
   const health = useMemo(
     () => computeExtractionHealth(doors, hardwareSets),
@@ -164,6 +189,59 @@ export default function PunchyReview({
       confirmed: true,
     });
   }, [health.bestSample, onGoldenSampleConfirmed]);
+
+  // ─── Empty-set row handlers ───
+  // These wrap the parent callbacks so we can also clean up local hint state
+  // (avoids stale `hintInputs[setId]` entries after a set is removed) and
+  // toggle the inline hint input.
+
+  const clearHintStateFor = useCallback((setId: string) => {
+    setHintVisible((prev) => {
+      if (!prev.has(setId)) return prev;
+      const next = new Set(prev);
+      next.delete(setId);
+      return next;
+    });
+    setHintInputs((prev) => {
+      if (!(setId in prev)) return prev;
+      const next = { ...prev };
+      delete next[setId];
+      return next;
+    });
+  }, []);
+
+  const handleRemoveEmptySet = useCallback((setId: string) => {
+    onRemoveSet(setId);
+    clearHintStateFor(setId);
+  }, [onRemoveSet, clearHintStateFor]);
+
+  const handleMarkManualEntry = useCallback((setId: string) => {
+    onAddManualPlaceholder(setId);
+    clearHintStateFor(setId);
+  }, [onAddManualPlaceholder, clearHintStateFor]);
+
+  const handleToggleHint = useCallback((setId: string) => {
+    setHintVisible((prev) => {
+      const next = new Set(prev);
+      if (next.has(setId)) {
+        next.delete(setId);
+      } else {
+        next.add(setId);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleHintChange = useCallback((setId: string, value: string) => {
+    setHintInputs((prev) => ({ ...prev, [setId]: value }));
+  }, []);
+
+  const handleSubmitHint = useCallback((setId: string) => {
+    const hint = (hintInputs[setId] ?? "").trim();
+    if (hint.length === 0) return;
+    onDeepExtract({ userHint: hint, targetSetIds: [setId] });
+    clearHintStateFor(setId);
+  }, [hintInputs, onDeepExtract, clearHintStateFor]);
 
   // ─── Load prior decisions on mount (for re-imports) ───
   const priorDecisionsLoaded = useRef(false);
@@ -372,6 +450,13 @@ export default function PunchyReview({
     handleConfirmSample,
     handleFinish,
     onDeepExtract,
+    hintVisible,
+    hintInputs,
+    handleRemoveEmptySet,
+    handleMarkManualEntry,
+    handleToggleHint,
+    handleHintChange,
+    handleSubmitHint,
   })}
       {/* Skip to Triage shortcut — shown when no required cards remain */}
       {currentCard.kind !== 'summary' && currentCard.kind !== 'ready' && remainingRequired === 0 && (
@@ -411,7 +496,15 @@ interface RenderContext {
   handleAnswerQuestion: (id: string, answer: string, setId?: string, itemName?: string) => void;
   handleConfirmSample: () => void;
   handleFinish: () => void;
-  onDeepExtract: () => void;
+  onDeepExtract: (opts?: { userHint?: string; targetSetIds?: string[] }) => void;
+  // Empty-set per-row resolution
+  hintVisible: Set<string>;
+  hintInputs: Record<string, string>;
+  handleRemoveEmptySet: (setId: string) => void;
+  handleMarkManualEntry: (setId: string) => void;
+  handleToggleHint: (setId: string) => void;
+  handleHintChange: (setId: string, value: string) => void;
+  handleSubmitHint: (setId: string) => void;
 }
 
 function renderCard(card: PunchCardData, ctx: RenderContext) {
@@ -509,6 +602,7 @@ function renderCard(card: PunchCardData, ctx: RenderContext) {
     // ── Empty Sets Card ──
     case "empty_sets": {
       const p = card.payload as { emptySets: Array<{ set_id: string; heading: string }>; totalSets: number };
+      const busy = ctx.deepExtracting;
       return (
         <PunchCard
           type="empty_sets"
@@ -516,24 +610,98 @@ function renderCard(card: PunchCardData, ctx: RenderContext) {
           current={current}
           total={total}
           primaryAction={{
-            label: ctx.deepExtracting ? "Extracting..." : `Extract with AI (${p.emptySets.length} set${p.emptySets.length !== 1 ? "s" : ""})`,
-            onClick: ctx.onDeepExtract,
-            disabled: ctx.deepExtracting,
+            label: busy ? "Extracting..." : `Extract with AI (${p.emptySets.length} set${p.emptySets.length !== 1 ? "s" : ""})`,
+            // Wrap in arrow fn so the React MouseEvent isn't passed as `opts`.
+            onClick: () => ctx.onDeepExtract(),
+            disabled: busy,
           }}
           onSkip={ctx.goNext}
         >
           <div className="space-y-3">
             <p className="text-secondary text-sm">
-              These sets were found in the PDF but the table reader couldn&apos;t parse their items. AI extraction can usually recover them.
+              These sets were found in the PDF but the table reader couldn&apos;t parse their items. Use AI extraction, mark a set for manual entry, or remove it if it&apos;s a phantom.
             </p>
-            <div className="flex flex-wrap gap-1.5">
-              {p.emptySets.map(s => (
-                <span key={s.set_id} className="font-mono text-xs px-2 py-0.5 rounded bg-danger-dim text-danger border border-danger">
-                  {s.set_id}
-                </span>
-              ))}
-            </div>
-            {ctx.deepExtracting && (
+            <ul className="space-y-2">
+              {p.emptySets.map((s) => {
+                const showHint = ctx.hintVisible.has(s.set_id);
+                const hintValue = ctx.hintInputs[s.set_id] ?? "";
+                const submitDisabled = busy || hintValue.trim().length === 0;
+                return (
+                  <li
+                    key={s.set_id}
+                    className="rounded border border-border-dim bg-tint p-2"
+                  >
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-mono text-xs px-2 py-0.5 rounded bg-danger-dim text-danger border border-danger">
+                        {s.set_id}
+                      </span>
+                      {s.heading.length > 0 && (
+                        <span className="text-secondary text-xs truncate flex-1 min-w-0">
+                          {s.heading}
+                        </span>
+                      )}
+                      <div className="flex items-center gap-1.5 ml-auto">
+                        <button
+                          type="button"
+                          onClick={() => ctx.handleMarkManualEntry(s.set_id)}
+                          disabled={busy}
+                          aria-label={`Mark ${s.set_id} for manual entry`}
+                          className="px-2 py-1 min-h-8 rounded text-xs font-medium bg-tint-strong border border-border-dim-strong hover:bg-surface-hover text-primary disabled:opacity-50 transition-colors"
+                        >
+                          Add manually
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => ctx.handleRemoveEmptySet(s.set_id)}
+                          disabled={busy}
+                          aria-label={`Remove phantom set ${s.set_id}`}
+                          className="px-2 py-1 min-h-8 rounded text-xs font-medium bg-danger hover:bg-danger/80 text-white disabled:opacity-50 transition-colors"
+                        >
+                          Remove
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => ctx.handleToggleHint(s.set_id)}
+                          disabled={busy}
+                          aria-label={`Try ${s.set_id} again with a hint`}
+                          aria-expanded={showHint}
+                          className="px-2 py-1 min-h-8 rounded text-xs font-medium bg-accent hover:bg-accent/80 text-white disabled:opacity-50 transition-colors"
+                        >
+                          {showHint ? "Cancel hint" : "Try with hint"}
+                        </button>
+                      </div>
+                    </div>
+                    {showHint && (
+                      <div className="mt-2 flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={hintValue}
+                          onChange={(e) => ctx.handleHintChange(s.set_id, e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" && !submitDisabled) {
+                              e.preventDefault();
+                              ctx.handleSubmitHint(s.set_id);
+                            }
+                          }}
+                          placeholder='e.g., "this set is on page 18"'
+                          aria-label={`Hint for ${s.set_id}`}
+                          className="flex-1 min-w-0 px-2 py-1 text-xs rounded bg-surface border border-border-dim text-primary placeholder:text-tertiary focus:outline-none focus:border-accent"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => ctx.handleSubmitHint(s.set_id)}
+                          disabled={submitDisabled}
+                          className="px-3 py-1 min-h-8 rounded text-xs font-semibold bg-accent hover:bg-accent/80 text-white disabled:opacity-50 transition-colors"
+                        >
+                          Submit
+                        </button>
+                      </div>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+            {busy && (
               <div className="flex items-center gap-2 py-2">
                 <div className="w-4 h-4 border-2 border-accent border-t-transparent rounded-full animate-spin" />
                 <span className="text-accent text-xs">Punchy is reading the PDF and extracting items...</span>

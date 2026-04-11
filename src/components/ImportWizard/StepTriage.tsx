@@ -248,12 +248,20 @@ export default function StepTriage({
   }, [file, pdfStoragePath, projectId, columnMappings, classifyResult, onError]);
 
   // ─── Deep Extract: LLM-based item extraction for empty sets ───
-  const handleDeepExtract = useCallback(async () => {
+  // Accepts optional opts:
+  //   - userHint: free-text hint forwarded to Punchy ("this set is on page 18")
+  //   - targetSetIds: restrict the extraction to a specific set of empty IDs
+  //     (used by per-row "Try with hint" retries from PunchyReview)
+  const handleDeepExtract = useCallback(async (
+    opts?: { userHint?: string; targetSetIds?: string[] }
+  ) => {
     // Use PunchyReview's internal hardwareSets if available (passed via the component),
     // but fall back to StepTriage's state. PunchyReview maintains its own copy.
     const setsToCheck = hardwareSets;
+    const targetIds = opts?.targetSetIds ?? [];
     const emptySets = setsToCheck
       .filter((s) => (s.items?.length ?? 0) === 0)
+      .filter((s) => targetIds.length === 0 || targetIds.includes(s.set_id))
       .map((s) => ({ set_id: s.set_id, heading: s.heading ?? "" }));
 
     if (emptySets.length === 0) {
@@ -262,8 +270,15 @@ export default function StepTriage({
       return;
     }
 
+    const trimmedHint = (opts?.userHint ?? "").trim();
+    const hasHint = trimmedHint.length > 0;
+
     setDeepExtracting(true);
-    setStatus(`Extracting items for ${emptySets.length} empty set${emptySets.length !== 1 ? "s" : ""} with AI...`);
+    setStatus(
+      hasHint
+        ? `Retrying ${emptySets.length} set${emptySets.length !== 1 ? "s" : ""} with your hint...`
+        : `Extracting items for ${emptySets.length} empty set${emptySets.length !== 1 ? "s" : ""} with AI...`
+    );
 
     try {
       // Build deep extract request body.
@@ -278,6 +293,10 @@ export default function StepTriage({
           })),
         } : undefined,
       };
+
+      if (hasHint) {
+        deepExtractBody.userHint = trimmedHint;
+      }
 
       if (pdfStoragePath) {
         deepExtractBody.projectId = projectId;
@@ -371,6 +390,56 @@ export default function StepTriage({
       setDeepExtracting(false);
     }
   }, [hardwareSets, file, pdfStoragePath, projectId, classifyResult, goldenSample]);
+
+  // ─── Empty-set resolution: phantom-set removal ───
+  // Removes a hardware set entirely and clears `hw_set` on every door that
+  // referenced it. Used by the "Remove" button on the empty_sets card when the
+  // user determines a set was a parsing artifact and shouldn't exist.
+  // hw_set is non-nullable string in DoorEntry — clear with "" not null.
+  const handleRemoveSet = useCallback((setId: string) => {
+    const refCount = doors.filter((d) => d.hw_set === setId).length;
+    const message =
+      refCount > 0
+        ? `Remove set ${setId}? ${refCount} door${refCount !== 1 ? "s" : ""} reference${refCount === 1 ? "s" : ""} this set and will become unassigned.`
+        : `Remove set ${setId}?`;
+    if (typeof window !== "undefined" && !window.confirm(message)) {
+      return;
+    }
+    setHardwareSets((prev) => prev.filter((s) => s.set_id !== setId));
+    setDoors((prev) =>
+      prev.map((d) => (d.hw_set === setId ? { ...d, hw_set: "" } : d))
+    );
+    setStatus(`Removed set ${setId}.`);
+  }, [doors]);
+
+  // ─── Empty-set resolution: manual entry sentinel ───
+  // Inserts a single placeholder item into an otherwise-empty set so that
+  // generatePunchCards no longer flags it as an empty set. The user fills in
+  // the real items in StepReview afterward. qty_source is `?: string` in
+  // ExtractedHardwareItem (see types/index.ts) — "manual_placeholder" is a
+  // type-safe sentinel value the downstream UI can recognize.
+  const handleAddManualPlaceholder = useCallback((setId: string) => {
+    setHardwareSets((prev) =>
+      prev.map((s) =>
+        s.set_id === setId && (s.items?.length ?? 0) === 0
+          ? {
+              ...s,
+              items: [
+                {
+                  qty: 1,
+                  name: "",
+                  manufacturer: "",
+                  model: "",
+                  finish: "",
+                  qty_source: "manual_placeholder",
+                },
+              ],
+            }
+          : s
+      )
+    );
+    setStatus(`Marked ${setId} for manual entry.`);
+  }, []);
 
   // ─── Phase 3: Run triage classification ───
   const runTriageClassification = useCallback(async () => {
@@ -547,6 +616,8 @@ export default function StepTriage({
           projectId={projectId}
           onGoldenSampleConfirmed={(sample) => setGoldenSample(sample)}
           onDeepExtract={handleDeepExtract}
+          onRemoveSet={handleRemoveSet}
+          onAddManualPlaceholder={handleAddManualPlaceholder}
           deepExtracting={deepExtracting}
           onComplete={(updates) => {
             setHardwareSets(updates.hardwareSets);
