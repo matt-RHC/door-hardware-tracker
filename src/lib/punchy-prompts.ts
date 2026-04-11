@@ -251,7 +251,12 @@ RULES:
 
 // ── Deep Extraction: LLM-based item extraction for empty sets ──
 
-export function getDeepExtractionPrompt(): string {
+export function getDeepExtractionPrompt(userHint?: string): string {
+  const trimmedHint = (userHint ?? '').trim()
+  const userGuidanceBlock = trimmedHint.length > 0
+    ? `\n\nUSER GUIDANCE — the human operator provided this hint:\n"${trimmedHint}"\nUse it to focus your search, but still verify against the PDF. Do NOT fabricate items to satisfy the hint.\n`
+    : ''
+
   return `${PUNCHY_PERSONA}
 
 ${DFH_DOMAIN_KNOWLEDGE}
@@ -279,7 +284,7 @@ SEARCH STRATEGY — use ALL of these clues to find the right section:
    their presence confirms you're looking at the right sub-heading block
 3. If the heading text is garbled or truncated, rely on the set_id and door numbers
 4. Search multiple pages if needed — sub-variants may be on different pages
-
+${userGuidanceBlock}
 For EACH set listed, find ITS SPECIFIC section in the PDF and extract ALL hardware items.
 Each hardware set page typically has:
 - A heading block with the set ID and assigned door numbers

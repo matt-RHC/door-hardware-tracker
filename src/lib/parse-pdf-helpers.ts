@@ -354,8 +354,9 @@ export async function callDeepExtraction(
   base64: string,
   emptySets: Array<{ set_id: string; heading: string }>,
   goldenSample?: { set_id: string; items: ExtractedHardwareItem[] } | null,
+  userHint?: string,
 ): Promise<DeepExtractOutcome> {
-  const systemPrompt = getDeepExtractionPrompt()
+  const systemPrompt = getDeepExtractionPrompt(userHint)
 
   const setsDescription = emptySets
     .map(s => `- Set "${s.set_id}" (${s.heading || 'no heading'})`)
