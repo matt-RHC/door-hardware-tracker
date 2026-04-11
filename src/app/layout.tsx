@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import PerformanceProvider from "@/components/PerformanceProvider";
+import ToastProvider from "@/components/ToastProvider";
 
 export const viewport: Viewport = {
   width: "device-width",
@@ -36,7 +37,9 @@ export default function RootLayout({
       </head>
       <body className="min-h-full flex flex-col bg-black text-[#f5f5f7]">
         <PerformanceProvider>
-          {children}
+          <ToastProvider>
+            {children}
+          </ToastProvider>
         </PerformanceProvider>
       </body>
     </html>
