@@ -538,12 +538,12 @@ export default function DoorDetailPage() {
               opening.hardware_items.map((item) => (
                 <div
                   key={item.id}
-                  className={`bg-[var(--surface)] border rounded-xl p-4 shadow-sm transition-colors hover:bg-[var(--surface-hover)] hover:border-[var(--border-hover)] ${
+                  className={`glow-card p-4 shadow-sm ${
                     item.install_type === 'bench'
-                      ? 'border-l-[3px] border-l-[var(--purple)] border-white/[0.08]'
+                      ? 'glow-card--purple corner-brackets'
                       : item.install_type === 'field'
-                      ? 'border-l-[3px] border-l-[var(--orange)] border-white/[0.08]'
-                      : 'border-[var(--border)]'
+                      ? 'glow-card--orange corner-brackets'
+                      : ''
                   }`}
                 >
                   {editingItemId === item.id && editingItem ? (
@@ -648,69 +648,85 @@ export default function DoorDetailPage() {
                   ) : (
                     // View mode
                     <>
-                      <div className="flex justify-between items-start mb-2">
-                        <div className="flex items-center gap-2">
-                          {item.install_type && (
-                            <span className={`text-[10px] font-bold uppercase px-1.5 py-0.5 rounded ${
-                              item.install_type === 'bench'
-                                ? 'bg-[rgba(191,90,242,0.15)] text-[var(--purple)] border border-[rgba(191,90,242,0.3)]'
-                                : 'bg-[rgba(255,159,10,0.15)] text-[var(--orange)] border border-[rgba(255,159,10,0.3)]'
-                            }`}>
-                              {item.install_type === 'bench' ? 'B' : 'F'}
-                            </span>
-                          )}
-                          <h3 className="text-[15px] font-medium text-[var(--text-primary)]">{item.name}</h3>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {item.qty > 0 && (
-                            <span className="text-[12px] font-medium text-[var(--text-secondary)] bg-[var(--surface)] px-2 py-1 rounded-lg border border-[var(--border)]">
-                              Qty {item.qty}
-                            </span>
-                          )}
-                          <button
-                            onClick={() => startEditItem(item)}
-                            className="text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] min-h-[44px] min-w-[44px] flex items-center justify-center"
-                            title="Edit item"
+                      {/* Header row: item name + compact install-type toggle */}
+                      <div className="flex justify-between items-start gap-3 mb-2">
+                        <div className="flex-1 min-w-0">
+                          <h3
+                            className="text-[18px] font-bold uppercase text-[var(--text-primary)] leading-tight break-words"
+                            style={{ fontFamily: "var(--font-display)", letterSpacing: "0.02em" }}
                           >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                            </svg>
+                            {item.name}
+                          </h3>
+                          {formatSpec(item) && (
+                            <p className="text-[13px] text-[var(--text-secondary)] mt-1">
+                              {formatSpec(item)}
+                            </p>
+                          )}
+                          <div className="flex items-center gap-2 mt-1">
+                            {item.qty > 0 && (
+                              <span
+                                className="text-[11px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-md border"
+                                style={{
+                                  fontFamily: "var(--font-display)",
+                                  color: "var(--cyan)",
+                                  background: "var(--cyan-dim)",
+                                  borderColor: "var(--cyan)",
+                                  letterSpacing: "0.06em",
+                                }}
+                              >
+                                Qty {item.qty}
+                              </span>
+                            )}
+                            {item.options && (
+                              <span className="text-[11px] text-[var(--text-tertiary)] truncate">
+                                {item.options}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Install-type compact toggle pair */}
+                        <div
+                          className="flex shrink-0 rounded-md overflow-hidden border"
+                          style={{ borderColor: "var(--border)", background: "var(--surface-raised)" }}
+                          role="group"
+                          aria-label="Install type"
+                        >
+                          <button
+                            type="button"
+                            onClick={() => handleInstallTypeChange(item.id, 'bench')}
+                            aria-pressed={item.install_type === 'bench'}
+                            title="Classify as bench"
+                            className="min-w-[44px] min-h-[44px] px-2 text-[11px] font-semibold uppercase transition-colors"
+                            style={{
+                              fontFamily: "var(--font-display)",
+                              letterSpacing: "0.06em",
+                              background: item.install_type === 'bench' ? "var(--purple-dim)" : "transparent",
+                              color: item.install_type === 'bench' ? "var(--purple)" : "var(--text-tertiary)",
+                              boxShadow: item.install_type === 'bench' ? "inset 0 0 0 1px var(--purple)" : "none",
+                            }}
+                          >
+                            Bench
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleInstallTypeChange(item.id, 'field')}
+                            aria-pressed={item.install_type === 'field'}
+                            title="Classify as field"
+                            className="min-w-[44px] min-h-[44px] px-2 text-[11px] font-semibold uppercase transition-colors"
+                            style={{
+                              fontFamily: "var(--font-display)",
+                              letterSpacing: "0.06em",
+                              background: item.install_type === 'field' ? "var(--orange-dim)" : "transparent",
+                              color: item.install_type === 'field' ? "var(--orange)" : "var(--text-tertiary)",
+                              boxShadow: item.install_type === 'field' ? "inset 0 0 0 1px var(--orange)" : "none",
+                              borderLeft: "1px solid var(--border)",
+                            }}
+                          >
+                            Field
                           </button>
                         </div>
                       </div>
-
-                      {formatSpec(item) && (
-                        <p className="text-[13px] text-[var(--text-tertiary)] mb-2">
-                          {formatSpec(item)}
-                        </p>
-                      )}
-
-                      {item.options && (
-                        <p className="text-[12px] text-[var(--text-tertiary)] mb-2">
-                          {item.options}
-                        </p>
-                      )}
-
-                      {/* Install type selector (if not set) */}
-                      {!item.install_type && (
-                        <div className="flex flex-col gap-2 w-full mb-3">
-                          <span className="text-[12px] text-[var(--text-tertiary)]">Classify:</span>
-                          <div className="flex flex-col gap-2 w-full">
-                            <button
-                              onClick={() => handleInstallTypeChange(item.id, 'bench')}
-                              className="text-[14px] px-4 py-3 min-h-[48px] bg-[rgba(191,90,242,0.15)] text-[var(--purple)] rounded-lg hover:bg-[rgba(191,90,242,0.25)] transition-colors border border-[var(--purple)]"
-                            >
-                              Bench
-                            </button>
-                            <button
-                              onClick={() => handleInstallTypeChange(item.id, 'field')}
-                              className="text-[14px] px-4 py-3 min-h-[48px] bg-[rgba(255,159,10,0.15)] text-[var(--orange)] rounded-lg hover:bg-[rgba(255,159,10,0.25)] transition-colors border border-[var(--orange)]"
-                            >
-                              Field
-                            </button>
-                          </div>
-                        </div>
-                      )}
 
                       {/* Workflow steps with green checks */}
                       <div className="flex flex-wrap items-center gap-2 mt-3">
@@ -727,7 +743,7 @@ export default function DoorDetailPage() {
                                 className="flex items-center justify-center w-12 h-12 rounded-full transition-colors"
                                 style={{
                                   background: isActive ? 'var(--green)' : 'transparent',
-                                  border: isActive ? '2px solid var(--green)' : `2px solid var(--border)`,
+                                  border: isActive ? '2px solid var(--green)' : `2px solid var(--border-hover)`,
                                 }}
                               >
                                 {isActive && (
@@ -736,7 +752,14 @@ export default function DoorDetailPage() {
                                   </svg>
                                 )}
                               </button>
-                              <span className="text-[10px] uppercase font-medium" style={{ color: isActive ? 'var(--green)' : 'var(--text-tertiary)' }}>
+                              <span
+                                className="text-[10px] uppercase font-semibold"
+                                style={{
+                                  fontFamily: "var(--font-display)",
+                                  letterSpacing: "0.06em",
+                                  color: isActive ? 'var(--green)' : 'var(--text-tertiary)',
+                                }}
+                              >
                                 {label}
                               </span>
                               {idx < getWorkflowSteps(item).length - 1 && (
@@ -750,27 +773,26 @@ export default function DoorDetailPage() {
                             </div>
                           );
                         })}
+                      </div>
 
-                        {/* Change install type */}
-                        {item.install_type && (
-                          <button
-                            onClick={() => handleInstallTypeChange(
-                              item.id,
-                              item.install_type === 'bench' ? 'field' : 'bench'
-                            )}
-                            className="ml-2 text-[11px] text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] underline min-h-[44px] flex items-center"
-                            title={`Switch to ${item.install_type === 'bench' ? 'field' : 'bench'}`}
-                          >
-                            Switch to {item.install_type === 'bench' ? 'Field' : 'Bench'}
-                          </button>
-                        )}
-
+                      {/* Bottom action row: edit + report issue */}
+                      <div className="flex items-center justify-end gap-2 mt-3 pt-2 border-t border-[var(--border)]">
+                        <button
+                          onClick={() => startEditItem(item)}
+                          className="text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] min-h-[44px] min-w-[44px] flex items-center justify-center transition-colors"
+                          title="Edit item"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                        </button>
                         <button
                           onClick={() => setIssueModal({
                             doorNumber: opening.door_number,
                             hardwareItemName: item.name,
                           })}
-                          className="ml-auto text-[11px] text-[var(--red)] hover:text-[var(--red)]/80 transition-colors min-h-[44px] flex items-center"
+                          className="text-[11px] uppercase text-[var(--red)] hover:text-[var(--red)]/80 transition-colors min-h-[44px] px-2 flex items-center"
+                          style={{ fontFamily: "var(--font-display)", letterSpacing: "0.06em" }}
                         >
                           Report Issue
                         </button>
