@@ -48,12 +48,19 @@ async function extractFromPDF(base64: string, filteredPdfBase64?: string, userCo
 
   // Python layer now handles qty normalization (total ÷ door_count = per-opening).
   // Pass through qty metadata fields as-is.
+  //
+  // heading_doors MUST be forwarded — the Python extractor populates it
+  // via extract_heading_door_numbers() so the TS layer can route doors
+  // to specific sub-sets (DH4A.0 vs DH4A.1). Dropping it here silently
+  // breaks buildDoorToSetMap() and the wizard's Verify Sample picker,
+  // which produced the "wrong door paired with wrong items" symptom.
   let hardwareSets: HardwareSet[] = (pdfplumberResult?.hardware_sets || []).map(s => ({
     set_id: s.set_id,
     generic_set_id: s.generic_set_id,
     heading: s.heading,
     heading_door_count: s.heading_door_count,
     heading_leaf_count: s.heading_leaf_count,
+    heading_doors: s.heading_doors ?? [],
     items: (s.items ?? []).map(i => ({
       qty: i.qty,
       qty_total: i.qty_total,

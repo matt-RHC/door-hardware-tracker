@@ -56,6 +56,11 @@ export interface PdfplumberResult {
     heading: string
     heading_door_count?: number
     heading_leaf_count?: number
+    /** Specific door numbers listed under this sub-heading. Populated by
+     *  api/extract-tables.py via extract_heading_door_numbers(). Used by
+     *  the TS layer to route doors to specific sub-sets (DH4A.0 vs
+     *  DH4A.1) instead of collapsing them by generic_set_id. */
+    heading_doors?: string[]
     items: Array<{
       qty: number
       qty_total?: number
@@ -599,7 +604,50 @@ export function normalizeQuantities(
         continue
       }
 
-      // per_leaf (or unknown/null fallback) → try leafCount first, then doorCount
+      // per_leaf items must divide by leafCount when leafCount is known.
+      //
+      // Historical bug: the old code required Number.isInteger(qty/leafCount)
+      // and otherwise fell back to dividing by doorCount. For pair-door sets
+      // with mixed hinge rows (e.g., 42 standard + 6 electric across 12
+      // leaves), 42/12=3.5 is NOT an integer, so the code fell back to
+      // 42/6=7 per opening. That number happens to be an integer and looks
+      // plausible but is silently wrong — the correct answer is ~4 per leaf.
+      //
+      // Fix: if leafCount > 1, ALWAYS divide by leafCount for per_leaf items.
+      // Use Math.round for non-integer results and flag the item so Punchy's
+      // quantity check and the UI can surface it for verification. Only fall
+      // back to doorCount when leafCount is missing (single-door sets where
+      // Python couldn't compute a leaf count).
+      if (scope === 'per_leaf') {
+        if (leafCount > 1 && item.qty >= leafCount) {
+          const perLeaf = item.qty / leafCount
+          item.qty_total = item.qty
+          item.qty_door_count = leafCount
+          if (Number.isInteger(perLeaf)) {
+            item.qty = perLeaf
+            item.qty_source = 'divided'
+          } else {
+            // Non-integer per-leaf. Could be mixed configurations (some
+            // leaves get 4 hinges, some 3) or a different count elsewhere
+            // in the set. Round to nearest and flag for review.
+            item.qty = Math.round(perLeaf)
+            item.qty_source = 'flagged'
+          }
+        } else if (doorCount > 1 && item.qty >= doorCount) {
+          // Leaf count unknown — fall back to doorCount.
+          const perOpening = item.qty / doorCount
+          if (Number.isInteger(perOpening)) {
+            item.qty_total = item.qty
+            item.qty_door_count = doorCount
+            item.qty = perOpening
+            item.qty_source = 'divided'
+          }
+        }
+        continue
+      }
+
+      // Unknown scope → legacy behavior: try leafCount first, then doorCount.
+      // This is the conservative fallback for items we can't classify.
       let divided = false
       if (leafCount > 1 && item.qty >= leafCount) {
         const perLeaf = item.qty / leafCount

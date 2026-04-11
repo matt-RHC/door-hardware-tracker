@@ -67,13 +67,18 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Convert pdfplumber result to our types — Python layer handles qty normalization
+    // Convert pdfplumber result to our types — Python layer handles qty normalization.
+    //
+    // heading_doors MUST be forwarded — see parse-pdf/route.ts for the full
+    // explanation. Dropping this field breaks sub-set door routing and the
+    // Verify Sample picker. Mirrors the fix in the non-chunked route.
     let hardwareSets: HardwareSet[] = (pdfplumberResult?.hardware_sets || []).map(s => ({
       set_id: s.set_id,
       generic_set_id: s.generic_set_id,
       heading: s.heading,
       heading_door_count: s.heading_door_count,
       heading_leaf_count: s.heading_leaf_count,
+      heading_doors: s.heading_doors ?? [],
       items: (s.items ?? []).map(i => ({
         qty: i.qty,
         qty_total: i.qty_total,

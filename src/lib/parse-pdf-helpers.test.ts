@@ -78,6 +78,75 @@ describe('normalizeQuantities — category-aware division', () => {
     expect(sets[0].items[0].qty_source).toBe('divided')
   })
 
+  // Regression for the "42 hinges on 12 leaves" pair-door bug
+  // (Radius DC DH4A.0 screenshot, 2026-04-11).
+  //
+  // Old behavior: 42 hinges / 12 leaves = 3.5 (non-integer) → rejected →
+  // fell back to 42 / 6 doors = 7 per opening → silently wrong.
+  //
+  // New behavior: always divide by leafCount for per_leaf items when
+  // leafCount > 1, using Math.round and flagging the item if the
+  // division isn't clean.
+  it('rounds and flags pair-door hinges when qty does not divide cleanly by leafCount', () => {
+    // Pair-door set with 6 pairs (12 leaves). 42 standard hinges is a
+    // real-world pattern: 3 hinges on each of 12 leaves = 36, plus 6
+    // "extra" (e.g., mid-height pivots, transfer prep) that show on the
+    // same line. The correct per-leaf answer is roughly 4 (42/12≈3.5
+    // → rounds up to 4) — NOT 7 (42/6) which was the old incorrect
+    // fallback.
+    const sets = [makeSet('DH4A', [
+      { name: 'Butt Hinge 5BB1 HW 4.5" x 4.5"', qty: 42 },
+    ], { heading_leaf_count: 12, heading_door_count: 6 })]
+    const doors = Array.from({ length: 6 }, (_, i) =>
+      makeDoor(`DH4A-PR-${i + 1}`, 'DH4A'),
+    )
+
+    normalizeQuantities(sets, doors)
+
+    // 42 / 12 = 3.5, rounds to 4. NOT 7 (the old buggy fallback).
+    expect(sets[0].items[0].qty).toBe(4)
+    expect(sets[0].items[0].qty_total).toBe(42)
+    expect(sets[0].items[0].qty_door_count).toBe(12)
+    // Flagged so Punchy + the UI know this is a non-clean division.
+    expect(sets[0].items[0].qty_source).toBe('flagged')
+  })
+
+  it('divides pair-door hinges cleanly when qty is a multiple of leafCount', () => {
+    // Clean case: 48 hinges across 12 leaves = 4 per leaf.
+    // Should be marked 'divided' (not flagged) because the math is exact.
+    const sets = [makeSet('DH4A_CLEAN', [
+      { name: 'Butt Hinge 5BB1', qty: 48 },
+    ], { heading_leaf_count: 12, heading_door_count: 6 })]
+    const doors = Array.from({ length: 6 }, (_, i) =>
+      makeDoor(`CLEAN-PR-${i + 1}`, 'DH4A_CLEAN'),
+    )
+
+    normalizeQuantities(sets, doors)
+
+    expect(sets[0].items[0].qty).toBe(4)
+    expect(sets[0].items[0].qty_total).toBe(48)
+    expect(sets[0].items[0].qty_door_count).toBe(12)
+    expect(sets[0].items[0].qty_source).toBe('divided')
+  })
+
+  it('never silently falls back to doorCount for per_leaf items when leafCount is known', () => {
+    // Safety net: regardless of whether the per_leaf division is clean,
+    // a per_leaf item with a known leafCount must NEVER divide by
+    // doorCount alone. This is the exact mask-the-bug behavior we're
+    // killing.
+    const sets = [makeSet('DH_SAFETY', [
+      { name: 'Hinge', qty: 14 }, // 14/4=3.5 → rounds to 4; 14/2=7 would be "plausible"
+    ], { heading_leaf_count: 4, heading_door_count: 2 })]
+    const doors = [makeDoor('S01', 'DH_SAFETY'), makeDoor('S02', 'DH_SAFETY')]
+
+    normalizeQuantities(sets, doors)
+
+    // Must round from leafCount division, NOT fall back to doorCount.
+    expect(sets[0].items[0].qty).toBe(4) // NOT 7
+    expect(sets[0].items[0].qty_door_count).toBe(4) // leafCount, not doorCount
+    expect(sets[0].items[0].qty_source).toBe('flagged')
+  })
+
   // === per_opening items (closers, locksets) ===
 
   it('divides closers by door count, not leaf count (per_opening)', () => {
