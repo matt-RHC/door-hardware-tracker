@@ -15,6 +15,7 @@ const MAPPABLE_FIELDS: { value: keyof DoorEntry | ""; label: string }[] = [
   { value: "", label: "(skip)" },
   { value: "door_number", label: "Door Number" },
   { value: "hw_set", label: "Hardware Set" },
+  { value: "hw_heading", label: "Hardware Heading" },
   { value: "location", label: "Location" },
   { value: "door_type", label: "Door Type" },
   { value: "frame_type", label: "Frame Type" },
