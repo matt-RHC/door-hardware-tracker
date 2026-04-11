@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import Anthropic from '@anthropic-ai/sdk'
 import { fetchProjectPdfBase64 } from '@/lib/pdf-storage'
-import { callDeepExtraction, type DeepExtractResult } from '@/lib/parse-pdf-helpers'
+import { callDeepExtraction } from '@/lib/parse-pdf-helpers'
 
 // Haiku is fast — 300s is generous
 export const maxDuration = 300
@@ -41,13 +41,22 @@ export async function POST(request: NextRequest) {
 
     const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
 
-    const results: DeepExtractResult[] = await callDeepExtraction(
+    const outcome = await callDeepExtraction(
       client,
       pdfBase64,
       emptySets,
       goldenSample,
     )
 
+    if (!outcome.ok) {
+      console.error(`[deep-extract] Failed: ${outcome.error}`)
+      return NextResponse.json(
+        { error: `Deep extraction failed: ${outcome.error}` },
+        { status: 502 },
+      )
+    }
+
+    const results = outcome.results
     const totalItems = results.reduce(
       (sum, r) => sum + (r.items?.length ?? 0),
       0,
