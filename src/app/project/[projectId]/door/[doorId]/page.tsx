@@ -14,6 +14,7 @@ import { playSuccess, playToggle } from "@/lib/sounds";
 import { useItemEditing } from "@/hooks/useItemEditing";
 import { useOpeningEditing } from "@/hooks/useOpeningEditing";
 import { useClassification } from "@/hooks/useClassification";
+import { useToast } from "@/components/ToastProvider";
 
 interface OpeningDetail extends Opening {
   hardware_items: HardwareItemWithProgress[];
@@ -40,6 +41,7 @@ export default function DoorDetailPage() {
 
   const supabase = createClient();
   const fetchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const { showToast } = useToast();
 
   const fetchOpeningData = useCallback(async () => {
     try {
@@ -142,7 +144,7 @@ export default function DoorDetailPage() {
       await fetchOpeningData();
     } catch (err) {
       console.error("Error toggling step:", err);
-      alert("Failed to update step. Check your connection and try again.");
+      showToast("error", "Failed to update step. Check your connection and try again.");
     }
   };
 
@@ -165,7 +167,7 @@ export default function DoorDetailPage() {
       await fetchOpeningData();
     } catch (err) {
       console.error("Error toggling item:", err);
-      alert("Failed to update item. Check your connection and try again.");
+      showToast("error", "Failed to update item. Check your connection and try again.");
     }
   };
 
@@ -187,7 +189,7 @@ export default function DoorDetailPage() {
       setTimeout(() => setNotesSaved(false), 2000);
     } catch (err) {
       console.error("Error saving notes:", err);
-      alert("Failed to save notes. Please try again.");
+      showToast("error", "Failed to save notes. Please try again.");
     } finally {
       setSavingNotes(false);
     }
@@ -211,7 +213,7 @@ export default function DoorDetailPage() {
       await fetchOpeningData();
     } catch (err) {
       console.error("Error uploading attachment:", err);
-      alert("Failed to upload attachment. Check your connection and try again.");
+      showToast("error", "Failed to upload attachment. Check your connection and try again.");
     } finally {
       setAttachmentLoading(false);
     }

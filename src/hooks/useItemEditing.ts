@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react'
 import { HardwareItemWithProgress } from '@/lib/types/database'
+import { useToast } from '@/components/ToastProvider'
 
 interface OpeningDetail {
   hardware_items: HardwareItemWithProgress[]
@@ -31,6 +32,7 @@ interface UseItemEditingOptions {
 }
 
 export function useItemEditing({ projectId, doorId, opening, fetchOpeningData }: UseItemEditingOptions) {
+  const { showToast } = useToast()
   const [editingItemId, setEditingItemId] = useState<string | null>(null)
   const [editingItem, setEditingItem] = useState<EditingItemState | null>(null)
   const [savingItem, setSavingItem] = useState(false)
@@ -74,12 +76,12 @@ export function useItemEditing({ projectId, doorId, opening, fetchOpeningData }:
       if (!response.ok) throw new Error('Failed to bulk update items')
     } catch (err) {
       console.error('Error bulk updating items:', err)
-      alert('Failed to apply the edit to all matching items. Check your connection and try again.')
+      showToast('error', 'Failed to apply the edit to all matching items. Check your connection and try again.')
     } finally {
       setEditApplyAllLoading(false)
       setEditApplyAllPrompt(null)
     }
-  }, [projectId])
+  }, [projectId, showToast])
 
   const saveSingleItem = useCallback(async () => {
     if (!editingItem) return
@@ -109,11 +111,11 @@ export function useItemEditing({ projectId, doorId, opening, fetchOpeningData }:
       setOriginalItemName(null)
     } catch (err) {
       console.error('Error saving item:', err)
-      alert('Failed to save item. Check your connection and try again.')
+      showToast('error', 'Failed to save item. Check your connection and try again.')
     } finally {
       setSavingItem(false)
     }
-  }, [editingItem, doorId, fetchOpeningData])
+  }, [editingItem, doorId, fetchOpeningData, showToast])
 
   const saveEditItem = useCallback(async () => {
     if (!editingItem || !originalItemName) return
