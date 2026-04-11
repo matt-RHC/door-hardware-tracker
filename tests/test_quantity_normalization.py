@@ -41,21 +41,80 @@ class TestQuantityDivision:
         assert item.qty_total == 12
         assert item.qty_door_count == 4
 
-    def test_non_exact_division_not_divided(self, extract_tables):
-        """13 hinges ÷ 4 leaves → not evenly divisible, should not divide."""
+    def test_non_exact_per_leaf_rounds_and_flags(self, extract_tables):
+        """13 hinges ÷ 4 leaves = 3.25 → rounded to 3, flagged for review.
+
+        This asserts the fix for the pair-door quantity bug. The old
+        behavior rejected non-integer results and left the item
+        unflagged/undivided. The new behavior rounds and flags so the
+        user can see and correct it. qty_source MUST be 'flagged' (not
+        'divided'), and qty_door_count MUST be leaf_count (4), not
+        door_count (2) — per-leaf items never silently fall back to
+        door_count division when leaf_count > 1.
+        """
         hw = self._make_set(extract_tables, qty=13, door_count=2, leaf_count=4)
         extract_tables.normalize_quantities([hw], [])
         item = hw.items[0]
-        assert item.qty_source != "divided"
+        assert item.qty == 3, f"Expected 3 (round(13/4)), got {item.qty}"
+        assert item.qty_source == "flagged"
+        assert item.qty_door_count == 4, "must divide by leaf_count, not door_count"
+        assert item.qty_total == 13
 
-    def test_division_by_openings_when_leaves_dont_divide(self, extract_tables):
-        """10 hinges ÷ 5 openings = 2 per opening (leaf division fails first)."""
+    def test_per_leaf_never_falls_back_to_door_count_when_leaf_count_gt_1(self, extract_tables):
+        """10 hinges on 5 doors / 7 leaves must divide by leaves (rounded), not 10/5=2.
+
+        This tests the exact anti-pattern from the DH4A.0 / DH1.01 pair-door
+        bug. Old buggy behavior: 10 / 7 leaves fails integer check, falls
+        back to 10 / 5 openings = 2, silently 'divided'. That hides the
+        underlying data problem. New behavior: round(10/7) = 1 per leaf,
+        flagged for review. Even if the number is 'wrong' in an absolute
+        sense, flagging surfaces the issue to the user.
+        """
         hw = self._make_set(extract_tables, qty=10, door_count=5, leaf_count=7)
         extract_tables.normalize_quantities([hw], [])
         item = hw.items[0]
-        assert item.qty == 2
-        assert item.qty_source == "divided"
-        assert item.qty_door_count == 5
+        # MUST NOT be 2 (the old buggy fallback to 10/5=2)
+        assert item.qty != 2, "regression: fell back to door_count division"
+        # MUST be round(10/7) = 1
+        assert item.qty == 1
+        assert item.qty_source == "flagged"
+        assert item.qty_door_count == 7, "must preserve leaf_count, not fall back to door_count"
+
+    def test_pair_door_42_hinges_on_12_leaves_rounds_to_4(self, extract_tables):
+        """42 hinges across 6 pair doors (12 leaves) → 4 per leaf, flagged.
+
+        This is the exact Radius DC DH4A.0 scenario from the April 2026
+        production report. 42/12 = 3.5, rounds to 4. Old code fell back
+        to 42/6 = 7 per opening (an integer, but wildly wrong — tall
+        commercial doors use 3-5 hinges per leaf per DHI standards).
+        New code flags it at 4 per leaf for user confirmation.
+        """
+        hw = self._make_set(extract_tables, qty=42, door_count=6, leaf_count=12)
+        extract_tables.normalize_quantities([hw], [])
+        item = hw.items[0]
+        assert item.qty == 4, (
+            f"Expected 4 (round(42/12)), got {item.qty}. The old buggy "
+            f"fallback produced 7 (42/6 per opening). If this assertion "
+            f"fails with qty=7, the fallback-to-door_count bug has regressed."
+        )
+        assert item.qty_source == "flagged"
+        assert item.qty_door_count == 12
+        assert item.qty_total == 42
+
+    def test_pair_door_48_hinges_on_12_leaves_divides_cleanly(self, extract_tables):
+        """48 hinges across 6 pair doors (12 leaves) → 4 per leaf, divided.
+
+        Clean companion case: when the per-leaf math divides cleanly,
+        qty_source should be 'divided' (not flagged). This verifies that
+        the new rounding path only engages for non-integer results, not
+        for every per-leaf item.
+        """
+        hw = self._make_set(extract_tables, qty=48, door_count=6, leaf_count=12)
+        extract_tables.normalize_quantities([hw], [])
+        item = hw.items[0]
+        assert item.qty == 4
+        assert item.qty_source == "divided", "clean division must not be flagged"
+        assert item.qty_door_count == 12
 
     def test_large_exact_division(self, extract_tables):
         """42 hinges ÷ 14 leaves = 3 per leaf (the actual BUG-9 scenario)."""

@@ -3364,38 +3364,105 @@ def normalize_quantities(
             category = _classify_hardware_item(item.name)
             pref = DIVISION_PREFERENCE.get(category, "opening")
 
-            if pref == "leaf":
-                # Per-leaf items (hinges): try leaves first, then openings
-                divisors = [
-                    (leaf_count, "leaves"),
-                    (door_count, "openings"),
-                ]
+            if pref == "leaf" and leaf_count > 1 and raw_qty >= leaf_count:
+                # Per-leaf items (hinges, pivots, continuous hinges).
+                #
+                # HARD RULE: when leaf_count > 1, ALWAYS divide by leaf_count.
+                # Never fall back to door_count. The old fallback silently
+                # produced wrong per-opening quantities for pair-door sets
+                # whose raw totals didn't divide cleanly by leaves. Example:
+                # 42 hinges across 6 pair doors (12 leaves) → 42/12=3.5 used
+                # to fail the integer-only check and fall through to
+                # 42/6=7 per opening (an integer, but wrong — the real
+                # answer is ~4 per leaf). The sanity check at the end would
+                # flag qty>max but the quantity itself stayed wrong.
+                #
+                # New behavior: if leaf division doesn't divide cleanly,
+                # round to the nearest integer and set qty_source='flagged'
+                # so downstream consumers (Punchy quantity check, wizard
+                # UI) know to scrutinize. Non-clean per-leaf math usually
+                # means mixed leaf configurations or extra prep hardware
+                # counted as hinges — both cases benefit from user review.
+                per_unit, ok = _try_divide(raw_qty, leaf_count)
+                if ok:
+                    item.qty = per_unit
+                    item.qty_door_count = leaf_count
+                    item.qty_source = "divided"
+                    divided = True
+                    logger.info(
+                        f"[qty-norm] {hw_set.set_id}: '{item.name}' "
+                        f"{raw_qty} ÷ {leaf_count} leaves = {item.qty} "
+                        f"(category={category}, pref=leaf)"
+                    )
+                else:
+                    rounded = round(raw_qty / leaf_count)
+                    item.qty = rounded
+                    item.qty_door_count = leaf_count
+                    item.qty_source = "flagged"
+                    divided = True
+                    logger.warning(
+                        f"[qty-norm] {hw_set.set_id}: '{item.name}' "
+                        f"{raw_qty} ÷ {leaf_count} leaves = "
+                        f"{raw_qty / leaf_count:.2f} → rounded to "
+                        f"{rounded} (category={category}, flagged for "
+                        f"review — non-clean per-leaf division)"
+                    )
+            elif pref == "leaf":
+                # Per-leaf item but leaf_count is missing/<=1 OR raw_qty is
+                # already smaller than leaf_count. Fall back to opening
+                # division if possible; otherwise the "Neither worked"
+                # handler below will mark it as 'parsed' or 'flagged'.
+                if door_count > 1 and raw_qty >= door_count:
+                    per_unit, ok = _try_divide(raw_qty, door_count)
+                    if ok:
+                        item.qty = per_unit
+                        item.qty_door_count = door_count
+                        item.qty_source = "divided"
+                        divided = True
+                        logger.info(
+                            f"[qty-norm] {hw_set.set_id}: '{item.name}' "
+                            f"{raw_qty} ÷ {door_count} openings = {item.qty} "
+                            f"(category={category}, pref=leaf, leaf_count missing)"
+                        )
             elif pref == "opening_only":
                 # Per-opening-only items: never divide by leaves
                 divisors = [
                     (door_count, "openings"),
                 ]
+                for divisor, label in divisors:
+                    if divided:
+                        break
+                    per_unit, ok = _try_divide(raw_qty, divisor)
+                    if ok:
+                        item.qty = per_unit
+                        item.qty_door_count = divisor
+                        item.qty_source = "divided"
+                        divided = True
+                        logger.info(
+                            f"[qty-norm] {hw_set.set_id}: '{item.name}' "
+                            f"{raw_qty} ÷ {divisor} {label} = {item.qty} "
+                            f"(category={category}, pref={pref})"
+                        )
             else:  # "opening"
                 # Per-opening items: try openings first, then leaves
                 divisors = [
                     (door_count, "openings"),
                     (leaf_count, "leaves"),
                 ]
-
-            for divisor, label in divisors:
-                if divided:
-                    break
-                per_unit, ok = _try_divide(raw_qty, divisor)
-                if ok:
-                    item.qty = per_unit
-                    item.qty_door_count = divisor
-                    item.qty_source = "divided"
-                    divided = True
-                    logger.info(
-                        f"[qty-norm] {hw_set.set_id}: '{item.name}' "
-                        f"{raw_qty} ÷ {divisor} {label} = {item.qty} "
-                        f"(category={category}, pref={pref})"
-                    )
+                for divisor, label in divisors:
+                    if divided:
+                        break
+                    per_unit, ok = _try_divide(raw_qty, divisor)
+                    if ok:
+                        item.qty = per_unit
+                        item.qty_door_count = divisor
+                        item.qty_source = "divided"
+                        divided = True
+                        logger.info(
+                            f"[qty-norm] {hw_set.set_id}: '{item.name}' "
+                            f"{raw_qty} ÷ {divisor} {label} = {item.qty} "
+                            f"(category={category}, pref={pref})"
+                        )
 
             # Neither worked
             if not divided:
