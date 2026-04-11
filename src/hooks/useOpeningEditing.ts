@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react'
+import { useToast } from '@/components/ToastProvider'
 
 export interface EditingOpeningState {
   door_number: string
@@ -29,6 +30,7 @@ interface UseOpeningEditingOptions {
 }
 
 export function useOpeningEditing({ projectId, doorId, opening, fetchOpeningData }: UseOpeningEditingOptions) {
+  const { showToast } = useToast()
   const [editingOpening, setEditingOpening] = useState(false)
   const [editingOpeningData, setEditingOpeningData] = useState<EditingOpeningState | null>(null)
   const [savingOpening, setSavingOpening] = useState(false)
@@ -71,10 +73,11 @@ export function useOpeningEditing({ projectId, doorId, opening, fetchOpeningData
       setEditingOpeningData(null)
     } catch (err) {
       console.error('Error saving opening:', err)
+      showToast('error', 'Failed to save opening. Check your connection and try again.')
     } finally {
       setSavingOpening(false)
     }
-  }, [editingOpeningData, projectId, doorId, fetchOpeningData])
+  }, [editingOpeningData, projectId, doorId, fetchOpeningData, showToast])
 
   return {
     editingOpening,

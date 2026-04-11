@@ -1,5 +1,6 @@
 import { useState, useCallback } from 'react'
 import { HardwareItemWithProgress } from '@/lib/types/database'
+import { useToast } from '@/components/ToastProvider'
 
 export interface ClassifyPrompt {
   itemId: string
@@ -16,6 +17,7 @@ interface UseClassificationOptions {
 }
 
 export function useClassification({ projectId, doorId, opening, fetchOpeningData }: UseClassificationOptions) {
+  const { showToast } = useToast()
   const [classifyPrompt, setClassifyPrompt] = useState<ClassifyPrompt | null>(null)
   const [classifyLoading, setClassifyLoading] = useState(false)
   const [dontAskClassify, setDontAskClassify] = useState(false)
@@ -34,8 +36,9 @@ export function useClassification({ projectId, doorId, opening, fetchOpeningData
       await fetchOpeningData()
     } catch (err) {
       console.error('Error updating install type:', err)
+      showToast('error', 'Failed to update install type. Check your connection and try again.')
     }
-  }, [doorId, fetchOpeningData])
+  }, [doorId, fetchOpeningData, showToast])
 
   const applyClassification = useCallback(async (itemName: string, installType: 'bench' | 'field', itemIds?: string[]) => {
     setClassifyLoading(true)
@@ -56,11 +59,12 @@ export function useClassification({ projectId, doorId, opening, fetchOpeningData
       await fetchOpeningData()
     } catch (err) {
       console.error('Error classifying items:', err)
+      showToast('error', 'Failed to classify items. Check your connection and try again.')
     } finally {
       setClassifyLoading(false)
       setClassifyPrompt(null)
     }
-  }, [projectId, fetchOpeningData])
+  }, [projectId, fetchOpeningData, showToast])
 
   const handleInstallTypeChange = useCallback(async (itemId: string, installType: 'bench' | 'field' | null) => {
     if (!installType || !opening) {
@@ -78,6 +82,7 @@ export function useClassification({ projectId, doorId, opening, fetchOpeningData
         await fetchOpeningData()
       } catch (err) {
         console.error('Error updating install type:', err)
+        showToast('error', 'Failed to clear install type. Check your connection and try again.')
       }
       return
     }
@@ -113,7 +118,7 @@ export function useClassification({ projectId, doorId, opening, fetchOpeningData
     } catch {
       await applySingleClassification(itemId, installType)
     }
-  }, [opening, dontAskClassify, projectId, doorId, fetchOpeningData, applyClassification, applySingleClassification])
+  }, [opening, dontAskClassify, projectId, doorId, fetchOpeningData, applyClassification, applySingleClassification, showToast])
 
   return {
     classifyPrompt,
