@@ -142,6 +142,7 @@ export default function DoorDetailPage() {
       await fetchOpeningData();
     } catch (err) {
       console.error("Error toggling step:", err);
+      alert("Failed to update step. Check your connection and try again.");
     }
   };
 
@@ -164,6 +165,7 @@ export default function DoorDetailPage() {
       await fetchOpeningData();
     } catch (err) {
       console.error("Error toggling item:", err);
+      alert("Failed to update item. Check your connection and try again.");
     }
   };
 
@@ -209,6 +211,7 @@ export default function DoorDetailPage() {
       await fetchOpeningData();
     } catch (err) {
       console.error("Error uploading attachment:", err);
+      alert("Failed to upload attachment. Check your connection and try again.");
     } finally {
       setAttachmentLoading(false);
     }
