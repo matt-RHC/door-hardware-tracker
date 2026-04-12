@@ -449,6 +449,119 @@ export type Database = {
           last_synced?: string | null
         }
       }
+      tracking_items: {
+        Row: {
+          id: string
+          record_type: 'plan_item' | 'session' | 'metric_run'
+          source_sheet_id: number | null
+          source_row_id: number | null
+          source_imported_at: string | null
+          title: string
+          status: string | null
+          category: string | null
+          priority: string | null
+          area: string | null
+          description: string | null
+          notes: string | null
+          session_refs: string[] | null
+          date_identified: string | null
+          date_resolved: string | null
+          due_date: string | null
+          resolved_pr: number | null
+          resolved_commit: string | null
+          code_evidence: Record<string, unknown> | null
+          relevance: 'current' | 'stale' | 'archived' | 'unknown' | null
+          relevance_notes: string | null
+          last_verified_at: string | null
+          session_topics: string | null
+          session_decisions: string | null
+          session_status: string | null
+          metric_pdf_name: string | null
+          metric_doors_expected: number | null
+          metric_doors_extracted: number | null
+          metric_sets_expected: number | null
+          metric_sets_extracted: number | null
+          metric_accuracy_pct: number | null
+          metric_duration_ms: number | null
+          metric_build_commit: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          record_type: 'plan_item' | 'session' | 'metric_run'
+          source_sheet_id?: number | null
+          source_row_id?: number | null
+          source_imported_at?: string | null
+          title: string
+          status?: string | null
+          category?: string | null
+          priority?: string | null
+          area?: string | null
+          description?: string | null
+          notes?: string | null
+          session_refs?: string[] | null
+          date_identified?: string | null
+          date_resolved?: string | null
+          due_date?: string | null
+          resolved_pr?: number | null
+          resolved_commit?: string | null
+          code_evidence?: Record<string, unknown> | null
+          relevance?: 'current' | 'stale' | 'archived' | 'unknown' | null
+          relevance_notes?: string | null
+          last_verified_at?: string | null
+          session_topics?: string | null
+          session_decisions?: string | null
+          session_status?: string | null
+          metric_pdf_name?: string | null
+          metric_doors_expected?: number | null
+          metric_doors_extracted?: number | null
+          metric_sets_expected?: number | null
+          metric_sets_extracted?: number | null
+          metric_accuracy_pct?: number | null
+          metric_duration_ms?: number | null
+          metric_build_commit?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          record_type?: 'plan_item' | 'session' | 'metric_run'
+          source_sheet_id?: number | null
+          source_row_id?: number | null
+          source_imported_at?: string | null
+          title?: string
+          status?: string | null
+          category?: string | null
+          priority?: string | null
+          area?: string | null
+          description?: string | null
+          notes?: string | null
+          session_refs?: string[] | null
+          date_identified?: string | null
+          date_resolved?: string | null
+          due_date?: string | null
+          resolved_pr?: number | null
+          resolved_commit?: string | null
+          code_evidence?: Record<string, unknown> | null
+          relevance?: 'current' | 'stale' | 'archived' | 'unknown' | null
+          relevance_notes?: string | null
+          last_verified_at?: string | null
+          session_topics?: string | null
+          session_decisions?: string | null
+          session_status?: string | null
+          metric_pdf_name?: string | null
+          metric_doors_expected?: number | null
+          metric_doors_extracted?: number | null
+          metric_sets_expected?: number | null
+          metric_sets_extracted?: number | null
+          metric_accuracy_pct?: number | null
+          metric_duration_ms?: number | null
+          metric_build_commit?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+      }
     }
     Views: {}
     Functions: {}
@@ -492,6 +605,10 @@ export type DeliveryUpdate = Database['public']['Tables']['deliveries']['Update'
 export type SmartsheetRowMap = Database['public']['Tables']['smartsheet_row_map']['Row']
 export type SmartsheetWebhook = Database['public']['Tables']['smartsheet_webhooks']['Row']
 export type SmartsheetPortfolio = Database['public']['Tables']['smartsheet_portfolio']['Row']
+
+export type TrackingItem = Database['public']['Tables']['tracking_items']['Row']
+export type TrackingItemInsert = Database['public']['Tables']['tracking_items']['Insert']
+export type TrackingItemUpdate = Database['public']['Tables']['tracking_items']['Update']
 
 // --- Shared composite types ---
 
