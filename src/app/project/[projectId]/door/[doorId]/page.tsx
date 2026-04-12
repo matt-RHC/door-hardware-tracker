@@ -16,6 +16,8 @@ import { useOpeningEditing } from "@/hooks/useOpeningEditing";
 import { useClassification } from "@/hooks/useClassification";
 import { useToast } from "@/components/ToastProvider";
 import { openProjectPdfAtPage } from "@/lib/pdf-page-link";
+import { groupItemsByLeaf, getLeafDisplayQty, getLeafProgress } from "@/lib/classify-leaf-items";
+import { classifyItemScope } from "@/lib/parse-pdf-helpers";
 
 interface OpeningDetail extends Opening {
   hardware_items: HardwareItemWithProgress[];
@@ -110,7 +112,7 @@ export default function DoorDetailPage() {
 
   type WorkflowStep = 'received' | 'pre_install' | 'installed' | 'qa_qc';
 
-  const handleStepToggle = async (itemId: string, step: WorkflowStep, currentValue: boolean) => {
+  const handleStepToggle = async (itemId: string, step: WorkflowStep, currentValue: boolean, leafIndex: number = 1) => {
     try {
       const response = await fetch(
         `/api/openings/${doorId}/check`,
@@ -119,6 +121,7 @@ export default function DoorDetailPage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             item_id: itemId,
+            leaf_index: leafIndex,
             step,
             value: !currentValue,
           }),
@@ -248,15 +251,20 @@ export default function DoorDetailPage() {
 
   if (!opening) return null;
 
-  const totalItems = opening.hardware_items.length;
-  // An item is "complete" when its final step (qa_qc) is checked
-  const completedItems = opening.hardware_items.filter(
-    (item) => item.progress?.qa_qc
-  ).length;
-  // For backward compat: also count old-style checked items
-  const checkedItems = opening.hardware_items.filter(
-    (item) => item.progress?.qa_qc || item.progress?.checked
-  ).length;
+  // --- Per-leaf grouping ---
+  const leafCount = (opening as any).leaf_count ?? 1;
+  const isPair = leafCount >= 2;
+  const { shared, leaf1, leaf2 } = groupItemsByLeaf(opening.hardware_items, leafCount);
+
+  // Progress: count each leaf section's items independently
+  const countLeafComplete = (items: HardwareItemWithProgress[], leafIndex: number) =>
+    items.filter(item => {
+      const p = getLeafProgress(item, leafIndex);
+      return p?.qa_qc || p?.checked;
+    }).length;
+
+  const totalItems = shared.length + leaf1.length + (isPair ? leaf2.length : 0);
+  const checkedItems = countLeafComplete(shared, 1) + countLeafComplete(leaf1, 1) + (isPair ? countLeafComplete(leaf2, 2) : 0);
   const progress = totalItems > 0 ? (checkedItems / totalItems) * 100 : 0;
 
   // Workflow step helper
@@ -268,9 +276,10 @@ export default function DoorDetailPage() {
     return step;
   };
 
-  const getStepValue = (item: HardwareItemWithProgress, step: WorkflowStep): boolean => {
-    if (!item.progress) return false;
-    return !!(item.progress as any)[step];
+  const getStepValue = (item: HardwareItemWithProgress, step: WorkflowStep, leafIndex: number = 1): boolean => {
+    const p = getLeafProgress(item, leafIndex);
+    if (!p) return false;
+    return !!(p as any)[step];
   };
 
   const getWorkflowSteps = (item: HardwareItemWithProgress): WorkflowStep[] => {
@@ -306,6 +315,250 @@ export default function DoorDetailPage() {
     classifyPrompt, classifyLoading, dontAskClassify, setDontAskClassify,
     setClassifyPrompt, handleInstallTypeChange, applySingleClassification, applyClassification,
   } = classification;
+
+  // --- Item card renderer (shared across all leaf sections) ---
+  const renderItemCard = (item: HardwareItemWithProgress, leafIndex: number) => {
+    const scope = classifyItemScope(item.name);
+    const displayQty = getLeafDisplayQty(item, leafCount, scope);
+    // Use composite key for per-leaf items that appear on both leaves
+    const cardKey = `${item.id}-leaf${leafIndex}`;
+
+    return (
+      <div
+        key={cardKey}
+        className={`glow-card p-4 shadow-sm ${
+          item.install_type === 'bench'
+            ? 'glow-card--purple corner-brackets'
+            : item.install_type === 'field'
+            ? 'glow-card--orange corner-brackets'
+            : ''
+        }`}
+      >
+        {editingItemId === item.id && editingItem ? (
+          // Edit mode (only shown on one leaf — prevents double-edit confusion)
+          leafIndex === 1 ? (
+            <div className="space-y-3">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[12px] text-[var(--text-secondary)] mb-1">Name</label>
+                  <input
+                    type="text"
+                    value={editingItem.name}
+                    onChange={(e) => setEditingItem({ ...editingItem, name: e.target.value })}
+                    className="w-full px-3 py-2 bg-[var(--surface)] border border-[var(--border)] rounded-lg text-[var(--text-primary)] placeholder-[var(--text-tertiary)] focus:border-[var(--blue-dim)] focus:outline-none text-[13px]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[12px] text-[var(--text-secondary)] mb-1">Qty</label>
+                  <input
+                    type="number"
+                    value={editingItem.qty}
+                    onChange={(e) => setEditingItem({ ...editingItem, qty: parseInt(e.target.value) || 0 })}
+                    className="w-full px-3 py-2 bg-[var(--surface)] border border-[var(--border)] rounded-lg text-[var(--text-primary)] placeholder-[var(--text-tertiary)] focus:border-[var(--blue-dim)] focus:outline-none text-[13px]"
+                  />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div>
+                  <label className="block text-[12px] text-[var(--text-secondary)] mb-1">Manufacturer</label>
+                  <input type="text" value={editingItem.manufacturer || ""} onChange={(e) => setEditingItem({ ...editingItem, manufacturer: e.target.value || null })} placeholder="Optional" className="w-full px-3 py-2 bg-[var(--surface)] border border-[var(--border)] rounded-lg text-[var(--text-primary)] placeholder-[var(--text-tertiary)] focus:border-[var(--blue-dim)] focus:outline-none text-[13px]" />
+                </div>
+                <div>
+                  <label className="block text-[12px] text-[var(--text-secondary)] mb-1">Model</label>
+                  <input type="text" value={editingItem.model || ""} onChange={(e) => setEditingItem({ ...editingItem, model: e.target.value || null })} placeholder="Optional" className="w-full px-3 py-2 bg-[var(--surface)] border border-[var(--border)] rounded-lg text-[var(--text-primary)] placeholder-[var(--text-tertiary)] focus:border-[var(--blue-dim)] focus:outline-none text-[13px]" />
+                </div>
+                <div>
+                  <label className="block text-[12px] text-[var(--text-secondary)] mb-1">Finish</label>
+                  <input type="text" value={editingItem.finish || ""} onChange={(e) => setEditingItem({ ...editingItem, finish: e.target.value || null })} placeholder="Optional" className="w-full px-3 py-2 bg-[var(--surface)] border border-[var(--border)] rounded-lg text-[var(--text-primary)] placeholder-[var(--text-tertiary)] focus:border-[var(--blue-dim)] focus:outline-none text-[13px]" />
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-[12px] text-[var(--text-secondary)] mb-1">Options</label>
+                  <input type="text" value={editingItem.options || ""} onChange={(e) => setEditingItem({ ...editingItem, options: e.target.value || null })} placeholder="Optional" className="w-full px-3 py-2 bg-[var(--surface)] border border-[var(--border)] rounded-lg text-[var(--text-primary)] placeholder-[var(--text-tertiary)] focus:border-[var(--blue-dim)] focus:outline-none text-[13px]" />
+                </div>
+                <div>
+                  <label className="block text-[12px] text-[var(--text-secondary)] mb-1">Install Type</label>
+                  <select
+                    value={editingItem.install_type || ""}
+                    onChange={(e) => setEditingItem({ ...editingItem, install_type: (e.target.value as 'bench' | 'field') || null })}
+                    className="w-full px-3 py-2 min-h-[44px] bg-[var(--surface)] border border-[var(--border)] rounded-lg text-[var(--text-primary)] focus:border-[rgba(10,132,255,0.3)] focus:outline-none text-[13px]"
+                  >
+                    <option value="">Not set</option>
+                    <option value="bench">Bench</option>
+                    <option value="field">Field</option>
+                  </select>
+                </div>
+              </div>
+              <div className="flex gap-2 pt-2">
+                <button onClick={saveEditItem} disabled={savingItem} className="flex-1 px-3 py-2 min-h-[44px] bg-[var(--blue)] hover:bg-[var(--blue)]/80 disabled:bg-[var(--surface)] text-white disabled:text-[var(--text-tertiary)] rounded-lg transition-colors text-[13px] font-medium">
+                  {savingItem ? "Saving..." : "Save"}
+                </button>
+                <button onClick={cancelEditItem} disabled={savingItem} className="flex-1 px-3 py-2 min-h-[44px] bg-[var(--surface)] border border-[var(--border)] hover:bg-[var(--surface-hover)] disabled:opacity-50 text-[var(--text-secondary)] rounded-lg transition-colors text-[13px] font-medium">
+                  Cancel
+                </button>
+              </div>
+            </div>
+          ) : (
+            <p className="text-[var(--text-tertiary)] text-[13px] italic text-center py-4">Editing on Leaf 1...</p>
+          )
+        ) : (
+          // View mode
+          <>
+            {/* Header row: item name + compact install-type toggle */}
+            <div className="flex justify-between items-start gap-3 mb-2">
+              <div className="flex-1 min-w-0">
+                <h3
+                  className="text-[18px] font-bold uppercase text-[var(--text-primary)] leading-tight break-words"
+                  style={{ fontFamily: "var(--font-display)", letterSpacing: "0.02em" }}
+                >
+                  {item.name}
+                </h3>
+                {formatSpec(item) && (
+                  <p className="text-[13px] text-[var(--text-secondary)] mt-1">
+                    {formatSpec(item)}
+                  </p>
+                )}
+                <div className="flex items-center gap-2 mt-1">
+                  {displayQty > 0 && (
+                    <span
+                      className="text-[11px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-md border"
+                      style={{
+                        fontFamily: "var(--font-display)",
+                        color: "var(--cyan)",
+                        background: "var(--cyan-dim)",
+                        borderColor: "var(--cyan)",
+                        letterSpacing: "0.06em",
+                      }}
+                    >
+                      Qty {displayQty}
+                    </span>
+                  )}
+                  {item.options && (
+                    <span className="text-[11px] text-[var(--text-tertiary)] truncate">
+                      {item.options}
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Install-type compact toggle pair */}
+              <div
+                className="flex shrink-0 rounded-md overflow-hidden border"
+                style={{ borderColor: "var(--border)", background: "var(--surface-raised)" }}
+                role="group"
+                aria-label="Install type"
+              >
+                <button
+                  type="button"
+                  onClick={() => handleInstallTypeChange(item.id, 'bench')}
+                  aria-pressed={item.install_type === 'bench'}
+                  title="Classify as bench"
+                  className="min-w-[44px] min-h-[44px] px-2 text-[11px] font-semibold uppercase transition-colors"
+                  style={{
+                    fontFamily: "var(--font-display)",
+                    letterSpacing: "0.06em",
+                    background: item.install_type === 'bench' ? "var(--purple-dim)" : "transparent",
+                    color: item.install_type === 'bench' ? "var(--purple)" : "var(--text-tertiary)",
+                    boxShadow: item.install_type === 'bench' ? "inset 0 0 0 1px var(--purple)" : "none",
+                  }}
+                >
+                  Bench
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleInstallTypeChange(item.id, 'field')}
+                  aria-pressed={item.install_type === 'field'}
+                  title="Classify as field"
+                  className="min-w-[44px] min-h-[44px] px-2 text-[11px] font-semibold uppercase transition-colors"
+                  style={{
+                    fontFamily: "var(--font-display)",
+                    letterSpacing: "0.06em",
+                    background: item.install_type === 'field' ? "var(--orange-dim)" : "transparent",
+                    color: item.install_type === 'field' ? "var(--orange)" : "var(--text-tertiary)",
+                    boxShadow: item.install_type === 'field' ? "inset 0 0 0 1px var(--orange)" : "none",
+                    borderLeft: "1px solid var(--border)",
+                  }}
+                >
+                  Field
+                </button>
+              </div>
+            </div>
+
+            {/* Workflow steps with green checks (per-leaf aware) */}
+            <div className="flex flex-wrap items-center gap-2 mt-3">
+              {getWorkflowSteps(item).map((step, idx) => {
+                const isActive = getStepValue(item, step, leafIndex);
+                const label = getStepLabel(item, step);
+                return (
+                  <div key={step} className="flex items-center gap-2">
+                    <button
+                      onClick={() => {
+                        playToggle();
+                        handleStepToggle(item.id, step, isActive, leafIndex);
+                      }}
+                      className="flex items-center justify-center w-12 h-12 rounded-full transition-colors"
+                      style={{
+                        background: isActive ? 'var(--green)' : 'transparent',
+                        border: isActive ? '2px solid var(--green)' : `2px solid var(--border-hover)`,
+                      }}
+                    >
+                      {isActive && (
+                        <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                        </svg>
+                      )}
+                    </button>
+                    <span
+                      className="text-[10px] uppercase font-semibold"
+                      style={{
+                        fontFamily: "var(--font-display)",
+                        letterSpacing: "0.06em",
+                        color: isActive ? 'var(--green)' : 'var(--text-tertiary)',
+                      }}
+                    >
+                      {label}
+                    </span>
+                    {idx < getWorkflowSteps(item).length - 1 && (
+                      <div
+                        className="w-6 h-0.5"
+                        style={{
+                          background: isActive ? 'var(--green)' : 'var(--border)',
+                        }}
+                      />
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Bottom action row: edit + report issue */}
+            <div className="flex items-center justify-end gap-2 mt-3 pt-2 border-t border-[var(--border)]">
+              <button
+                onClick={() => startEditItem(item)}
+                className="text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] min-h-[44px] min-w-[44px] flex items-center justify-center transition-colors"
+                title="Edit item"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                </svg>
+              </button>
+              <button
+                onClick={() => setIssueModal({
+                  doorNumber: opening.door_number,
+                  hardwareItemName: item.name,
+                })}
+                className="text-[11px] uppercase text-[var(--red)] hover:text-[var(--red)]/80 transition-colors min-h-[44px] px-2 flex items-center"
+                style={{ fontFamily: "var(--font-display)", letterSpacing: "0.06em" }}
+              >
+                Report Issue
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+    );
+  };
 
   return (
     <div className="min-h-screen bg-[var(--background)] pb-28">
@@ -535,272 +788,62 @@ export default function DoorDetailPage() {
             {opening.hardware_items.length === 0 ? (
               <p className="text-[var(--text-secondary)] text-center py-8">No hardware items yet</p>
             ) : (
-              opening.hardware_items.map((item) => (
-                <div
-                  key={item.id}
-                  className={`glow-card p-4 shadow-sm ${
-                    item.install_type === 'bench'
-                      ? 'glow-card--purple corner-brackets'
-                      : item.install_type === 'field'
-                      ? 'glow-card--orange corner-brackets'
-                      : ''
-                  }`}
-                >
-                  {editingItemId === item.id && editingItem ? (
-                    // Edit mode
-                    <div className="space-y-3">
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        <div>
-                          <label className="block text-[12px] text-[var(--text-secondary)] mb-1">Name</label>
-                          <input
-                            type="text"
-                            value={editingItem.name}
-                            onChange={(e) => setEditingItem({ ...editingItem, name: e.target.value })}
-                            className="w-full px-3 py-2 bg-[var(--surface)] border border-[var(--border)] rounded-lg text-[var(--text-primary)] placeholder-[var(--text-tertiary)] focus:border-[var(--blue-dim)] focus:outline-none text-[13px]"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-[12px] text-[var(--text-secondary)] mb-1">Qty</label>
-                          <input
-                            type="number"
-                            value={editingItem.qty}
-                            onChange={(e) => setEditingItem({ ...editingItem, qty: parseInt(e.target.value) || 0 })}
-                            className="w-full px-3 py-2 bg-[var(--surface)] border border-[var(--border)] rounded-lg text-[var(--text-primary)] placeholder-[var(--text-tertiary)] focus:border-[var(--blue-dim)] focus:outline-none text-[13px]"
-                          />
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                        <div>
-                          <label className="block text-[12px] text-[var(--text-secondary)] mb-1">Manufacturer</label>
-                          <input
-                            type="text"
-                            value={editingItem.manufacturer || ""}
-                            onChange={(e) => setEditingItem({ ...editingItem, manufacturer: e.target.value || null })}
-                            placeholder="Optional"
-                            className="w-full px-3 py-2 bg-[var(--surface)] border border-[var(--border)] rounded-lg text-[var(--text-primary)] placeholder-[var(--text-tertiary)] focus:border-[var(--blue-dim)] focus:outline-none text-[13px]"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-[12px] text-[var(--text-secondary)] mb-1">Model</label>
-                          <input
-                            type="text"
-                            value={editingItem.model || ""}
-                            onChange={(e) => setEditingItem({ ...editingItem, model: e.target.value || null })}
-                            placeholder="Optional"
-                            className="w-full px-3 py-2 bg-[var(--surface)] border border-[var(--border)] rounded-lg text-[var(--text-primary)] placeholder-[var(--text-tertiary)] focus:border-[var(--blue-dim)] focus:outline-none text-[13px]"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-[12px] text-[var(--text-secondary)] mb-1">Finish</label>
-                          <input
-                            type="text"
-                            value={editingItem.finish || ""}
-                            onChange={(e) => setEditingItem({ ...editingItem, finish: e.target.value || null })}
-                            placeholder="Optional"
-                            className="w-full px-3 py-2 bg-[var(--surface)] border border-[var(--border)] rounded-lg text-[var(--text-primary)] placeholder-[var(--text-tertiary)] focus:border-[var(--blue-dim)] focus:outline-none text-[13px]"
-                          />
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                        <div>
-                          <label className="block text-[12px] text-[var(--text-secondary)] mb-1">Options</label>
-                          <input
-                            type="text"
-                            value={editingItem.options || ""}
-                            onChange={(e) => setEditingItem({ ...editingItem, options: e.target.value || null })}
-                            placeholder="Optional"
-                            className="w-full px-3 py-2 bg-[var(--surface)] border border-[var(--border)] rounded-lg text-[var(--text-primary)] placeholder-[var(--text-tertiary)] focus:border-[var(--blue-dim)] focus:outline-none text-[13px]"
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-[12px] text-[var(--text-secondary)] mb-1">Install Type</label>
-                          <select
-                            value={editingItem.install_type || ""}
-                            onChange={(e) => setEditingItem({ ...editingItem, install_type: (e.target.value as 'bench' | 'field') || null })}
-                            className="w-full px-3 py-2 min-h-[44px] bg-[var(--surface)] border border-[var(--border)] rounded-lg text-[var(--text-primary)] focus:border-[rgba(10,132,255,0.3)] focus:outline-none text-[13px]"
-                          >
-                            <option value="">Not set</option>
-                            <option value="bench">Bench</option>
-                            <option value="field">Field</option>
-                          </select>
-                        </div>
-                      </div>
-
-                      <div className="flex gap-2 pt-2">
-                        <button
-                          onClick={saveEditItem}
-                          disabled={savingItem}
-                          className="flex-1 px-3 py-2 min-h-[44px] bg-[var(--blue)] hover:bg-[var(--blue)]/80 disabled:bg-[var(--surface)] text-white disabled:text-[var(--text-tertiary)] rounded-lg transition-colors text-[13px] font-medium"
+              <>
+                {/* --- Shared section (per_pair + per_frame items) --- */}
+                {shared.length > 0 && (
+                  <>
+                    {isPair && (
+                      <div className="flex items-center gap-3 mt-2 mb-3">
+                        <div className="h-px flex-1 bg-[var(--border)]" />
+                        <span
+                          className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)]"
+                          style={{ fontFamily: "var(--font-display)", letterSpacing: "0.08em" }}
                         >
-                          {savingItem ? "Saving..." : "Save"}
-                        </button>
-                        <button
-                          onClick={cancelEditItem}
-                          disabled={savingItem}
-                          className="flex-1 px-3 py-2 min-h-[44px] bg-[var(--surface)] border border-[var(--border)] hover:bg-[var(--surface-hover)] disabled:opacity-50 text-[var(--text-secondary)] rounded-lg transition-colors text-[13px] font-medium"
-                        >
-                          Cancel
-                        </button>
+                          SHARED
+                        </span>
+                        <div className="h-px flex-1 bg-[var(--border)]" />
                       </div>
+                    )}
+                    {shared.map((item) => renderItemCard(item, 1))}
+                  </>
+                )}
+
+                {/* --- Leaf 1 section --- */}
+                {leaf1.length > 0 && (
+                  <>
+                    {isPair && (
+                      <div className="flex items-center gap-3 mt-6 mb-3">
+                        <div className="h-px flex-1 bg-[var(--border)]" />
+                        <span
+                          className="text-[11px] font-semibold uppercase tracking-wider text-[var(--cyan)]"
+                          style={{ fontFamily: "var(--font-display)", letterSpacing: "0.08em" }}
+                        >
+                          LEAF 1 (ACTIVE)
+                        </span>
+                        <div className="h-px flex-1 bg-[var(--border)]" />
+                      </div>
+                    )}
+                    {leaf1.map((item) => renderItemCard(item, 1))}
+                  </>
+                )}
+
+                {/* --- Leaf 2 section (pair doors only) --- */}
+                {isPair && leaf2.length > 0 && (
+                  <>
+                    <div className="flex items-center gap-3 mt-6 mb-3">
+                      <div className="h-px flex-1 bg-[var(--border)]" />
+                      <span
+                        className="text-[11px] font-semibold uppercase tracking-wider text-[var(--orange)]"
+                        style={{ fontFamily: "var(--font-display)", letterSpacing: "0.08em" }}
+                      >
+                        LEAF 2 (INACTIVE)
+                      </span>
+                      <div className="h-px flex-1 bg-[var(--border)]" />
                     </div>
-                  ) : (
-                    // View mode
-                    <>
-                      {/* Header row: item name + compact install-type toggle */}
-                      <div className="flex justify-between items-start gap-3 mb-2">
-                        <div className="flex-1 min-w-0">
-                          <h3
-                            className="text-[18px] font-bold uppercase text-[var(--text-primary)] leading-tight break-words"
-                            style={{ fontFamily: "var(--font-display)", letterSpacing: "0.02em" }}
-                          >
-                            {item.name}
-                          </h3>
-                          {formatSpec(item) && (
-                            <p className="text-[13px] text-[var(--text-secondary)] mt-1">
-                              {formatSpec(item)}
-                            </p>
-                          )}
-                          <div className="flex items-center gap-2 mt-1">
-                            {item.qty > 0 && (
-                              <span
-                                className="text-[11px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-md border"
-                                style={{
-                                  fontFamily: "var(--font-display)",
-                                  color: "var(--cyan)",
-                                  background: "var(--cyan-dim)",
-                                  borderColor: "var(--cyan)",
-                                  letterSpacing: "0.06em",
-                                }}
-                              >
-                                Qty {item.qty}
-                              </span>
-                            )}
-                            {item.options && (
-                              <span className="text-[11px] text-[var(--text-tertiary)] truncate">
-                                {item.options}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Install-type compact toggle pair */}
-                        <div
-                          className="flex shrink-0 rounded-md overflow-hidden border"
-                          style={{ borderColor: "var(--border)", background: "var(--surface-raised)" }}
-                          role="group"
-                          aria-label="Install type"
-                        >
-                          <button
-                            type="button"
-                            onClick={() => handleInstallTypeChange(item.id, 'bench')}
-                            aria-pressed={item.install_type === 'bench'}
-                            title="Classify as bench"
-                            className="min-w-[44px] min-h-[44px] px-2 text-[11px] font-semibold uppercase transition-colors"
-                            style={{
-                              fontFamily: "var(--font-display)",
-                              letterSpacing: "0.06em",
-                              background: item.install_type === 'bench' ? "var(--purple-dim)" : "transparent",
-                              color: item.install_type === 'bench' ? "var(--purple)" : "var(--text-tertiary)",
-                              boxShadow: item.install_type === 'bench' ? "inset 0 0 0 1px var(--purple)" : "none",
-                            }}
-                          >
-                            Bench
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleInstallTypeChange(item.id, 'field')}
-                            aria-pressed={item.install_type === 'field'}
-                            title="Classify as field"
-                            className="min-w-[44px] min-h-[44px] px-2 text-[11px] font-semibold uppercase transition-colors"
-                            style={{
-                              fontFamily: "var(--font-display)",
-                              letterSpacing: "0.06em",
-                              background: item.install_type === 'field' ? "var(--orange-dim)" : "transparent",
-                              color: item.install_type === 'field' ? "var(--orange)" : "var(--text-tertiary)",
-                              boxShadow: item.install_type === 'field' ? "inset 0 0 0 1px var(--orange)" : "none",
-                              borderLeft: "1px solid var(--border)",
-                            }}
-                          >
-                            Field
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* Workflow steps with green checks */}
-                      <div className="flex flex-wrap items-center gap-2 mt-3">
-                        {getWorkflowSteps(item).map((step, idx) => {
-                          const isActive = getStepValue(item, step);
-                          const label = getStepLabel(item, step);
-                          return (
-                            <div key={step} className="flex items-center gap-2">
-                              <button
-                                onClick={() => {
-                                  playToggle();
-                                  handleStepToggle(item.id, step, isActive);
-                                }}
-                                className="flex items-center justify-center w-12 h-12 rounded-full transition-colors"
-                                style={{
-                                  background: isActive ? 'var(--green)' : 'transparent',
-                                  border: isActive ? '2px solid var(--green)' : `2px solid var(--border-hover)`,
-                                }}
-                              >
-                                {isActive && (
-                                  <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20">
-                                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                                  </svg>
-                                )}
-                              </button>
-                              <span
-                                className="text-[10px] uppercase font-semibold"
-                                style={{
-                                  fontFamily: "var(--font-display)",
-                                  letterSpacing: "0.06em",
-                                  color: isActive ? 'var(--green)' : 'var(--text-tertiary)',
-                                }}
-                              >
-                                {label}
-                              </span>
-                              {idx < getWorkflowSteps(item).length - 1 && (
-                                <div
-                                  className="w-6 h-0.5"
-                                  style={{
-                                    background: isActive ? 'var(--green)' : 'var(--border)',
-                                  }}
-                                />
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-
-                      {/* Bottom action row: edit + report issue */}
-                      <div className="flex items-center justify-end gap-2 mt-3 pt-2 border-t border-[var(--border)]">
-                        <button
-                          onClick={() => startEditItem(item)}
-                          className="text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] min-h-[44px] min-w-[44px] flex items-center justify-center transition-colors"
-                          title="Edit item"
-                        >
-                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                          </svg>
-                        </button>
-                        <button
-                          onClick={() => setIssueModal({
-                            doorNumber: opening.door_number,
-                            hardwareItemName: item.name,
-                          })}
-                          className="text-[11px] uppercase text-[var(--red)] hover:text-[var(--red)]/80 transition-colors min-h-[44px] px-2 flex items-center"
-                          style={{ fontFamily: "var(--font-display)", letterSpacing: "0.06em" }}
-                        >
-                          Report Issue
-                        </button>
-                      </div>
-                    </>
-                  )}
-                </div>
-              ))
+                    {leaf2.map((item) => renderItemCard(item, 2))}
+                  </>
+                )}
+              </>
             )}
           </div>
         )}

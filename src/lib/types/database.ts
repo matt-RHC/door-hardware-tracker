@@ -109,6 +109,7 @@ export type Database = {
           hand: string | null
           notes: string | null
           pdf_page: number | null
+          leaf_count: number
           created_at: string
         }
         Insert: {
@@ -124,6 +125,7 @@ export type Database = {
           hand?: string | null
           notes?: string | null
           pdf_page?: number | null
+          leaf_count?: number
           created_at?: string
         }
         Update: {
@@ -139,6 +141,7 @@ export type Database = {
           hand?: string | null
           notes?: string | null
           pdf_page?: number | null
+          leaf_count?: number
           created_at?: string
         }
       }
@@ -188,6 +191,7 @@ export type Database = {
           id: string
           opening_id: string
           item_id: string
+          leaf_index: number
           checked: boolean
           checked_by: string | null
           checked_at: string | null
@@ -210,6 +214,7 @@ export type Database = {
           id?: string
           opening_id: string
           item_id: string
+          leaf_index?: number
           checked?: boolean
           checked_by?: string | null
           checked_at?: string | null
@@ -232,6 +237,7 @@ export type Database = {
           id?: string
           opening_id?: string
           item_id?: string
+          leaf_index?: number
           checked?: boolean
           checked_by?: string | null
           checked_at?: string | null

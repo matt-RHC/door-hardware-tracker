@@ -837,21 +837,16 @@ describe('detectIsPair', () => {
 
 // ─── buildPerOpeningItems (pair-detection regression) ───
 //
-// Regression test for the Radius DC 2026-04-12 bug where pair doors
-// were storing per-leaf hinge quantities (qty=4) instead of per-opening
-// quantities (qty=8), and only 1 Door row instead of 2.
+// Phase 2: buildPerOpeningItems stores per-leaf quantities as-is (no doubling).
+// The UI renders Shared / Leaf 1 / Leaf 2 sections and handles the visual split.
 
 describe('buildPerOpeningItems — pair detection', () => {
-  it('doubles per-leaf items and adds 2 Door rows for pair openings', () => {
+  it('stores per-leaf quantities without doubling and adds 2 Door rows for pair openings', () => {
     // Exact Radius DC DH4A.1 shape: 8 pair doors, 16 leaves, 56 hinges
     // (which is 56/16=3.5 per leaf, rounded to qty=4 by Python's
-    // normalize_quantities fix). A pair opening should show qty=8
-    // hinges (4 per leaf × 2 leaves), not qty=4.
+    // normalize_quantities fix). Phase 2 stores qty=4 as-is (per-leaf),
+    // and the UI shows "4 on Leaf 1 + 4 on Leaf 2".
     // Each item has qty_door_count reflecting what divisor Python used.
-    // Hinges were divided by 16 (leaves) — per-leaf, DOUBLE for pair.
-    // Flush bolt kit was divided by 8 (doors) — per-opening, don't double.
-    // Closer was divided by 8 (doors) — per-opening, don't double.
-    // Smoke seal was divided by 8 (doors) — per-frame, don't double.
     const hwSet: HardwareSet = {
       set_id: 'DH4A.1',
       generic_set_id: 'DH4A',
@@ -891,14 +886,13 @@ describe('buildPerOpeningItems — pair detection', () => {
     expect(frameRows).toHaveLength(1)
     expect(frameRows[0].qty).toBe(1)
 
-    // Per-leaf items DOUBLED (4 × 2 = 8 hinges). Both hinge items had
-    // qty_door_count=16 (Python divided by leaves), so both get ×2.
+    // Per-leaf items stored as-is (no doubling). UI will show on each leaf section.
     const hingeNrp = rows.find(r => (r.name as string).includes('5BB1 4.5x4.5 NRP'))
-    expect(hingeNrp?.qty).toBe(8) // 4 × 2 = 8. NOT 4.
+    expect(hingeNrp?.qty).toBe(4) // stored per-leaf, NOT doubled
 
-    // CON TW8 hinge also has qty_door_count=16 → per-leaf → ×2 = 2
+    // CON TW8 hinge also stored per-leaf
     const hingeCon = rows.find(r => (r.name as string).includes('CON TW8'))
-    expect(hingeCon?.qty).toBe(2)
+    expect(hingeCon?.qty).toBe(1)
 
     // Per-pair item NOT doubled
     const flushBolt = rows.find(r => (r.name as string).includes('Flush Bolt Kit'))
@@ -971,6 +965,6 @@ describe('buildPerOpeningItems — pair detection', () => {
     const doorRows = rows.filter(r => (r.name as string).startsWith('Door'))
     expect(doorRows).toHaveLength(2) // pair detected via size
     const hinge = rows.find(r => r.name === 'Hinges')
-    expect(hinge?.qty).toBe(8) // 4 × 2 leaves
+    expect(hinge?.qty).toBe(4) // stored per-leaf, UI handles the split
   })
 })

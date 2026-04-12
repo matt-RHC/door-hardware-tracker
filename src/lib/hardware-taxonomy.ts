@@ -217,7 +217,7 @@ export const HARDWARE_TAXONOMY: HardwareCategory[] = [
     interior: true,
     fire_rated: true,
     pairs_only: false,
-    install_scope: 'per_leaf',
+    install_scope: 'per_opening',
     typical_qty_single: [1, 1],
     typical_qty_pair: [2, 2],
   },

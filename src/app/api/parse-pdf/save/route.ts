@@ -3,7 +3,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { createExtractionRun, updateExtractionRun, writeStagingData, promoteExtraction } from '@/lib/extraction-staging'
 import type { StagingOpening } from '@/lib/extraction-staging'
 import type { DoorEntry, HardwareSet } from '@/lib/types'
-import { buildPerOpeningItems, buildDoorToSetMap } from '@/lib/parse-pdf-helpers'
+import { buildPerOpeningItems, buildDoorToSetMap, detectIsPair, normalizeDoorNumber } from '@/lib/parse-pdf-helpers'
 
 // --- Shared: check for unmatched sets ---
 //
@@ -124,19 +124,28 @@ export async function POST(request: NextRequest) {
     })
 
     // 2. Transform doors → StagingOpening[]
-    const stagingOpenings: StagingOpening[] = doors.map(d => ({
-      door_number: d.door_number,
-      hw_set: d.hw_set || undefined,
-      location: d.location || undefined,
-      door_type: d.door_type || undefined,
-      frame_type: d.frame_type || undefined,
-      fire_rating: d.fire_rating || undefined,
-      hand: d.hand || undefined,
-      // Issue #8: carry the set's PDF page through to the staging opening
-      // so it lands on openings.pdf_page after promote_extraction().
-      pdf_page: setMap.get(d.hw_set ?? '')?.pdf_page ?? null,
-      field_confidence: d.field_confidence || undefined,
-    }))
+    const stagingOpenings: StagingOpening[] = doors.map(d => {
+      // Resolve the hardware set for this door (same lookup chain as buildPerOpeningItems)
+      const doorKey = normalizeDoorNumber(d.door_number)
+      const hwSet = doorToSetMap.get(doorKey) ?? setMap.get(d.hw_set ?? '')
+      const doorInfo = doorInfoMap.get(d.door_number)
+      const isPair = detectIsPair(hwSet, doorInfo)
+      return {
+        door_number: d.door_number,
+        hw_set: d.hw_set || undefined,
+        location: d.location || undefined,
+        door_type: d.door_type || undefined,
+        frame_type: d.frame_type || undefined,
+        fire_rating: d.fire_rating || undefined,
+        hand: d.hand || undefined,
+        // Issue #8: carry the set's PDF page through to the staging opening
+        // so it lands on openings.pdf_page after promote_extraction().
+        pdf_page: setMap.get(d.hw_set ?? '')?.pdf_page ?? null,
+        // Phase 2: persist pair detection so the UI can render per-leaf sections
+        leaf_count: isPair ? 2 : 1,
+        field_confidence: d.field_confidence || undefined,
+      }
+    })
 
     // 3. Write staging openings (empty hardwareSets — items handled separately)
     const stagingResult = await writeStagingData(supabase, runId, projectId, stagingOpenings, [])

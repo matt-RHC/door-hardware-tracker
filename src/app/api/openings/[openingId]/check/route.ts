@@ -6,6 +6,7 @@ type WorkflowStep = 'received' | 'pre_install' | 'installed' | 'qa_qc' | 'checke
 
 interface CheckItemRequest {
   item_id: string
+  leaf_index?: number  // 1 = Leaf 1 / single door, 2 = Leaf 2 (pair doors)
   checked?: boolean  // legacy support
   step?: WorkflowStep
   value?: boolean
@@ -75,6 +76,7 @@ export async function POST(
     const updatePayload: Record<string, any> = {
       opening_id: openingId,
       item_id,
+      leaf_index: body.leaf_index ?? 1,
     }
 
     if (step === 'checked') {
@@ -109,7 +111,7 @@ export async function POST(
           ...updatePayload,
         }],
         {
-          onConflict: 'opening_id,item_id',
+          onConflict: 'opening_id,item_id,leaf_index',
         }
       )
       .select()
