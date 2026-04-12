@@ -3367,6 +3367,37 @@ def normalize_quantities(
     if doors_per_set:
         logger.info(f"Doors per set (Opening List): {doors_per_set}")
 
+    # Pre-compute generic set totals for sub-heading normalization.
+    # When multiple sub-headings (e.g., DH3.0, DH3.1) share a generic_set_id
+    # (DH3), item quantities may be set-level totals that should be divided
+    # by the TOTAL door count across all sub-headings, not just one.
+    generic_totals: dict[str, tuple[int, int]] = {}  # gid → (total_doors, total_leaves)
+    for hw_set in hardware_sets:
+        gid = (hw_set.generic_set_id or hw_set.set_id).strip().upper()
+        prev_d, prev_l = generic_totals.get(gid, (0, 0))
+        generic_totals[gid] = (
+            prev_d + hw_set.heading_door_count,
+            prev_l + hw_set.heading_leaf_count,
+        )
+    # Also incorporate Opening List counts for generics (covers cases where
+    # heading block door counts are missing but the Opening List has data)
+    for gid, (total_d, total_l) in list(generic_totals.items()):
+        if total_d == 0:
+            ol_count = _fuzzy_lookup(gid, doors_per_set)
+            if ol_count > 0:
+                ol_leaves = _leaf_count_from_openings(
+                    openings, "hw_set", gid, ol_count
+                )
+                generic_totals[gid] = (ol_count, ol_leaves)
+                logger.info(
+                    f"[qty-norm] Generic '{gid}': heading counts=0, "
+                    f"using Opening List ({ol_count} doors, {ol_leaves} leaves)"
+                )
+
+    for gid, (td, tl) in generic_totals.items():
+        if td > 0:
+            logger.info(f"[qty-norm] Generic total '{gid}': {td} doors, {tl} leaves")
+
     for hw_set in hardware_sets:
         # --- Determine door count and leaf count ---
         door_count = hw_set.heading_door_count
@@ -3425,6 +3456,21 @@ def normalize_quantities(
                             f"[qty-norm] {hw_set.set_id}: fallback 3 cross-field "
                             f"match ({door_count} doors, {leaf_count} leaves)"
                         )
+
+        # --- Sub-heading detection: check if this set belongs to a larger group ---
+        gid = (hw_set.generic_set_id or hw_set.set_id).strip().upper()
+        generic_doors, generic_leaves = generic_totals.get(gid, (0, 0))
+        is_sub_heading = (
+            hw_set.generic_set_id
+            and hw_set.generic_set_id != hw_set.set_id
+            and generic_doors > door_count
+        )
+        if is_sub_heading:
+            logger.info(
+                f"[qty-norm] {hw_set.set_id}: sub-heading of '{gid}' — "
+                f"sub={door_count}d/{leaf_count}l, "
+                f"generic={generic_doors}d/{generic_leaves}l"
+            )
 
         # --- Single door or unknown: category cap fallback ---
         if door_count <= 1 and leaf_count <= 1:
@@ -3569,18 +3615,61 @@ def normalize_quantities(
                         f"(category={category}), flagged"
                     )
 
-        # Sanity-check: if divided qty still exceeds category max, flag
+        # Sanity-check: if divided qty still exceeds category max, try
+        # generic set total (for sub-headings) before falling back to flag.
         for item in hw_set.items:
-            if item.qty_source == "divided":
+            if item.qty_source in ("divided", "flagged"):
                 category = _classify_hardware_item(item.name)
                 max_qty = _max_qty_for_category(category)
                 if item.qty > max_qty:
-                    logger.warning(
-                        f"[qty-norm] {hw_set.set_id}: '{item.name}' "
-                        f"divided qty {item.qty} exceeds category max "
-                        f"{max_qty}, flagging for review"
-                    )
-                    item.qty_source = "flagged"
+                    # If this is a sub-heading, the item may be a set-level
+                    # total that was incorrectly divided by the sub-heading
+                    # count. Try the generic set's total count instead.
+                    if is_sub_heading:
+                        pref = DIVISION_PREFERENCE.get(category, "opening")
+                        alt_divisor = (
+                            generic_leaves if pref == "leaf" and generic_leaves > 1
+                            else generic_doors
+                        )
+                        raw = item.qty_total if item.qty_total else item.qty
+                        if alt_divisor > 1:
+                            alt_unit, alt_ok = _try_divide(raw, alt_divisor)
+                            if alt_ok and alt_unit <= max_qty:
+                                logger.info(
+                                    f"[qty-norm] {hw_set.set_id}: '{item.name}' "
+                                    f"re-divided by generic total: "
+                                    f"{raw} ÷ {alt_divisor} = {alt_unit} "
+                                    f"(sub-heading gave {item.qty}, "
+                                    f"exceeds max {max_qty})"
+                                )
+                                item.qty = alt_unit
+                                item.qty_door_count = alt_divisor
+                                item.qty_source = "divided"
+                                continue
+                            elif alt_divisor > 0:
+                                rounded = round(raw / alt_divisor)
+                                if rounded <= max_qty:
+                                    logger.info(
+                                        f"[qty-norm] {hw_set.set_id}: "
+                                        f"'{item.name}' re-divided "
+                                        f"(rounded) by generic total: "
+                                        f"{raw} ÷ {alt_divisor} ≈ "
+                                        f"{rounded} (sub-heading gave "
+                                        f"{item.qty}, exceeds max "
+                                        f"{max_qty})"
+                                    )
+                                    item.qty = rounded
+                                    item.qty_door_count = alt_divisor
+                                    item.qty_source = "flagged"
+                                    continue
+                    # No generic total available or still exceeds max → flag
+                    if item.qty_source == "divided":
+                        logger.warning(
+                            f"[qty-norm] {hw_set.set_id}: '{item.name}' "
+                            f"divided qty {item.qty} exceeds category max "
+                            f"{max_qty}, flagging for review"
+                        )
+                        item.qty_source = "flagged"
 
 
 # --- Vercel Handler ---

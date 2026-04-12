@@ -3,7 +3,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { createExtractionRun, updateExtractionRun, writeStagingData, promoteExtraction } from '@/lib/extraction-staging'
 import type { StagingOpening } from '@/lib/extraction-staging'
 import type { DoorEntry, HardwareSet } from '@/lib/types'
-import { buildPerOpeningItems, buildDoorToSetMap, detectIsPair, normalizeDoorNumber } from '@/lib/parse-pdf-helpers'
+import { buildPerOpeningItems, buildDoorToSetMap, classifyItemScope, detectIsPair, normalizeDoorNumber } from '@/lib/parse-pdf-helpers'
 
 // --- Shared: check for unmatched sets ---
 //
@@ -71,6 +71,22 @@ export async function POST(request: NextRequest) {
       if (setKey) doorsPerSet.set(setKey, (doorsPerSet.get(setKey) ?? 0) + 1)
     }
 
+    // Pre-compute generic set totals for sub-heading normalization
+    const genericTotals = new Map<string, { doors: number; leaves: number }>()
+    for (const set of hardwareSets) {
+      const gid = (set.generic_set_id ?? set.set_id).toUpperCase()
+      const prev = genericTotals.get(gid) ?? { doors: 0, leaves: 0 }
+      genericTotals.set(gid, {
+        doors: prev.doors + (set.heading_door_count ?? 0),
+        leaves: prev.leaves + (set.heading_leaf_count ?? 0),
+      })
+    }
+
+    // Max expected per-opening quantities (mirrors Python EXPECTED_QTY_RANGES)
+    const SAVE_MAX_QTY: Record<string, number> = {
+      per_leaf: 5, per_opening: 2, per_pair: 1, per_frame: 1,
+    }
+
     // Iterate hardwareSets directly (not setMap) to avoid double-iteration —
     // each set is registered under both set_id and generic_set_id in setMap,
     // which would cause items to be divided twice.
@@ -84,6 +100,15 @@ export async function POST(request: NextRequest) {
         : (doorsPerSet.get((set.generic_set_id ?? set.set_id ?? setId).toUpperCase()) ?? 0)
       if (leafCount <= 1 && doorCount <= 1) continue
 
+      // Sub-heading detection
+      const gid = (set.generic_set_id ?? set.set_id).toUpperCase()
+      const genericTotal = genericTotals.get(gid) ?? { doors: 0, leaves: 0 }
+      const isSubHeading = (
+        set.generic_set_id
+        && set.generic_set_id !== set.set_id
+        && genericTotal.doors > doorCount
+      )
+
       for (const item of set.items ?? []) {
         if (item.qty_source === 'divided' || item.qty_source === 'flagged' || item.qty_source === 'capped') continue
         let divided = false
@@ -92,7 +117,7 @@ export async function POST(request: NextRequest) {
           if (Number.isInteger(perLeaf)) {
             console.debug(`[save-qty-norm] ${setId}: "${item.name}" qty ${item.qty} ÷ ${leafCount} leaves = ${perLeaf}`)
             item.qty = perLeaf
-            item.qty_source = 'divided'  // prevent re-division downstream
+            item.qty_source = 'divided'
             divided = true
           }
         }
@@ -102,6 +127,33 @@ export async function POST(request: NextRequest) {
             console.debug(`[save-qty-norm] ${setId}: "${item.name}" qty ${item.qty} ÷ ${doorCount} openings = ${perOpening}`)
             item.qty = perOpening
             item.qty_source = 'divided'
+          }
+        }
+      }
+
+      // Post-division sanity: try generic total for sub-headings
+      if (isSubHeading) {
+        for (const item of set.items ?? []) {
+          if (item.qty_source !== 'divided') continue
+          const scope = classifyItemScope(item.name)
+          const maxQty = SAVE_MAX_QTY[scope ?? 'per_opening'] ?? 4
+          if (item.qty > maxQty) {
+            const raw = item.qty_total ?? item.qty
+            const altDivisor = scope === 'per_leaf' && genericTotal.leaves > 1
+              ? genericTotal.leaves
+              : genericTotal.doors
+            if (altDivisor > 1) {
+              const altUnit = raw / altDivisor
+              if (Number.isInteger(altUnit) && altUnit <= maxQty) {
+                console.debug(
+                  `[save-qty-norm] ${setId}: "${item.name}" re-divided by generic total: ` +
+                  `${raw} ÷ ${altDivisor} = ${altUnit} (sub-heading gave ${item.qty})`
+                )
+                item.qty = altUnit
+                item.qty_door_count = altDivisor
+                item.qty_source = 'divided'
+              }
+            }
           }
         }
       }
