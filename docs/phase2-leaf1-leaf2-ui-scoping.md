@@ -1,7 +1,8 @@
 # Phase 2: Leaf 1 / Leaf 2 UI for Pair Doors — Scoping Doc
 
-**Status:** DRAFT, awaiting approval
+**Status:** APPROVED (2026-04-12)
 **Author:** Claude (session 2026-04-12)
+**Approved by:** Matt Feagin (2026-04-12)
 **Parent:** follow-up to Phase 1 (`claude/phase1-pair-detection-leaf-count-and-size`, commit `8f57e08`)
 **Context:** User feedback on the door detail page for pair-door openings (Radius DC DH4A.1 / 120-02A)
 
@@ -30,9 +31,10 @@ Phase 1 shipped a data fix that doubles per-leaf quantities for pair openings, s
 
 ## 3. Non-goals
 
-- Renaming Active/Inactive terminology in the database (keep DFH convention in data; use Leaf 1 / Leaf 2 in the UI).
-- Changing the import wizard flow — Phase 2 only affects the post-import door detail page.
-- Retroactively fixing existing imports — Phase 2 works for new imports; existing imports get the flat view until re-imported (or we add a one-time migration script, TBD).
+- Renaming Active/Inactive terminology in the database (keep DFH convention in data; use "LEAF 1 (ACTIVE)" / "LEAF 2 (INACTIVE)" in the UI — **approved compromise**).
+- ~~Changing the import wizard flow~~ — **REVISED: Step 4 Review WILL also split per-leaf, done in the same session as the door detail page (Session 2.2), not deferred.**
+- Retroactively fixing existing imports — user will re-import after Phase 2 ships. **No data migration script needed (confirmed).**
+- Triple doors or larger assemblies — **out of scope, not needed for now.** Schema CHECK constraint changed from `BETWEEN 1 AND 4` to `BETWEEN 1 AND 2`.
 
 ## 4. Architectural decisions
 
@@ -63,7 +65,7 @@ Rationale:
 ```sql
 ALTER TABLE openings
   ADD COLUMN IF NOT EXISTS leaf_count INTEGER NOT NULL DEFAULT 1
-  CHECK (leaf_count BETWEEN 1 AND 4);
+  CHECK (leaf_count BETWEEN 1 AND 2);
 
 ALTER TABLE staging_openings
   ADD COLUMN IF NOT EXISTS leaf_count INTEGER NOT NULL DEFAULT 1;
@@ -91,9 +93,11 @@ This is the hardest decision.
 - **Pros:** minimal schema changes, preserves the visual leaf split, fast to ship
 - **Cons:** breaks the "mark Leaf 1 done before Leaf 2" use case. If you install hinges on Leaf 1 first, you can't check them as installed until Leaf 2 is also hung.
 
-**Recommendation: Option A for Phase 2.0 (MVP), upgrade to Option B in Phase 2.1 if user validates the need.**
+**Recommendation: Option B (per-leaf progress). User confirmed: "progress needs to be trackable per leaf, and if there are revised submittals, progress needs to be updated per leaf." This is NOT deferred to Phase 2.1 — it ships with Phase 2.0 (Session 2.1 + 2.2).**
 
-Start with the cheap version. The visual leaf split alone is probably 80% of the user value. If installers report needing per-leaf checklist granularity, do the schema change in a follow-up.
+Implementation: add `leaf_index INTEGER NOT NULL DEFAULT 1` to `checklist_progress`. For pair doors, each per-leaf item gets TWO checklist rows (leaf_index=1 and leaf_index=2). Shared items (per_pair, per_frame) get one row with leaf_index=1. The UI renders per-leaf checkboxes on each leaf section.
+
+Revision handling: when a revised submittal is applied via the compare wizard, per-leaf progress rows must be updated per leaf. If an item's qty changes on Leaf 1 only (e.g., hinge count revised from 4 to 5 on the active leaf), the Leaf 1 progress row resets but Leaf 2's stays.
 
 ### 4.4 Item classification at render time: do we use the taxonomy?
 
@@ -177,7 +181,7 @@ Three sub-sessions:
 - [ ] Fix the `hardware-taxonomy.ts` closer/wire_harness inconsistency (change to `per_opening`)
 - [ ] Unit tests for all of the above
 
-### Session 2.2 — Door detail page UI (frontend)
+### Session 2.2 — Door detail page UI + Step 4 Review split (frontend)
 
 - [ ] Read `opening.leaf_count` and `classifyItemScope(item.name)` at the top of the door detail page
 - [ ] Group items into `shared` / `leaf1` / `leaf2` arrays based on scope:
@@ -185,16 +189,21 @@ Three sub-sessions:
   - `per_opening` → `leaf1` + `leaf2` (split: qty ÷ leaf_count on each, or qty=1 on each if per-leaf by physical convention)
   - `per_pair` / `per_frame` / `unknown` → `shared`
 - [ ] Render three sections: Shared → Leaf 1 → Leaf 2
+- [ ] Section headers use "LEAF 1 (ACTIVE)" / "LEAF 2 (INACTIVE)" naming (approved compromise)
 - [ ] Leaf 2 section is hidden if `leaf_count === 1`
+- [ ] **Step 4 Review in the wizard also splits per-leaf** (same classification logic, same section headers — NOT deferred)
 - [ ] Preserve all existing interactions (Bench/Field toggle, Report Issue, classify modal)
+- [ ] Per-leaf checklist progress: each leaf section renders its own checkboxes per item (from `checklist_progress` rows with `leaf_index=1` and `leaf_index=2`). Shared items render one set of checkboxes.
 - [ ] Mobile responsive: accordion collapse on narrow viewports
 - [ ] Visual regression tests
 
-### Session 2.3 — Progress tracking decisions
+### Session 2.3 — ~~Progress tracking decisions~~ Revision submittal per-leaf update
 
-- [ ] User testing of Session 2.1 + 2.2 output
-- [ ] Decide Option A (shared progress) vs Option B (per-leaf progress)
-- [ ] If Option B: migration 013 adds `leaf_index` to `checklist_progress`, UI splits checkboxes per leaf
+- [ ] ~~User testing of Session 2.1 + 2.2 output~~ (per-leaf progress is NOT deferred — ships with 2.2)
+- [ ] ~~Decide Option A (shared progress) vs Option B (per-leaf progress)~~ (Option B confirmed)
+- [ ] Verify revised submittal flow (compare wizard) correctly updates per-leaf progress when items change on one leaf
+- [ ] Test: if hinge qty changes on Leaf 1 only, Leaf 1 progress resets but Leaf 2 stays
+- [ ] Test: if a new item is added to Leaf 2 only, Leaf 1 progress is unaffected
 
 ## 6. Risks and mitigations
 
@@ -206,13 +215,13 @@ Three sub-sessions:
 | Schema change breaks existing `promote_extraction()` | LOW | Migration 012 follows the same `CREATE OR REPLACE FUNCTION` pattern as migration 010. Tested against the function's current body before committing. |
 | Installers don't actually want Leaf 1 / Leaf 2 visualization | MEDIUM | Ship Session 2.1 + 2.2 to staging, get user feedback before Session 2.3. If rejected, revert Session 2.2 and keep the flat list. The backend `leaf_count` column is harmless. |
 
-## 7. Open questions
+## 7. Open questions — RESOLVED
 
-1. **Do we keep "Active Leaf" / "Inactive Leaf" terminology or use "Leaf 1 / Leaf 2"?** User said "Leaf 1 / Leaf 2" but DFH industry convention is active/inactive. Compromise: headers say "LEAF 1 (ACTIVE)" and "LEAF 2 (INACTIVE)."
-2. **Should the wizard Step 4 Review also split per-leaf?** Probably yes for consistency, but that's a bigger wizard change. Defer to Session 2.2.5 (optional follow-up).
-3. **Triple doors and larger assemblies?** Rare but possible. Schema allows up to 4 leaves via CHECK constraint, UI can render Leaf 1/2/3/4 headers. No additional work needed beyond the generic loop.
-4. **Data migration for existing Radius DC project?** Two options: (a) one-time script that sets `leaf_count=2` for openings assigned to sets with `heading_leaf_count > heading_door_count`, OR (b) user re-imports the PDF after Phase 2 ships. (b) is simpler.
-5. **Progress counter semantics when an item is duplicated across leaves?** If "Hinges NRP" appears on Leaf 1 and Leaf 2 (same underlying row), does checking it once satisfy both displays or just one? Depends on Option A/B decision in Session 2.3.
+1. **Naming:** "LEAF 1 (ACTIVE)" / "LEAF 2 (INACTIVE)" — **approved compromise.**
+2. **Step 4 Review per-leaf split:** **YES, do it at the same time as the door detail page (Session 2.2), not deferred.**
+3. **Triple doors:** **Out of scope. Not needed for now.** Schema constraint narrowed to 1-2.
+4. **Data migration for existing Radius DC:** **No migration. User will re-import after Phase 2 ships.**
+5. **Progress per leaf:** **YES. Progress must be trackable per leaf. Per-leaf checklist progress ships with Phase 2.0, not deferred. Revised submittals must update progress per leaf.**
 
 ## 8. Success criteria
 
