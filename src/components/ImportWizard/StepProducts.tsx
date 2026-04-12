@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback } from "react";
+import { useMemo, useCallback, useState } from "react";
 import type { HardwareSet } from "./types";
 import {
   analyzeProducts,
@@ -50,13 +50,13 @@ export default function StepProducts({
   onBack,
 }: StepProductsProps) {
   const [sets, setSets] = useState<HardwareSet[]>(initialSets);
-  const [flippedCards, setFlippedCards] = useState<Set<string>>(new Set());
+  const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
   const [resolvedTypos, setResolvedTypos] = useState<Set<string>>(new Set());
 
   const analysis: ProductAnalysis = useMemo(() => analyzeProducts(sets), [sets]);
 
-  const toggleFlip = useCallback((key: string) => {
-    setFlippedCards(prev => {
+  const toggleExpanded = useCallback((key: string) => {
+    setExpandedCards(prev => {
       const next = new Set(prev);
       if (next.has(key)) next.delete(key);
       else next.add(key);
@@ -125,7 +125,7 @@ export default function StepProducts({
           )}
         </p>
         <p className="text-xs text-tertiary/60 mt-0.5">
-          Tap any card to see variant details
+          Tap a card to expand long variant lists
         </p>
       </div>
 
@@ -172,8 +172,8 @@ export default function StepProducts({
               </div>
             )}
 
-            {/* Card grid */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 stagger-children">
+            {/* Card grid — auto-rows-fr keeps sibling heights aligned */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 auto-rows-fr stagger-children">
               {families.map(family => {
                 const familyKey = `${family.manufacturer}|${family.baseSeries}`;
                 const isTypoTarget = categoryTypos.some(
@@ -186,8 +186,8 @@ export default function StepProducts({
                     key={familyKey}
                     family={family}
                     accent={accent}
-                    isFlipped={flippedCards.has(familyKey)}
-                    onFlip={() => toggleFlip(familyKey)}
+                    isExpanded={expandedCards.has(familyKey)}
+                    onToggleExpanded={() => toggleExpanded(familyKey)}
                     isTypoTarget={isTypoTarget}
                   />
                 );
@@ -207,115 +207,133 @@ export default function StepProducts({
 }
 
 
-// ── Flip card sub-component ──
+// ── Product family card ──
+// Matches the opening-card design language: glow-card with accent
+// left border. Shows the first few variants inline; taps expand when
+// there are more. Taller than the prior flip card so consultants can
+// scan model/finish/set data without clicking through.
+
+const INLINE_VARIANT_LIMIT = 4;
 
 function ProductFamilyCard({
   family,
   accent,
-  isFlipped,
-  onFlip,
+  isExpanded,
+  onToggleExpanded,
   isTypoTarget,
 }: {
   family: ProductFamily;
   accent: string;
-  isFlipped: boolean;
-  onFlip: () => void;
+  isExpanded: boolean;
+  onToggleExpanded: () => void;
   isTypoTarget: boolean;
 }) {
+  const hasOverflow = family.items.length > INLINE_VARIANT_LIMIT;
+  const visibleVariants = isExpanded || !hasOverflow
+    ? family.items
+    : family.items.slice(0, INLINE_VARIANT_LIMIT);
+  const hiddenCount = family.items.length - visibleVariants.length;
+
   return (
     <div
-      className={`flip-card flip-card--${accent} ${isFlipped ? 'flip-card--flipped' : ''}`}
-      style={{ minHeight: '160px' }}
-      onClick={onFlip}
-      role="button"
-      tabIndex={0}
-      onKeyDown={(e) => {
+      className={`glow-card glow-card--${accent} p-4 flex flex-col h-full ${hasOverflow ? 'cursor-pointer' : ''}`}
+      onClick={hasOverflow ? onToggleExpanded : undefined}
+      role={hasOverflow ? 'button' : undefined}
+      tabIndex={hasOverflow ? 0 : undefined}
+      onKeyDown={hasOverflow ? (e) => {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
-          onFlip();
+          onToggleExpanded();
         }
-      }}
-      aria-label={`${family.manufacturer ?? 'Unknown'} ${family.baseSeries}. ${isFlipped ? 'Showing details. Click to flip back.' : 'Click to see details.'}`}
+      } : undefined}
+      aria-expanded={hasOverflow ? isExpanded : undefined}
+      aria-label={
+        hasOverflow
+          ? `${family.manufacturer ?? 'Unknown'} ${family.baseSeries}, ${family.items.length} variants. ${isExpanded ? 'Expanded. Tap to collapse.' : 'Tap to expand.'}`
+          : `${family.manufacturer ?? 'Unknown'} ${family.baseSeries}, ${family.items.length} variant${family.items.length !== 1 ? 's' : ''}`
+      }
     >
-      <div className="flip-card__inner">
-        {/* ── FRONT ── */}
-        <div className="flip-card__front bg-tint border border-border-dim p-4 flex flex-col justify-between">
-          <div>
-            <div className="flex items-start justify-between mb-2">
-              <span
-                className="text-[10px] font-semibold uppercase tracking-wider text-tertiary"
-                style={{ fontFamily: "var(--font-display)" }}
-              >
-                {family.manufacturer || 'Unknown'}
-              </span>
-              {isTypoTarget && (
-                <span className="text-[9px] px-1.5 py-0.5 bg-warning-dim text-warning rounded-lg font-semibold">
-                  Typo?
-                </span>
-              )}
-            </div>
-            <div
-              className="text-lg font-semibold"
-              style={{ color: `var(--${accent})` }}
-            >
-              {family.baseSeries}
-            </div>
-          </div>
+      {/* Header row: manufacturer + typo badge */}
+      <div className="flex items-start justify-between gap-2 mb-1">
+        <span
+          className="text-[10px] font-semibold uppercase tracking-wider text-tertiary truncate"
+          style={{ fontFamily: "var(--font-display)" }}
+        >
+          {family.manufacturer || 'Unknown'}
+        </span>
+        {isTypoTarget && (
+          <span className="text-[9px] px-1.5 py-0.5 bg-warning-dim text-warning rounded-lg font-semibold whitespace-nowrap">
+            Typo?
+          </span>
+        )}
+      </div>
 
-          <div>
-            <div className="flex items-center justify-between mt-3 text-[10px] text-tertiary">
-              <span>
-                {family.items.length} variant{family.items.length !== 1 ? 's' : ''}
-              </span>
-              <span>
-                {family.totalOccurrences} use{family.totalOccurrences !== 1 ? 's' : ''}
-              </span>
-            </div>
-            {/* Flip hint */}
-            <div className="text-[9px] text-tertiary/40 text-center mt-2">
-              tap to flip
-            </div>
-          </div>
-        </div>
+      {/* Base series title */}
+      <div
+        className="text-lg font-semibold leading-tight mb-3 break-all"
+        style={{ color: `var(--${accent})` }}
+      >
+        {family.baseSeries}
+      </div>
 
-        {/* ── BACK ── */}
-        <div className="flip-card__back bg-surface border border-border-dim-strong p-4 overflow-y-auto">
-          <div className="flex items-center justify-between mb-3">
+      {/* Variant list — inline, like the opening card's item list */}
+      <div className="flex-1 space-y-1.5 mb-3">
+        {visibleVariants.map(variant => (
+          <div
+            key={variant.normalizedModel}
+            className="flex items-start gap-2 text-xs"
+          >
             <span
-              className="text-[10px] font-semibold uppercase tracking-wider"
-              style={{
-                fontFamily: "var(--font-display)",
-                color: `var(--${accent})`,
-              }}
+              className="mt-0.5 shrink-0"
+              style={{ color: `var(--${accent})` }}
+              aria-hidden
             >
-              {family.baseSeries}
+              &bull;
             </span>
-            <span className="text-[9px] text-tertiary/40">tap to flip</span>
-          </div>
-          <div className="space-y-2">
-            {family.items.map(variant => (
-              <div
-                key={variant.normalizedModel}
-                className="flex items-start gap-2 text-xs"
-              >
-                <span style={{ color: `var(--${accent})` }}>&bull;</span>
-                <div className="flex-1 min-w-0">
-                  <div className="text-primary font-mono truncate">
-                    {variant.model}
-                  </div>
-                  {variant.finish && (
-                    <div className="text-tertiary text-[10px]">{variant.finish}</div>
-                  )}
-                </div>
-                <span className="text-tertiary whitespace-nowrap text-[10px]">
-                  {variant.setIds.length <= 3
-                    ? variant.setIds.join(', ')
-                    : `${variant.setIds.slice(0, 2).join(', ')} +${variant.setIds.length - 2}`}
+            <div className="flex-1 min-w-0">
+              <div className="text-primary font-mono truncate" title={variant.model}>
+                {variant.model}
+              </div>
+              <div className="flex items-center gap-2 text-[10px] text-tertiary">
+                {variant.finish && (
+                  <span className="truncate">{variant.finish}</span>
+                )}
+                {variant.finish && variant.setIds.length > 0 && (
+                  <span className="text-border-dim-strong" aria-hidden>|</span>
+                )}
+                {variant.setIds.length > 0 && (
+                  <span
+                    className="truncate"
+                    title={variant.setIds.join(', ')}
+                  >
+                    {variant.setIds.length <= 3
+                      ? variant.setIds.join(', ')
+                      : `${variant.setIds.slice(0, 2).join(', ')} +${variant.setIds.length - 2}`}
+                  </span>
+                )}
+                <span className="ml-auto whitespace-nowrap">
+                  &times;{variant.occurrences}
                 </span>
               </div>
-            ))}
+            </div>
           </div>
-        </div>
+        ))}
+
+        {hiddenCount > 0 && (
+          <div className="text-[10px] text-accent pt-1">
+            +{hiddenCount} more variant{hiddenCount !== 1 ? 's' : ''} — tap to show
+          </div>
+        )}
+      </div>
+
+      {/* Footer: variant / uses counts */}
+      <div className="flex items-center justify-between text-[10px] text-tertiary border-t border-border-dim pt-2">
+        <span>
+          {family.items.length} variant{family.items.length !== 1 ? 's' : ''}
+        </span>
+        <span>
+          {family.totalOccurrences} use{family.totalOccurrences !== 1 ? 's' : ''}
+        </span>
       </div>
     </div>
   );

@@ -633,24 +633,10 @@ function renderCard(card: PunchCardData, ctx: RenderContext) {
     case "empty_sets": {
       const p = card.payload as { emptySets: Array<{ set_id: string; heading: string }>; totalSets: number };
       const busy = ctx.deepExtracting;
-      // If every currently-empty set has already been through batch
-      // deep-extract and Punchy returned zero items for all of them,
-      // disable the batch button and relabel it to push the user toward
-      // the per-set resolution options below. Without this, the user
-      // can click "Extract with AI" indefinitely with no feedback — the
-      // exact silent-no-op bug from 2026-04-11.
-      const pendingSetIds = p.emptySets.map((s) => s.set_id);
-      const untriedCount = pendingSetIds.filter(
-        (id) => !ctx.emptySetsAttempted.has(id)
-      ).length;
-      const allAttempted = untriedCount === 0;
-      const batchLabel = busy
-        ? "Extracting..."
-        : allAttempted
-          ? "Punchy couldn't find items — use options below"
-          : untriedCount < p.emptySets.length
-            ? `Extract with AI (${untriedCount} untried set${untriedCount !== 1 ? "s" : ""})`
-            : `Extract with AI (${p.emptySets.length} set${p.emptySets.length !== 1 ? "s" : ""})`;
+      // Per-set resolution only — batch "Extract with AI" was removed
+      // because it duplicated "Try with hint" (same /deep-extract endpoint)
+      // but with no user guidance, which produced worse results. Each set
+      // now gets its own Add manually / Remove / Try with hint controls.
       return (
         <PunchCard
           type="empty_sets"
@@ -658,34 +644,16 @@ function renderCard(card: PunchCardData, ctx: RenderContext) {
           current={current}
           total={total}
           primaryAction={{
-            label: batchLabel,
-            // Wrap in arrow fn so the React MouseEvent isn't passed as `opts`.
-            // When some sets are untried, target only those to avoid
-            // re-asking Punchy about sets it already said it couldn't find.
-            onClick: () => {
-              if (allAttempted) return;
-              const targets = pendingSetIds.filter(
-                (id) => !ctx.emptySetsAttempted.has(id)
-              );
-              ctx.onDeepExtract(
-                targets.length > 0 && targets.length < pendingSetIds.length
-                  ? { targetSetIds: targets }
-                  : undefined
-              );
-            },
-            disabled: busy || allAttempted,
+            label: "Continue",
+            onClick: ctx.goNext,
+            variant: "primary",
+            disabled: busy,
           }}
-          onSkip={ctx.goNext}
         >
           <div className="space-y-3">
             <p className="text-primary text-sm">
-              These sets were found in the PDF but the table reader couldn&apos;t parse their items. Use AI extraction, mark a set for manual entry, or remove it if it&apos;s a phantom.
+              These sets were found in the PDF but the table reader couldn&apos;t parse their items. For each one, add a hint and retry, mark it for manual entry, or remove it if it&apos;s a phantom.
             </p>
-            {allAttempted && (
-              <div className="rounded-lg border border-warning bg-warning-dim p-3 text-xs text-warning">
-                Punchy tried and couldn&apos;t find items for {p.emptySets.length === 1 ? "this set" : `all ${p.emptySets.length} sets`}. Pick one of the per-set options below (<span className="font-semibold">Add manually</span>, <span className="font-semibold">Remove</span>, or <span className="font-semibold">Try with hint</span>).
-              </div>
-            )}
             <ul className="space-y-2">
               {p.emptySets.map((s) => {
                 const showHint = ctx.hintVisible.has(s.set_id);

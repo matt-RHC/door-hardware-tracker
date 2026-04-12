@@ -272,48 +272,6 @@ body {
 .glow-card--purple { border-left-color: var(--purple); }
 .glow-card--red    { border-left-color: var(--red); }
 
-/* ── Flip Card ── */
-/* 3D card flip for StepProducts product family display */
-.flip-card {
-  perspective: 800px;
-  cursor: pointer;
-}
-.flip-card__inner {
-  position: relative;
-  width: 100%;
-  height: 100%;
-  transition: transform 0.5s cubic-bezier(0.4, 0, 0.2, 1);
-  transform-style: preserve-3d;
-}
-.flip-card--flipped .flip-card__inner {
-  transform: rotateY(180deg);
-}
-.flip-card__front,
-.flip-card__back {
-  position: absolute;
-  inset: 0;
-  backface-visibility: hidden;
-  -webkit-backface-visibility: hidden;
-  border-radius: 12px;
-  overflow: hidden;
-}
-.flip-card__back {
-  transform: rotateY(180deg);
-}
-
-/* Category accent colors for flip card left border */
-.flip-card--blue   .flip-card__front { border-left: 3px solid var(--blue); }
-.flip-card--green  .flip-card__front { border-left: 3px solid var(--green); }
-.flip-card--orange .flip-card__front { border-left: 3px solid var(--orange); }
-.flip-card--purple .flip-card__front { border-left: 3px solid var(--purple); }
-.flip-card--red    .flip-card__front { border-left: 3px solid var(--red); }
-.flip-card--cyan   .flip-card__front { border-left: 3px solid var(--cyan, var(--blue)); }
-
-/* Subtle glow on hover */
-.flip-card:hover .flip-card__front {
-  box-shadow: var(--glow-sm) rgba(90, 200, 250, 0.08);
-}
-
 /* ── Corner Brackets ── */
 /* Decorative corners à la HoloLoader, for panels and modals */
 .corner-brackets {
@@ -659,20 +617,12 @@ body {
   animation: none;
   opacity: 1;
 }
-[data-perf="low"] .flip-card__inner,
-[data-perf="mid"] .flip-card__inner {
-  transition: none;
-}
-
 /* Reduced motion preference override (highest priority) */
 @media (prefers-reduced-motion: reduce) {
   .stagger-children > *,
   .animate-fade-in-up {
     animation: none !important;
     opacity: 1 !important;
-  }
-  .flip-card__inner {
-    transition: none !important;
   }
 }
 
