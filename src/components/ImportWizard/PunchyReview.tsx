@@ -995,6 +995,7 @@ function renderCard(card: PunchCardData, ctx: RenderContext) {
           title={card.title}
           current={current}
           total={total}
+          pdfPreview={ctx.pdfPreview}
           primaryAction={{ label: "Continue", onClick: ctx.goNext }}
           secondaryAction={ctx.currentIdx > 0 ? { label: "Back", onClick: ctx.goBack, variant: "ghost" } : undefined}
           onSkip={ctx.goNext}

@@ -95,7 +95,7 @@ export default function PunchCard({
   onSkip,
 }: PunchCardProps) {
   return (
-    <div className="w-full max-w-2xl mx-auto animate-fade-in-up">
+    <div className={`w-full mx-auto animate-fade-in-up ${pdfPreview ? 'max-w-5xl' : 'max-w-2xl'}`}>
       {/* Header: avatar + title + progress */}
       <div className="flex items-center gap-3 mb-4">
         <PunchAvatar size="sm" state={avatarStateForType(type)} />
@@ -113,15 +113,19 @@ export default function PunchCard({
         />
       </div>
 
-      {/* Content area */}
-      <div className="mb-4">
-        {children}
-      </div>
-
-      {/* PDF Preview (optional) */}
-      {pdfPreview && (
+      {/* Content + PDF: side-by-side on desktop, stacked on mobile */}
+      {pdfPreview ? (
+        <div className="flex flex-col md:flex-row md:gap-6 mb-4">
+          <div className="flex-1 min-w-0 mb-4 md:mb-0">
+            {children}
+          </div>
+          <div className="w-full md:w-[45%] md:max-w-lg shrink-0">
+            {pdfPreview}
+          </div>
+        </div>
+      ) : (
         <div className="mb-4">
-          {pdfPreview}
+          {children}
         </div>
       )}
 

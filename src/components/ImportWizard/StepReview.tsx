@@ -112,6 +112,17 @@ export default function StepReview({
   const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(
     new Set()
   );
+  // Per-set collapsed leaf sections: key = "setId:shared|leaf1|leaf2"
+  const [collapsedLeafSections, setCollapsedLeafSections] = useState<Set<string>>(new Set());
+  const toggleLeafSection = useCallback((setId: string, section: 'shared' | 'leaf1' | 'leaf2') => {
+    const key = `${setId}:${section}`;
+    setCollapsedLeafSections(prev => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }, []);
   const [sortField, setSortField] = useState<DoorStringField>("door_number");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   // Lookup maps for resolving door → hardware set
@@ -515,20 +526,41 @@ export default function StepReview({
                       <div className="space-y-2">
                         {grouped.shared.length > 0 && (
                           <div>
-                            <div className="text-[10px] font-semibold uppercase text-tertiary tracking-wider mb-0.5" style={{ fontFamily: "var(--font-display)" }}>Shared</div>
-                            {renderItems(grouped.shared, 1)}
+                            <button
+                              onClick={() => toggleLeafSection(group.setId, 'shared')}
+                              className="flex items-center gap-1 text-[10px] font-semibold uppercase text-tertiary tracking-wider mb-0.5 hover:text-secondary transition-colors"
+                              style={{ fontFamily: "var(--font-display)" }}
+                            >
+                              <span className="text-[8px]">{collapsedLeafSections.has(`${group.setId}:shared`) ? '\u25B8' : '\u25BE'}</span>
+                              Shared ({grouped.shared.length})
+                            </button>
+                            {!collapsedLeafSections.has(`${group.setId}:shared`) && renderItems(grouped.shared, 1)}
                           </div>
                         )}
                         {grouped.leaf1.length > 0 && (
                           <div>
-                            <div className="text-[10px] font-semibold uppercase tracking-wider mb-0.5" style={{ fontFamily: "var(--font-display)", color: "var(--cyan)" }}>Leaf 1 (Active)</div>
-                            {renderItems(grouped.leaf1, 1)}
+                            <button
+                              onClick={() => toggleLeafSection(group.setId, 'leaf1')}
+                              className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider mb-0.5 hover:text-secondary transition-colors"
+                              style={{ fontFamily: "var(--font-display)", color: "var(--cyan)" }}
+                            >
+                              <span className="text-[8px]">{collapsedLeafSections.has(`${group.setId}:leaf1`) ? '\u25B8' : '\u25BE'}</span>
+                              Leaf 1 - Active ({grouped.leaf1.length})
+                            </button>
+                            {!collapsedLeafSections.has(`${group.setId}:leaf1`) && renderItems(grouped.leaf1, 1)}
                           </div>
                         )}
                         {grouped.leaf2.length > 0 && (
                           <div>
-                            <div className="text-[10px] font-semibold uppercase tracking-wider mb-0.5" style={{ fontFamily: "var(--font-display)", color: "var(--orange)" }}>Leaf 2 (Inactive)</div>
-                            {renderItems(grouped.leaf2, 2)}
+                            <button
+                              onClick={() => toggleLeafSection(group.setId, 'leaf2')}
+                              className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider mb-0.5 hover:text-secondary transition-colors"
+                              style={{ fontFamily: "var(--font-display)", color: "var(--orange)" }}
+                            >
+                              <span className="text-[8px]">{collapsedLeafSections.has(`${group.setId}:leaf2`) ? '\u25B8' : '\u25BE'}</span>
+                              Leaf 2 - Inactive ({grouped.leaf2.length})
+                            </button>
+                            {!collapsedLeafSections.has(`${group.setId}:leaf2`) && renderItems(grouped.leaf2, 2)}
                           </div>
                         )}
                       </div>

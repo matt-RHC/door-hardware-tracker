@@ -57,6 +57,17 @@ export function findPageForSet(
   return page?.page_number ?? null
 }
 
+/**
+ * Find the first door_schedule page (0-based index).
+ * Used for triage questions where the relevant context is the opening list.
+ */
+export function findFirstDoorSchedulePage(
+  pages: PageClassification[],
+): number | null {
+  const page = pages.find(p => p.page_type === 'door_schedule')
+  return page?.page_number ?? null
+}
+
 // ── Extraction health (moved from StepTriage) ──
 
 export interface ExtractionHealth {
@@ -332,7 +343,7 @@ export function generatePunchCards(input: {
       kind: 'triage_question',
       title: `${triageQs.length} Validation Question${triageQs.length !== 1 ? 's' : ''}`,
       required: false,
-      pdfPageIndex: null,
+      pdfPageIndex: findFirstDoorSchedulePage(pages),
       payload: { questions: triageQs },
     })
   }
