@@ -149,38 +149,40 @@ classify-pages.py → detect-mapping.py → ColumnMapperWizard (user)
 
 ### Mandatory Test Protocol
 - **Any pipeline change** must be tested against ALL 13 golden PDFs (not just the 3 original ones)
-- **After running tests**, log results to Smartsheet Metrics Log (2206493777547140) with: session ID, PDF name, expected vs extracted doors/sets, accuracy %, pipeline duration, build commit, and notes
+- **After running tests**, log results via `npm run tracking -- add-metric --session-id S-XXX --pdf <name> --doors-exp N --doors-ext N --sets-exp N --sets-ext N --accuracy N --commit SHA`. If the CLI is unavailable (cloud sandbox without `.env.local`), hand the user a SQL INSERT for the `tracking_items` table.
 - **Regenerating baselines**: Run `python tests/create_expected.py <PDF_NAME>` for each fixture, then copy to the `-baseline.json` naming convention the tests expect
 - **When counts change**, update both `tests/baselines/` and `tests/ground-truth/` files, and update any hardcoded assertions (e.g., `test_107_doors`)
 
 ### Metrics Tracking & Trend Analysis
-**HARD RULE.** Every test run must be logged to the Smartsheet Metrics Log (2206493777547140). This enables:
+**HARD RULE.** Every test run must be logged to the `tracking_items` table (record_type=`metric_run`) via `npm run tracking -- add-metric`. This enables:
 - **Trend detection**: Track whether door/set accuracy improves or regresses across sessions
 - **Regression alerts**: Compare current run against previous session's metrics — flag any accuracy drops
 - **Positive signal tracking**: Note which code changes produced accuracy improvements and why
 - **Schedule-format progress**: Track the gap between expected=0 and extracted=N for schedule PDFs as the inline parser improves
 - **Punchy effectiveness**: When AI review tests run, note whether Punchy caught issues that pdfplumber missed
 
-At session start, read the last 2-3 runs from the Metrics Log to understand the current accuracy baseline. At session end, compare your test results against those baselines and call out trends in the session summary. If any PDF's accuracy dropped, flag it immediately — do not wait for session end.
+At session start, run `npm run tracking -- list --type metric_run --limit 10` to understand the current accuracy baseline. At session end, compare your test results against those baselines and call out trends in the session summary. If any PDF's accuracy dropped, flag it immediately — do not wait for session end.
+
+> **Fallback**: If the CLI is unavailable (e.g. cloud sandbox without `.env.local`), ask the user to paste data from `/admin/tracking` or compose a SQL INSERT for the `tracking_items` table to paste into Supabase Studio.
 
 ## Session Protocol
 
 Every session must follow this protocol. These rules are non-negotiable and should not require user reminders.
 
 ### Session Start
-1. **Read Smartsheet.** Check project plan (4722023373688708), session log (1895373728599940), and metrics log (2206493777547140) for current state before doing anything.
+1. **Read tracking state.** Run `npm run tracking -- list` to load all current plan items, recent sessions, and recent metric runs. If the CLI is unavailable, ask the user for a paste from `/admin/tracking` or compose a Supabase query. Pick the next session number by incrementing the most recent session ID (e.g. if last was S-086, this session is S-087).
 2. **Confirm boilerplate.** First response must list all tracked rules from this file so the user can verify they're loaded. Quick numbered list, no elaboration needed.
 3. **Check for unmerged work.** If there's an active plan or open PR from the last session, work on THAT first.
 
 ### During Session
-4. **Track extraction metrics.** Any pipeline change must be tested against ALL 13 golden PDFs and logged to the metrics sheet (2206493777547140). See "Testing > Metrics Tracking & Trend Analysis" for full protocol.
-5. **Compare against prior metrics.** Before logging new test results, read the most recent metrics run and compare. Flag accuracy regressions immediately. Note positive trends in session summary.
+4. **Track extraction metrics.** Any pipeline change must be tested against ALL 13 golden PDFs and logged via `npm run tracking -- add-metric`. See "Testing > Metrics Tracking & Trend Analysis" for full protocol.
+5. **Compare against prior metrics.** Before logging new test results, run `npm run tracking -- list --type metric_run --limit 5` and compare. Flag accuracy regressions immediately. Note positive trends in session summary.
 6. **Datestamp everything.** Memory files, session entries, project plan updates, and commit messages include dates (YYYY-MM-DD).
-7. **Preserve data.** Never delete from memory files, docs, or Smartsheet rows without asking. Append and datestamp instead of overwriting.
+7. **Preserve data.** Never delete from memory files, docs, or tracking_items rows without asking. Append and datestamp instead of overwriting.
 
 ### Session End
-8. **Update Smartsheet session log.** Add or update session row with: topics, decisions, tasks completed, pending items, status.
-9. **Update project plan.** Mark resolved items Done with date. Add new findings as Open rows.
+8. **Log this session.** Run `npm run tracking -- add-session --session-id S-XXX --topics "..." --decisions "..." --status complete` with the current session's summary.
+9. **Update plan items.** Mark resolved items Done: `npm run tracking -- update-item <id> --status Done --resolved-pr N`. Add new findings as Open items: `npm run tracking -- add-item --title "..." --priority "P2 - Medium" --area "API" --description "..."`.
 10. **Update memory.** If anything was learned about the user, project, or workflow that future sessions need, save it.
 11. **Summarize test trends.** If tests were run this session, include a brief trend comparison vs. the prior metrics run in the session summary (e.g., "MEDIUM door accuracy stable at 100% since S-072; sched-DT FPs reduced from 116→112").
 
