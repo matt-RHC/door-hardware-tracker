@@ -340,6 +340,9 @@ export default function StepReview({
       manufacturer: item.manufacturer ?? null,
       model: item.model ?? null,
       finish: item.finish ?? null,
+      qty_source: item.qty_source,
+      qty_total: item.qty_total,
+      qty_door_count: item.qty_door_count,
     }));
     return { ...groupItemsByLeaf(items, lc), leafCount: lc, isPair };
   }, [doorToSetMap, setMap]);
@@ -619,9 +622,12 @@ export default function StepReview({
                                         </div>
                                       )}
                                       {leafData.shared.map(item => (
-                                        <div key={item.id} className="flex items-center gap-3 py-0.5 text-[12px]">
+                                        <div key={item.id} className={`flex items-center gap-3 py-0.5 text-[12px] ${item.qty_source === 'flagged' ? 'bg-warning-dim rounded px-1' : ''}`}>
                                           <span className="text-primary font-medium">{item.name}</span>
                                           <span className="text-accent text-[11px]">qty {item.qty}</span>
+                                          {item.qty_source === 'flagged' && (
+                                            <span className="text-[9px] px-1 py-0.5 rounded bg-warning-dim text-warning border border-warning font-medium" title={item.qty_total != null && item.qty_door_count != null ? `${item.qty_total} total ÷ ${item.qty_door_count} leaves = ${item.qty} per leaf (rounded)` : 'Non-standard quantity — verify against PDF'}>⚠ verify</span>
+                                          )}
                                           {item.model && <span className="text-tertiary">{item.model}</span>}
                                         </div>
                                       ))}
@@ -639,9 +645,12 @@ export default function StepReview({
                                         const scope = classifyItemScope(item.name);
                                         const dq = getLeafDisplayQty(item, leafData.leafCount, scope);
                                         return (
-                                          <div key={`${item.id}-l1`} className="flex items-center gap-3 py-0.5 text-[12px]">
+                                          <div key={`${item.id}-l1`} className={`flex items-center gap-3 py-0.5 text-[12px] ${item.qty_source === 'flagged' ? 'bg-warning-dim rounded px-1' : ''}`}>
                                             <span className="text-primary font-medium">{item.name}</span>
                                             <span className="text-accent text-[11px]">qty {dq}</span>
+                                            {item.qty_source === 'flagged' && (
+                                              <span className="text-[9px] px-1 py-0.5 rounded bg-warning-dim text-warning border border-warning font-medium" title={item.qty_total != null && item.qty_door_count != null ? `${item.qty_total} total ÷ ${item.qty_door_count} leaves = ${item.qty} per leaf (rounded)` : 'Non-standard quantity — verify against PDF'}>⚠ verify</span>
+                                            )}
                                             {item.model && <span className="text-tertiary">{item.model}</span>}
                                           </div>
                                         );
@@ -658,9 +667,12 @@ export default function StepReview({
                                         const scope = classifyItemScope(item.name);
                                         const dq = getLeafDisplayQty(item, leafData.leafCount, scope);
                                         return (
-                                          <div key={`${item.id}-l2`} className="flex items-center gap-3 py-0.5 text-[12px]">
+                                          <div key={`${item.id}-l2`} className={`flex items-center gap-3 py-0.5 text-[12px] ${item.qty_source === 'flagged' ? 'bg-warning-dim rounded px-1' : ''}`}>
                                             <span className="text-primary font-medium">{item.name}</span>
                                             <span className="text-accent text-[11px]">qty {dq}</span>
+                                            {item.qty_source === 'flagged' && (
+                                              <span className="text-[9px] px-1 py-0.5 rounded bg-warning-dim text-warning border border-warning font-medium" title={item.qty_total != null && item.qty_door_count != null ? `${item.qty_total} total ÷ ${item.qty_door_count} leaves = ${item.qty} per leaf (rounded)` : 'Non-standard quantity — verify against PDF'}>⚠ verify</span>
+                                            )}
                                             {item.model && <span className="text-tertiary">{item.model}</span>}
                                           </div>
                                         );

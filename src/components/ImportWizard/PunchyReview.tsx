@@ -805,8 +805,18 @@ function renderCard(card: PunchCardData, ctx: RenderContext) {
             )}
             <div className="space-y-0.5 max-h-40 overflow-y-auto">
               {(sample.items ?? []).map((item, i) => (
-                <div key={`${item.name}-${i}`} className="flex items-center gap-2 px-2 py-1 rounded bg-tint text-xs">
+                <div key={`${item.name}-${i}`} className={`flex items-center gap-2 px-2 py-1 rounded text-xs ${item.qty_source === 'flagged' ? 'bg-warning-dim border border-warning' : 'bg-tint'}`}>
                   <span className="text-tertiary w-6 text-right">{item.qty}x</span>
+                  {item.qty_source === 'flagged' && (
+                    <span
+                      className="text-[9px] px-1 py-0.5 rounded bg-warning-dim text-warning font-medium"
+                      title={item.qty_total != null && item.qty_door_count != null
+                        ? `${item.qty_total} total ÷ ${item.qty_door_count} leaves = ${item.qty} per leaf (rounded)`
+                        : 'Non-standard quantity — verify against PDF'}
+                    >
+                      ⚠
+                    </span>
+                  )}
                   <span className="text-primary flex-1">{item.name}</span>
                   <span className="text-tertiary">{item.manufacturer}</span>
                 </div>
