@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import type { DoorEntry, HardwareSet } from '@/lib/types'
-import { buildPerOpeningItems, buildDoorToSetMap } from '@/lib/parse-pdf-helpers'
+import { buildPerOpeningItems, buildDoorToSetMap, NEVER_RENORMALIZE } from '@/lib/parse-pdf-helpers'
 
 // User decisions from the wizard
 interface RemovedDecision {
@@ -72,7 +72,7 @@ export async function POST(request: NextRequest) {
       if (leafCount <= 1 && doorCount <= 1) continue
 
       for (const item of set.items ?? []) {
-        if (item.qty_source === 'divided' || item.qty_source === 'flagged' || item.qty_source === 'capped') continue
+        if (NEVER_RENORMALIZE.has(item.qty_source ?? '')) continue
         let divided = false
         if (leafCount > 1 && item.qty >= leafCount) {
           const perLeaf = item.qty / leafCount

@@ -294,6 +294,45 @@ describe('normalizeQuantities — category-aware division', () => {
     expect(sets[0].items[1].qty).toBe(4)
   })
 
+  it('does not re-normalize Punchy-corrected or user-authored qty_sources', () => {
+    // Regression test for the P0 bug where normalizeQuantities divided qty
+    // values that were already final (per-opening) because the skip list
+    // only covered 'divided' / 'flagged' / 'capped'. Every terminal
+    // qty_source in NEVER_RENORMALIZE must survive a normalize pass unchanged.
+    //
+    // Scenario: pair-door set with 2 leaves and 2 doors. Each item below has
+    // a per-opening qty that, if wrongly re-divided by leafCount=2, would
+    // become half its intended value.
+    const sets = [makeSet('DH_TERMINAL', [
+      { name: 'Hinge', qty: 4, qty_source: 'llm_override' },
+      { name: 'Closer', qty: 2, qty_source: 'auto_corrected' },
+      { name: 'Exit Device', qty: 2, qty_source: 'deep_extract' },
+      { name: 'Lockset', qty: 2, qty_source: 'region_extract' },
+      { name: 'Flush Bolt', qty: 2, qty_source: 'propagated' },
+      { name: 'Kick Plate', qty: 2, qty_source: 'reverted' },
+      { name: 'Wire Harness', qty: 2, qty_source: 'manual_placeholder' },
+    ], { heading_leaf_count: 2, heading_door_count: 2 })]
+    const doors = [makeDoor('2001', 'DH_TERMINAL'), makeDoor('2002', 'DH_TERMINAL')]
+
+    normalizeQuantities(sets, doors)
+
+    // Every item must keep its original qty and qty_source.
+    expect(sets[0].items[0].qty).toBe(4)
+    expect(sets[0].items[0].qty_source).toBe('llm_override')
+    expect(sets[0].items[1].qty).toBe(2)
+    expect(sets[0].items[1].qty_source).toBe('auto_corrected')
+    expect(sets[0].items[2].qty).toBe(2)
+    expect(sets[0].items[2].qty_source).toBe('deep_extract')
+    expect(sets[0].items[3].qty).toBe(2)
+    expect(sets[0].items[3].qty_source).toBe('region_extract')
+    expect(sets[0].items[4].qty).toBe(2)
+    expect(sets[0].items[4].qty_source).toBe('propagated')
+    expect(sets[0].items[5].qty).toBe(2)
+    expect(sets[0].items[5].qty_source).toBe('reverted')
+    expect(sets[0].items[6].qty).toBe(2)
+    expect(sets[0].items[6].qty_source).toBe('manual_placeholder')
+  })
+
   it('skips sets where both leafCount and doorCount are <= 1', () => {
     const sets = [makeSet('DH13', [
       { name: 'Hinge', qty: 3 },

@@ -3,7 +3,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { createExtractionRun, updateExtractionRun, writeStagingData, promoteExtraction } from '@/lib/extraction-staging'
 import type { StagingOpening } from '@/lib/extraction-staging'
 import type { DoorEntry, HardwareSet } from '@/lib/types'
-import { buildPerOpeningItems, buildDoorToSetMap, classifyItemScope, detectIsPair, normalizeDoorNumber } from '@/lib/parse-pdf-helpers'
+import { buildPerOpeningItems, buildDoorToSetMap, classifyItemScope, detectIsPair, normalizeDoorNumber, NEVER_RENORMALIZE } from '@/lib/parse-pdf-helpers'
 
 // --- Shared: check for unmatched sets ---
 //
@@ -110,7 +110,7 @@ export async function POST(request: NextRequest) {
       )
 
       for (const item of set.items ?? []) {
-        if (item.qty_source === 'divided' || item.qty_source === 'flagged' || item.qty_source === 'capped') continue
+        if (NEVER_RENORMALIZE.has(item.qty_source ?? '')) continue
         let divided = false
         if (leafCount > 1 && item.qty >= leafCount) {
           const perLeaf = item.qty / leafCount

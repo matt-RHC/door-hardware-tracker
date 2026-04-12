@@ -45,6 +45,41 @@ export function classifyItemScope(name: string): InstallScope | null {
   return null
 }
 
+/**
+ * Terminal `qty_source` values that must NOT be re-normalized.
+ *
+ * Every normalization entry point (`normalizeQuantities` here, save/route.ts,
+ * apply-revision/route.ts) must check this set before dividing a qty. Values
+ * in this set represent a qty that is already per-opening / per-leaf / final
+ * for one of these reasons:
+ *
+ *   - 'divided' / 'flagged' / 'capped' — produced by a prior normalization
+ *     pass. Re-dividing would compound the division.
+ *   - 'llm_override' — Punchy explicitly corrected the qty. Punchy's prompt
+ *     at punchy-prompts.ts:187 tells it the values it sees are already
+ *     per-opening, so its returned values are final.
+ *   - 'auto_corrected' — PunchyReview.tsx auto-applied a Punchy correction.
+ *     Same rationale as 'llm_override'.
+ *   - 'deep_extract' / 'region_extract' — pulled from a targeted region of
+ *     the PDF with Claude's vision model. Returned values are per-opening.
+ *   - 'propagated' — apply-to-all copy of an already-normalized qty.
+ *   - 'reverted' — user manually reverted an auto-correction. The user chose
+ *     this exact value; do not silently change it.
+ *   - 'manual_placeholder' — triage-time placeholder the user will edit.
+ */
+export const NEVER_RENORMALIZE: ReadonlySet<string> = new Set([
+  'divided',
+  'flagged',
+  'capped',
+  'llm_override',
+  'auto_corrected',
+  'deep_extract',
+  'region_extract',
+  'propagated',
+  'reverted',
+  'manual_placeholder',
+])
+
 // --- Shared types ---
 
 export interface PdfplumberResult {
@@ -483,7 +518,9 @@ export function applyCorrections(
             const val = fix.new_value
             if (fix.field === 'qty') {
               (item as any)[fix.field] = parseInt(val, 10) || 1
-              // S-064: Reset qty_source so post-LLM re-normalization catches this
+              // Mark as llm_override so downstream normalization (NEVER_RENORMALIZE)
+              // preserves Punchy's correction — Punchy sees per-opening values and
+              // returns per-opening values; re-dividing would clobber the fix.
               ;(item as any).qty_source = 'llm_override'
             } else {
               (item as any)[fix.field] = val
@@ -624,7 +661,7 @@ export function normalizeQuantities(
     if (leafCount <= 1 && doorCount <= 1) continue
 
     for (const item of set.items ?? []) {
-      if (item.qty_source === 'divided' || item.qty_source === 'flagged' || item.qty_source === 'capped') {
+      if (NEVER_RENORMALIZE.has(item.qty_source ?? '')) {
         continue
       }
 
