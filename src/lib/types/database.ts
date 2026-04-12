@@ -157,6 +157,7 @@ export type Database = {
           options: string | null
           sort_order: number
           install_type: 'bench' | 'field' | null
+          leaf_side: 'active' | 'inactive' | 'shared' | 'both' | null
           created_at: string
         }
         Insert: {
@@ -170,6 +171,7 @@ export type Database = {
           options?: string | null
           sort_order?: number
           install_type?: 'bench' | 'field' | null
+          leaf_side?: 'active' | 'inactive' | 'shared' | 'both' | null
           created_at?: string
         }
         Update: {
@@ -183,6 +185,7 @@ export type Database = {
           options?: string | null
           sort_order?: number
           install_type?: 'bench' | 'field' | null
+          leaf_side?: 'active' | 'inactive' | 'shared' | 'both' | null
           created_at?: string
         }
       }

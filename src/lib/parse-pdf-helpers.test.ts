@@ -8,6 +8,7 @@ import {
   parseOpeningSize,
   detectIsPair,
   buildPerOpeningItems,
+  computeLeafSide,
 } from './parse-pdf-helpers'
 import type { HardwareSet, DoorEntry } from '@/lib/types'
 
@@ -1005,5 +1006,64 @@ describe('buildPerOpeningItems — pair detection', () => {
     expect(doorRows).toHaveLength(2) // pair detected via size
     const hinge = rows.find(r => r.name === 'Hinges')
     expect(hinge?.qty).toBe(4) // stored per-leaf, UI handles the split
+  })
+})
+
+// ── Phase 3 (leaf_side) tests ─────────────────────────────────────────
+
+describe('computeLeafSide — per-item leaf attribution', () => {
+  it('returns shared for Frame rows', () => {
+    expect(computeLeafSide('Frame', 1)).toBe('shared')
+    expect(computeLeafSide('Frame', 2)).toBe('shared')
+  })
+
+  it('returns active for Door (Active Leaf)', () => {
+    expect(computeLeafSide('Door (Active Leaf)', 2)).toBe('active')
+  })
+
+  it('returns inactive for Door (Inactive Leaf)', () => {
+    expect(computeLeafSide('Door (Inactive Leaf)', 2)).toBe('inactive')
+  })
+
+  it('returns active for a bare Door on a single opening', () => {
+    expect(computeLeafSide('Door', 1)).toBe('active')
+  })
+
+  it('returns null for a bare Door on a pair opening (unexpected shape)', () => {
+    // Pair openings should have been split into active + inactive rows
+    // by buildPerOpeningItems. If we see 'Door' on a pair it's data from
+    // a pre-Phase-2 save — let render-time classification handle it.
+    expect(computeLeafSide('Door', 2)).toBeNull()
+  })
+
+  it('returns shared for per_pair items (coordinator, flush bolt, astragal)', () => {
+    expect(computeLeafSide('Coordinator', 2)).toBe('shared')
+    expect(computeLeafSide('Flush Bolt Kit FB32', 2)).toBe('shared')
+    expect(computeLeafSide('Astragal', 2)).toBe('shared')
+  })
+
+  it('returns shared for per_frame items (threshold, seals, silencer)', () => {
+    expect(computeLeafSide('Threshold 655BK', 2)).toBe('shared')
+    expect(computeLeafSide('Gasketing', 2)).toBe('shared')
+    expect(computeLeafSide('Silencer', 2)).toBe('shared')
+    expect(computeLeafSide('Weatherstrip', 2)).toBe('shared')
+  })
+
+  it('returns null for per_leaf items on pairs (ambiguous — render-time decides)', () => {
+    // Hinges, exit devices, kick plates: could go on active, inactive,
+    // or both leaves depending on spec. Keep NULL so the UI keeps the
+    // existing behavior until the triage UI lets users set it explicitly.
+    expect(computeLeafSide('Hinges 5BB1 4.5x4.5 NRP', 2)).toBeNull()
+    expect(computeLeafSide('Exit Device 9875', 2)).toBeNull()
+    expect(computeLeafSide('Kick Plate', 2)).toBeNull()
+  })
+
+  it('returns null for per_opening items on pairs (ambiguous)', () => {
+    expect(computeLeafSide('Closer 4040XP', 2)).toBeNull()
+    expect(computeLeafSide('Mortise Lockset L9080', 2)).toBeNull()
+  })
+
+  it('returns null for unknown / unclassified items', () => {
+    expect(computeLeafSide('Widget XYZ-123', 2)).toBeNull()
   })
 })

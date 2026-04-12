@@ -80,6 +80,56 @@ export const NEVER_RENORMALIZE: ReadonlySet<string> = new Set([
   'manual_placeholder',
 ])
 
+/**
+ * Leaf attribution values persisted on `hardware_items.leaf_side`.
+ *
+ * - 'active'   — active leaf only (lockset, exit device on most pairs)
+ * - 'inactive' — inactive leaf only (flush bolts)
+ * - 'shared'   — one per opening, not per leaf (coordinator, threshold,
+ *   astragal, gaskets, thresholds)
+ * - 'both'     — present on each leaf with its own row (hinges, closers
+ *   when the user has split them per-leaf via the triage UI)
+ *
+ * `null` means "unset — fall back to render-time classification in
+ * `classify-leaf-items.ts::groupItemsByLeaf`." See migration 013.
+ */
+export type LeafSide = 'active' | 'inactive' | 'shared' | 'both'
+
+/**
+ * Compute the unambiguous `leaf_side` for a hardware item at save time.
+ *
+ * Returns a definite value for structural rows (Door / Frame) and for
+ * items whose taxonomy scope is per_pair or per_frame (those items only
+ * ever exist once per opening regardless of leaf count). For per_leaf
+ * and per_opening items on pair doors, the choice between 'active',
+ * 'inactive', and 'both' depends on installation details we can't infer
+ * from the name alone, so we return `null` and let render-time logic
+ * handle it — users will eventually override via the triage UI.
+ *
+ * Note: caller should pass `leafCount` from the opening row so we can
+ * correctly handle single-leaf openings (where there's no inactive leaf
+ * and a bare "Door" is implicitly active).
+ */
+export function computeLeafSide(
+  itemName: string,
+  leafCount: number,
+): LeafSide | null {
+  // Structural items — fixed by name.
+  if (itemName === 'Door (Active Leaf)') return 'active'
+  if (itemName === 'Door (Inactive Leaf)') return 'inactive'
+  if (itemName === 'Frame') return 'shared'
+  // A bare 'Door' row exists only on single-leaf openings; the render
+  // code routes it to leaf 1 which is the implicit active leaf.
+  if (itemName === 'Door') return leafCount <= 1 ? 'active' : null
+
+  // Hardware items — scope drives unambiguous attribution.
+  const scope = classifyItemScope(itemName)
+  if (scope === 'per_pair' || scope === 'per_frame') return 'shared'
+
+  // per_leaf / per_opening / unknown on pair doors: ambiguous, defer.
+  return null
+}
+
 // --- Shared types ---
 
 export interface PdfplumberResult {
@@ -1111,15 +1161,17 @@ export function buildPerOpeningItems(
     // pair openings got only 1 Door row and per-leaf item quantities
     // were stored without being doubled.
     const isPair = detectIsPair(hwSet, doorInfo)
+    const leafCount = isPair ? 2 : 1
 
-    // Add door(s) only when door_type is known
+    // Add door(s) only when door_type is known. Stamp leaf_side on each
+    // structural row so the DB carries the attribution (see migration 013).
     const doorModel = doorInfo?.door_type?.trim() || null
     if (doorModel) {
       if (isPair) {
-        rows.push({ ...base, name: 'Door (Active Leaf)', qty: 1, manufacturer: null, model: doorModel, finish: null, sort_order: sortOrder++ })
-        rows.push({ ...base, name: 'Door (Inactive Leaf)', qty: 1, manufacturer: null, model: doorModel, finish: null, sort_order: sortOrder++ })
+        rows.push({ ...base, name: 'Door (Active Leaf)', qty: 1, manufacturer: null, model: doorModel, finish: null, sort_order: sortOrder++, leaf_side: 'active' })
+        rows.push({ ...base, name: 'Door (Inactive Leaf)', qty: 1, manufacturer: null, model: doorModel, finish: null, sort_order: sortOrder++, leaf_side: 'inactive' })
       } else {
-        rows.push({ ...base, name: 'Door', qty: 1, manufacturer: null, model: doorModel, finish: null, sort_order: sortOrder++ })
+        rows.push({ ...base, name: 'Door', qty: 1, manufacturer: null, model: doorModel, finish: null, sort_order: sortOrder++, leaf_side: 'active' })
       }
     }
 
@@ -1127,7 +1179,7 @@ export function buildPerOpeningItems(
     // regardless of pair vs single (pair doors share one doubled frame).
     const frameModel = doorInfo?.frame_type?.trim() || null
     if (frameModel) {
-      rows.push({ ...base, name: 'Frame', qty: 1, manufacturer: null, model: frameModel, finish: null, sort_order: sortOrder++ })
+      rows.push({ ...base, name: 'Frame', qty: 1, manufacturer: null, model: frameModel, finish: null, sort_order: sortOrder++, leaf_side: 'shared' })
     }
 
     // Hardware set items — store per-leaf quantities as-is.
@@ -1135,8 +1187,14 @@ export function buildPerOpeningItems(
     // Shared / Leaf 1 / Leaf 2 sections, so per-leaf items (hinges,
     // closers, etc.) are stored at their per-leaf value and the UI
     // displays them on each leaf section.
+    //
+    // Phase 3: attach a leaf_side hint via computeLeafSide() — unambiguous
+    // for per_pair / per_frame items (→ 'shared') and left NULL for
+    // per_leaf / per_opening items on pairs, where render-time logic still
+    // decides (triage UI in a follow-up will let users set these).
     if ((hwSet?.items?.length ?? 0) > 0) {
       for (const item of hwSet?.items ?? []) {
+        const leafSide = computeLeafSide(item.name, leafCount)
         rows.push({
           ...base,
           name: item.name,
@@ -1145,6 +1203,7 @@ export function buildPerOpeningItems(
           model: item.model || null,
           finish: item.finish || null,
           sort_order: sortOrder++,
+          leaf_side: leafSide,
         })
       }
     }
