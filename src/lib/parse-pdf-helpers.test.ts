@@ -3,6 +3,8 @@ import {
   normalizeQuantities,
   normalizeDoorNumber,
   buildDoorToSetMap,
+  buildDefinedSetIds,
+  findDoorsWithUnmatchedSets,
 } from './parse-pdf-helpers'
 import type { HardwareSet, DoorEntry } from '@/lib/types'
 
@@ -510,5 +512,150 @@ describe('buildDoorToSetMap', () => {
 
     expect(map.size).toBe(1)
     expect(map.get('110-02A')).toBe(set)
+  })
+})
+
+// ─── buildDefinedSetIds + findDoorsWithUnmatchedSets ───
+//
+// Regression tests for the Radius DC "Cannot save: 6 Door(s) reference
+// hardware sets that don't exist" bug from 2026-04-11. The save-path
+// validation was comparing door.hw_set against set.set_id only, missing
+// the generic_set_id fallback, and was not excluding by_others doors.
+
+describe('buildDefinedSetIds', () => {
+  function makeSet(set_id: string, generic_set_id?: string): HardwareSet {
+    return {
+      set_id,
+      generic_set_id,
+      heading: `Heading ${set_id}`,
+      items: [],
+    }
+  }
+
+  it('includes both set_id and generic_set_id when they differ', () => {
+    const ids = buildDefinedSetIds([
+      makeSet('DH4A.0', 'DH4A'),
+      makeSet('DH4A.1', 'DH4A'),
+    ])
+
+    expect(ids.has('DH4A.0')).toBe(true)
+    expect(ids.has('DH4A.1')).toBe(true)
+    expect(ids.has('DH4A')).toBe(true)
+  })
+
+  it('does not duplicate when set_id equals generic_set_id', () => {
+    const ids = buildDefinedSetIds([
+      makeSet('DH1', 'DH1'),
+    ])
+
+    expect(ids.size).toBe(1)
+    expect(ids.has('DH1')).toBe(true)
+  })
+
+  it('returns empty set for empty hardwareSets input', () => {
+    expect(buildDefinedSetIds([]).size).toBe(0)
+  })
+
+  it('handles sets with no generic_set_id', () => {
+    const ids = buildDefinedSetIds([makeSet('DH5.0')])
+
+    expect(ids.size).toBe(1)
+    expect(ids.has('DH5.0')).toBe(true)
+  })
+})
+
+describe('findDoorsWithUnmatchedSets', () => {
+  function makeDoor(
+    door_number: string,
+    hw_set: string,
+    by_others = false,
+  ): DoorEntry {
+    return {
+      door_number,
+      hw_set,
+      by_others,
+      door_type: null,
+      frame_type: null,
+      fire_rating: null,
+      hand: null,
+      location: null,
+    } as unknown as DoorEntry
+  }
+
+  it('matches doors by generic_set_id when set_id differs (Radius DC regression)', () => {
+    // This is the exact scenario from the 2026-04-11 production bug:
+    // doors reference the generic parent id "DH4A" while the sets are
+    // stored under specific sub-heading ids "DH4A.0" and "DH4A.1".
+    const sets: HardwareSet[] = [
+      { set_id: 'DH4A.0', generic_set_id: 'DH4A', heading: '', items: [] },
+      { set_id: 'DH4A.1', generic_set_id: 'DH4A', heading: '', items: [] },
+    ]
+    const doors = [
+      makeDoor('110-02A', 'DH4A'), // generic reference — must match
+      makeDoor('110-08A', 'DH4A'),
+    ]
+    const definedSetIds = buildDefinedSetIds(sets)
+    const unmatched = findDoorsWithUnmatchedSets(doors, definedSetIds)
+
+    expect(unmatched).toHaveLength(0)
+  })
+
+  it('excludes by_others doors from the unmatched list', () => {
+    const sets: HardwareSet[] = [{ set_id: 'DH1', heading: '', items: [] }]
+    const doors = [
+      makeDoor('100A', 'DH1'),
+      makeDoor('100B', 'N/A', true), // by-others, intentionally unassigned
+      makeDoor('100C', '', true), // by-others with empty hw_set
+    ]
+    const definedSetIds = buildDefinedSetIds(sets)
+    const unmatched = findDoorsWithUnmatchedSets(doors, definedSetIds)
+
+    expect(unmatched).toHaveLength(0)
+  })
+
+  it('flags genuine unmatched references', () => {
+    const sets: HardwareSet[] = [{ set_id: 'DH1', heading: '', items: [] }]
+    const doors = [
+      makeDoor('100A', 'DH1'),
+      makeDoor('100B', 'INVALID-SET'),
+    ]
+    const definedSetIds = buildDefinedSetIds(sets)
+    const unmatched = findDoorsWithUnmatchedSets(doors, definedSetIds)
+
+    expect(unmatched).toHaveLength(1)
+    expect(unmatched[0].door_number).toBe('100B')
+  })
+
+  it('skips doors with empty hw_set', () => {
+    const sets: HardwareSet[] = [{ set_id: 'DH1', heading: '', items: [] }]
+    const doors = [
+      makeDoor('100A', 'DH1'),
+      makeDoor('100B', ''),
+    ]
+    const definedSetIds = buildDefinedSetIds(sets)
+    const unmatched = findDoorsWithUnmatchedSets(doors, definedSetIds)
+
+    expect(unmatched).toHaveLength(0)
+  })
+
+  it('handles a mix of matched, by_others, and unmatched doors', () => {
+    // This simulates roughly the Radius DC data shape: some doors match
+    // via generic_set_id, some are by_others, and a few have genuinely
+    // bad references. Only the bad ones should be reported.
+    const sets: HardwareSet[] = [
+      { set_id: 'DH4A.0', generic_set_id: 'DH4A', heading: '', items: [] },
+      { set_id: 'DH1-10', heading: '', items: [] },
+    ]
+    const doors = [
+      makeDoor('110-02A', 'DH4A'), // match via generic
+      makeDoor('110-01A', 'DH1-10'), // direct match
+      makeDoor('120-04B', 'N/A', true), // by-others
+      makeDoor('ORPHAN-1', 'DH99'), // genuinely unmatched
+    ]
+    const definedSetIds = buildDefinedSetIds(sets)
+    const unmatched = findDoorsWithUnmatchedSets(doors, definedSetIds)
+
+    expect(unmatched).toHaveLength(1)
+    expect(unmatched[0].door_number).toBe('ORPHAN-1')
   })
 })
