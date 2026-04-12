@@ -206,7 +206,10 @@ def score_header_for_field(header: str, field: str) -> float:
     return min(score, 1.0)
 
 
-def detect_column_mapping(headers: list[str]) -> dict[str, int]:
+def detect_column_mapping(
+    headers: list[str],
+    sample_rows: list[list[str]] | None = None,
+) -> dict[str, int]:
     fields = list(COLUMN_KEYWORDS.keys())
     mapping: dict[str, int] = {}
     used_columns: set[int] = set()
@@ -215,7 +218,17 @@ def detect_column_mapping(headers: list[str]) -> dict[str, int]:
         if not header or not header.strip():
             continue
         for field in fields:
-            score = score_header_for_field(header, field)
+            header_score = score_header_for_field(header, field)
+            # Content-based scoring: sample the column values
+            content_score = 0.0
+            if sample_rows:
+                col_values = [
+                    row[i] for row in sample_rows
+                    if i < len(row) and row[i] and row[i].strip()
+                ]
+                content_score = score_content_for_field(col_values, field)
+            # Use whichever signal is stronger
+            score = max(header_score, content_score)
             if score >= 0.3:
                 candidates.append((score, field, i))
     candidates.sort(key=lambda x: -x[0])
@@ -238,12 +251,24 @@ def detect_column_mapping(headers: list[str]) -> dict[str, int]:
     return mapping
 
 
-def get_confidence_scores(headers: list[str], mapping: dict[str, int]) -> dict[str, float]:
-    """Return confidence score for each mapped field."""
+def get_confidence_scores(
+    headers: list[str],
+    mapping: dict[str, int],
+    sample_rows: list[list[str]] | None = None,
+) -> dict[str, float]:
+    """Return confidence score for each mapped field (max of header and content scores)."""
     scores: dict[str, float] = {}
     for field, col_idx in mapping.items():
         if col_idx < len(headers):
-            scores[field] = round(score_header_for_field(headers[col_idx], field), 2)
+            header_score = score_header_for_field(headers[col_idx], field)
+            content_score = 0.0
+            if sample_rows:
+                col_values = [
+                    row[col_idx] for row in sample_rows
+                    if col_idx < len(row) and row[col_idx] and row[col_idx].strip()
+                ]
+                content_score = score_content_for_field(col_values, field)
+            scores[field] = round(max(header_score, content_score), 2)
     return scores
 
 
@@ -275,6 +300,66 @@ def looks_like_door_number(val: str) -> bool:
     if re.match(r"^\d{5}(-\d{4})?$", s):
         return False
     return True
+
+
+# --- Content-based column inference ---
+
+# Fire rating values that appear in DFH submittals
+_FIRE_RATING_RE = re.compile(
+    r"^(\d{1,3}\s*[Mm][Ii][Nn]\.?|\d{1,3}\s*[Hh][Rr]\.?|NR|N/?A|NONE|RATED|--?|—|[ABC])$"
+)
+_FIRE_RATING_BARE_NUMBERS = {20, 45, 60, 90, 120, 180}
+
+_HAND_RE = re.compile(r"^(LH|RH|LHR|RHR|LHRB|RHRB)$", re.IGNORECASE)
+
+
+def score_content_for_field(values: list[str], field: str) -> float:
+    """Score how well a column's actual cell values match a field type.
+
+    Samples up to 5 non-empty values and checks against known patterns.
+    Returns a confidence score 0.0–1.0.
+    """
+    non_empty = [v.strip() for v in values if v and v.strip()][:5]
+    if len(non_empty) == 0:
+        return 0.0
+
+    if field == "fire_rating":
+        matches = 0
+        for v in non_empty:
+            if _FIRE_RATING_RE.match(v):
+                matches += 1
+            elif v.isdigit() and int(v) in _FIRE_RATING_BARE_NUMBERS:
+                matches += 1
+        return matches / len(non_empty)
+
+    if field == "hand":
+        matches = sum(1 for v in non_empty if _HAND_RE.match(v))
+        return matches / len(non_empty)
+
+    if field == "door_number":
+        matches = sum(1 for v in non_empty if looks_like_door_number(v))
+        return matches / len(non_empty)
+
+    if field == "hw_set":
+        # HW set IDs are short alphanumeric codes like "DH1", "I2S-1E"
+        matches = 0
+        for v in non_empty:
+            if re.match(r"^[A-Z0-9][A-Z0-9\-.:]{0,10}$", v, re.IGNORECASE) and not v.isdigit():
+                matches += 1
+        return matches / len(non_empty) * 0.7  # lower weight — ambiguous
+
+    if field == "location":
+        # Free-form text with spaces — NOT matching fire_rating, hand, or door_number
+        matches = 0
+        for v in non_empty:
+            has_space = " " in v
+            not_fire = not _FIRE_RATING_RE.match(v) and not (v.isdigit() and int(v) in _FIRE_RATING_BARE_NUMBERS)
+            not_hand = not _HAND_RE.match(v)
+            if has_space and not_fire and not_hand:
+                matches += 1
+        return matches / len(non_empty) * 0.5  # low confidence — fallback
+
+    return 0.0
 
 
 def _row_has_contact_data(row: list[str]) -> bool:
@@ -538,8 +623,8 @@ class handler(BaseHTTPRequestHandler):
                     page = pdf.pages[pi]
                     headers, sample_rows, method = find_door_schedule_table(page)
                     if headers:
-                        mapping = detect_column_mapping(headers)
-                        scores = get_confidence_scores(headers, mapping)
+                        mapping = detect_column_mapping(headers, sample_rows)
+                        scores = get_confidence_scores(headers, mapping, sample_rows)
 
                         # Compute overall confidence — if too low, mark as
                         # low_confidence so frontend can warn the user
