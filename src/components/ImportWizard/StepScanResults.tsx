@@ -1,6 +1,7 @@
 "use client";
 
 import type { ClassifyPagesResponse } from "./types";
+import WizardNav from "./WizardNav";
 
 interface StepScanResultsProps {
   classifyResult: ClassifyPagesResponse;
@@ -64,11 +65,14 @@ export default function StepScanResults({
   const typeOrder = ["door_schedule", "hardware_set", "reference", "cover", "other"];
 
   return (
-    <div className="max-w-lg mx-auto">
-      <h3 className="text-primary font-semibold mb-1">
-        Step 2: Scan Results
+    <div className="max-w-2xl mx-auto">
+      <h3
+        className="text-[11px] font-semibold uppercase text-secondary tracking-wider"
+        style={{ fontFamily: "var(--font-display)" }}
+      >
+        Scan Results
       </h3>
-      <p className="text-secondary text-sm mb-4">
+      <p className="text-sm text-tertiary mt-1 mb-4">
         Review what we found in your PDF before continuing.
       </p>
 
@@ -216,20 +220,7 @@ export default function StepScanResults({
       </div>
 
       {/* ── Navigation ── */}
-      <div className="flex justify-between mt-6">
-        <button
-          onClick={onBack}
-          className="px-4 py-2 text-secondary hover:text-primary transition-colors text-sm"
-        >
-          Back
-        </button>
-        <button
-          onClick={onNext}
-          className="px-6 py-2 bg-accent hover:bg-accent/80 text-white rounded-lg transition-colors font-semibold"
-        >
-          Next
-        </button>
-      </div>
+      <WizardNav onBack={onBack} onNext={onNext} nextLabel="Next" />
     </div>
   );
 }
