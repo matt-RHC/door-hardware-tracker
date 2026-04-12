@@ -17,6 +17,7 @@ import StepScanResults from "./StepScanResults";
 import StepMapColumns from "./StepMapColumns";
 import StepTriage from "./StepTriage";
 import StepReview from "./StepReview";
+import StepProducts from "./StepProducts";
 import StepConfirm from "./StepConfirm";
 import StepCompare from "./StepCompare";
 import PunchAssistant from "./PunchAssistant";
@@ -40,6 +41,7 @@ const ALL_STEPS: Array<{ label: string; step: WizardStep }> = [
   { label: "Map Columns", step: WizardStep.MapColumns },
   { label: "Triage", step: WizardStep.Triage },
   { label: "Review", step: WizardStep.Review },
+  { label: "Products", step: WizardStep.Products },
   { label: "Compare", step: WizardStep.Compare },
   { label: "Confirm", step: WizardStep.Confirm },
 ];
@@ -220,6 +222,12 @@ export default function ImportWizard({
           }))
         );
       }
+      case WizardStep.Products: {
+        return [{
+          severity: 'info' as const,
+          text: 'Review product families grouped by manufacturer and series. Resolve any flagged typos.',
+        }];
+      }
       case WizardStep.Compare: {
         return [{
           severity: 'info' as const,
@@ -321,11 +329,22 @@ export default function ImportWizard({
     [patch]
   );
 
-  // ─── Step 4 complete: review done → Compare (revision) or Confirm (fresh) ───
+  // ─── Step 4 complete: review done → Products ───
   const onReviewComplete = useCallback(
     (doors: DoorEntry[], hardwareSets: HardwareSet[]) => {
       patch({
         doors,
+        hardwareSets,
+        currentStep: WizardStep.Products,
+      });
+    },
+    [patch]
+  );
+
+  // ─── Step 5 complete: products reviewed → Compare (revision) or Confirm (fresh) ───
+  const onProductsComplete = useCallback(
+    (hardwareSets: HardwareSet[]) => {
+      patch({
         hardwareSets,
         currentStep: state.hasExistingData ? WizardStep.Compare : WizardStep.Confirm,
       });
@@ -433,13 +452,21 @@ export default function ImportWizard({
               />
             )}
 
+            {state.currentStep === WizardStep.Products && (
+              <StepProducts
+                hardwareSets={state.hardwareSets}
+                onComplete={onProductsComplete}
+                onBack={() => goToStep(WizardStep.Review)}
+              />
+            )}
+
             {state.currentStep === WizardStep.Compare && (
               <StepCompare
                 projectId={projectId}
                 doors={state.doors}
                 hardwareSets={state.hardwareSets}
                 onComplete={onConfirmComplete}
-                onBack={() => goToStep(WizardStep.Review)}
+                onBack={() => goToStep(WizardStep.Products)}
                 onError={(err) => patch({ error: err })}
               />
             )}
@@ -451,7 +478,7 @@ export default function ImportWizard({
                 hardwareSets={state.hardwareSets}
                 triageResult={state.triageResult}
                 onComplete={onConfirmComplete}
-                onBack={() => goToStep(state.hasExistingData ? WizardStep.Compare : WizardStep.Review)}
+                onBack={() => goToStep(state.hasExistingData ? WizardStep.Compare : WizardStep.Products)}
                 onError={(err) => patch({ error: err })}
               />
             )}
