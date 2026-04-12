@@ -60,6 +60,7 @@ export async function GET(
         hand,
         notes,
         pdf_page,
+        leaf_count,
         created_at,
         hardware_items(
           id,
@@ -76,6 +77,7 @@ export async function GET(
         checklist_progress(
           id,
           item_id,
+          leaf_index,
           checked,
           checked_by,
           checked_at,
@@ -122,14 +124,17 @@ export async function GET(
       )
     }
 
-    // Merge hardware items with their progress
+    // Merge hardware items with their progress (per-leaf aware)
     const hardware_items = (opening as any).hardware_items?.map((item: any) => {
-      const progress = (opening as any).checklist_progress?.find(
+      const progressEntries = (opening as any).checklist_progress?.filter(
         (p: any) => p.item_id === item.id
-      )
+      ) ?? []
       return {
         ...item,
-        progress,
+        // Backward compat: single progress object (first entry or undefined)
+        progress: progressEntries.length > 0 ? progressEntries[0] : undefined,
+        // Per-leaf progress: array of all checklist_progress rows for this item
+        progress_by_leaf: progressEntries.length > 0 ? progressEntries : undefined,
       }
     }) || []
 

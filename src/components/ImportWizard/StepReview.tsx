@@ -1,11 +1,13 @@
 "use client";
 
-import { useState, useCallback, useMemo } from "react";
+import React, { useState, useCallback, useMemo } from "react";
 import { usePunchHighlight } from "./usePunchHighlight";
 import type { DoorEntry, HardwareSet, ClassifyPagesResponse } from "./types";
 import PDFPagePreview from "./PDFPagePreview";
 import { findPageForSet } from "@/lib/punch-cards";
-import { buildDoorToSetMap, normalizeDoorNumber } from "@/lib/parse-pdf-helpers";
+import { buildDoorToSetMap, normalizeDoorNumber, detectIsPair, classifyItemScope } from "@/lib/parse-pdf-helpers";
+import { groupItemsByLeaf, getLeafDisplayQty } from "@/lib/classify-leaf-items";
+import type { ExtractedHardwareItem } from "@/lib/types";
 
 // ─── Confidence scoring ───
 
@@ -113,6 +115,21 @@ export default function StepReview({
   );
   const [sortField, setSortField] = useState<DoorStringField>("door_number");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
+  // Expandable per-door hardware items view
+  const [expandedDoors, setExpandedDoors] = useState<Set<number>>(new Set());
+
+  // Lookup maps for resolving door → hardware set
+  const setMap = useMemo(() => {
+    const m = new Map<string, HardwareSet>();
+    for (const set of hardwareSets) {
+      m.set(set.set_id, set);
+      if (set.generic_set_id && set.generic_set_id !== set.set_id) {
+        m.set(set.generic_set_id, set);
+      }
+    }
+    return m;
+  }, [hardwareSets]);
+  const doorToSetMap = useMemo(() => buildDoorToSetMap(hardwareSets), [hardwareSets]);
 
   // ─── Inline editing ───
   const startEdit = useCallback(
@@ -297,6 +314,36 @@ export default function StepReview({
     return "row-accent-red";
   };
 
+  // ─── Expandable door items ───
+  const toggleDoorExpand = useCallback((originalIndex: number) => {
+    setExpandedDoors(prev => {
+      const next = new Set(prev);
+      if (next.has(originalIndex)) next.delete(originalIndex);
+      else next.add(originalIndex);
+      return next;
+    });
+  }, []);
+
+  /** Resolve hardware set + items for a door and classify into leaf sections. */
+  const getDoorLeafItems = useCallback((door: DoorEntry) => {
+    const doorKey = normalizeDoorNumber(door.door_number);
+    const hwSet = doorToSetMap.get(doorKey) ?? setMap.get(door.hw_set ?? '');
+    if (!hwSet || (hwSet.items?.length ?? 0) === 0) return null;
+    const doorInfo = { door_type: door.door_type, location: door.location };
+    const isPair = detectIsPair(hwSet, doorInfo);
+    const lc = isPair ? 2 : 1;
+    // Map ExtractedHardwareItem to the shape groupItemsByLeaf expects
+    const items = (hwSet.items ?? []).map((item, idx) => ({
+      id: `${hwSet.set_id}-${idx}`,
+      name: item.name,
+      qty: item.qty ?? 1,
+      manufacturer: item.manufacturer ?? null,
+      model: item.model ?? null,
+      finish: item.finish ?? null,
+    }));
+    return { ...groupItemsByLeaf(items, lc), leafCount: lc, isPair };
+  }, [doorToSetMap, setMap]);
+
   return (
     <div className="flex flex-col h-full max-w-5xl mx-auto">
       {/* ── Summary Stats Bar ── */}
@@ -480,60 +527,160 @@ export default function StepReview({
                     </thead>
                     <tbody>
                       {group.doors.map(({ door, originalIndex }, i) => {
+                        const isExpanded = expandedDoors.has(originalIndex);
+                        const leafData = isExpanded ? getDoorLeafItems(door) : null;
                         return (
-                          <tr
-                            key={`${door.door_number}-${originalIndex}`}
-                            ref={(el) => {
-                              if (door.door_number)
-                                registerRef(door.door_number, el);
-                            }}
-                            className={`${confBorder(door)} border-t border-border-dim hover:bg-tint transition-colors duration-150 ${
-                              i % 2 === 1 ? "bg-white/[0.015]" : ""
-                            }`}
-                            style={{ minHeight: "40px" }}
-                          >
-                            {FIELD_KEYS.map((field) => {
-                              const isEditing =
-                                editingCell?.row === originalIndex &&
-                                editingCell?.field === field;
-                              return (
-                                <td
-                                  key={field}
-                                  className="px-3 py-2"
-                                >
-                                  {isEditing ? (
-                                    <input
-                                      autoFocus
-                                      type="text"
-                                      value={editValue}
-                                      onChange={(e) =>
-                                        setEditValue(e.target.value)
-                                      }
-                                      onBlur={commitEdit}
-                                      onKeyDown={(e) => {
-                                        if (e.key === "Enter") commitEdit();
-                                        if (e.key === "Escape") cancelEdit();
-                                      }}
-                                      className="w-full bg-tint-strong border border-accent rounded px-2 py-1 text-primary text-[13px] focus:outline-none"
-                                    />
-                                  ) : (
-                                    <span
-                                      onClick={() =>
-                                        startEdit(originalIndex, field)
-                                      }
-                                      className={`cursor-pointer text-[13px] font-mono ${
-                                        door[field]
-                                          ? "text-primary"
-                                          : "text-tertiary border-b border-dashed border-tertiary/30"
-                                      }`}
-                                    >
-                                      {door[field] || "\u00A0"}
-                                    </span>
+                          <React.Fragment key={`${door.door_number}-${originalIndex}`}>
+                            <tr
+                              ref={(el) => {
+                                if (door.door_number)
+                                  registerRef(door.door_number, el);
+                              }}
+                              className={`${confBorder(door)} border-t border-border-dim hover:bg-tint transition-colors duration-150 ${
+                                i % 2 === 1 ? "bg-white/[0.015]" : ""
+                              }`}
+                              style={{ minHeight: "40px" }}
+                            >
+                              {FIELD_KEYS.map((field, fieldIdx) => {
+                                const isEditing =
+                                  editingCell?.row === originalIndex &&
+                                  editingCell?.field === field;
+                                return (
+                                  <td
+                                    key={field}
+                                    className="px-3 py-2"
+                                  >
+                                    <div className="flex items-center gap-1">
+                                      {/* Expand toggle on the first column */}
+                                      {fieldIdx === 0 && (
+                                        <button
+                                          onClick={(e) => { e.stopPropagation(); toggleDoorExpand(originalIndex); }}
+                                          className="text-tertiary hover:text-secondary text-[10px] shrink-0 w-4"
+                                          title={isExpanded ? "Collapse items" : "Expand items"}
+                                        >
+                                          {isExpanded ? "▾" : "▸"}
+                                        </button>
+                                      )}
+                                      {isEditing ? (
+                                        <input
+                                          autoFocus
+                                          type="text"
+                                          value={editValue}
+                                          onChange={(e) =>
+                                            setEditValue(e.target.value)
+                                          }
+                                          onBlur={commitEdit}
+                                          onKeyDown={(e) => {
+                                            if (e.key === "Enter") commitEdit();
+                                            if (e.key === "Escape") cancelEdit();
+                                          }}
+                                          className="w-full bg-tint-strong border border-accent rounded px-2 py-1 text-primary text-[13px] focus:outline-none"
+                                        />
+                                      ) : (
+                                        <span
+                                          onClick={() =>
+                                            startEdit(originalIndex, field)
+                                          }
+                                          className={`cursor-pointer text-[13px] font-mono ${
+                                            door[field]
+                                              ? "text-primary"
+                                              : "text-tertiary border-b border-dashed border-tertiary/30"
+                                          }`}
+                                        >
+                                          {door[field] || "\u00A0"}
+                                        </span>
+                                      )}
+                                      {/* PAIR badge on door_number column */}
+                                      {fieldIdx === 0 && (() => {
+                                        const dk = normalizeDoorNumber(door.door_number);
+                                        const hs = doorToSetMap.get(dk) ?? setMap.get(door.hw_set ?? '');
+                                        const di = { door_type: door.door_type, location: door.location };
+                                        return detectIsPair(hs, di) ? (
+                                          <span className="text-[9px] font-semibold uppercase px-1.5 py-0.5 rounded bg-accent-dim text-accent border border-accent ml-1 shrink-0">
+                                            PAIR
+                                          </span>
+                                        ) : null;
+                                      })()}
+                                    </div>
+                                  </td>
+                                );
+                              })}
+                            </tr>
+                            {/* Expanded hardware items (per-leaf sections) */}
+                            {isExpanded && leafData && (
+                              <tr>
+                                <td colSpan={FIELD_KEYS.length} className="bg-tint px-4 py-3 border-t border-border-dim">
+                                  {/* Shared section */}
+                                  {leafData.shared.length > 0 && (
+                                    <div className="mb-2">
+                                      {leafData.isPair && (
+                                        <div className="text-[10px] font-semibold uppercase text-tertiary tracking-wider mb-1" style={{ fontFamily: "var(--font-display)" }}>
+                                          SHARED
+                                        </div>
+                                      )}
+                                      {leafData.shared.map(item => (
+                                        <div key={item.id} className="flex items-center gap-3 py-0.5 text-[12px]">
+                                          <span className="text-primary font-medium">{item.name}</span>
+                                          <span className="text-accent text-[11px]">qty {item.qty}</span>
+                                          {item.model && <span className="text-tertiary">{item.model}</span>}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                  {/* Leaf 1 */}
+                                  {leafData.leaf1.length > 0 && (
+                                    <div className="mb-2">
+                                      {leafData.isPair && (
+                                        <div className="text-[10px] font-semibold uppercase text-accent tracking-wider mb-1" style={{ fontFamily: "var(--font-display)" }}>
+                                          LEAF 1 (ACTIVE)
+                                        </div>
+                                      )}
+                                      {leafData.leaf1.map(item => {
+                                        const scope = classifyItemScope(item.name);
+                                        const dq = getLeafDisplayQty(item, leafData.leafCount, scope);
+                                        return (
+                                          <div key={`${item.id}-l1`} className="flex items-center gap-3 py-0.5 text-[12px]">
+                                            <span className="text-primary font-medium">{item.name}</span>
+                                            <span className="text-accent text-[11px]">qty {dq}</span>
+                                            {item.model && <span className="text-tertiary">{item.model}</span>}
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  )}
+                                  {/* Leaf 2 */}
+                                  {leafData.isPair && leafData.leaf2.length > 0 && (
+                                    <div>
+                                      <div className="text-[10px] font-semibold uppercase tracking-wider mb-1" style={{ fontFamily: "var(--font-display)", color: "var(--orange)" }}>
+                                        LEAF 2 (INACTIVE)
+                                      </div>
+                                      {leafData.leaf2.map(item => {
+                                        const scope = classifyItemScope(item.name);
+                                        const dq = getLeafDisplayQty(item, leafData.leafCount, scope);
+                                        return (
+                                          <div key={`${item.id}-l2`} className="flex items-center gap-3 py-0.5 text-[12px]">
+                                            <span className="text-primary font-medium">{item.name}</span>
+                                            <span className="text-accent text-[11px]">qty {dq}</span>
+                                            {item.model && <span className="text-tertiary">{item.model}</span>}
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  )}
+                                  {!leafData.isPair && leafData.leaf1.length === 0 && leafData.shared.length === 0 && (
+                                    <span className="text-tertiary text-[12px]">No items in this set</span>
                                   )}
                                 </td>
-                              );
-                            })}
-                          </tr>
+                              </tr>
+                            )}
+                            {isExpanded && !leafData && (
+                              <tr>
+                                <td colSpan={FIELD_KEYS.length} className="bg-tint px-4 py-2 border-t border-border-dim text-tertiary text-[12px]">
+                                  No hardware set matched for this door
+                                </td>
+                              </tr>
+                            )}
+                          </React.Fragment>
                         );
                       })}
                     </tbody>

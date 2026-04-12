@@ -19,6 +19,7 @@ export interface DoorEntry {
   hand: string
   field_confidence?: Record<string, number>
   by_others?: boolean
+  leaf_count?: number
 }
 
 /** A single hardware item within a hardware set. */

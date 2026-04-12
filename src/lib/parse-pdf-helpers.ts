@@ -36,7 +36,7 @@ const _taxonomyRegexCache: Array<{ id: string; install_scope: InstallScope; patt
  * Returns the install_scope for the matched category, or null if unrecognized.
  * Mirrors Python's _classify_hardware_item() at extract-tables.py:173.
  */
-function classifyItemScope(name: string): InstallScope | null {
+export function classifyItemScope(name: string): InstallScope | null {
   for (const cat of _taxonomyRegexCache) {
     for (const rx of cat.patterns) {
       if (rx.test(name)) return cat.install_scope
@@ -991,7 +991,6 @@ export function buildPerOpeningItems(
     // pair openings got only 1 Door row and per-leaf item quantities
     // were stored without being doubled.
     const isPair = detectIsPair(hwSet, doorInfo)
-    const leafMultiplier = isPair ? 2 : 1
 
     // Add door(s) only when door_type is known
     const doorModel = doorInfo?.door_type?.trim() || null
@@ -1011,55 +1010,17 @@ export function buildPerOpeningItems(
       rows.push({ ...base, name: 'Frame', qty: 1, manufacturer: null, model: frameModel, finish: null, sort_order: sortOrder++ })
     }
 
-    // Hardware set items.
-    //
-    // For pair openings, per-leaf items must be DOUBLED to produce
-    // per-opening quantities. Python's normalize_quantities stores
-    // per-leaf values for hinges/etc. (e.g., 4 hinges per leaf), so a
-    // pair opening needs 4 × 2 = 8 total. Per-opening items (closer,
-    // lockset, exit device, smoke seal) are stored as per-opening
-    // values and must NOT be doubled.
-    //
-    // The CANONICAL signal for "which way did Python divide this?" is
-    // item.qty_door_count — it holds the divisor Python actually used:
-    //   - qty_door_count === heading_leaf_count → Python divided by
-    //     leaves. The stored qty is PER LEAF. Double it for pair.
-    //   - qty_door_count === heading_door_count → Python divided by
-    //     doors. The stored qty is PER OPENING. Don't double.
-    //   - qty_door_count null/missing → Python didn't normalize (raw
-    //     parse or cap/flag fallback). Use the TypeScript taxonomy
-    //     (classifyItemScope) as a secondary signal. This also handles
-    //     pre-existing taxonomy inconsistencies between Python and TS
-    //     (e.g., TS labels closer as per_leaf, but Python normalized
-    //     it as per-opening — trusting qty_door_count prevents
-    //     double-counting).
-    const leafCount = hwSet?.heading_leaf_count ?? 0
-    const doorCount = hwSet?.heading_door_count ?? 0
+    // Hardware set items — store per-leaf quantities as-is.
+    // Phase 2 reverted Phase 1's doubling: the UI now renders
+    // Shared / Leaf 1 / Leaf 2 sections, so per-leaf items (hinges,
+    // closers, etc.) are stored at their per-leaf value and the UI
+    // displays them on each leaf section.
     if ((hwSet?.items?.length ?? 0) > 0) {
       for (const item of hwSet?.items ?? []) {
-        const baseQty = item.qty || 1
-        let shouldDouble = false
-        if (isPair) {
-          const qdc = item.qty_door_count ?? null
-          if (qdc != null && leafCount > doorCount && qdc === leafCount) {
-            // Primary: Python divided by leaves → per-leaf value → ×2
-            shouldDouble = true
-          } else if (qdc != null && qdc === doorCount) {
-            // Primary: Python divided by doors → per-opening value → keep
-            shouldDouble = false
-          } else {
-            // Fallback: taxonomy classification when qty_door_count is
-            // missing or ambiguous. Conservative — only double if scope
-            // is definitively per_leaf.
-            const scope = classifyItemScope(item.name)
-            shouldDouble = scope === 'per_leaf'
-          }
-        }
-        const qty = shouldDouble ? baseQty * leafMultiplier : baseQty
         rows.push({
           ...base,
           name: item.name,
-          qty,
+          qty: item.qty || 1,
           manufacturer: item.manufacturer || null,
           model: item.model || null,
           finish: item.finish || null,

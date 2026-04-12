@@ -64,6 +64,9 @@ export interface StagingOpening {
    *  Populated from HardwareSet.pdf_page at save time. Copied to
    *  openings.pdf_page on promote_extraction(). */
   pdf_page?: number | null
+  /** Number of door leaves (1 = single, 2 = pair). Computed from
+   *  detectIsPair() at save time. Copied to openings.leaf_count on promote. */
+  leaf_count?: number
   is_flagged?: boolean
   flag_reason?: string
   field_confidence?: Record<string, number>
@@ -190,6 +193,7 @@ export async function writeStagingData(
       hand: o.hand ?? null,
       notes: o.notes ?? null,
       pdf_page: o.pdf_page ?? setMap.get(o.hw_set ?? '')?.pdf_page ?? null,
+      leaf_count: o.leaf_count ?? 1,
       is_flagged: o.is_flagged ?? false,
       flag_reason: o.flag_reason ?? null,
       field_confidence: o.field_confidence ?? null,
