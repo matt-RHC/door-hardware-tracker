@@ -422,6 +422,7 @@ export default function ImportWizard({
 
             {state.currentStep === WizardStep.Review && (
               <StepReview
+                projectId={projectId}
                 doors={state.doors}
                 hardwareSets={state.hardwareSets}
                 hasExistingData={state.hasExistingData}

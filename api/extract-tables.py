@@ -96,6 +96,13 @@ class ExtractionResult(BaseModel):
     extraction_notes: list[str] = []  # human-readable notes about extraction quality
 
 
+class RegionExtractionResult(BaseModel):
+    """Lightweight result for bbox-cropped region extraction."""
+    success: bool
+    items: list[HardwareItem] = []
+    error: str = ""
+
+
 # --- Category-Aware Quantity Validation ---
 # Expected per-opening quantity ranges by hardware category.
 # Values outside these ranges are likely aggregate/total quantities.
@@ -2272,6 +2279,125 @@ def _parse_specworks_door_assignments(page_text: str) -> list[dict]:
     return doors
 
 
+def parse_items_from_raw_tables(tables: list) -> list[HardwareItem]:
+    """
+    Parse hardware items from raw pdfplumber table output.
+    Extracted as a reusable helper for both full-page and region extraction.
+    Handles column detection by header text or positional inference.
+    """
+    items: list[HardwareItem] = []
+
+    for table in tables:
+        if not table or len(table) < 2:
+            continue
+
+        header_row = [clean_cell(c) for c in table[0]]
+
+        # Skip door list tables
+        if is_opening_list_table(header_row):
+            continue
+
+        # Detect columns
+        qty_col = None
+        total_qty_col = None
+        name_col = None
+        mfr_col = None
+        model_col = None
+        finish_col = None
+
+        for i, h in enumerate(header_row):
+            hl = h.lower()
+            if re.search(r"(?i)(total|ext|extended)\s*(qty|quantity)", hl):
+                total_qty_col = i
+            elif re.match(r"(?i)^(qty\.?|quantity|#|qty\s*/?\s*ea|ea\.?\s*qty)$", hl):
+                qty_col = i
+            elif re.search(r"(?i)(item|description|hardware|product)", hl):
+                name_col = i
+            elif re.search(r"(?i)(mfr|mfg|manufacturer|vendor)", hl):
+                mfr_col = i
+            elif re.search(r"(?i)(model|catalog|cat\.?\s*#?|product\s*#?|series)", hl):
+                model_col = i
+            elif re.search(r"(?i)(finish|fin\.?|color)", hl):
+                finish_col = i
+
+        is_aggregate_qty = False
+        if qty_col is None and total_qty_col is not None:
+            qty_col = total_qty_col
+            is_aggregate_qty = True
+        elif qty_col is not None:
+            data_rows = table[1:6]
+            qty_values = []
+            for row in data_rows:
+                cells = [clean_cell(c) for c in row]
+                if qty_col < len(cells):
+                    m = re.match(r"(\d+)", cells[qty_col])
+                    if m:
+                        qty_values.append(int(m.group(1)))
+            if qty_values:
+                over_threshold = sum(1 for v in qty_values if v > 6)
+                if over_threshold / len(qty_values) > 0.6:
+                    is_aggregate_qty = True
+
+        # Positional inference fallback
+        if qty_col is None and name_col is None and len(header_row) >= 3:
+            data_rows = table[1:6]
+            first_col_is_qty = all(
+                re.match(r"^\d{1,2}$", clean_cell(row[0]))
+                for row in data_rows
+                if row and clean_cell(row[0])
+            )
+            if first_col_is_qty and len(header_row) >= 4:
+                qty_col = 0
+                name_col = 1
+                mfr_col = 2 if len(header_row) > 2 else None
+                model_col = 3 if len(header_row) > 3 else None
+                finish_col = 4 if len(header_row) > 4 else None
+
+        if name_col is None and qty_col is None:
+            continue
+        if name_col is None and qty_col is not None:
+            name_col = qty_col + 1
+
+        for row in table[1:]:
+            cells = [clean_cell(c) for c in row]
+            name_val = cells[name_col] if name_col is not None and name_col < len(cells) else ""
+            if not name_val:
+                continue
+            name_lower = name_val.lower()
+            if name_lower in ("total", "totals", "note", "notes", ""):
+                continue
+            if name_lower.startswith("note:") or name_lower.startswith("*"):
+                continue
+            if not HARDWARE_ITEM_NAMES.search(name_val) and len(name_val) < 3:
+                continue
+
+            qty_val = 1
+            if qty_col is not None and qty_col < len(cells):
+                raw_qty = cells[qty_col].strip()
+                if re.match(r"^(EA|PR|SET|PAIR|EACH)\.?$", raw_qty, re.IGNORECASE):
+                    qty_val = 1
+                else:
+                    qty_match = re.match(r"-?(\d+)", raw_qty)
+                    if qty_match:
+                        qty_val = int(qty_match.group(1))
+                        if qty_val == 0:
+                            qty_val = 1
+
+            mfr_val = cells[mfr_col] if mfr_col is not None and mfr_col < len(cells) else ""
+            model_val = cells[model_col] if model_col is not None and model_col < len(cells) else ""
+            finish_val = cells[finish_col] if finish_col is not None and finish_col < len(cells) else ""
+
+            items.append(HardwareItem(
+                qty=qty_val,
+                name=name_val,
+                manufacturer=mfr_val,
+                model=model_val,
+                finish=finish_val,
+            ))
+
+    return items
+
+
 def extract_hardware_sets_from_page(page, page_text: str, heading_format: str = "") -> list[HardwareSetDef]:
     """
     Extract hardware set definitions from a single page using text-alignment
@@ -2395,144 +2521,7 @@ def extract_hardware_sets_from_page(page, page_text: str, heading_format: str = 
             }
         )
 
-    items: list[HardwareItem] = []
-
-    for table in tables:
-        if not table or len(table) < 2:
-            continue
-
-        # Detect which table this is — we want the hardware items table
-        # Hardware items tables typically have columns like:
-        # Qty | Item/Description | Manufacturer | Model/Catalog | Finish
-        header_row = [clean_cell(c) for c in table[0]]
-        header_text_lower = " ".join(header_row).lower()
-
-        # Skip if this looks like a door list table (has door_number column)
-        if is_opening_list_table(header_row):
-            continue
-
-        # Detect hardware items table by looking for qty + item/description columns
-        qty_col = None
-        total_qty_col = None  # "Total Qty" / "Ext Qty" — aggregate, skip this
-        name_col = None
-        mfr_col = None
-        model_col = None
-        finish_col = None
-
-        for i, h in enumerate(header_row):
-            hl = h.lower()
-            # Detect "total qty", "ext qty", "extended qty" — these are aggregate columns
-            if re.search(r"(?i)(total|ext|extended)\s*(qty|quantity)", hl):
-                total_qty_col = i
-            elif re.match(r"(?i)^(qty\.?|quantity|#|qty\s*/?\s*ea|ea\.?\s*qty)$", hl):
-                qty_col = i
-            elif re.search(r"(?i)(item|description|hardware|product)", hl):
-                name_col = i
-            elif re.search(r"(?i)(mfr|mfg|manufacturer|vendor)", hl):
-                mfr_col = i
-            elif re.search(r"(?i)(model|catalog|cat\.?\s*#?|product\s*#?|series)", hl):
-                model_col = i
-            elif re.search(r"(?i)(finish|fin\.?|color)", hl):
-                finish_col = i
-
-        # If we found a total_qty_col but no per-set qty_col, detect which
-        # column type we're dealing with using value heuristics.
-        is_aggregate_qty = False
-        if qty_col is None and total_qty_col is not None:
-            qty_col = total_qty_col
-            is_aggregate_qty = True  # Flag for normalization below
-        elif qty_col is not None:
-            # Validate with heuristics: if >60% of values are >6,
-            # it's likely an aggregate column (total qty, not per-opening)
-            data_rows = table[1:6]
-            qty_values = []
-            for row in data_rows:
-                cells = [clean_cell(c) for c in row]
-                if qty_col < len(cells):
-                    m = re.match(r"(\d+)", cells[qty_col])
-                    if m:
-                        qty_values.append(int(m.group(1)))
-            if qty_values:
-                over_threshold = sum(1 for v in qty_values if v > 6)
-                if over_threshold / len(qty_values) > 0.6:
-                    is_aggregate_qty = True
-                    logger.info(f"Qty column detected as aggregate ({over_threshold}/{len(qty_values)} values > 6)")
-
-        # If we didn't find explicit headers, try positional inference
-        # Many submittals have: Qty | Description | Manufacturer | Catalog No. | Finish
-        if qty_col is None and name_col is None and len(header_row) >= 3:
-            # Check if first column values look like quantities (small integers)
-            data_rows = table[1:6]  # sample first 5 data rows
-            first_col_is_qty = all(
-                re.match(r"^\d{1,2}$", clean_cell(row[0]))
-                for row in data_rows
-                if row and clean_cell(row[0])
-            )
-            if first_col_is_qty and len(header_row) >= 4:
-                qty_col = 0
-                name_col = 1
-                mfr_col = 2 if len(header_row) > 2 else None
-                model_col = 3 if len(header_row) > 3 else None
-                finish_col = 4 if len(header_row) > 4 else None
-
-        # Need at least name to extract items
-        if name_col is None and qty_col is None:
-            continue
-
-        # If we only have qty_col, name is likely the next column
-        if name_col is None and qty_col is not None:
-            name_col = qty_col + 1
-
-        for row in table[1:]:
-            cells = [clean_cell(c) for c in row]
-
-            # Get item name
-            name_val = cells[name_col] if name_col is not None and name_col < len(cells) else ""
-            if not name_val:
-                continue
-
-            # Skip rows that look like notes, totals, or continuation text
-            name_lower = name_val.lower()
-            if name_lower in ("total", "totals", "note", "notes", ""):
-                continue
-            if name_lower.startswith("note:") or name_lower.startswith("*"):
-                continue
-
-            # Validate it looks like a hardware item (or "by others" / "not used")
-            # Be lenient — some items have unusual names
-            if not HARDWARE_ITEM_NAMES.search(name_val) and len(name_val) < 3:
-                continue
-
-            # Get raw qty — pass through as-is; normalization happens in handler
-            # after we know the door count per set.
-            qty_val = 1
-            if qty_col is not None and qty_col < len(cells):
-                raw_qty = cells[qty_col].strip()
-                # Handle text-only units: "EA", "PR", "SET" → default qty 1
-                if re.match(r"^(EA|PR|SET|PAIR|EACH)\.?$", raw_qty, re.IGNORECASE):
-                    qty_val = 1
-                else:
-                    qty_match = re.match(r"-?(\d+)", raw_qty)
-                    if qty_match:
-                        qty_val = int(qty_match.group(1))  # abs via group(1)
-                        # Zero qty → default to 1
-                        if qty_val == 0:
-                            qty_val = 1
-
-            # Handle text wrapping — if name is very long and contains what looks
-            # like a split model/finish, try to separate
-            # e.g. "Lockset Schlage ND50PD RHO 626" when columns collapsed
-            mfr_val = cells[mfr_col] if mfr_col is not None and mfr_col < len(cells) else ""
-            model_val = cells[model_col] if model_col is not None and model_col < len(cells) else ""
-            finish_val = cells[finish_col] if finish_col is not None and finish_col < len(cells) else ""
-
-            items.append(HardwareItem(
-                qty=qty_val,
-                name=name_val,
-                manufacturer=mfr_val,
-                model=model_val,
-                finish=finish_val,
-            ))
+    items = parse_items_from_raw_tables(tables)
 
     # If table extraction found nothing, try text-line parsing
     if not items:
@@ -3782,6 +3771,13 @@ class handler(BaseHTTPRequestHandler):
             pdf_bytes = base64.b64decode(pdf_base64)
             pdf_file = io.BytesIO(pdf_bytes)
 
+            # --- Region extraction: bbox + target_page ---
+            bbox_data = data.get("bbox")
+            target_page = data.get("target_page")
+            if bbox_data is not None and target_page is not None:
+                self._handle_region_extract(pdf_bytes, target_page, bbox_data)
+                return
+
             with pdfplumber.open(pdf_file, unicode_norm="NFKC") as pdf:
                 # Phase 1: Extract Hardware Sets (text-alignment detection)
                 hardware_sets = extract_all_hardware_sets(pdf)
@@ -3871,11 +3867,122 @@ class handler(BaseHTTPRequestHandler):
                 error=f"Extraction failed: {str(e)}"
             ))
 
+    def _handle_region_extract(self, pdf_bytes: bytes, target_page: int, bbox_data: dict):
+        """Extract hardware items from a cropped region of a single PDF page."""
+        try:
+            pdf_file = io.BytesIO(pdf_bytes)
+            with pdfplumber.open(pdf_file, unicode_norm="NFKC") as pdf:
+                if target_page < 0 or target_page >= len(pdf.pages):
+                    self._send_region_json(400, RegionExtractionResult(
+                        success=False,
+                        error=f"Page {target_page} out of range (PDF has {len(pdf.pages)} pages)"
+                    ))
+                    return
+
+                page = pdf.pages[target_page]
+                width = float(page.width)
+                height = float(page.height)
+
+                # Convert 0-1 percentage bbox to PDF points
+                x0 = float(bbox_data.get("x0", 0)) * width
+                y0 = float(bbox_data.get("y0", 0)) * height
+                x1 = float(bbox_data.get("x1", 1)) * width
+                y1 = float(bbox_data.get("y1", 1)) * height
+
+                # Clamp to page bounds
+                x0 = max(0, min(x0, width))
+                y0 = max(0, min(y0, height))
+                x1 = max(0, min(x1, width))
+                y1 = max(0, min(y1, height))
+
+                if x1 - x0 < 1 or y1 - y0 < 1:
+                    self._send_region_json(400, RegionExtractionResult(
+                        success=False,
+                        error="Selection region is too small"
+                    ))
+                    return
+
+                logger.info(
+                    f"[region-extract] page={target_page}, "
+                    f"bbox=({x0:.1f}, {y0:.1f}, {x1:.1f}, {y1:.1f}) "
+                    f"page_size=({width:.1f}, {height:.1f})"
+                )
+
+                # pdfplumber crop: (x0, top, x1, bottom)
+                cropped = page.crop((x0, y0, x1, y1))
+                cropped_text = cropped.extract_text() or ""
+
+                items: list[HardwareItem] = []
+
+                # Strategy 1: Full set extraction (works if heading is in selection)
+                sets = extract_hardware_sets_from_page(cropped, cropped_text)
+                for s in sets:
+                    items.extend(s.items)
+
+                # Strategy 2: Direct table extraction on cropped region
+                if not items:
+                    tables = cropped.extract_tables(
+                        table_settings={
+                            "vertical_strategy": "text",
+                            "horizontal_strategy": "text",
+                            "intersection_tolerance": 5,
+                            "snap_tolerance": 5,
+                            "join_tolerance": 8,
+                            "min_words_vertical": 2,
+                            "min_words_horizontal": 1,
+                            "text_x_tolerance": 5,
+                            "text_y_tolerance": 3,
+                        }
+                    )
+                    if not tables:
+                        tables = cropped.extract_tables(
+                            table_settings={
+                                "vertical_strategy": "lines",
+                                "horizontal_strategy": "lines",
+                                "intersection_tolerance": 5,
+                                "snap_tolerance": 5,
+                            }
+                        )
+                    if tables:
+                        items = parse_items_from_raw_tables(tables)
+
+                # Strategy 3: Text-based fallback
+                if not items:
+                    items = extract_hw_items_from_text(cropped_text)
+
+                # Deduplicate
+                if items:
+                    items = deduplicate_hardware_items(items)
+
+                logger.info(f"[region-extract] Extracted {len(items)} items from cropped region")
+
+                self._send_region_json(200, RegionExtractionResult(
+                    success=len(items) > 0,
+                    items=items,
+                    error="" if items else "No hardware items found in selected region"
+                ))
+        except Exception as e:
+            traceback.print_exc()
+            self._send_region_json(500, RegionExtractionResult(
+                success=False,
+                error=f"Region extraction failed: {str(e)}"
+            ))
+
     def _send_json(self, status: int, result: ExtractionResult):
         body = result.model_dump_json()
         body_bytes = body.encode()
         logger.info(f"[extract-tables] Sending response: status={status}, body_size={len(body_bytes)} bytes, "
                      f"openings={len(result.openings)}, hw_sets={len(result.hardware_sets)}")
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body_bytes)))
+        self.end_headers()
+        self.wfile.write(body_bytes)
+
+    def _send_region_json(self, status: int, result: RegionExtractionResult):
+        body = result.model_dump_json()
+        body_bytes = body.encode()
+        logger.info(f"[region-extract] Sending response: status={status}, items={len(result.items)}")
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body_bytes)))
