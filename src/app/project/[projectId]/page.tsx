@@ -230,7 +230,7 @@ export default function ProjectDetailPage() {
               onClick={() => setShowFilters(!showFilters)}
               className={`shrink-0 glow-btn text-[13px] rounded-lg ${
                 showFilters || activeFilterCount > 0
-                  ? "bg-[rgba(10,132,255,0.1)] border-[rgba(10,132,255,0.25)] text-[var(--blue)]"
+                  ? "bg-accent-dim border-accent text-[var(--blue)]"
                   : "glow-btn--ghost"
               }`}
               style={{ padding: "0.5rem 0.875rem" }}
@@ -240,7 +240,7 @@ export default function ProjectDetailPage() {
               </svg>
               Filters
               {activeFilterCount > 0 && (
-                <span className="bg-[rgba(10,132,255,0.2)] text-[10px] px-1.5 py-0.5 rounded-full text-[var(--blue)] font-semibold">
+                <span className="bg-accent-dim text-[10px] px-1.5 py-0.5 rounded-full text-[var(--blue)] font-semibold">
                   {activeFilterCount}
                 </span>
               )}
@@ -306,8 +306,8 @@ export default function ProjectDetailPage() {
           <div
             className={`mb-5 p-3 rounded-lg flex items-center justify-between text-[13px] border animate-fade-in-up ${
               syncResult.success
-                ? "bg-[rgba(48,209,88,0.08)] border-[rgba(48,209,88,0.15)] text-[var(--green)]"
-                : "bg-[rgba(255,69,58,0.08)] border-[rgba(255,69,58,0.15)] text-[var(--red)]"
+                ? "bg-success-dim border-success text-[var(--green)]"
+                : "bg-danger-dim border-danger text-[var(--red)]"
             }`}
           >
             <span>{syncResult.message}</span>
@@ -387,7 +387,7 @@ export default function ProjectDetailPage() {
             <span className="text-[13px] text-[var(--text-tertiary)]">Loading openings...</span>
           </div>
         ) : error ? (
-          <div className="p-4 bg-[rgba(255,69,58,0.08)] border border-[rgba(255,69,58,0.15)] rounded-lg text-[var(--red)] text-[14px]">
+          <div className="p-4 bg-danger-dim border border-danger rounded-lg text-[var(--red)] text-[14px]">
             {error}
           </div>
         ) : filteredOpenings.length === 0 ? (

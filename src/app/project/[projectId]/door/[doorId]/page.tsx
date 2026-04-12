@@ -243,7 +243,7 @@ export default function DoorDetailPage() {
   if (error && !opening) {
     return (
       <div className="min-h-screen bg-[var(--background)] p-4">
-        <div className="p-4 bg-[rgba(255,69,58,0.15)] border border-[var(--red)] rounded-lg text-[var(--red)]">
+        <div className="p-4 bg-danger-dim border border-[var(--red)] rounded-lg text-[var(--red)]">
           {error}
         </div>
       </div>
@@ -383,7 +383,7 @@ export default function DoorDetailPage() {
                   <select
                     value={editingItem.install_type || ""}
                     onChange={(e) => setEditingItem({ ...editingItem, install_type: (e.target.value as 'bench' | 'field') || null })}
-                    className="w-full px-3 py-2 min-h-[44px] bg-[var(--surface)] border border-[var(--border)] rounded-lg text-[var(--text-primary)] focus:border-[rgba(10,132,255,0.3)] focus:outline-none text-[13px]"
+                    className="w-full px-3 py-2 min-h-[44px] bg-[var(--surface)] border border-[var(--border)] rounded-lg text-[var(--text-primary)] focus:border-accent focus:outline-none text-[13px]"
                   >
                     <option value="">Not set</option>
                     <option value="bench">Bench</option>
@@ -704,7 +704,7 @@ export default function DoorDetailPage() {
 
             {opening.hw_set && (
               <div className="mb-3 flex items-center gap-2">
-                <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-[rgba(48,209,88,0.15)] border border-[var(--green)] text-[12px] font-medium text-[var(--green)]">
+                <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-success-dim border border-[var(--green)] text-[12px] font-medium text-[var(--green)]">
                   {opening.hw_set}
                   {opening.hw_heading && ` — ${opening.hw_heading}`}
                 </span>
@@ -724,7 +724,7 @@ export default function DoorDetailPage() {
                 </span>
               )}
               {opening.fire_rating && (
-                <span className="text-[11px] font-medium uppercase text-[var(--red)] bg-[rgba(255,69,58,0.15)] border border-[var(--red)] px-2 py-1 rounded-full">
+                <span className="text-[11px] font-medium uppercase text-[var(--red)] bg-danger-dim border border-[var(--red)] px-2 py-1 rounded-full">
                   {opening.fire_rating}
                 </span>
               )}
@@ -853,7 +853,7 @@ export default function DoorDetailPage() {
                   onClick={() => setActiveCategory(cat.value)}
                   className={`text-[12px] font-medium px-3 py-1.5 min-h-[44px] rounded-full transition-colors ${
                     activeCategory === cat.value
-                      ? 'bg-[rgba(10,132,255,0.15)] border border-[var(--blue)] text-[var(--blue)]'
+                      ? 'bg-accent-dim border border-[var(--blue)] text-[var(--blue)]'
                       : 'bg-[var(--surface)] border border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--surface-hover)]'
                   }`}
                 >
