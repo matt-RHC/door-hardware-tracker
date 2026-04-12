@@ -5,6 +5,9 @@ import {
   buildDoorToSetMap,
   buildDefinedSetIds,
   findDoorsWithUnmatchedSets,
+  parseOpeningSize,
+  detectIsPair,
+  buildPerOpeningItems,
 } from './parse-pdf-helpers'
 import type { HardwareSet, DoorEntry } from '@/lib/types'
 
@@ -657,5 +660,317 @@ describe('findDoorsWithUnmatchedSets', () => {
 
     expect(unmatched).toHaveLength(1)
     expect(unmatched[0].door_number).toBe('ORPHAN-1')
+  })
+})
+
+// ─── parseOpeningSize ───
+//
+// Regression tests for DFH opening-size format parsing. Used as a
+// secondary signal in detectIsPair when heading_leaf_count is missing.
+
+describe('parseOpeningSize', () => {
+  it('parses explicit feet/inches with quotes and x separator', () => {
+    const r = parseOpeningSize('3\'0" x 7\'0"')
+    expect(r).toEqual({ widthIn: 36, heightIn: 84 })
+  })
+
+  it('parses feet/inches with multiplication sign', () => {
+    const r = parseOpeningSize('3\'0" × 7\'0"')
+    expect(r).toEqual({ widthIn: 36, heightIn: 84 })
+  })
+
+  it('parses feet/inches with dash separator (architectural style)', () => {
+    const r = parseOpeningSize('3\'-0" x 7\'-0"')
+    expect(r).toEqual({ widthIn: 36, heightIn: 84 })
+  })
+
+  it('parses feet/inches with space separator', () => {
+    const r = parseOpeningSize('3\' 0" x 7\' 0"')
+    expect(r).toEqual({ widthIn: 36, heightIn: 84 })
+  })
+
+  it('parses 6\'0" pair door as 72 inches wide', () => {
+    const r = parseOpeningSize('6\'0" x 7\'0"')
+    expect(r).toEqual({ widthIn: 72, heightIn: 84 })
+  })
+
+  it('parses compressed 4-digit format 3070 as 3\'0" x 7\'0"', () => {
+    expect(parseOpeningSize('3070')).toEqual({ widthIn: 36, heightIn: 84 })
+  })
+
+  it('parses compressed 4-digit 3068 as 3\'0" x 6\'8"', () => {
+    expect(parseOpeningSize('3068')).toEqual({ widthIn: 36, heightIn: 80 })
+  })
+
+  it('parses compressed 6080 as 6\'0" x 8\'0" (pair)', () => {
+    expect(parseOpeningSize('6080')).toEqual({ widthIn: 72, heightIn: 96 })
+  })
+
+  it('parses compressed 3470 as 3\'4" x 7\'0"', () => {
+    expect(parseOpeningSize('3470')).toEqual({ widthIn: 40, heightIn: 84 })
+  })
+
+  it('rejects compressed digits outside plausible range', () => {
+    // "1020" → 1'0" × 2'0" = 12" × 24" — too small to be a door
+    expect(parseOpeningSize('1020')).toBeNull()
+    // "9999" → 9'9" × 9'9" = 117" × 117" height fails (> 144 allowed but
+    // 117 is fine, so this should actually parse — bumping to something
+    // truly out of range)
+    // Actually 9999 parses to {117, 117} which passes the check. Use
+    // something that's actually too small:
+    expect(parseOpeningSize('0000')).toBeNull()
+  })
+
+  it('parses pure inches format "36 x 84"', () => {
+    expect(parseOpeningSize('36 x 84')).toEqual({ widthIn: 36, heightIn: 84 })
+  })
+
+  it('parses pure inches with quotes "36\" × 84\""', () => {
+    expect(parseOpeningSize('36" × 84"')).toEqual({ widthIn: 36, heightIn: 84 })
+  })
+
+  it('converts metric millimeters "914 x 2134" to inches', () => {
+    // 914mm ≈ 36 in, 2134mm ≈ 84 in — standard commercial door in metric
+    const r = parseOpeningSize('914 x 2134')
+    expect(r).not.toBeNull()
+    expect(r!.widthIn).toBeCloseTo(36, 0)
+    expect(r!.heightIn).toBeCloseTo(84, 0)
+  })
+
+  it('returns null for unparseable text', () => {
+    expect(parseOpeningSize('Type A')).toBeNull()
+    expect(parseOpeningSize('HMD')).toBeNull()
+    expect(parseOpeningSize('')).toBeNull()
+    expect(parseOpeningSize(null)).toBeNull()
+    expect(parseOpeningSize(undefined)).toBeNull()
+  })
+})
+
+// ─── detectIsPair ───
+//
+// Tests the 3-tier layered pair detection used by buildPerOpeningItems.
+// The primary signal (heading_leaf_count > heading_door_count) is the
+// Radius DC regression case — the other tiers are fallbacks for PDFs
+// where the primary signal is missing.
+
+describe('detectIsPair', () => {
+  it('PRIMARY: returns true when heading_leaf_count > heading_door_count', () => {
+    // The exact Radius DC DH4A.1 shape: 8 pair doors = 16 leaves
+    const set: HardwareSet = {
+      set_id: 'DH4A.1',
+      heading: 'Heading #DH4A.1', // no "pair" keyword
+      heading_door_count: 8,
+      heading_leaf_count: 16,
+      items: [],
+    }
+    const doorInfo = { door_type: 'A' } // no "pr" keyword
+    expect(detectIsPair(set, doorInfo)).toBe(true)
+  })
+
+  it('PRIMARY: returns false when heading_leaf_count equals heading_door_count', () => {
+    const set: HardwareSet = {
+      set_id: 'DH1',
+      heading: 'Heading #DH1',
+      heading_door_count: 5,
+      heading_leaf_count: 5,
+      items: [],
+    }
+    expect(detectIsPair(set, { door_type: 'A' })).toBe(false)
+  })
+
+  it('SECONDARY: returns true when opening size width >= 48" via door_type', () => {
+    // The set has no leaf_count info; the door_type field contains a
+    // 6070 size code which parses to 72" wide (pair range).
+    const set: HardwareSet = {
+      set_id: 'GENERIC',
+      heading: 'Heading #GENERIC',
+      items: [],
+    }
+    const doorInfo = { door_type: '6070' } // 6'0" x 7'0" = 72" wide
+    expect(detectIsPair(set, doorInfo)).toBe(true)
+  })
+
+  it('SECONDARY: returns true for explicit "6\'0\" x 7\'0\"" in heading text', () => {
+    const set: HardwareSet = {
+      set_id: 'X',
+      heading: 'Heading #X 6\'0" x 7\'0" HMD',
+      items: [],
+    }
+    expect(detectIsPair(set, { door_type: 'A' })).toBe(true)
+  })
+
+  it('SECONDARY: returns false for 3070 single door width', () => {
+    const set: HardwareSet = { set_id: 'X', heading: 'H', items: [] }
+    expect(detectIsPair(set, { door_type: '3070' })).toBe(false)
+  })
+
+  it('TERTIARY: keyword match on heading', () => {
+    const set: HardwareSet = {
+      set_id: 'X',
+      heading: 'Pair Doors Heading',
+      items: [],
+    }
+    expect(detectIsPair(set, { door_type: 'A' })).toBe(true)
+  })
+
+  it('TERTIARY: keyword match on door_type "PR"', () => {
+    const set: HardwareSet = { set_id: 'X', heading: 'H', items: [] }
+    expect(detectIsPair(set, { door_type: 'PR' })).toBe(true)
+  })
+
+  it('returns false when none of the signals match', () => {
+    const set: HardwareSet = {
+      set_id: 'DH1',
+      heading: 'Heading #DH1',
+      heading_door_count: 3,
+      heading_leaf_count: 3,
+      items: [],
+    }
+    expect(detectIsPair(set, { door_type: 'A' })).toBe(false)
+  })
+
+  it('handles missing hwSet gracefully', () => {
+    expect(detectIsPair(undefined, { door_type: 'A' })).toBe(false)
+    expect(detectIsPair(undefined, undefined)).toBe(false)
+  })
+})
+
+// ─── buildPerOpeningItems (pair-detection regression) ───
+//
+// Regression test for the Radius DC 2026-04-12 bug where pair doors
+// were storing per-leaf hinge quantities (qty=4) instead of per-opening
+// quantities (qty=8), and only 1 Door row instead of 2.
+
+describe('buildPerOpeningItems — pair detection', () => {
+  it('doubles per-leaf items and adds 2 Door rows for pair openings', () => {
+    // Exact Radius DC DH4A.1 shape: 8 pair doors, 16 leaves, 56 hinges
+    // (which is 56/16=3.5 per leaf, rounded to qty=4 by Python's
+    // normalize_quantities fix). A pair opening should show qty=8
+    // hinges (4 per leaf × 2 leaves), not qty=4.
+    // Each item has qty_door_count reflecting what divisor Python used.
+    // Hinges were divided by 16 (leaves) — per-leaf, DOUBLE for pair.
+    // Flush bolt kit was divided by 8 (doors) — per-opening, don't double.
+    // Closer was divided by 8 (doors) — per-opening, don't double.
+    // Smoke seal was divided by 8 (doors) — per-frame, don't double.
+    const hwSet: HardwareSet = {
+      set_id: 'DH4A.1',
+      generic_set_id: 'DH4A',
+      heading: 'Heading #DH4A.1', // no "pair" keyword — relies on leaf count
+      heading_door_count: 8,
+      heading_leaf_count: 16,
+      heading_doors: ['120-02A'],
+      items: [
+        { qty: 4, qty_total: 56, qty_door_count: 16, qty_source: 'flagged', name: 'Hinges 5BB1 4.5x4.5 NRP', model: '', finish: '', manufacturer: '' },
+        { qty: 1, qty_total: 8, qty_door_count: 16, qty_source: 'divided', name: 'Hinges 5BB1 4.5x4.5 CON TW8', model: '', finish: '', manufacturer: '' },
+        { qty: 1, qty_total: 8, qty_door_count: 8, qty_source: 'divided', name: 'Flush Bolt Kit FB32', model: '', finish: '', manufacturer: '' },
+        { qty: 1, qty_total: 8, qty_door_count: 8, qty_source: 'divided', name: 'Exit Device 9875L-F', model: '', finish: '', manufacturer: '' },
+        { qty: 2, qty_total: 16, qty_door_count: 8, qty_source: 'divided', name: 'Closer 4040XP EDA', model: '', finish: '', manufacturer: '' },
+        { qty: 2, qty_total: 16, qty_door_count: 8, qty_source: 'divided', name: 'Smoke Seal 5075', model: '', finish: '', manufacturer: '' },
+      ],
+    }
+    const openings = [
+      { id: 'opening-1', door_number: '120-02A', hw_set: 'DH4A' },
+    ]
+    const doorInfoMap = new Map<string, { door_type: string; frame_type: string }>([
+      ['120-02A', { door_type: 'A', frame_type: 'F2' }],
+    ])
+    const setMap = new Map<string, HardwareSet>([['DH4A', hwSet]])
+    const doorToSetMap = new Map<string, HardwareSet>([['120-02A', hwSet]])
+
+    const rows = buildPerOpeningItems(openings, doorInfoMap, setMap, doorToSetMap)
+
+    // Should have 2 Door rows (Active + Inactive), 1 Frame, and 6 hardware items
+    const doorRows = rows.filter(r => (r.name as string).startsWith('Door'))
+    expect(doorRows).toHaveLength(2)
+    expect(doorRows.map(r => r.name)).toEqual([
+      'Door (Active Leaf)',
+      'Door (Inactive Leaf)',
+    ])
+
+    const frameRows = rows.filter(r => r.name === 'Frame')
+    expect(frameRows).toHaveLength(1)
+    expect(frameRows[0].qty).toBe(1)
+
+    // Per-leaf items DOUBLED (4 × 2 = 8 hinges). Both hinge items had
+    // qty_door_count=16 (Python divided by leaves), so both get ×2.
+    const hingeNrp = rows.find(r => (r.name as string).includes('5BB1 4.5x4.5 NRP'))
+    expect(hingeNrp?.qty).toBe(8) // 4 × 2 = 8. NOT 4.
+
+    // CON TW8 hinge also has qty_door_count=16 → per-leaf → ×2 = 2
+    const hingeCon = rows.find(r => (r.name as string).includes('CON TW8'))
+    expect(hingeCon?.qty).toBe(2)
+
+    // Per-pair item NOT doubled
+    const flushBolt = rows.find(r => (r.name as string).includes('Flush Bolt Kit'))
+    expect(flushBolt?.qty).toBe(1)
+
+    // Per-opening items NOT doubled (closer is per_opening, qty stays at 2)
+    const closer = rows.find(r => (r.name as string).includes('Closer'))
+    expect(closer?.qty).toBe(2)
+
+    // per_frame item NOT doubled (smoke seal is per_frame)
+    const smokeSeal = rows.find(r => (r.name as string).includes('Smoke Seal'))
+    expect(smokeSeal?.qty).toBe(2)
+  })
+
+  it('does NOT double per-leaf items for single-door openings', () => {
+    const hwSet: HardwareSet = {
+      set_id: 'DH3.0',
+      generic_set_id: 'DH3',
+      heading: 'Heading #DH3.0',
+      heading_door_count: 2,
+      heading_leaf_count: 2,
+      heading_doors: ['110-02C'],
+      items: [
+        { qty: 3, name: 'Hinges 5BB1', model: '', finish: '', manufacturer: '' },
+      ],
+    }
+    const openings = [
+      { id: 'opening-1', door_number: '110-02C', hw_set: 'DH3' },
+    ]
+    const doorInfoMap = new Map([
+      ['110-02C', { door_type: 'A', frame_type: 'F1' }],
+    ])
+    const setMap = new Map([['DH3', hwSet]])
+    const doorToSetMap = new Map([['110-02C', hwSet]])
+
+    const rows = buildPerOpeningItems(openings, doorInfoMap, setMap, doorToSetMap)
+
+    // Single door → 1 "Door" row (not Active/Inactive Leaf)
+    const doorRows = rows.filter(r => (r.name as string).startsWith('Door'))
+    expect(doorRows).toHaveLength(1)
+    expect(doorRows[0].name).toBe('Door')
+
+    // Hinge qty NOT doubled (single door)
+    const hinge = rows.find(r => (r.name as string).includes('Hinges'))
+    expect(hinge?.qty).toBe(3)
+  })
+
+  it('detects pair via opening size when leaf count is missing', () => {
+    // Simulates an older PDF format where Python didn't capture
+    // heading_leaf_count but the door_type field has a size code.
+    const hwSet: HardwareSet = {
+      set_id: 'X',
+      heading: 'Generic',
+      items: [
+        { qty: 4, name: 'Hinges', model: '', finish: '', manufacturer: '' },
+      ],
+    }
+    const openings = [
+      { id: 'opening-1', door_number: '100A', hw_set: 'X' },
+    ]
+    // door_type "6080" parses to 72" × 96" (pair width)
+    const doorInfoMap = new Map([
+      ['100A', { door_type: '6080', frame_type: 'F1' }],
+    ])
+    const setMap = new Map([['X', hwSet]])
+    const doorToSetMap = new Map<string, HardwareSet>()
+
+    const rows = buildPerOpeningItems(openings, doorInfoMap, setMap, doorToSetMap)
+
+    const doorRows = rows.filter(r => (r.name as string).startsWith('Door'))
+    expect(doorRows).toHaveLength(2) // pair detected via size
+    const hinge = rows.find(r => r.name === 'Hinges')
+    expect(hinge?.qty).toBe(8) // 4 × 2 leaves
   })
 })
