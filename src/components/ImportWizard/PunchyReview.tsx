@@ -162,7 +162,12 @@ export default function PunchyReview({
           const corr = setCorrs.find(
             c => c.item_name.toLowerCase() === item.name.toLowerCase(),
           );
-          if (corr) return { ...item, qty: corr.to_qty, qty_source: "auto_corrected" as const };
+          if (corr) return {
+            ...item,
+            qty: corr.to_qty,
+            qty_source: "auto_corrected" as const,
+            qty_before_correction: item.qty,
+          };
           return item;
         });
         return { ...set, items: updatedItems };
