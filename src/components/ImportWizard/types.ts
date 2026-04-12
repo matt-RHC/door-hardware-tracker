@@ -18,8 +18,9 @@ export enum WizardStep {
   MapColumns = 2,
   Triage = 3,
   Review = 4,
-  Compare = 5,
-  Confirm = 6,
+  Products = 5,
+  Compare = 6,
+  Confirm = 7,
 }
 
 // ─── API response types ───

@@ -43,6 +43,7 @@ class HardwareItem(BaseModel):
     manufacturer: str = ""
     model: str = ""
     finish: str = ""
+    base_series: str = ""               # product family ID (e.g., "5BB1", "L9010")
 
 
 class HardwareSetDef(BaseModel):
@@ -477,10 +478,13 @@ def split_concatenated_hw_fields(
     if not extracted_model and not extracted_mfr and not extracted_finish:
         return item
 
+    # Extract base series from model string for product family grouping
+    base_series = extract_base_series(extracted_model, extracted_mfr)
+
     logger.debug(
         f"[split] '{item.name}' → name='{extracted_name}', "
         f"model='{extracted_model}', finish='{extracted_finish}', "
-        f"mfr='{extracted_mfr}'"
+        f"mfr='{extracted_mfr}', base_series='{base_series}'"
     )
 
     return HardwareItem(
@@ -492,6 +496,7 @@ def split_concatenated_hw_fields(
         manufacturer=extracted_mfr,
         model=extracted_model,
         finish=extracted_finish,
+        base_series=base_series,
     )
 
 
@@ -986,6 +991,86 @@ NOT_FINISH_PATTERN = re.compile(
     r"|^CON-\w+"               # Connector model suffixes: CON-6W, CON-38P
     r"|^\d+FP$"                # Model suffixes like 60FP
 )
+
+# ─── Base series extraction ─────────────────────────────────────────────────
+
+# Size indicator pattern — matches dimensions like "4 1/2 x 4 1/2", "36\"", "83\""
+_SIZE_PATTERN = re.compile(
+    r"^\d+[\-\s]?\d*/?\d*\s*[x×X]\s*\d+"  # WxH: "4 1/2 x 4 1/2", "4x4"
+    r"|^\d+['\"\u2033\u201d]"               # Length: 36", 83", 108"
+    r"|^\d+\-\d+/\d+"                       # Fraction: 4-1/2
+)
+
+# Known manufacturer-specific base series patterns.
+# Order matters — more specific patterns first.
+_BASE_SERIES_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
+    # Schlage L-series: L + 4 digits (L9010, L9040, L9080, L9092)
+    ("schlage", re.compile(r"^(L\d{4})", re.IGNORECASE)),
+    # Von Duprin: 2-digit series (98, 99, 22, 88, 55, 78, 75, 94, 95, 33, 35)
+    ("von duprin", re.compile(r"^(\d{2})(?:EO|NL|L|TP|DT|-|$|\s)", re.IGNORECASE)),
+    # LCN: 4-digit model with optional suffix (4040XP, 4041, 1460, 9542, 4640)
+    ("lcn", re.compile(r"^(\d{4}[A-Z]*)", re.IGNORECASE)),
+    # Sargent: 2-4 digit model (8200, 8800, 11 line, 28, 482)
+    ("sargent", re.compile(r"^(\d{2,4})", re.IGNORECASE)),
+    # Corbin Russwin: ML or CL + 4 digits (ML2000, CL3300)
+    ("corbin russwin", re.compile(r"^([MC]L\d{4})", re.IGNORECASE)),
+    # Adams Rite: 4-digit model (4900, 8800, 7400, 4300)
+    ("adams rite", re.compile(r"^(\d{4})", re.IGNORECASE)),
+    # Securitron: Letter + 2-3 digits (M32, M62, M82)
+    ("securitron", re.compile(r"^([A-Z]\d{2,3})", re.IGNORECASE)),
+    # dormakaba / Dorma: 4-digit model (8600, 8900, 7400)
+    ("dorma", re.compile(r"^(\d{4})", re.IGNORECASE)),
+    ("dormakaba", re.compile(r"^(\d{4})", re.IGNORECASE)),
+    # Norton: 4-digit model (7500, 1600, 8000)
+    ("norton", re.compile(r"^(\d{4})", re.IGNORECASE)),
+]
+
+
+def extract_base_series(model: str, manufacturer: str) -> str:
+    """Extract the base product family identifier from a model string.
+
+    The base series is the leading identifier that maps to a single cut sheet.
+    For example:
+      "5BB1 HW 4 1/2 x 4 1/2 NRP 652"  → "5BB1"
+      "L9010 03N LH 626"                → "L9010"
+      "4040XP RWPA TBWMS AL"            → "4040XP"
+      "99EO-F 3' US26D"                 → "99"
+
+    Args:
+        model: The model string (already split from name/finish/manufacturer).
+        manufacturer: The manufacturer name or abbreviation.
+
+    Returns:
+        The base series string, or empty string if extraction fails.
+    """
+    model = model.strip()
+    if not model:
+        return ""
+
+    mfr_lower = manufacturer.lower()
+
+    # Try manufacturer-specific patterns first
+    for mfr_key, pattern in _BASE_SERIES_PATTERNS:
+        if mfr_key in mfr_lower:
+            m = pattern.match(model)
+            if m:
+                return m.group(1).upper()
+
+    # Generic fallback: first token that contains alphanumeric chars
+    # and is not a pure size indicator
+    tokens = model.split()
+    for tok in tokens:
+        if _SIZE_PATTERN.match(tok):
+            continue
+        # Must contain at least one alphanumeric character
+        if re.search(r"[A-Za-z0-9]", tok):
+            # Strip trailing hyphens/punctuation
+            cleaned = re.sub(r"[\-,;:]+$", "", tok)
+            if cleaned:
+                return cleaned.upper()
+
+    return ""
+
 
 # Non-hardware item patterns — used to filter garbage from extraction.
 NON_HARDWARE_PATTERN = re.compile(

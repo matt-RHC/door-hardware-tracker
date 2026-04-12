@@ -35,6 +35,10 @@ export interface ExtractedHardwareItem {
   model: string
   finish: string
   manufacturer: string
+  /** Product family identifier extracted from model string (e.g., "5BB1",
+   *  "L9010", "4040XP"). Populated by Python extraction, validated/filled
+   *  client-side if missing. Used for product family grouping in StepProducts. */
+  base_series?: string
 }
 
 /** A hardware set grouping items for a set of doors. */
