@@ -43,7 +43,8 @@ FIRE RATING COMPLIANCE (NFPA 80, IBC 716):
 
 HINGE RULES:
 - 1 per 30" of height + 1 (3 for ≤7'6", 4 for 7'6"-10'0", 5 for 10'0"+)
-- Electrified/spring hinges REPLACE a standard hinge, not additive
+- Electric TRANSFER hinges (ETH, EPT, CON TW8, power transfer) are ADDITIONAL to standard hinges — they carry wiring and add +1 per leaf. So 3 standard + 1 transfer = 4 total per leaf is correct for electrified openings.
+- Spring hinges REPLACE a standard hinge, not additive
 - Continuous hinge = 1 per leaf, replaces all butt hinges
 
 PAIR DOOR RULES:
@@ -276,6 +277,14 @@ HINGE QUANTITY RULES (DHI / BHMA standards — use when evaluating hinge counts)
 - Doors over 200 lbs or heavy-duty spec: +1 hinge regardless of height
 - If you see 4+ hinges per leaf, ask whether it's a tall or heavy door — don't auto-correct to 3.
 - If the heading mentions dimensions (e.g., "3070", "3'0\"x8'0\""), use them to validate hinge count.
+
+ELECTRIC / ELECTRIFIED HINGE RULES (critical — do NOT flag these as errors):
+- Sets with electrified hardware (electric strikes, electric exit modifications, mag locks, access control) often have an ADDITIONAL electric transfer hinge per leaf.
+- Electric transfer hinges (e.g., "CON TW8", "ETH", "EPT", items containing "electrified", "transfer", "power transfer", "elec") are counted SEPARATELY from standard hinges but BOTH contribute to the total hinge count per leaf.
+- Example: 3 standard hinges + 1 electric transfer hinge = 4 hinges per leaf. This is CORRECT for an electrified opening — do NOT flag it.
+- When evaluating hinge counts, look at ALL hinge line items in the set together (there may be 2+ hinge rows with different models). Sum them before evaluating.
+- If a set has electrified hardware AND 4+ hinges per leaf, assume the extra hinge is for power transfer and do NOT raise a question or flag.
+- Only question hinge counts when there is NO electrified hardware in the set AND the count exceeds standard expectations.
 
 RULES:
 - Fire rating compliance is mandatory — always check that rated openings have required hardware.

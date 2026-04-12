@@ -98,6 +98,8 @@ export default function PunchyReview({
   // hintInputs:  the in-progress hint text per set_id.
   const [hintVisible, setHintVisible] = useState<Set<string>>(new Set());
   const [hintInputs, setHintInputs] = useState<Record<string, string>>({});
+  // Track which question cards have their "Details" explanation expanded
+  const [detailsExpanded, setDetailsExpanded] = useState<Set<string>>(new Set());
 
   // Keep hardwareSets in sync if parent updates (e.g., deep extract fills empty sets)
   useEffect(() => {
@@ -473,6 +475,8 @@ export default function PunchyReview({
     handleToggleHint,
     handleHintChange,
     handleSubmitHint,
+    detailsExpanded,
+    setDetailsExpanded,
   })}
       {/* Skip to Triage shortcut — shown when no required cards remain */}
       {currentCard.kind !== 'summary' && currentCard.kind !== 'ready' && remainingRequired === 0 && (
@@ -523,6 +527,8 @@ interface RenderContext {
   handleToggleHint: (setId: string) => void;
   handleHintChange: (setId: string, value: string) => void;
   handleSubmitHint: (setId: string) => void;
+  detailsExpanded: Set<string>;
+  setDetailsExpanded: React.Dispatch<React.SetStateAction<Set<string>>>;
 }
 
 function renderCard(card: PunchCardData, ctx: RenderContext) {
@@ -554,28 +560,28 @@ function renderCard(card: PunchCardData, ctx: RenderContext) {
             <div className="grid grid-cols-3 gap-2">
               <div className="bg-tint border border-border-dim rounded-xl p-3 text-center">
                 <div className="text-xl font-bold text-success">{p.doorCount}</div>
-                <div className="text-[9px] text-tertiary uppercase tracking-wide">Doors</div>
+                <div className="text-[9px] text-secondary uppercase tracking-wide">Doors</div>
               </div>
               <div className="bg-tint border border-border-dim rounded-xl p-3 text-center">
                 <div className="text-xl font-bold text-accent">{p.setCount}</div>
-                <div className="text-[9px] text-tertiary uppercase tracking-wide">HW Sets</div>
+                <div className="text-[9px] text-secondary uppercase tracking-wide">HW Sets</div>
               </div>
               <div className={`bg-tint border rounded-xl p-3 text-center ${p.grade === "critical" ? "border-danger" : p.grade === "warning" ? "border-warning" : "border-border-dim"}`}>
                 <div className={`text-xl font-bold ${p.grade === "critical" ? "text-danger" : p.grade === "warning" ? "text-warning" : "text-success"}`}>
                   {p.itemCount}
                 </div>
-                <div className="text-[9px] text-tertiary uppercase tracking-wide">HW Items</div>
+                <div className="text-[9px] text-secondary uppercase tracking-wide">HW Items</div>
               </div>
             </div>
 
             {/* Coverage */}
             <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs px-1">
-              <span className="text-secondary">Doors with HW set</span>
+              <span className="text-primary">Doors with HW set</span>
               <span className="text-primary">
                 {p.assignedDoors} / {p.doorCount}
                 {p.unassignedDoors > 0 && <span className="text-warning ml-1">({p.unassignedDoors} unassigned)</span>}
               </span>
-              <span className="text-secondary">Sets with items</span>
+              <span className="text-primary">Sets with items</span>
               <span className="text-primary">
                 {p.setCount - p.emptySetCount} / {p.setCount}
                 {p.emptySetCount > 0 && <span className="text-danger ml-1">({p.emptySetCount} empty)</span>}
@@ -586,7 +592,7 @@ function renderCard(card: PunchCardData, ctx: RenderContext) {
             {p.missingSetIds.length > 0 && (
               <div className="bg-warning-dim border border-warning rounded-lg p-2.5">
                 <span className="text-warning text-xs font-semibold">Missing Sets: </span>
-                <span className="text-xs text-secondary">{p.missingSetIds.join(", ")}</span>
+                <span className="text-xs text-primary">{p.missingSetIds.join(", ")}</span>
               </div>
             )}
 
@@ -603,9 +609,9 @@ function renderCard(card: PunchCardData, ctx: RenderContext) {
                   <div key={s.set_id} className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs ${s.itemCount === 0 ? "bg-danger-dim border border-danger" : "bg-tint border border-border-dim"}`}>
                     <div className="flex items-center gap-2 min-w-0">
                       <span className={`font-mono font-medium ${s.itemCount === 0 ? "text-danger" : "text-accent"}`}>{s.set_id}</span>
-                      {s.heading && <span className="text-tertiary truncate max-w-[180px]">{s.heading}</span>}
+                      {s.heading && <span className="text-secondary truncate max-w-[180px]">{s.heading}</span>}
                     </div>
-                    <span className={`font-semibold whitespace-nowrap ${s.itemCount === 0 ? "text-danger" : "text-secondary"}`}>
+                    <span className={`font-semibold whitespace-nowrap ${s.itemCount === 0 ? "text-danger" : "text-primary"}`}>
                       {s.itemCount === 0 ? "0 items" : `${s.itemCount} item${s.itemCount !== 1 ? "s" : ""}`}
                     </span>
                   </div>
@@ -666,7 +672,7 @@ function renderCard(card: PunchCardData, ctx: RenderContext) {
           onSkip={ctx.goNext}
         >
           <div className="space-y-3">
-            <p className="text-secondary text-sm">
+            <p className="text-primary text-sm">
               These sets were found in the PDF but the table reader couldn&apos;t parse their items. Use AI extraction, mark a set for manual entry, or remove it if it&apos;s a phantom.
             </p>
             {allAttempted && (
@@ -698,7 +704,7 @@ function renderCard(card: PunchCardData, ctx: RenderContext) {
                         </span>
                       )}
                       {s.heading.length > 0 && (
-                        <span className="text-secondary text-xs truncate flex-1 min-w-0">
+                        <span className="text-primary text-xs truncate flex-1 min-w-0">
                           {s.heading}
                         </span>
                       )}
@@ -854,7 +860,7 @@ function renderCard(card: PunchCardData, ctx: RenderContext) {
           secondaryAction={ctx.currentIdx > 0 ? { label: "Back", onClick: ctx.goBack, variant: "ghost" } : undefined}
         >
           <div className="space-y-2">
-            <p className="text-secondary text-sm">
+            <p className="text-primary text-sm">
               Punchy is confident about these fixes:
             </p>
             {corrections.map((c, i) => (
@@ -863,7 +869,7 @@ function renderCard(card: PunchCardData, ctx: RenderContext) {
                 <span className="text-accent font-mono font-medium">{c.set_id}</span>
                 <span className="text-primary">{c.item_name}:</span>
                 <span className="text-danger line-through">{c.from_qty}</span>
-                <span className="text-secondary">&rarr;</span>
+                <span className="text-primary">&rarr;</span>
                 <span className="text-success font-semibold">{c.to_qty}</span>
               </div>
             ))}
@@ -894,20 +900,48 @@ function renderCard(card: PunchCardData, ctx: RenderContext) {
           required
         >
           <div className="space-y-3">
-            <p className="text-primary text-sm leading-relaxed">{q.text}</p>
-            {q.context && <p className="text-tertiary text-xs">{q.context}</p>}
-            <div className="text-xs text-secondary mb-2">
-              Currently: <span className="font-mono text-primary">{q.current_qty}</span>
+            {/* Clean summary: set + item + current qty */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="font-mono text-xs px-2 py-0.5 rounded bg-accent-dim text-accent border border-accent">
+                {q.set_id}
+              </span>
+              <span className="text-primary text-sm font-medium">{q.item_name}</span>
+              <span className="text-secondary text-xs">
+                — currently <span className="font-mono font-semibold text-primary">{q.current_qty}</span> per opening
+              </span>
             </div>
+            {/* Simplified question text */}
+            <p className="text-primary text-sm leading-relaxed">{q.text}</p>
+            {/* Collapsible AI reasoning */}
+            {q.context && (
+              <div>
+                <button
+                  onClick={() => ctx.setDetailsExpanded(prev => {
+                    const next = new Set(prev);
+                    if (next.has(q.id)) { next.delete(q.id); } else { next.add(q.id); }
+                    return next;
+                  })}
+                  className="text-xs text-accent font-medium hover:underline"
+                >
+                  {ctx.detailsExpanded.has(q.id) ? "Hide details \u25BE" : "Show details \u25B8"}
+                </button>
+                {ctx.detailsExpanded.has(q.id) && (
+                  <p className="text-secondary text-xs mt-1 pl-2 border-l-2 border-border-dim leading-relaxed">
+                    {q.context}
+                  </p>
+                )}
+              </div>
+            )}
+            {/* Answer options — larger targets */}
             <div className="flex flex-wrap gap-2">
               {(q.options as string[]).map((opt: string) => (
                 <button
                   key={opt}
                   onClick={() => ctx.handleAnswerQuestion(q.id, opt, q.set_id, q.item_name)}
-                  className={`px-3 py-2 rounded-lg border text-sm font-medium transition-colors ${
+                  className={`px-4 py-2.5 rounded-lg border text-sm font-medium transition-colors ${
                     answered === opt
                       ? "bg-accent text-white border-accent"
-                      : "bg-tint border-border-dim text-primary hover:bg-tint-strong"
+                      : "bg-tint-strong border-border-dim-strong text-primary hover:bg-surface-hover"
                   }`}
                 >
                   {opt}
@@ -944,10 +978,37 @@ function renderCard(card: PunchCardData, ctx: RenderContext) {
           required
         >
           <div className="space-y-3">
+            {/* Clean summary: item + current qty */}
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-primary text-sm font-medium">{representative.item_name}</span>
+              <span className="text-secondary text-xs">
+                — currently <span className="font-mono font-semibold text-primary">{representative.current_qty}</span> per opening
+              </span>
+            </div>
             <p className="text-primary text-sm leading-relaxed">{representative.text}</p>
-            {representative.context && <p className="text-tertiary text-xs">{representative.context}</p>}
-            <div className="bg-tint border border-border-dim rounded-lg p-2.5">
-              <div className="text-[10px] text-tertiary uppercase tracking-wide mb-1.5 font-semibold">
+            {/* Collapsible AI reasoning */}
+            {representative.context && (
+              <div>
+                <button
+                  onClick={() => ctx.setDetailsExpanded(prev => {
+                    const next = new Set(prev);
+                    const key = `batch-${card.id}`;
+                    if (next.has(key)) { next.delete(key); } else { next.add(key); }
+                    return next;
+                  })}
+                  className="text-xs text-accent font-medium hover:underline"
+                >
+                  {ctx.detailsExpanded.has(`batch-${card.id}`) ? "Hide details \u25BE" : "Show details \u25B8"}
+                </button>
+                {ctx.detailsExpanded.has(`batch-${card.id}`) && (
+                  <p className="text-secondary text-xs mt-1 pl-2 border-l-2 border-border-dim leading-relaxed">
+                    {representative.context}
+                  </p>
+                )}
+              </div>
+            )}
+            <div className="bg-tint-strong border border-border-dim-strong rounded-lg p-2.5">
+              <div className="text-[10px] text-primary uppercase tracking-wide mb-1.5 font-semibold">
                 Affects {setIds.length} sets
               </div>
               <div className="flex flex-wrap gap-1">
@@ -970,10 +1031,10 @@ function renderCard(card: PunchCardData, ctx: RenderContext) {
                     // Also store under the batch card ID for UI state
                     ctx.handleAnswerQuestion(card.id, opt);
                   }}
-                  className={`px-3 py-2 rounded-lg border text-sm font-medium transition-colors ${
+                  className={`px-4 py-2.5 rounded-lg border text-sm font-medium transition-colors ${
                     answered === opt
                       ? "bg-accent text-white border-accent"
-                      : "bg-tint border-border-dim text-primary hover:bg-tint-strong"
+                      : "bg-tint-strong border-border-dim-strong text-primary hover:bg-surface-hover"
                   }`}
                 >
                   {opt}
@@ -1019,7 +1080,7 @@ function renderCard(card: PunchCardData, ctx: RenderContext) {
                         className={`px-2.5 py-1.5 rounded-lg border text-xs font-medium transition-colors ${
                           qAnswered === opt
                             ? "bg-accent text-white border-accent"
-                            : "bg-tint border-border-dim text-primary hover:bg-tint-strong"
+                            : "bg-tint-strong border-border-dim-strong text-primary hover:bg-surface-hover"
                         }`}
                       >
                         {opt}
@@ -1063,7 +1124,7 @@ function renderCard(card: PunchCardData, ctx: RenderContext) {
                 </div>
                 <p className="text-primary text-sm">{ci.issue}</p>
                 {ci.regulation && (
-                  <p className="text-tertiary text-xs mt-1">{ci.regulation}</p>
+                  <p className="text-secondary text-xs mt-1">{ci.regulation}</p>
                 )}
               </div>
             ))}
@@ -1086,11 +1147,11 @@ function renderCard(card: PunchCardData, ctx: RenderContext) {
           onSkip={ctx.goNext}
         >
           <div className="space-y-1.5">
-            <p className="text-secondary text-sm mb-2">
+            <p className="text-primary text-sm mb-2">
               These may be fine — just worth knowing about:
             </p>
             {flags.map((f, i) => (
-              <div key={`fl-${i}`} className="text-xs text-secondary px-2.5 py-1.5 bg-warning-dim border border-warning rounded-lg">
+              <div key={`fl-${i}`} className="text-xs text-primary px-2.5 py-1.5 bg-warning-dim border border-warning rounded-lg">
                 <span className="text-warning font-mono mr-1">{f.set_id}</span>
                 {f.message ?? f.reason ?? ""}
               </div>
@@ -1117,7 +1178,7 @@ function renderCard(card: PunchCardData, ctx: RenderContext) {
             <p className="text-primary text-sm font-medium mb-1">
               Review complete
             </p>
-            <p className="text-tertiary text-xs">
+            <p className="text-secondary text-xs">
               {p.doorCount} doors and {p.setCount} hardware sets ready for triage classification.
             </p>
           </div>
