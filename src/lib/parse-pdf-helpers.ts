@@ -571,15 +571,55 @@ export function normalizeQuantities(
       doorsPerSet.set(door.hw_set.toUpperCase(), (doorsPerSet.get(door.hw_set.toUpperCase()) ?? 0) + 1)
     }
   }
+
+  // Pre-compute generic set totals for sub-heading normalization.
+  // When multiple sub-headings (e.g., DH3.0, DH3.1) share a generic_set_id,
+  // item quantities may be set-level totals that should be divided by the
+  // TOTAL door count, not just the sub-heading's count.
+  const genericTotals = new Map<string, { doors: number; leaves: number }>()
+  for (const set of hardwareSets) {
+    const gid = (set.generic_set_id ?? set.set_id).toUpperCase()
+    const prev = genericTotals.get(gid) ?? { doors: 0, leaves: 0 }
+    genericTotals.set(gid, {
+      doors: prev.doors + (set.heading_door_count ?? 0),
+      leaves: prev.leaves + (set.heading_leaf_count ?? 0),
+    })
+  }
+  // Fill in from opening list when heading counts are 0
+  for (const [gid, totals] of genericTotals) {
+    if (totals.doors === 0) {
+      const olCount = doorsPerSet.get(gid) ?? 0
+      if (olCount > 0) {
+        genericTotals.set(gid, { doors: olCount, leaves: olCount })
+      }
+    }
+  }
+
+  // Max expected per-opening quantities (mirrors Python EXPECTED_QTY_RANGES)
+  const MAX_QTY: Record<string, number> = {
+    per_leaf: 5, per_opening: 2, per_pair: 1, per_frame: 1,
+  }
+
   for (const set of hardwareSets) {
     const leafCount = (set.heading_leaf_count ?? 0) > 1 ? (set.heading_leaf_count ?? 0) : 0
     const doorCount = (set.heading_door_count ?? 0) > 1
       ? (set.heading_door_count ?? 0)
       : (doorsPerSet.get((set.generic_set_id ?? set.set_id).toUpperCase()) ?? 0)
+
+    // Check if this is a sub-heading within a larger generic group
+    const gid = (set.generic_set_id ?? set.set_id).toUpperCase()
+    const genericTotal = genericTotals.get(gid) ?? { doors: 0, leaves: 0 }
+    const isSubHeading = (
+      set.generic_set_id
+      && set.generic_set_id !== set.set_id
+      && genericTotal.doors > doorCount
+    )
+
     console.debug(
       `[qty-norm] set=${set.set_id} generic=${set.generic_set_id ?? '?'} ` +
       `headingDoorCount=${set.heading_door_count ?? 0} headingLeafCount=${set.heading_leaf_count ?? 0} ` +
-      `resolvedLeafCount=${leafCount} resolvedDoorCount=${doorCount}`
+      `resolvedLeafCount=${leafCount} resolvedDoorCount=${doorCount}` +
+      (isSubHeading ? ` (sub-heading: generic=${genericTotal.doors}d/${genericTotal.leaves}l)` : '')
     )
     if (leafCount <= 1 && doorCount <= 1) continue
 
@@ -671,6 +711,45 @@ export function normalizeQuantities(
           item.qty_door_count = doorCount
           item.qty = perOpening
           item.qty_source = 'divided'
+        }
+      }
+    }
+
+    // Post-division sanity check: if divided qty exceeds category max,
+    // try the generic set total for sub-headings.
+    if (isSubHeading) {
+      for (const item of set.items ?? []) {
+        if (item.qty_source !== 'divided' && item.qty_source !== 'flagged') continue
+        const scope = classifyItemScope(item.name)
+        const maxQty = MAX_QTY[scope ?? 'per_opening'] ?? 4
+        if (item.qty > maxQty) {
+          const raw = item.qty_total ?? item.qty
+          const altDivisor = scope === 'per_leaf' && genericTotal.leaves > 1
+            ? genericTotal.leaves
+            : genericTotal.doors
+          if (altDivisor > 1) {
+            const altPerUnit = raw / altDivisor
+            if (Number.isInteger(altPerUnit) && altPerUnit <= maxQty) {
+              console.debug(
+                `[qty-norm] ${set.set_id}: "${item.name}" re-divided by generic total: ` +
+                `${raw} ÷ ${altDivisor} = ${altPerUnit} (sub-heading gave ${item.qty}, max=${maxQty})`
+              )
+              item.qty = altPerUnit
+              item.qty_door_count = altDivisor
+              item.qty_source = 'divided'
+            } else if (altDivisor > 0) {
+              const rounded = Math.round(raw / altDivisor)
+              if (rounded <= maxQty) {
+                console.debug(
+                  `[qty-norm] ${set.set_id}: "${item.name}" re-divided (rounded) by generic total: ` +
+                  `${raw} ÷ ${altDivisor} ≈ ${rounded} (sub-heading gave ${item.qty}, max=${maxQty})`
+                )
+                item.qty = rounded
+                item.qty_door_count = altDivisor
+                item.qty_source = 'flagged'
+              }
+            }
+          }
         }
       }
     }

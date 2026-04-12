@@ -47,6 +47,27 @@ export interface HardwareCategory {
 export const HARDWARE_TAXONOMY: HardwareCategory[] = [
   // === HANGING ===
   {
+    id: 'electric_hinge',
+    label: 'Electric / Conductor Hinge',
+    name_patterns: [
+      'hinge.*\\bCON\\b',
+      'hinge.*\\bTW\\d',
+      'hinge.*electr',
+      'hinge.*conduct',
+      'electr.*hinge',
+      'conductor.*hinge',
+      'power\\s*transfer\\s*hinge',
+    ],
+    universal: false,
+    exterior: true,
+    interior: false,
+    fire_rated: false,
+    pairs_only: false,
+    install_scope: 'per_opening',  // 1 per opening, replaces one NRP position
+    typical_qty_single: [1, 1],
+    typical_qty_pair: [1, 1],
+  },
+  {
     id: 'hinges',
     label: 'Hinges',
     name_patterns: [
@@ -203,6 +224,24 @@ export const HARDWARE_TAXONOMY: HardwareCategory[] = [
   },
 
   // === CLOSING ===
+  {
+    id: 'auto_operator',
+    label: 'Automatic Operator',
+    name_patterns: [
+      'auto.*operator',
+      'automatic\\s*operator',
+      'power\\s*operator',
+      'ada\\s*operator',
+    ],
+    universal: false,
+    exterior: true,
+    interior: false,
+    fire_rated: false,
+    pairs_only: false,
+    install_scope: 'per_opening',  // 1 per opening, typically replaces closer
+    typical_qty_single: [1, 1],
+    typical_qty_pair: [1, 2],
+  },
   {
     id: 'closer',
     label: 'Closer',

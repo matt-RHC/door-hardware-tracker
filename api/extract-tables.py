@@ -101,11 +101,13 @@ class ExtractionResult(BaseModel):
 # Values outside these ranges are likely aggregate/total quantities.
 EXPECTED_QTY_RANGES: dict[str, tuple[int, int]] = {
     "hinge":              (2, 5),   # 3 standard, 4-5 for tall/heavy doors
+    "electric_hinge":     (1, 5),   # Per-opening, but use hinge max for cap-path compat
     "continuous_hinge":   (1, 2),
     "pivot":              (1, 2),
     "lockset":            (1, 1),
     "exit_device":        (1, 2),
     "flush_bolt":         (1, 2),
+    "auto_operator":      (1, 1),   # Replaces closer, 1 per opening
     "closer":             (1, 2),
     "coordinator":        (0, 1),
     "stop":               (1, 2),
@@ -127,8 +129,10 @@ EXPECTED_QTY_RANGES: dict[str, tuple[int, int]] = {
 # "opening_only" — items that exist once per opening, never per-leaf
 DIVISION_PREFERENCE: dict[str, str] = {
     "hinge":            "leaf",
+    "electric_hinge":   "opening",     # 1 per opening, replaces one NRP position
     "continuous_hinge": "leaf",
     "pivot":            "leaf",
+    "auto_operator":    "opening",     # 1 per opening, replaces closer
     "closer":           "opening",
     "lockset":          "opening",
     "exit_device":      "opening",
@@ -150,11 +154,20 @@ DIVISION_PREFERENCE: dict[str, str] = {
 # Map item names to categories using keyword matching
 _CATEGORY_PATTERNS: list[tuple[str, re.Pattern]] = [
     ("continuous_hinge", re.compile(r"(?i)continuous\s*hinge|cont\.?\s*hinge")),
+    # Electric/conductor/power-transfer hinges: per-opening, not per-leaf.
+    # These replace ONE standard hinge position on the active leaf.
+    # Must be checked BEFORE generic "hinge" pattern.
+    ("electric_hinge", re.compile(
+        r"(?i)hinge.*\bCON\b|hinge.*\bTW\d|hinge.*electr|hinge.*conduct"
+        r"|electr.*hinge|conductor.*hinge|power\s*transfer\s*hinge"
+    )),
     ("hinge",     re.compile(r"(?i)\bhinge|pivot|spring\s*hinge")),
     ("pivot",     re.compile(r"(?i)\bpivot\b")),
     ("lockset",   re.compile(r"(?i)lockset|latchset|latch\s*set|lock\s*set|passage|privacy|storeroom|classroom|entrance|mortise|cylindrical|deadbolt")),
     ("exit_device", re.compile(r"(?i)exit\s*device|panic|rim\s*device|concealed\s*vertical|surface\s*vertical|push\s*bar|touch\s*bar")),
     ("flush_bolt", re.compile(r"(?i)flush\s*bolt|surface\s*bolt")),
+    # Automatic operators: replace the closer function. When both exist, flag.
+    ("auto_operator", re.compile(r"(?i)auto.*operator|automatic\s*operator|power\s*operator|ada\s*operator")),
     ("closer",    re.compile(r"(?i)\bcloser\b|door\s*check|floor\s*closer")),
     ("coordinator", re.compile(r"(?i)\bcoordinator\b")),
     ("stop",      re.compile(r"(?i)\bstop\b|wall\s*stop|floor\s*stop|overhead\s*stop|door\s*stop")),
@@ -3367,6 +3380,37 @@ def normalize_quantities(
     if doors_per_set:
         logger.info(f"Doors per set (Opening List): {doors_per_set}")
 
+    # Pre-compute generic set totals for sub-heading normalization.
+    # When multiple sub-headings (e.g., DH3.0, DH3.1) share a generic_set_id
+    # (DH3), item quantities may be set-level totals that should be divided
+    # by the TOTAL door count across all sub-headings, not just one.
+    generic_totals: dict[str, tuple[int, int]] = {}  # gid → (total_doors, total_leaves)
+    for hw_set in hardware_sets:
+        gid = (hw_set.generic_set_id or hw_set.set_id).strip().upper()
+        prev_d, prev_l = generic_totals.get(gid, (0, 0))
+        generic_totals[gid] = (
+            prev_d + hw_set.heading_door_count,
+            prev_l + hw_set.heading_leaf_count,
+        )
+    # Also incorporate Opening List counts for generics (covers cases where
+    # heading block door counts are missing but the Opening List has data)
+    for gid, (total_d, total_l) in list(generic_totals.items()):
+        if total_d == 0:
+            ol_count = _fuzzy_lookup(gid, doors_per_set)
+            if ol_count > 0:
+                ol_leaves = _leaf_count_from_openings(
+                    openings, "hw_set", gid, ol_count
+                )
+                generic_totals[gid] = (ol_count, ol_leaves)
+                logger.info(
+                    f"[qty-norm] Generic '{gid}': heading counts=0, "
+                    f"using Opening List ({ol_count} doors, {ol_leaves} leaves)"
+                )
+
+    for gid, (td, tl) in generic_totals.items():
+        if td > 0:
+            logger.info(f"[qty-norm] Generic total '{gid}': {td} doors, {tl} leaves")
+
     for hw_set in hardware_sets:
         # --- Determine door count and leaf count ---
         door_count = hw_set.heading_door_count
@@ -3425,6 +3469,21 @@ def normalize_quantities(
                             f"[qty-norm] {hw_set.set_id}: fallback 3 cross-field "
                             f"match ({door_count} doors, {leaf_count} leaves)"
                         )
+
+        # --- Sub-heading detection: check if this set belongs to a larger group ---
+        gid = (hw_set.generic_set_id or hw_set.set_id).strip().upper()
+        generic_doors, generic_leaves = generic_totals.get(gid, (0, 0))
+        is_sub_heading = (
+            hw_set.generic_set_id
+            and hw_set.generic_set_id != hw_set.set_id
+            and generic_doors > door_count
+        )
+        if is_sub_heading:
+            logger.info(
+                f"[qty-norm] {hw_set.set_id}: sub-heading of '{gid}' — "
+                f"sub={door_count}d/{leaf_count}l, "
+                f"generic={generic_doors}d/{generic_leaves}l"
+            )
 
         # --- Single door or unknown: category cap fallback ---
         if door_count <= 1 and leaf_count <= 1:
@@ -3569,18 +3628,118 @@ def normalize_quantities(
                         f"(category={category}), flagged"
                     )
 
-        # Sanity-check: if divided qty still exceeds category max, flag
+        # Sanity-check: if divided qty still exceeds category max, try
+        # generic set total (for sub-headings) before falling back to flag.
         for item in hw_set.items:
-            if item.qty_source == "divided":
+            if item.qty_source in ("divided", "flagged"):
                 category = _classify_hardware_item(item.name)
                 max_qty = _max_qty_for_category(category)
                 if item.qty > max_qty:
+                    # If this is a sub-heading, the item may be a set-level
+                    # total that was incorrectly divided by the sub-heading
+                    # count. Try the generic set's total count instead.
+                    if is_sub_heading:
+                        pref = DIVISION_PREFERENCE.get(category, "opening")
+                        alt_divisor = (
+                            generic_leaves if pref == "leaf" and generic_leaves > 1
+                            else generic_doors
+                        )
+                        raw = item.qty_total if item.qty_total else item.qty
+                        if alt_divisor > 1:
+                            alt_unit, alt_ok = _try_divide(raw, alt_divisor)
+                            if alt_ok and alt_unit <= max_qty:
+                                logger.info(
+                                    f"[qty-norm] {hw_set.set_id}: '{item.name}' "
+                                    f"re-divided by generic total: "
+                                    f"{raw} ÷ {alt_divisor} = {alt_unit} "
+                                    f"(sub-heading gave {item.qty}, "
+                                    f"exceeds max {max_qty})"
+                                )
+                                item.qty = alt_unit
+                                item.qty_door_count = alt_divisor
+                                item.qty_source = "divided"
+                                continue
+                            elif alt_divisor > 0:
+                                rounded = round(raw / alt_divisor)
+                                if rounded <= max_qty:
+                                    logger.info(
+                                        f"[qty-norm] {hw_set.set_id}: "
+                                        f"'{item.name}' re-divided "
+                                        f"(rounded) by generic total: "
+                                        f"{raw} ÷ {alt_divisor} ≈ "
+                                        f"{rounded} (sub-heading gave "
+                                        f"{item.qty}, exceeds max "
+                                        f"{max_qty})"
+                                    )
+                                    item.qty = rounded
+                                    item.qty_door_count = alt_divisor
+                                    item.qty_source = "flagged"
+                                    continue
+                    # No generic total available or still exceeds max → flag
+                    if item.qty_source == "divided":
+                        logger.warning(
+                            f"[qty-norm] {hw_set.set_id}: '{item.name}' "
+                            f"divided qty {item.qty} exceeds category max "
+                            f"{max_qty}, flagging for review"
+                        )
+                        item.qty_source = "flagged"
+
+    # === Cross-item combination rules ===
+    # These rules catch patterns that single-item normalization can't detect.
+    _RHR_LHR_RE = re.compile(r"(?i)\b(RHR|LHR|RH|LH)\b")
+
+    for hw_set in hardware_sets:
+        # --- Rule: RHR/LHR variant pairing ---
+        # When a set has both RHR and LHR variants of the same item, each
+        # door gets ONE variant based on its hand. The combined qty for both
+        # variants should equal door count, not be divided independently.
+        items_by_base: dict[str, list[HardwareItem]] = {}
+        for item in hw_set.items:
+            base_name = _RHR_LHR_RE.sub("", item.name).strip()
+            base_model = _RHR_LHR_RE.sub("", item.model).strip() if item.model else ""
+            key = f"{base_name}|{base_model}".lower()
+            items_by_base.setdefault(key, []).append(item)
+
+        for key, variants in items_by_base.items():
+            if len(variants) < 2:
+                continue
+            hands = set()
+            for v in variants:
+                m = _RHR_LHR_RE.search(v.name + " " + (v.model or ""))
+                if m:
+                    hands.add(m.group(1).upper()[:2])  # normalize to RH/LH
+            if len(hands) >= 2:
+                # Both RH and LH present — each variant's qty should be 1
+                # (one per door of that hand). If not 1, check if the total
+                # across variants matches and each should be 1.
+                for v in variants:
+                    if v.qty > 1 and v.qty_source in ("divided", "flagged"):
+                        logger.info(
+                            f"[qty-norm] {hw_set.set_id}: '{v.name}' "
+                            f"RHR/LHR variant pair detected — qty {v.qty} "
+                            f"→ 1 (each door gets ONE hand variant)"
+                        )
+                        v.qty = 1
+                        v.qty_source = "divided"
+
+        # --- Rule: Auto operator + closer conflict ---
+        # When an automatic operator is present, it typically replaces the
+        # closer function. Flag the combination for user review.
+        has_auto_op = any(
+            _classify_hardware_item(item.name) == "auto_operator"
+            for item in hw_set.items
+        )
+        if has_auto_op:
+            for item in hw_set.items:
+                if _classify_hardware_item(item.name) == "closer":
                     logger.warning(
-                        f"[qty-norm] {hw_set.set_id}: '{item.name}' "
-                        f"divided qty {item.qty} exceeds category max "
-                        f"{max_qty}, flagging for review"
+                        f"[qty-norm] {hw_set.set_id}: auto operator AND "
+                        f"closer both present — closer '{item.name}' may "
+                        f"be redundant (operator replaces closer function)"
                     )
-                    item.qty_source = "flagged"
+                    # Don't auto-remove — flag for user review
+                    if item.qty_source == "divided":
+                        item.qty_source = "flagged"
 
 
 # --- Vercel Handler ---
