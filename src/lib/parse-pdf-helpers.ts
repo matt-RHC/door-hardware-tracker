@@ -576,6 +576,11 @@ export function normalizeQuantities(
     const doorCount = (set.heading_door_count ?? 0) > 1
       ? (set.heading_door_count ?? 0)
       : (doorsPerSet.get((set.generic_set_id ?? set.set_id).toUpperCase()) ?? 0)
+    console.debug(
+      `[qty-norm] set=${set.set_id} generic=${set.generic_set_id ?? '?'} ` +
+      `headingDoorCount=${set.heading_door_count ?? 0} headingLeafCount=${set.heading_leaf_count ?? 0} ` +
+      `resolvedLeafCount=${leafCount} resolvedDoorCount=${doorCount}`
+    )
     if (leafCount <= 1 && doorCount <= 1) continue
 
     for (const item of set.items ?? []) {
