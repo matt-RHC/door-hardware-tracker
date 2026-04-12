@@ -6,10 +6,17 @@ import type { DoorEntry, HardwareSet } from '@/lib/types'
 import { buildPerOpeningItems, buildDoorToSetMap } from '@/lib/parse-pdf-helpers'
 
 // --- Shared: check for unmatched sets ---
-
+//
+// Doors with `by_others === true` are intentionally unassigned (hardware
+// is provided by a different contractor) and their `hw_set` is typically
+// a sentinel like "N/A". Skipping them here prevents the save endpoint
+// from emitting noise in the `unmatchedSets` warning list and keeps the
+// server-side logic consistent with the client-side StepConfirm
+// validation (which uses findDoorsWithUnmatchedSets).
 function findUnmatchedSets(doors: DoorEntry[], setMap: Map<string, HardwareSet>): string[] {
   const unmatched: string[] = []
   for (const door of doors) {
+    if (door.by_others) continue
     if (door.hw_set && !setMap.has(door.hw_set) && !unmatched.includes(door.hw_set)) {
       unmatched.push(door.hw_set)
     }

@@ -68,6 +68,14 @@ export default function StepTriage({
   const [doors, setDoors] = useState<DoorEntry[]>([]);
   const [hardwareSets, setHardwareSets] = useState<HardwareSet[]>([]);
   const [deepExtracting, setDeepExtracting] = useState(false);
+  // Set IDs that Punchy tried to deep-extract but returned zero items
+  // for. Tracked so the PunchyReview empty_sets card can disable the
+  // batch "Extract with AI" button and tell the user to use the per-set
+  // resolution options (Add manually / Remove / Try with hint) instead
+  // of clicking the useless batch button repeatedly.
+  const [emptySetsAttempted, setEmptySetsAttempted] = useState<Set<string>>(
+    () => new Set()
+  );
   const [goldenSample, setGoldenSample] = useState<{
     set_id: string;
     heading: string;
@@ -354,11 +362,24 @@ export default function StepTriage({
         }>;
       }> = result.sets ?? [];
 
-      // Merge extracted items into existing hardware sets
-      if (extractedSets.length > 0) {
+      // Merge extracted items into existing hardware sets.
+      //
+      // Punchy may return entries with `items: []` for sets it couldn't
+      // find anything for (the DH-4 phantom-set case from 2026-04-11).
+      // Track those in `emptySetsAttempted` so the PunchyReview empty_sets
+      // card can disable the batch "Extract with AI" button and push the
+      // user toward the per-set resolution options.
+      const setsWithItems = extractedSets.filter(
+        (s) => (s.items?.length ?? 0) > 0
+      );
+      const setsReturnedEmpty = extractedSets.filter(
+        (s) => (s.items?.length ?? 0) === 0
+      );
+
+      if (setsWithItems.length > 0) {
         setHardwareSets((prev) => {
           const updated = [...prev];
-          for (const extracted of extractedSets) {
+          for (const extracted of setsWithItems) {
             const idx = updated.findIndex(
               (s) => s.set_id === extracted.set_id
             );
@@ -371,16 +392,32 @@ export default function StepTriage({
           }
           return updated;
         });
+      }
 
-        const totalNewItems = extractedSets.reduce(
-          (sum, s) => sum + (s.items?.length ?? 0),
-          0,
-        );
+      if (setsReturnedEmpty.length > 0) {
+        setEmptySetsAttempted((prev) => {
+          const next = new Set(prev);
+          for (const s of setsReturnedEmpty) next.add(s.set_id);
+          return next;
+        });
+      }
+
+      const totalNewItems = setsWithItems.reduce(
+        (sum, s) => sum + (s.items?.length ?? 0),
+        0
+      );
+      if (setsWithItems.length > 0 && setsReturnedEmpty.length === 0) {
         setStatus(
-          `Deep extract found ${totalNewItems} item${totalNewItems !== 1 ? "s" : ""} across ${extractedSets.length} set${extractedSets.length !== 1 ? "s" : ""}.`
+          `Deep extract found ${totalNewItems} item${totalNewItems !== 1 ? "s" : ""} across ${setsWithItems.length} set${setsWithItems.length !== 1 ? "s" : ""}.`
+        );
+      } else if (setsWithItems.length > 0 && setsReturnedEmpty.length > 0) {
+        setStatus(
+          `Deep extract found ${totalNewItems} item${totalNewItems !== 1 ? "s" : ""} for ${setsWithItems.length} set${setsWithItems.length !== 1 ? "s" : ""}. ${setsReturnedEmpty.length} set${setsReturnedEmpty.length !== 1 ? "s" : ""} returned no items — use the per-set options to resolve.`
         );
       } else {
-        setStatus("Deep extract returned no items. You can still continue.");
+        setStatus(
+          `Punchy couldn't find items for ${setsReturnedEmpty.length || emptySets.length} set${(setsReturnedEmpty.length || emptySets.length) !== 1 ? "s" : ""}. Use the per-set options (Add manually / Remove / Try with hint) to resolve.`
+        );
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
@@ -409,6 +446,12 @@ export default function StepTriage({
     setDoors((prev) =>
       prev.map((d) => (d.hw_set === setId ? { ...d, hw_set: "" } : d))
     );
+    setEmptySetsAttempted((prev) => {
+      if (!prev.has(setId)) return prev;
+      const next = new Set(prev);
+      next.delete(setId);
+      return next;
+    });
     setStatus(`Removed set ${setId}.`);
   }, [doors]);
 
@@ -438,6 +481,12 @@ export default function StepTriage({
           : s
       )
     );
+    setEmptySetsAttempted((prev) => {
+      if (!prev.has(setId)) return prev;
+      const next = new Set(prev);
+      next.delete(setId);
+      return next;
+    });
     setStatus(`Marked ${setId} for manual entry.`);
   }, []);
 
@@ -619,6 +668,7 @@ export default function StepTriage({
           onRemoveSet={handleRemoveSet}
           onAddManualPlaceholder={handleAddManualPlaceholder}
           deepExtracting={deepExtracting}
+          emptySetsAttempted={emptySetsAttempted}
           onComplete={(updates) => {
             setHardwareSets(updates.hardwareSets);
             // Store triage questions for hints

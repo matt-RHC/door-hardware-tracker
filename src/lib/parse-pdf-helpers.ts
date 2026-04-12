@@ -673,6 +673,53 @@ export function normalizeQuantities(
   }
 }
 
+// --- Save-path validation helpers ---
+
+/**
+ * Build the set of all hardware-set IDs that a door's `hw_set` field may
+ * legitimately match against. Includes BOTH the specific `set_id` (e.g.,
+ * "DH4A.0") AND the `generic_set_id` (e.g., "DH4A") for every set, so
+ * that doors whose opening-list entry references the generic parent id
+ * still match when the set is stored under a specific sub-heading id.
+ *
+ * Used by the save-path validation in StepConfirm and in the
+ * `/api/parse-pdf/save` route. Previously the client-side validation
+ * only used `set.set_id`, which blocked the Save button for any project
+ * whose opening list references the parent id of a multi-heading set
+ * (the exact Radius DC DH4A case from 2026-04-11).
+ */
+export function buildDefinedSetIds(hardwareSets: HardwareSet[]): Set<string> {
+  const ids = new Set<string>()
+  for (const set of hardwareSets) {
+    if (set.set_id) ids.add(set.set_id)
+    if (set.generic_set_id && set.generic_set_id !== set.set_id) {
+      ids.add(set.generic_set_id)
+    }
+  }
+  return ids
+}
+
+/**
+ * Return the subset of doors whose `hw_set` references a hardware set
+ * that doesn't exist in `definedSetIds`. This is the save-blocking
+ * validation used by StepConfirm and the save route.
+ *
+ * Doors with `by_others === true` are EXCLUDED from this check — they
+ * are intentionally unassigned (hardware is provided by a different
+ * contractor) and their `hw_set` is typically "N/A" or similar sentinel
+ * text that will never match a real set. Including them in the
+ * unmatched list was the second half of the "Cannot save: 6 Door(s)
+ * reference hardware sets that don't exist" bug from 2026-04-11.
+ */
+export function findDoorsWithUnmatchedSets(
+  doors: DoorEntry[],
+  definedSetIds: Set<string>,
+): DoorEntry[] {
+  return doors.filter(
+    d => !d.by_others && d.hw_set && !definedSetIds.has(d.hw_set),
+  )
+}
+
 // --- Door number normalization + doorToSetMap ---
 
 /**

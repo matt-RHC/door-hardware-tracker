@@ -2,6 +2,10 @@
 
 import { useState } from "react";
 import type { DoorEntry, HardwareSet, TriageResult } from "./types";
+import {
+  buildDefinedSetIds,
+  findDoorsWithUnmatchedSets,
+} from "@/lib/parse-pdf-helpers";
 
 interface StepConfirmProps {
   projectId: string;
@@ -39,16 +43,31 @@ export default function StepConfirm({
   );
 
   // Warnings
+  //
+  // `definedSetIds` contains BOTH the specific `set_id` and the
+  // `generic_set_id` for every hardware set. Doors in the opening list
+  // often reference the generic parent id (e.g., "DH4A") while the
+  // extracted set is stored under a specific sub-heading id (e.g.,
+  // "DH4A.0" / "DH4A.1"). Without the generic fallback, the save button
+  // would be blocked for any multi-heading project — the exact Radius
+  // DC DH4A case from 2026-04-11.
+  //
+  // `findDoorsWithUnmatchedSets` also excludes `by_others` doors, which
+  // intentionally have no valid hw_set (hardware supplied by a
+  // different contractor) and must not count as "unmatched."
   const warnings: string[] = [];
-  const mappedSetIds = new Set(doors.map((d) => d.hw_set).filter(Boolean));
-  const definedSetIds = new Set(hardwareSets.map((s) => s.set_id));
+  const definedSetIds = buildDefinedSetIds(hardwareSets);
+  const nonByOthersDoors = doors.filter((d) => !d.by_others);
+  const mappedSetIds = new Set(
+    nonByOthersDoors.map((d) => d.hw_set).filter(Boolean)
+  );
   const unmatchedRefs = [...mappedSetIds].filter((id) => !definedSetIds.has(id));
   if (unmatchedRefs.length > 0) {
     warnings.push(
       `${unmatchedRefs.length} hardware set(s) referenced by doors but not defined: ${unmatchedRefs.join(", ")}`
     );
   }
-  const lowConfDoors = doors.filter(
+  const lowConfDoors = nonByOthersDoors.filter(
     (d) => !d.door_number || !d.hw_set
   );
   if (lowConfDoors.length > 0) {
@@ -58,9 +77,7 @@ export default function StepConfirm({
   }
 
   // Count doors that reference non-existent sets (blocks save unless overridden)
-  const doorsWithUnmatchedSets = doors.filter(
-    (d) => d.hw_set && !definedSetIds.has(d.hw_set)
-  );
+  const doorsWithUnmatchedSets = findDoorsWithUnmatchedSets(doors, definedSetIds);
   const saveBlocked =
     doorsWithUnmatchedSets.length > 0 && !overrideUnmatched;
 

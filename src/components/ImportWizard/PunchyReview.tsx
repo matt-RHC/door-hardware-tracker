@@ -49,6 +49,15 @@ interface PunchyReviewProps {
   /** Insert a manual-entry sentinel item so the user fills it in StepReview. */
   onAddManualPlaceholder: (setId: string) => void;
   deepExtracting: boolean;
+  /**
+   * Set of set_ids that the user has already run batch deep-extract on
+   * and Punchy returned zero items for. When every currently-empty set
+   * is in this set, the "Extract with AI" batch button is disabled and
+   * relabeled to push the user toward the per-set resolution options
+   * (Add manually / Remove / Try with hint). Prevents the user from
+   * clicking the batch button repeatedly with no feedback.
+   */
+  emptySetsAttempted: Set<string>;
   /** Called when user finishes all cards and is ready for triage. */
   onComplete: (updates: {
     hardwareSets: HardwareSet[];
@@ -73,6 +82,7 @@ export default function PunchyReview({
   onRemoveSet,
   onAddManualPlaceholder,
   deepExtracting,
+  emptySetsAttempted,
   onComplete,
   onBack,
 }: PunchyReviewProps) {
@@ -452,6 +462,7 @@ export default function PunchyReview({
     onDeepExtract,
     hintVisible,
     hintInputs,
+    emptySetsAttempted,
     handleRemoveEmptySet,
     handleMarkManualEntry,
     handleToggleHint,
@@ -500,6 +511,8 @@ interface RenderContext {
   // Empty-set per-row resolution
   hintVisible: Set<string>;
   hintInputs: Record<string, string>;
+  /** Set of empty set IDs that batch deep-extract already tried. */
+  emptySetsAttempted: Set<string>;
   handleRemoveEmptySet: (setId: string) => void;
   handleMarkManualEntry: (setId: string) => void;
   handleToggleHint: (setId: string) => void;
@@ -603,6 +616,24 @@ function renderCard(card: PunchCardData, ctx: RenderContext) {
     case "empty_sets": {
       const p = card.payload as { emptySets: Array<{ set_id: string; heading: string }>; totalSets: number };
       const busy = ctx.deepExtracting;
+      // If every currently-empty set has already been through batch
+      // deep-extract and Punchy returned zero items for all of them,
+      // disable the batch button and relabel it to push the user toward
+      // the per-set resolution options below. Without this, the user
+      // can click "Extract with AI" indefinitely with no feedback — the
+      // exact silent-no-op bug from 2026-04-11.
+      const pendingSetIds = p.emptySets.map((s) => s.set_id);
+      const untriedCount = pendingSetIds.filter(
+        (id) => !ctx.emptySetsAttempted.has(id)
+      ).length;
+      const allAttempted = untriedCount === 0;
+      const batchLabel = busy
+        ? "Extracting..."
+        : allAttempted
+          ? "Punchy couldn't find items — use options below"
+          : untriedCount < p.emptySets.length
+            ? `Extract with AI (${untriedCount} untried set${untriedCount !== 1 ? "s" : ""})`
+            : `Extract with AI (${p.emptySets.length} set${p.emptySets.length !== 1 ? "s" : ""})`;
       return (
         <PunchCard
           type="empty_sets"
@@ -610,10 +641,22 @@ function renderCard(card: PunchCardData, ctx: RenderContext) {
           current={current}
           total={total}
           primaryAction={{
-            label: busy ? "Extracting..." : `Extract with AI (${p.emptySets.length} set${p.emptySets.length !== 1 ? "s" : ""})`,
+            label: batchLabel,
             // Wrap in arrow fn so the React MouseEvent isn't passed as `opts`.
-            onClick: () => ctx.onDeepExtract(),
-            disabled: busy,
+            // When some sets are untried, target only those to avoid
+            // re-asking Punchy about sets it already said it couldn't find.
+            onClick: () => {
+              if (allAttempted) return;
+              const targets = pendingSetIds.filter(
+                (id) => !ctx.emptySetsAttempted.has(id)
+              );
+              ctx.onDeepExtract(
+                targets.length > 0 && targets.length < pendingSetIds.length
+                  ? { targetSetIds: targets }
+                  : undefined
+              );
+            },
+            disabled: busy || allAttempted,
           }}
           onSkip={ctx.goNext}
         >
@@ -621,11 +664,17 @@ function renderCard(card: PunchCardData, ctx: RenderContext) {
             <p className="text-secondary text-sm">
               These sets were found in the PDF but the table reader couldn&apos;t parse their items. Use AI extraction, mark a set for manual entry, or remove it if it&apos;s a phantom.
             </p>
+            {allAttempted && (
+              <div className="rounded-lg border border-warning bg-warning-dim p-3 text-xs text-warning">
+                Punchy tried and couldn&apos;t find items for {p.emptySets.length === 1 ? "this set" : `all ${p.emptySets.length} sets`}. Pick one of the per-set options below (<span className="font-semibold">Add manually</span>, <span className="font-semibold">Remove</span>, or <span className="font-semibold">Try with hint</span>).
+              </div>
+            )}
             <ul className="space-y-2">
               {p.emptySets.map((s) => {
                 const showHint = ctx.hintVisible.has(s.set_id);
                 const hintValue = ctx.hintInputs[s.set_id] ?? "";
                 const submitDisabled = busy || hintValue.trim().length === 0;
+                const wasTried = ctx.emptySetsAttempted.has(s.set_id);
                 return (
                   <li
                     key={s.set_id}
@@ -635,6 +684,14 @@ function renderCard(card: PunchCardData, ctx: RenderContext) {
                       <span className="font-mono text-xs px-2 py-0.5 rounded bg-danger-dim text-danger border border-danger">
                         {s.set_id}
                       </span>
+                      {wasTried && (
+                        <span
+                          className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-warning-dim text-warning border border-warning uppercase tracking-wide"
+                          title="Punchy already tried to extract items for this set and returned nothing"
+                        >
+                          tried
+                        </span>
+                      )}
                       {s.heading.length > 0 && (
                         <span className="text-secondary text-xs truncate flex-1 min-w-0">
                           {s.heading}
