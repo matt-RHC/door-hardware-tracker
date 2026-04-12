@@ -525,13 +525,56 @@ def _heal_broken_words(text: str) -> str:
     return " ".join(result)
 
 
+def _join_split_rows(items: list[HardwareItem]) -> list[HardwareItem]:
+    """Join rows that pdfplumber split across column boundaries.
+
+    Detects fragments like {"name": "Others)", "model": "CONTRACTOR"} that
+    should be part of "Hardware by Others (Contractor)" on the previous row.
+
+    Heuristic: if an item's name is < 4 chars, ends with unmatched ')',
+    starts with lowercase, or is pure punctuation — merge it into the
+    previous item's model/finish fields.
+    """
+    if len(items) < 2:
+        return items
+    merged: list[HardwareItem] = []
+    for item in items:
+        name = item.name.strip()
+        is_fragment = (
+            (len(name) < 4 and not re.match(r"^[A-Z]{1,3}$", name))
+            or re.match(r"^[)\]\s]+$", name)
+            or (len(name) > 0 and name[0].islower())
+            or name.endswith(")")
+        )
+        if is_fragment and merged:
+            prev = merged[-1]
+            # Join into previous item's model field
+            join_text = f"{name} {item.model}".strip() if item.model else name
+            new_model = f"{prev.model} {join_text}".strip() if prev.model else join_text
+            merged[-1] = HardwareItem(
+                qty=prev.qty,
+                qty_total=prev.qty_total,
+                qty_door_count=prev.qty_door_count,
+                qty_source=prev.qty_source,
+                name=prev.name,
+                manufacturer=prev.manufacturer,
+                model=new_model,
+                finish=prev.finish if prev.finish else item.finish,
+            )
+            logger.debug("[join_split_rows] Merged fragment %r into prev item %r", name, prev.name)
+        else:
+            merged.append(item)
+    return merged
+
+
 def apply_field_splitting(
     hardware_sets: list[HardwareSetDef],
     reference_codes: list[ReferenceCode],
 ) -> None:
     """
     Post-processing pass: filter garbage items, reassemble truncated fields,
-    split concatenated fields, and re-deduplicate. Mutates hardware_sets in place.
+    split concatenated fields, join split rows, and re-deduplicate.
+    Mutates hardware_sets in place.
     Called after hardware sets AND reference codes are both extracted.
     """
     for hw_set in hardware_sets:
@@ -554,6 +597,8 @@ def apply_field_splitting(
                 )
             item = split_concatenated_hw_fields(item, reference_codes)
             new_items.append(item)
+        # Join rows that pdfplumber split across column boundaries
+        new_items = _join_split_rows(new_items)
         # Second filter pass: reassembly can produce longer garbage strings
         # from short fragments that survived the first filter
         new_items = filter_non_hardware_items(new_items)
@@ -1804,8 +1849,18 @@ def extract_heading_door_numbers(section_text: str) -> list[str]:
     """
     doors: list[str] = []
     seen: set[str] = set()
+    # Primary: use HEADING_DOOR_WITH_NUMBER which captures qty + type + first door
     for m in HEADING_DOOR_WITH_NUMBER.finditer(section_text):
         door_num = m.group(3).strip().rstrip(",;:").upper()
+        if door_num and door_num not in seen and is_valid_door_number(door_num):
+            seen.add(door_num)
+            doors.append(door_num)
+    # Secondary: scan for all #<door_number> patterns in the text.
+    # This catches cases where multiple doors are listed on one line
+    # (e.g., "5 Single Doors #1603, #1708, #1803, #2101, #2103")
+    # that the primary regex only captures the first of.
+    for m in re.finditer(r"#\s*(\S+)", section_text):
+        door_num = m.group(1).strip().rstrip(",;:").upper()
         if door_num and door_num not in seen and is_valid_door_number(door_num):
             seen.add(door_num)
             doors.append(door_num)
@@ -2308,10 +2363,10 @@ def extract_hardware_sets_from_page(page, page_text: str, heading_format: str = 
             "horizontal_strategy": "text",
             "intersection_tolerance": 5,
             "snap_tolerance": 5,
-            "join_tolerance": 5,
+            "join_tolerance": 8,
             "min_words_vertical": 2,
             "min_words_horizontal": 1,
-            "text_x_tolerance": 3,
+            "text_x_tolerance": 5,
             "text_y_tolerance": 3,
         }
     )
@@ -2572,6 +2627,39 @@ def extract_all_hardware_sets(pdf: pdfplumber.PDF) -> list[HardwareSetDef]:
                 # First occurrence of this specific set_id (preserve suffix)
                 seen_set_ids[hw_set.set_id] = len(all_sets)
                 all_sets.append(hw_set)
+
+    # D1: Drop phantom sets — no heading text, no doors, no items.
+    # pdfplumber occasionally picks up set IDs from TOC/reference tables
+    # and creates empty entries that confuse downstream extraction.
+    phantoms = [
+        s for s in all_sets
+        if not s.heading.strip()
+        and s.heading_door_count == 0
+        and len(s.heading_doors) == 0
+        and len(s.items) == 0
+    ]
+    for p in phantoms:
+        logger.warning(
+            "Dropping phantom set '%s' — no heading, no doors, no items",
+            p.set_id,
+        )
+    if phantoms:
+        phantom_ids = {id(p) for p in phantoms}
+        all_sets = [s for s in all_sets if id(s) not in phantom_ids]
+
+    # D2: Reconcile heading_door_count vs heading_doors when they disagree.
+    # count_heading_doors() and extract_heading_door_numbers() use different
+    # regexes and can get out of sync. Use the larger value as truth.
+    for s in all_sets:
+        actual_doors = len(s.heading_doors)
+        if actual_doors > 0 and s.heading_door_count != actual_doors:
+            logger.warning(
+                "Set '%s': heading_door_count=%d disagrees with len(heading_doors)=%d — using max",
+                s.set_id,
+                s.heading_door_count,
+                actual_doors,
+            )
+            s.heading_door_count = max(s.heading_door_count, actual_doors)
 
     return all_sets
 
