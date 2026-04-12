@@ -9,6 +9,7 @@ import type {
   DoorEntry,
 } from "./types";
 import { arrayBufferToBase64 } from "@/lib/pdf-utils";
+import WizardNav from "./WizardNav";
 
 // Fields available for mapping
 const MAPPABLE_FIELDS: { value: keyof DoorEntry | ""; label: string }[] = [
@@ -176,11 +177,14 @@ export default function StepMapColumns({
   };
 
   return (
-    <div className="max-w-2xl mx-auto">
-      <h3 className="text-primary font-semibold mb-2">
-        Step 2: Map Columns
+    <div className="max-w-4xl mx-auto">
+      <h3
+        className="text-[11px] font-semibold uppercase text-secondary tracking-wider"
+        style={{ fontFamily: "var(--font-display)" }}
+      >
+        Map Columns
       </h3>
-      <p className="text-secondary text-sm mb-4">
+      <p className="text-sm text-tertiary mt-1 mb-4">
         We detected the column headers from your door schedule. Review the
         mappings below and adjust any that look incorrect.
       </p>
@@ -254,22 +258,12 @@ export default function StepMapColumns({
       )}
 
       {/* Navigation */}
-      <div className="flex justify-between mt-6">
-        <button
-          onClick={onBack}
-          disabled={loading}
-          className="px-4 py-2 bg-tint border border-border-dim-strong hover:bg-tint-strong disabled:opacity-50 text-secondary rounded-lg transition-colors"
-        >
-          Back
-        </button>
-        <button
-          onClick={handleNext}
-          disabled={loading || mappings.length === 0}
-          className="px-6 py-2 bg-accent hover:bg-accent/80 text-white rounded-lg transition-colors font-semibold disabled:opacity-50"
-        >
-          Next
-        </button>
-      </div>
+      <WizardNav
+        onBack={onBack}
+        onNext={handleNext}
+        nextLabel="Next"
+        nextDisabled={loading || mappings.length === 0}
+      />
     </div>
   );
 }

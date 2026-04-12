@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import type { DoorEntry, HardwareSet, TriageResult } from "./types";
+import WizardNav from "./WizardNav";
 import {
   buildDefinedSetIds,
   findDoorsWithUnmatchedSets,
@@ -230,11 +231,14 @@ export default function StepConfirm({
 
   // ─── Confirm state ───
   return (
-    <div className="max-w-lg mx-auto">
-      <h3 className="text-primary font-semibold mb-2">
-        Step 5: Confirm &amp; Save
+    <div className="max-w-2xl mx-auto">
+      <h3
+        className="text-[11px] font-semibold uppercase text-secondary tracking-wider"
+        style={{ fontFamily: "var(--font-display)" }}
+      >
+        Confirm &amp; Save
       </h3>
-      <p className="text-secondary text-sm mb-4">
+      <p className="text-sm text-tertiary mt-1 mb-4">
         Review the summary below and save to your project.
       </p>
 
@@ -307,22 +311,13 @@ export default function StepConfirm({
       )}
 
       {/* Navigation */}
-      <div className="flex justify-between mt-6">
-        <button
-          onClick={onBack}
-          disabled={loading}
-          className="px-4 py-2 bg-tint border border-border-dim-strong hover:bg-tint-strong disabled:opacity-50 text-secondary rounded-lg transition-colors"
-        >
-          Back
-        </button>
-        <button
-          onClick={handleSave}
-          disabled={loading || saveBlocked}
-          className="px-6 py-2 bg-success hover:bg-success/80 text-white rounded-lg transition-colors font-semibold disabled:opacity-50"
-        >
-          {loading ? "Saving..." : "Save"}
-        </button>
-      </div>
+      <WizardNav
+        onBack={onBack}
+        onNext={handleSave}
+        nextLabel={loading ? "Saving..." : "Save"}
+        nextDisabled={loading || saveBlocked}
+        nextVariant="success"
+      />
     </div>
   );
 }

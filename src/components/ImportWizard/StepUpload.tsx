@@ -3,6 +3,7 @@
 import { useState, useRef, useCallback, type ChangeEvent, type DragEvent } from "react";
 import type { ClassifyPagesResponse } from "./types";
 import { arrayBufferToBase64 } from "@/lib/pdf-utils";
+import WizardNav from "./WizardNav";
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50 MB
 
@@ -196,11 +197,14 @@ export default function StepUpload({
   };
 
   return (
-    <div className="max-w-lg mx-auto">
-      <h3 className="text-primary font-semibold mb-2">
-        Step 1: Upload PDF
+    <div className="max-w-2xl mx-auto">
+      <h3
+        className="text-[11px] font-semibold uppercase text-secondary tracking-wider"
+        style={{ fontFamily: "var(--font-display)" }}
+      >
+        Upload PDF
       </h3>
-      <p className="text-secondary text-sm mb-4">
+      <p className="text-sm text-tertiary mt-1 mb-4">
         Select a door hardware submittal PDF. We&apos;ll classify each page to
         find door schedules and hardware sets.
       </p>
@@ -267,16 +271,12 @@ export default function StepUpload({
         </div>
       )}
 
-      {/* Next button */}
-      <div className="flex justify-end mt-6">
-        <button
-          onClick={handleClassify}
-          disabled={!file || loading}
-          className="px-6 py-2 bg-accent hover:bg-accent/80 text-white rounded-lg transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {loading ? "Processing..." : "Next"}
-        </button>
-      </div>
+      {/* Navigation */}
+      <WizardNav
+        onNext={handleClassify}
+        nextLabel={loading ? "Processing..." : "Next"}
+        nextDisabled={!file || loading}
+      />
     </div>
   );
 }

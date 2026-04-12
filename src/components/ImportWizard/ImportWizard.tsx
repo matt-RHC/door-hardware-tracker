@@ -273,6 +273,12 @@ export default function ImportWizard({
     []
   );
 
+  // Stable onError callback — prevents infinite re-render loops in StepCompare/StepTriage
+  const onError = useCallback(
+    (err: string) => patch({ error: err }),
+    [patch]
+  );
+
   const goToStep = useCallback(
     (step: WizardStep) => patch({ currentStep: step, error: null }),
     [patch]
@@ -344,12 +350,13 @@ export default function ImportWizard({
   // ─── Step 5 complete: products reviewed → Compare (revision) or Confirm (fresh) ───
   const onProductsComplete = useCallback(
     (hardwareSets: HardwareSet[]) => {
-      patch({
+      setState((prev) => ({
+        ...prev,
         hardwareSets,
-        currentStep: state.hasExistingData ? WizardStep.Compare : WizardStep.Confirm,
-      });
+        currentStep: prev.hasExistingData ? WizardStep.Compare : WizardStep.Confirm,
+      }));
     },
-    [patch, state.hasExistingData]
+    [],
   );
 
   // ─── Step 5 complete: saved ───
@@ -402,7 +409,7 @@ export default function ImportWizard({
               <StepUpload
                 projectId={projectId}
                 onComplete={onUploadComplete}
-                onError={(err) => patch({ error: err })}
+                onError={onError}
               />
             )}
 
@@ -420,7 +427,7 @@ export default function ImportWizard({
                 classifyResult={state.classifyResult!}
                 onComplete={onMapColumnsComplete}
                 onBack={() => goToStep(WizardStep.ScanResults)}
-                onError={(err) => patch({ error: err })}
+                onError={onError}
               />
             )}
 
@@ -435,7 +442,7 @@ export default function ImportWizard({
                 onComplete={onTriageComplete}
                 onQuestionsGenerated={handleQuestionsGenerated}
                 onBack={() => goToStep(WizardStep.MapColumns)}
-                onError={(err) => patch({ error: err })}
+                onError={onError}
               />
             )}
 
@@ -468,7 +475,7 @@ export default function ImportWizard({
                 hardwareSets={state.hardwareSets}
                 onComplete={onConfirmComplete}
                 onBack={() => goToStep(WizardStep.Products)}
-                onError={(err) => patch({ error: err })}
+                onError={onError}
               />
             )}
 
@@ -480,7 +487,7 @@ export default function ImportWizard({
                 triageResult={state.triageResult}
                 onComplete={onConfirmComplete}
                 onBack={() => goToStep(state.hasExistingData ? WizardStep.Compare : WizardStep.Products)}
-                onError={(err) => patch({ error: err })}
+                onError={onError}
               />
             )}
           </div>

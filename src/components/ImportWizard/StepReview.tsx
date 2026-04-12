@@ -8,6 +8,7 @@ import PDFRegionSelector from "./PDFRegionSelector";
 import { findPageForSet } from "@/lib/punch-cards";
 import { buildDoorToSetMap, normalizeDoorNumber, detectIsPair, classifyItemScope } from "@/lib/parse-pdf-helpers";
 import { groupItemsByLeaf, getLeafDisplayQty } from "@/lib/classify-leaf-items";
+import WizardNav from "./WizardNav";
 
 // ─── Confidence scoring ───
 
@@ -750,30 +751,12 @@ export default function StepReview({
       </div>
 
       {/* ── Navigation ── */}
-      <div className="flex justify-between mt-4 pt-4 border-t border-border-dim-strong">
-        <div className="flex items-center gap-2">
-          <button
-            onClick={onBack}
-            className="px-4 py-2 bg-tint border border-border-dim-strong hover:bg-tint-strong text-secondary rounded-lg transition-colors"
-          >
-            Back
-          </button>
-          {onRemapColumns && (
-            <button
-              onClick={onRemapColumns}
-              className="px-3 py-2 bg-warning-dim border border-warning hover:bg-warning-dim text-warning rounded-lg transition-colors text-sm"
-            >
-              Remap Columns
-            </button>
-          )}
-        </div>
-        <button
-          onClick={() => onComplete(doors, hardwareSets)}
-          className="px-6 py-2 bg-accent hover:bg-accent/80 text-white rounded-lg transition-colors font-semibold"
-        >
-          Next
-        </button>
-      </div>
+      <WizardNav
+        onBack={onBack}
+        onNext={() => onComplete(doors, hardwareSets)}
+        nextLabel="Next"
+        secondaryAction={onRemapColumns ? { label: "Remap Columns", onClick: onRemapColumns, variant: "warning" } : undefined}
+      />
 
       {/* ── Region extract modal ── */}
       {regionExtractSetId != null && regionExtractPageIdx != null && pdfBuffer && (

@@ -112,14 +112,20 @@ export default function PunchyReview({
     [doors, hardwareSets, qtyCheck, pages],
   );
 
-  // Defensive: when cards shrink (e.g., the empty_sets card disappears after
-  // the user resolves all empty sets), keep currentIdx in range so we don't
-  // render undefined or fall off the end of the wizard.
+  // Stable identity key for the cards array — detects when card composition
+  // changes even if the length stays the same.
+  const cardsKey = useMemo(
+    () => cards.map(c => c.kind).join(','),
+    [cards],
+  );
+
+  // Defensive: when cards shrink or change composition, keep currentIdx in
+  // range so we don't render undefined or fall off the end of the wizard.
   useEffect(() => {
     if (currentIdx > cards.length - 1) {
       setCurrentIdx(Math.max(0, cards.length - 1));
     }
-  }, [cards.length, currentIdx]);
+  }, [cardsKey, currentIdx, cards.length]);
 
   const health = useMemo(
     () => computeExtractionHealth(doors, hardwareSets),
@@ -182,18 +188,18 @@ export default function PunchyReview({
     (questionId: string, answer: string, setId?: string, itemName?: string) => {
       setAnswers(prev => ({ ...prev, [questionId]: answer }));
 
-      // Propagate quantity decisions
+      // Propagate quantity decisions using functional setState to avoid stale closure
       if (setId && itemName) {
         const decision = buildDecisionFromAnswer(setId, itemName, answer);
         if (decision) {
-          const result = propagateQuantityDecision(decision, hardwareSets);
-          if (result.appliedCount > 0) {
-            setHardwareSets(result.updatedSets);
-          }
+          setHardwareSets(prev => {
+            const result = propagateQuantityDecision(decision, prev);
+            return result.appliedCount > 0 ? result.updatedSets : prev;
+          });
         }
       }
     },
-    [hardwareSets],
+    [],
   );
 
   const handleConfirmSample = useCallback(() => {

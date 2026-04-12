@@ -90,6 +90,11 @@ export default function StepTriage({
   answersRef.current = questionAnswers;
   const generatedQuestionsRef = useRef<PunchQuestion[]>([]);
 
+  // Ref for current hardwareSets — used by handleDeepExtract to read current
+  // state without capturing a stale closure value in the useCallback deps.
+  const hardwareSetsRef = useRef(hardwareSets);
+  hardwareSetsRef.current = hardwareSets;
+
   // ─── Phase 1: Run extraction on mount ───
   const runExtraction = useCallback(async () => {
     setPhase("extracting");
@@ -263,9 +268,8 @@ export default function StepTriage({
   const handleDeepExtract = useCallback(async (
     opts?: { userHint?: string; targetSetIds?: string[] }
   ) => {
-    // Use PunchyReview's internal hardwareSets if available (passed via the component),
-    // but fall back to StepTriage's state. PunchyReview maintains its own copy.
-    const setsToCheck = hardwareSets;
+    // Read current hardwareSets from ref to avoid stale closure
+    const setsToCheck = hardwareSetsRef.current;
     const targetIds = opts?.targetSetIds ?? [];
     const emptySets = setsToCheck
       .filter((s) => (s.items?.length ?? 0) === 0)
@@ -426,7 +430,7 @@ export default function StepTriage({
     } finally {
       setDeepExtracting(false);
     }
-  }, [hardwareSets, file, pdfStoragePath, projectId, classifyResult, goldenSample]);
+  }, [file, pdfStoragePath, projectId, classifyResult, goldenSample]);
 
   // ─── Empty-set resolution: phantom-set removal ───
   // Removes a hardware set entirely and clears `hw_set` on every door that
@@ -604,8 +608,12 @@ export default function StepTriage({
     }
   }, [doors, file, pdfStoragePath, projectId, classifyResult, onError]);
 
-  // Start extraction on mount
+  // Start extraction on mount — hasRun guard prevents duplicate API calls
+  // if runExtraction identity changes (e.g. from React StrictMode or dep shifts)
+  const extractionStarted = useRef(false);
   useEffect(() => {
+    if (extractionStarted.current) return;
+    extractionStarted.current = true;
     runExtraction();
   }, [runExtraction]);
 

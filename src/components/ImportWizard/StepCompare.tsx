@@ -2,6 +2,7 @@
 
 import { useState, useCallback, useEffect } from "react";
 import type { DoorEntry, HardwareSet } from "./types";
+import WizardNav from "./WizardNav";
 
 // ─── Types ───
 
@@ -420,32 +421,21 @@ export default function StepCompare({
       </div>
 
       {/* Footer buttons */}
-      <div className="flex justify-between mt-4 pt-4 border-t border-border-dim-strong">
-        {subStep === 5 ? (
-          <div className="w-full flex justify-end">
-            <button onClick={onComplete} className="px-6 py-2 bg-success hover:bg-success/80 text-white rounded-lg transition-colors font-semibold">
-              Done
-            </button>
-          </div>
-        ) : (
-          <>
-            <button
-              onClick={subStep <= 1 ? onBack : handleSubBack}
-              disabled={loading}
-              className="px-4 py-2 bg-tint border border-border-dim-strong hover:bg-tint-strong disabled:opacity-50 text-secondary rounded-lg transition-colors"
-            >
-              Back
-            </button>
-            <button
-              onClick={subStep === 4 ? applyRevision : handleSubNext}
-              disabled={loading || subStep === 0}
-              className={`px-6 py-2 rounded-lg transition-colors font-semibold disabled:opacity-50 ${subStep === 4 ? "bg-success hover:bg-success/80 text-white" : "bg-accent hover:bg-accent/80 text-white"}`}
-            >
-              {loading ? "Processing..." : subStep === 4 ? "Apply Changes" : "Next"}
-            </button>
-          </>
-        )}
-      </div>
+      {subStep === 5 ? (
+        <WizardNav
+          onNext={onComplete}
+          nextLabel="Done"
+          nextVariant="success"
+        />
+      ) : (
+        <WizardNav
+          onBack={subStep <= 1 ? onBack : handleSubBack}
+          onNext={subStep === 4 ? applyRevision : handleSubNext}
+          nextLabel={loading ? "Processing..." : subStep === 4 ? "Apply Changes" : "Next"}
+          nextDisabled={loading || subStep === 0}
+          nextVariant={subStep === 4 ? "success" : "accent"}
+        />
+      )}
     </div>
   );
 }
