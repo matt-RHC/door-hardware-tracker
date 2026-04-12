@@ -216,7 +216,7 @@ export default function StepUpload({
             ? "border-accent bg-accent-dim"
             : file
             ? "border-success/30 bg-success-dim"
-            : "border-white/[0.12] hover:border-white/[0.2] bg-tint"
+            : "border-border-dim hover:border-th-border-hover bg-tint"
         }`}
       >
         <input

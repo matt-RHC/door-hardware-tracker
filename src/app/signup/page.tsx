@@ -50,7 +50,7 @@ export default function SignupPage() {
     return (
       <div className="min-h-screen w-full bg-background flex items-center justify-center px-4 py-12">
         <div className="w-full max-w-md">
-          <div className="bg-white/[0.04] border border-white/[0.08] rounded-xl shadow-xl p-6 md:p-8 text-center">
+          <div className="bg-tint border border-border-dim rounded-xl shadow-xl p-6 md:p-8 text-center">
             <div className="mb-4 text-success text-4xl">✓</div>
             <h2 className="text-2xl font-bold text-primary mb-2">
               Check your email

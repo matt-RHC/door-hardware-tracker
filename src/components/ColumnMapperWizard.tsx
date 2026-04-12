@@ -218,7 +218,7 @@ function Step1IdentifyTable({
       </div>
 
       {/* What happens next */}
-      <div className="p-3 rounded-lg bg-[var(--cyan-dim)] border border-[var(--cyan-dim)]">
+      <div className="p-3 rounded-lg bg-accent-dim border border-accent-dim">
         <p className="text-xs text-info">
           <strong>Next step:</strong> After you confirm, you&apos;ll be able to tell us which column is
           which (Door Number, Fire Rating, etc.) so we parse everything correctly.
@@ -227,7 +227,7 @@ function Step1IdentifyTable({
 
       {/* Low confidence warning */}
       {data.low_confidence && (
-        <div className="p-4 rounded-lg bg-[var(--orange-dim)] border border-[var(--orange-dim)]">
+        <div className="p-4 rounded-lg bg-warning-dim border border-warning-dim">
           <p className="text-warning font-semibold text-sm mb-1">
             Low Confidence Detection
           </p>
@@ -240,7 +240,7 @@ function Step1IdentifyTable({
 
       {/* Sample table - dark theme, scrollable */}
       <div
-        className="rounded-lg border border-[var(--tint-strong)] overflow-hidden flex flex-col"
+        className="rounded-lg border border-border-dim-strong overflow-hidden flex flex-col"
         style={{ maxHeight: "420px", backgroundColor: "var(--background)" }}
       >
         <div className="overflow-auto flex-1">
@@ -274,7 +274,7 @@ function Step1IdentifyTable({
                   style={{
                     backgroundColor: rowIdx % 2 === 0
                       ? "var(--tint)"
-                      : "rgba(0,0,0,0.15)",
+                      : "var(--tint-strong)",
                     borderBottom: "1px solid var(--tint)",
                   }}
                 >
@@ -383,7 +383,7 @@ function Step2MapColumns({
           Only <span className="text-danger font-medium">Door Number</span> is required.
           Map as many other fields as your PDF has.
         </p>
-        <div className="mt-3 p-3 rounded-lg bg-[var(--cyan-dim)] border border-[var(--cyan-dim)]">
+        <div className="mt-3 p-3 rounded-lg bg-accent-dim border border-accent-dim">
           <p className="text-xs text-info leading-relaxed">
             <strong>1.</strong> Click a field on the left to select it.{" "}
             <strong>2.</strong> Click the matching column on the right to assign it.
@@ -585,13 +585,13 @@ function Step2MapColumns({
 
       {/* Status message */}
       {activeField ? (
-        <div className="p-3 rounded-lg bg-[var(--cyan-dim)] border border-[var(--cyan-dim)]">
+        <div className="p-3 rounded-lg bg-accent-dim border border-accent-dim">
           <p className="text-sm text-info">
             Assigning <strong>{fieldLabels[activeField]}</strong> — click a column on the right to assign it
           </p>
         </div>
       ) : (
-        <div className="p-3 rounded-lg bg-[var(--tint)] border border-[var(--tint-strong)]">
+        <div className="p-3 rounded-lg bg-tint border border-border-dim-strong">
           <p className="text-sm text-tertiary">
             Select a field on the left to begin mapping
           </p>
@@ -608,7 +608,7 @@ function Step2MapColumns({
       )}
 
       {/* Actions */}
-      <div className="flex items-center justify-between pt-4 gap-4 border-t border-[var(--border-dim)] pt-6">
+      <div className="flex items-center justify-between pt-4 gap-4 border-t border-border-dim pt-6">
         <div className="flex gap-2">
           <button onClick={onReset} className="glow-btn glow-btn--ghost text-xs">
             Reset Mappings
@@ -671,7 +671,7 @@ function Step3Confirm({
 
       {/* Summary table showing all assignments */}
       <div
-        className="rounded-lg border border-[var(--tint-strong)] p-6"
+        className="rounded-lg border border-border-dim-strong p-6"
         style={{ backgroundColor: "var(--background)" }}
       >
         <div className="mb-4">
@@ -720,7 +720,7 @@ function Step3Confirm({
       {/* Sample data preview table */}
       {data.sample_rows.length > 0 && (
         <div
-          className="rounded-lg border border-[var(--tint-strong)] p-4"
+          className="rounded-lg border border-border-dim-strong p-4"
           style={{ backgroundColor: "var(--background)" }}
         >
           <div className="text-xs uppercase tracking-widest text-tertiary font-semibold mb-3">
@@ -752,8 +752,8 @@ function Step3Confirm({
                 {data.sample_rows.map((row, rowIdx) => (
                   <tr
                     key={rowIdx}
-                    className={`border-b border-[var(--tint)] ${
-                      rowIdx % 2 === 0 ? "bg-[var(--tint)]" : ""
+                    className={`border-b border-border-dim ${
+                      rowIdx % 2 === 0 ? "bg-tint" : ""
                     }`}
                   >
                     {Object.entries(mapping).map(([field, colIdx]) => (
@@ -771,7 +771,7 @@ function Step3Confirm({
       )}
 
       {/* Actions */}
-      <div className="flex items-center justify-between pt-4 gap-4 border-t border-[var(--border-dim)] pt-6">
+      <div className="flex items-center justify-between pt-4 gap-4 border-t border-border-dim pt-6">
         <button onClick={onBack} className="glow-btn glow-btn--ghost">
           Back
         </button>

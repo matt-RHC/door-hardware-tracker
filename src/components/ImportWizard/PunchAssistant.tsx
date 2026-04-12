@@ -104,7 +104,7 @@ function QuestionCard({ question, onAnswer, onDismiss }: QuestionCardProps) {
         <button
           type="button"
           onClick={() => onDismiss(question.id)}
-          className="px-2.5 py-1 rounded-md border border-[var(--border-dim-strong)] text-tertiary text-xs hover:bg-tint-strong transition-colors"
+          className="px-2.5 py-1 rounded-md border border-border-dim-strong text-tertiary text-xs hover:bg-tint-strong transition-colors"
         >
           Skip
         </button>
