@@ -518,9 +518,9 @@ export default function StepReview({
                   const dq = getLeafDisplayQty(item, lc, scope);
                   const isCorrected = item.qty_source === 'auto_corrected' && item.qty_before_correction != null;
                   return (
-                    <div key={`${item.id}-l${leafIdx}`} className={`flex items-center gap-3 py-1 text-[12px] ${isCorrected ? 'bg-[var(--cyan-dim)] rounded px-1 -mx-1' : ''}`}>
+                    <div key={`${item.id}-l${leafIdx}`} className={`flex items-center gap-3 py-1 text-[12px] ${isCorrected ? 'bg-accent-dim rounded px-1 -mx-1' : ''}`}>
                       <span className="text-primary font-medium truncate">{item.name}</span>
-                      <span className={`text-[11px] shrink-0 ${isCorrected ? 'text-[var(--cyan)] font-bold' : 'text-accent'}`}>
+                      <span className={`text-[11px] shrink-0 ${isCorrected ? 'text-info font-bold' : 'text-accent'}`}>
                         qty {dq}
                         {isCorrected && (
                           <span className="text-tertiary font-normal ml-1">(was {item.qty_before_correction})</span>
@@ -529,7 +529,7 @@ export default function StepReview({
                       {isCorrected && (
                         <button
                           onClick={() => handleRevert(item._setId, item._itemIdx, item.qty_before_correction!)}
-                          className="text-[10px] text-[var(--orange)] hover:text-[var(--red)] shrink-0 underline"
+                          className="text-[10px] text-warning hover:text-danger shrink-0 underline"
                         >
                           revert
                         </button>
@@ -549,7 +549,7 @@ export default function StepReview({
                       {(() => {
                         const correctedCount = items.filter(i => i.qty_source === 'auto_corrected' && i.qty_before_correction != null).length;
                         return correctedCount > 0 ? (
-                          <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-[var(--cyan-dim)] text-[var(--cyan)] border border-[var(--cyan)]">
+                          <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-accent-dim text-info border border-info">
                             {correctedCount} corrected
                           </span>
                         ) : null;
