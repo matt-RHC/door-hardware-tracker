@@ -71,7 +71,7 @@ function variantClasses(variant: PunchCardAction["variant"]): string {
     case "danger":
       return "bg-danger hover:bg-danger/80 text-white";
     case "ghost":
-      return "bg-tint border border-border-dim hover:bg-tint-strong text-secondary";
+      return "bg-tint-strong border border-border-dim-strong hover:bg-surface-hover text-primary";
     case "secondary":
       return "bg-tint-strong border border-border-dim-strong hover:bg-surface-hover text-primary";
     case "primary":
@@ -100,7 +100,7 @@ export default function PunchCard({
       <div className="flex items-center gap-3 mb-4">
         <PunchAvatar size="sm" state={avatarStateForType(type)} />
         <h4 className="text-primary font-semibold text-sm flex-1">{title}</h4>
-        <span className="text-[10px] text-tertiary font-mono">
+        <span className="text-[10px] text-secondary font-mono">
           {current}/{total}
         </span>
       </div>
@@ -146,7 +146,7 @@ export default function PunchCard({
             <button
               onClick={onSkip}
               aria-label="Skip this card"
-              className="px-4 py-2.5 min-h-11 rounded-lg transition-colors font-medium text-sm bg-tint border border-border-dim hover:bg-tint-strong text-tertiary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+              className="px-4 py-2.5 min-h-11 rounded-lg transition-colors font-medium text-sm bg-tint-strong border border-border-dim-strong hover:bg-surface-hover text-secondary focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
             >
               Skip
             </button>
