@@ -35,7 +35,7 @@ export default function RootLayout({
       <head>
         <meta name="theme-color" content="#000000" />
       </head>
-      <body className="min-h-full flex flex-col bg-black text-[#f5f5f7]">
+      <body className="min-h-full flex flex-col bg-background text-foreground">
         <PerformanceProvider>
           <ToastProvider>
             {children}
