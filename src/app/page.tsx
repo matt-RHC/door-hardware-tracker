@@ -209,11 +209,11 @@ export default function LoginPage() {
             RABBIT HOLE
           </h1>
           <div className="flex items-center justify-center gap-3 mb-1">
-            <div className="h-px w-8 bg-gradient-to-r from-transparent to-[rgba(90,200,250,0.3)]" />
+            <div className="h-px w-8 bg-gradient-to-r from-transparent to-accent/30" />
             <p className="text-[12px] text-accent/70 tracking-[0.2em] uppercase font-medium">
               Door Hardware Systems
             </p>
-            <div className="h-px w-8 bg-gradient-to-l from-transparent to-[rgba(90,200,250,0.3)]" />
+            <div className="h-px w-8 bg-gradient-to-l from-transparent to-accent/30" />
           </div>
         </div>
 
