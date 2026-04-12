@@ -175,6 +175,10 @@
   --color-caution-dim: var(--yellow-dim);
   --color-purple: var(--purple);
   --color-purple-dim: var(--purple-dim);
+
+  /* Install type indicators → text-field, bg-field, text-bench, bg-bench */
+  --color-field: var(--field);
+  --color-bench: var(--bench);
 }
 
 * {

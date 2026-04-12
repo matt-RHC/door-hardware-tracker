@@ -215,8 +215,8 @@ export default function DashboardPage() {
           <div
             className={`mb-5 p-3 rounded-lg flex items-center justify-between text-[13px] border animate-fade-in-up ${
               portfolioResult.success
-                ? "bg-[rgba(48,209,88,0.08)] border-[rgba(48,209,88,0.15)] text-[var(--green)]"
-                : "bg-[rgba(255,69,58,0.08)] border-[rgba(255,69,58,0.15)] text-[var(--red)]"
+                ? "bg-success-dim border-success text-[var(--green)]"
+                : "bg-danger-dim border-danger text-[var(--red)]"
             }`}
           >
             <span>{portfolioResult.message}</span>
@@ -238,7 +238,7 @@ export default function DashboardPage() {
             <span className="text-[13px] text-[var(--text-tertiary)]">Loading projects...</span>
           </div>
         ) : error ? (
-          <div className="p-4 bg-[rgba(255,69,58,0.08)] border border-[rgba(255,69,58,0.15)] rounded-lg text-[var(--red)] text-[14px] mb-4 flex items-center justify-between">
+          <div className="p-4 bg-danger-dim border border-danger rounded-lg text-[var(--red)] text-[14px] mb-4 flex items-center justify-between">
             <span>{error}</span>
             <button
               onClick={() => setError(null)}
@@ -249,7 +249,7 @@ export default function DashboardPage() {
           </div>
         ) : projects.length === 0 ? (
           <div className="text-center py-20">
-            <div className="w-16 h-16 mx-auto mb-4 rounded-xl bg-[rgba(10,132,255,0.06)] border border-[rgba(10,132,255,0.12)] flex items-center justify-center">
+            <div className="w-16 h-16 mx-auto mb-4 rounded-xl bg-accent-dim border border-accent flex items-center justify-center">
               <svg className="w-7 h-7 text-[var(--blue)]/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
               </svg>
@@ -299,7 +299,7 @@ export default function DashboardPage() {
                           setDeleteConfirm(project.id);
                           setMenuOpen(null);
                         }}
-                        className="w-full text-left px-4 py-2.5 text-[13px] text-[var(--red)] hover:bg-[rgba(255,69,58,0.06)] transition-colors"
+                        className="w-full text-left px-4 py-2.5 text-[13px] text-[var(--red)] hover:bg-danger-dim transition-colors"
                       >
                         Delete
                       </button>

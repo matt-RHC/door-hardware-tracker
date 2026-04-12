@@ -135,7 +135,7 @@ export default function PDFPageBrowser({
   return (
     <div className="space-y-6 animate-fade-in-up">
       <div>
-        <h2 className="font-display text-2xl font-bold text-white mb-2">
+        <h2 className="font-display text-2xl font-bold text-primary mb-2">
           SELECT YOUR DOOR SCHEDULE
         </h2>
         <p className="text-sm text-secondary leading-relaxed">

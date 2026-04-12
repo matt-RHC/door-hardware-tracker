@@ -29,7 +29,7 @@ function Particles() {
             top: `${p.y}%`,
             width: p.size,
             height: p.size,
-            background: "#5ac8fa",
+            background: "var(--cyan)",
             opacity: p.opacity,
             animation: `float-particle ${p.duration}s ease-in-out ${p.delay}s infinite`,
           }}
@@ -203,14 +203,14 @@ export default function LoginPage() {
             <DoorIllustration />
           </div>
           <h1
-            className="text-3xl sm:text-4xl font-bold text-[#e8e8ed] mb-2 tracking-tight"
+            className="text-3xl sm:text-4xl font-bold text-primary mb-2 tracking-tight"
             style={{ fontFamily: "var(--font-display)", letterSpacing: "0.06em" }}
           >
             RABBIT HOLE
           </h1>
           <div className="flex items-center justify-center gap-3 mb-1">
             <div className="h-px w-8 bg-gradient-to-r from-transparent to-[rgba(90,200,250,0.3)]" />
-            <p className="text-[12px] text-[#5ac8fa]/70 tracking-[0.2em] uppercase font-medium">
+            <p className="text-[12px] text-accent/70 tracking-[0.2em] uppercase font-medium">
               Door Hardware Systems
             </p>
             <div className="h-px w-8 bg-gradient-to-l from-transparent to-[rgba(90,200,250,0.3)]" />
@@ -227,12 +227,12 @@ export default function LoginPage() {
             onSubmit={handleLogin}
             className="panel corner-brackets p-6 sm:p-8"
           >
-            <h2 className="text-[15px] font-semibold text-[#e8e8ed] mb-5 text-center">
+            <h2 className="text-[15px] font-semibold text-primary mb-5 text-center">
               Sign in to your account
             </h2>
 
             {error && (
-              <div className="mb-5 p-3 bg-[rgba(255,69,58,0.06)] border border-[rgba(255,69,58,0.12)] rounded-lg text-[#ff453a] text-[13px] flex items-center gap-2.5 animate-fade-in-up">
+              <div className="mb-5 p-3 bg-danger-dim border border-danger rounded-lg text-danger text-[13px] flex items-center gap-2.5 animate-fade-in-up">
                 <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                 </svg>
@@ -244,7 +244,7 @@ export default function LoginPage() {
               <div>
                 <label
                   htmlFor="email"
-                  className="block text-[11px] text-[#8e8e93] mb-1.5 uppercase tracking-[0.15em] font-medium"
+                  className="block text-[11px] text-secondary mb-1.5 uppercase tracking-[0.15em] font-medium"
                 >
                   Email Address
                 </label>
@@ -265,7 +265,7 @@ export default function LoginPage() {
               <div>
                 <label
                   htmlFor="password"
-                  className="block text-[11px] text-[#8e8e93] mb-1.5 uppercase tracking-[0.15em] font-medium"
+                  className="block text-[11px] text-secondary mb-1.5 uppercase tracking-[0.15em] font-medium"
                 >
                   Password
                 </label>
@@ -307,11 +307,11 @@ export default function LoginPage() {
             mounted ? "opacity-100" : "opacity-0"
           }`}
         >
-          <p className="text-[#636366] text-[13px]">
+          <p className="text-tertiary text-[13px]">
             Don&apos;t have an account?{" "}
             <a
               href="/signup"
-              className="text-[#5ac8fa] hover:text-[#5ac8fa]/80 font-medium transition-colors"
+              className="text-accent hover:text-accent/80 font-medium transition-colors"
             >
               Request access
             </a>
@@ -333,16 +333,16 @@ export default function LoginPage() {
               key={label}
               className="flex flex-col items-center gap-1.5 py-3 px-2 rounded-lg bg-white/[0.02] border border-white/[0.04]"
             >
-              <svg className="w-5 h-5 text-[#5ac8fa]/40" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
+              <svg className="w-5 h-5 text-accent/40" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d={icon} />
               </svg>
-              <span className="text-[10px] text-[#636366] tracking-wider uppercase">{label}</span>
+              <span className="text-[10px] text-tertiary tracking-wider uppercase">{label}</span>
             </div>
           ))}
         </div>
 
         {/* Version tag */}
-        <p className="text-center mt-8 text-[10px] text-[#636366]/40 tracking-[0.2em] uppercase">
+        <p className="text-center mt-8 text-[10px] text-tertiary/40 tracking-[0.2em] uppercase">
           v0.31 // Rabbit Hole Systems
         </p>
       </div>

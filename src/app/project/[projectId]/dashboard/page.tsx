@@ -88,8 +88,8 @@ export default function DashboardPage() {
   }, [data?.doors, sortKey, sortDir]);
 
   const statusColor = (status: string) => {
-    if (status === "Complete") return "bg-[rgba(48,209,88,0.15)] text-[var(--green)] border-[var(--green)]";
-    if (status === "In Progress") return "bg-[rgba(10,132,255,0.15)] text-[var(--blue)] border-[var(--blue)]";
+    if (status === "Complete") return "bg-success-dim text-[var(--green)] border-[var(--green)]";
+    if (status === "In Progress") return "bg-accent-dim text-[var(--blue)] border-[var(--blue)]";
     return "bg-[var(--surface)] text-[var(--text-tertiary)] border-[var(--border)]";
   };
 
@@ -124,7 +124,7 @@ export default function DashboardPage() {
             </svg>
             Back
           </button>
-          <div className="p-4 bg-[rgba(255,69,58,0.15)] border border-[var(--red)] rounded-lg text-[var(--red)]">
+          <div className="p-4 bg-danger-dim border border-[var(--red)] rounded-lg text-[var(--red)]">
             {error}
           </div>
         </div>

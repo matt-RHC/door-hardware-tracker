@@ -65,27 +65,27 @@ export default function IssueReportModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="bg-slate-900 border border-slate-700 rounded-xl p-6 w-full max-w-md mx-4 shadow-2xl">
+      <div className="bg-surface border border-th-border rounded-xl p-6 w-full max-w-md mx-4 shadow-2xl">
         <div className="flex items-center justify-between mb-6">
-          <h2 className="text-xl font-bold text-white">Report Issue</h2>
+          <h2 className="text-xl font-bold text-primary">Report Issue</h2>
           <button
             onClick={onClose}
-            className="text-slate-400 hover:text-white text-2xl leading-none"
+            className="text-tertiary hover:text-primary text-2xl leading-none"
           >
             &times;
           </button>
         </div>
 
         {(doorNumber || hardwareItemName) && (
-          <div className="mb-4 p-3 bg-slate-800/50 rounded-lg text-sm">
+          <div className="mb-4 p-3 bg-surface-hover rounded-lg text-sm">
             {doorNumber && (
-              <p className="text-slate-300">
-                Door: <span className="text-white font-medium">{doorNumber}</span>
+              <p className="text-secondary">
+                Door: <span className="text-primary font-medium">{doorNumber}</span>
               </p>
             )}
             {hardwareItemName && (
-              <p className="text-slate-300">
-                Item: <span className="text-white font-medium">{hardwareItemName}</span>
+              <p className="text-secondary">
+                Item: <span className="text-primary font-medium">{hardwareItemName}</span>
               </p>
             )}
           </div>
@@ -93,26 +93,26 @@ export default function IssueReportModal({
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="block text-sm text-slate-400 mb-1">
+            <label className="block text-sm text-secondary mb-1">
               Description *
             </label>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Describe the issue..."
-              className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-24 resize-none"
+              className="w-full px-3 py-2 bg-surface border border-th-border rounded text-primary placeholder-tertiary focus:outline-none focus:ring-2 focus:ring-accent min-h-24 resize-none"
               required
             />
           </div>
 
           <div>
-            <label className="block text-sm text-slate-400 mb-1">
+            <label className="block text-sm text-secondary mb-1">
               Severity
             </label>
             <select
               value={severity}
               onChange={(e) => setSeverity(e.target.value as any)}
-              className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 bg-surface border border-th-border rounded text-primary focus:outline-none focus:ring-2 focus:ring-accent"
             >
               <option value="low">Low</option>
               <option value="medium">Medium</option>
@@ -122,7 +122,7 @@ export default function IssueReportModal({
           </div>
 
           <div>
-            <label className="block text-sm text-slate-400 mb-1">
+            <label className="block text-sm text-secondary mb-1">
               Assigned To
             </label>
             <input
@@ -130,26 +130,26 @@ export default function IssueReportModal({
               value={assignedTo}
               onChange={(e) => setAssignedTo(e.target.value)}
               placeholder="Name or email..."
-              className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full px-3 py-2 bg-surface border border-th-border rounded text-primary placeholder-tertiary focus:outline-none focus:ring-2 focus:ring-accent"
             />
           </div>
 
           {error && (
-            <p className="text-red-400 text-sm">{error}</p>
+            <p className="text-danger text-sm">{error}</p>
           )}
 
           <div className="flex gap-3 pt-2">
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 px-4 py-2 bg-slate-800 hover:bg-slate-700 text-white rounded transition-colors"
+              className="flex-1 px-4 py-2 bg-surface hover:bg-surface-hover text-primary rounded transition-colors"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={submitting || !description.trim()}
-              className="flex-1 px-4 py-2 bg-red-600 hover:bg-red-500 disabled:bg-slate-700 text-white rounded transition-colors"
+              className="flex-1 px-4 py-2 bg-danger hover:bg-danger/80 disabled:bg-surface-hover text-white rounded transition-colors"
             >
               {submitting ? "Submitting..." : "Report Issue"}
             </button>

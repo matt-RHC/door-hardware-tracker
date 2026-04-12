@@ -18,12 +18,12 @@ interface Delivery {
 }
 
 const STATUS_COLORS: Record<string, string> = {
-  pending: "bg-yellow-900/30 text-yellow-300 border-yellow-800",
-  in_transit: "bg-blue-900/30 text-blue-300 border-blue-800",
-  delivered: "bg-green-900/30 text-green-300 border-green-800",
-  partial: "bg-orange-900/30 text-orange-300 border-orange-800",
-  delayed: "bg-red-900/30 text-red-300 border-red-800",
-  cancelled: "bg-slate-800/30 text-slate-400 border-slate-700",
+  pending: "bg-caution-dim text-caution border-caution",
+  in_transit: "bg-accent-dim text-accent border-accent",
+  delivered: "bg-success-dim text-success border-success",
+  partial: "bg-warning-dim text-warning border-warning",
+  delayed: "bg-danger-dim text-danger border-danger",
+  cancelled: "bg-surface-hover text-secondary border-th-border",
 };
 
 export default function DeliveryTrackerPanel({
@@ -100,41 +100,41 @@ export default function DeliveryTrackerPanel({
 
   if (loading) {
     return (
-      <div className="bg-slate-900 rounded-lg border border-slate-800 p-6">
-        <h2 className="text-xl font-bold text-white mb-4">Deliveries</h2>
-        <p className="text-slate-400 text-sm">Loading...</p>
+      <div className="bg-surface rounded-lg border border-th-border p-6">
+        <h2 className="text-xl font-bold text-primary mb-4">Deliveries</h2>
+        <p className="text-secondary text-sm">Loading...</p>
       </div>
     );
   }
 
   return (
-    <div className="bg-slate-900 rounded-lg border border-slate-800 p-6">
+    <div className="bg-surface rounded-lg border border-th-border p-6">
       <div className="flex items-center justify-between mb-4">
-        <h2 className="text-xl font-bold text-white">Deliveries</h2>
+        <h2 className="text-xl font-bold text-primary">Deliveries</h2>
         <button
           onClick={() => setShowForm(!showForm)}
-          className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white rounded text-sm transition-colors"
+          className="px-3 py-1.5 bg-accent hover:bg-accent/80 text-white rounded text-sm transition-colors"
         >
           {showForm ? "Cancel" : "+ Add Delivery"}
         </button>
       </div>
 
       {showForm && (
-        <form onSubmit={handleAdd} className="mb-6 p-4 bg-slate-800/50 rounded-lg space-y-3">
+        <form onSubmit={handleAdd} className="mb-6 p-4 bg-surface-hover rounded-lg space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <input
               type="text"
               placeholder="PO Number"
               value={formData.po_number}
               onChange={(e) => setFormData({ ...formData, po_number: e.target.value })}
-              className="px-3 py-2 bg-slate-800 border border-slate-700 rounded text-white placeholder-slate-500 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="px-3 py-2 bg-surface border border-th-border rounded text-primary placeholder-tertiary text-sm focus:outline-none focus:ring-2 focus:ring-accent"
             />
             <input
               type="text"
               placeholder="Vendor"
               value={formData.vendor}
               onChange={(e) => setFormData({ ...formData, vendor: e.target.value })}
-              className="px-3 py-2 bg-slate-800 border border-slate-700 rounded text-white placeholder-slate-500 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="px-3 py-2 bg-surface border border-th-border rounded text-primary placeholder-tertiary text-sm focus:outline-none focus:ring-2 focus:ring-accent"
             />
           </div>
           <input
@@ -142,7 +142,7 @@ export default function DeliveryTrackerPanel({
             placeholder="Description"
             value={formData.description}
             onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-            className="w-full px-3 py-2 bg-slate-800 border border-slate-700 rounded text-white placeholder-slate-500 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full px-3 py-2 bg-surface border border-th-border rounded text-primary placeholder-tertiary text-sm focus:outline-none focus:ring-2 focus:ring-accent"
           />
           <div className="grid grid-cols-3 gap-3">
             <input
@@ -150,27 +150,27 @@ export default function DeliveryTrackerPanel({
               placeholder="Items"
               value={formData.items_summary}
               onChange={(e) => setFormData({ ...formData, items_summary: e.target.value })}
-              className="px-3 py-2 bg-slate-800 border border-slate-700 rounded text-white placeholder-slate-500 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="px-3 py-2 bg-surface border border-th-border rounded text-primary placeholder-tertiary text-sm focus:outline-none focus:ring-2 focus:ring-accent"
             />
             <input
               type="number"
               placeholder="Qty"
               value={formData.quantity}
               onChange={(e) => setFormData({ ...formData, quantity: e.target.value })}
-              className="px-3 py-2 bg-slate-800 border border-slate-700 rounded text-white placeholder-slate-500 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="px-3 py-2 bg-surface border border-th-border rounded text-primary placeholder-tertiary text-sm focus:outline-none focus:ring-2 focus:ring-accent"
             />
             <input
               type="date"
               placeholder="Expected Date"
               value={formData.expected_date}
               onChange={(e) => setFormData({ ...formData, expected_date: e.target.value })}
-              className="px-3 py-2 bg-slate-800 border border-slate-700 rounded text-white placeholder-slate-500 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="px-3 py-2 bg-surface border border-th-border rounded text-primary placeholder-tertiary text-sm focus:outline-none focus:ring-2 focus:ring-accent"
             />
           </div>
           <button
             type="submit"
             disabled={submitting}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-500 disabled:bg-slate-700 text-white rounded text-sm transition-colors"
+            className="px-4 py-2 bg-accent hover:bg-accent/80 disabled:bg-surface-hover text-white rounded text-sm transition-colors"
           >
             {submitting ? "Adding..." : "Add Delivery"}
           </button>
@@ -178,12 +178,12 @@ export default function DeliveryTrackerPanel({
       )}
 
       {deliveries.length === 0 ? (
-        <p className="text-slate-400 text-sm">No deliveries tracked yet</p>
+        <p className="text-secondary text-sm">No deliveries tracked yet</p>
       ) : (
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="text-left text-slate-400 border-b border-slate-800">
+              <tr className="text-left text-secondary border-b border-th-border">
                 <th className="pb-2 pr-4">PO#</th>
                 <th className="pb-2 pr-4">Vendor</th>
                 <th className="pb-2 pr-4">Items</th>
@@ -193,15 +193,15 @@ export default function DeliveryTrackerPanel({
             </thead>
             <tbody>
               {deliveries.map((d) => (
-                <tr key={d.id} className="border-b border-slate-800/50">
-                  <td className="py-2 pr-4 text-white font-medium">
+                <tr key={d.id} className="border-b border-th-border/50">
+                  <td className="py-2 pr-4 text-primary font-medium">
                     {d.po_number || "-"}
                   </td>
-                  <td className="py-2 pr-4 text-slate-300">{d.vendor || "-"}</td>
-                  <td className="py-2 pr-4 text-slate-300 max-w-32 truncate">
+                  <td className="py-2 pr-4 text-secondary">{d.vendor || "-"}</td>
+                  <td className="py-2 pr-4 text-secondary max-w-32 truncate">
                     {d.items_summary || d.description || "-"}
                   </td>
-                  <td className="py-2 pr-4 text-slate-300">
+                  <td className="py-2 pr-4 text-secondary">
                     {d.expected_date
                       ? new Date(d.expected_date).toLocaleDateString()
                       : "-"}

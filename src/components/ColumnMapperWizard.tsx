@@ -201,7 +201,7 @@ function Step1IdentifyTable({
   return (
     <div className="space-y-6 animate-fade-in-up">
       <div>
-        <h2 className="font-display text-2xl font-bold text-white mb-2">
+        <h2 className="font-display text-2xl font-bold text-primary mb-2">
           VERIFY YOUR DOOR SCHEDULE
         </h2>
         <p className="text-sm text-secondary leading-relaxed">
@@ -375,7 +375,7 @@ function Step2MapColumns({
   return (
     <div className="space-y-6 animate-fade-in-up">
       <div>
-        <h2 className="font-display text-2xl font-bold text-white mb-2">
+        <h2 className="font-display text-2xl font-bold text-primary mb-2">
           MAP YOUR COLUMNS
         </h2>
         <p className="text-sm text-secondary leading-relaxed">
@@ -656,7 +656,7 @@ function Step3Confirm({
   return (
     <div className="space-y-6 animate-fade-in-up">
       <div>
-        <h2 className="font-display text-2xl font-bold text-white mb-2">
+        <h2 className="font-display text-2xl font-bold text-primary mb-2">
           CONFIRM & EXTRACT
         </h2>
         <p className="text-sm text-secondary leading-relaxed">
