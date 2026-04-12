@@ -29,6 +29,9 @@
     "src/app/api/parse-pdf/apply-revision/route.ts": {
       "maxDuration": 120
     },
+    "src/app/api/parse-pdf/region-extract/route.ts": {
+      "maxDuration": 120
+    },
     "src/app/api/projects/[projectId]/sync-smartsheet/route.ts": {
       "maxDuration": 120
     },

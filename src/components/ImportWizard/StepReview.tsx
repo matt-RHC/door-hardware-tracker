@@ -4,6 +4,7 @@ import { useState, useCallback, useMemo } from "react";
 import { usePunchHighlight } from "./usePunchHighlight";
 import type { DoorEntry, HardwareSet, ClassifyPagesResponse } from "./types";
 import PDFPagePreview from "./PDFPagePreview";
+import PDFRegionSelector from "./PDFRegionSelector";
 import { findPageForSet } from "@/lib/punch-cards";
 import { buildDoorToSetMap, normalizeDoorNumber, detectIsPair, classifyItemScope } from "@/lib/parse-pdf-helpers";
 import { groupItemsByLeaf, getLeafDisplayQty } from "@/lib/classify-leaf-items";
@@ -72,6 +73,7 @@ interface DoorGroup {
 // ─── Props ───
 
 interface StepReviewProps {
+  projectId: string;
   doors: DoorEntry[];
   hardwareSets: HardwareSet[];
   hasExistingData: boolean;
@@ -85,6 +87,7 @@ interface StepReviewProps {
 }
 
 export default function StepReview({
+  projectId,
   doors: initialDoors,
   hardwareSets: initialHardwareSets,
   hasExistingData,
@@ -100,6 +103,10 @@ export default function StepReview({
   const [doors, setDoors] = useState<DoorEntry[]>(initialDoors);
   // Which set groups have their PDF preview open (lazy-mounted when expanded)
   const [previewOpen, setPreviewOpen] = useState<Set<string>>(new Set());
+  // Region extract modal state
+  const [regionExtractSetId, setRegionExtractSetId] = useState<string | null>(null);
+  const [regionExtractPageIdx, setRegionExtractPageIdx] = useState<number | null>(null);
+  const [regionExtracting, setRegionExtracting] = useState(false);
   const [editingCell, setEditingCell] = useState<{
     row: number;
     field: DoorStringField;
@@ -303,6 +310,43 @@ export default function StepReview({
     });
   }, []);
 
+  // ─── Region extract handler ───
+  const handleRegionExtract = useCallback(async (bbox: { x0: number; y0: number; x1: number; y1: number }) => {
+    if (!regionExtractSetId || regionExtractPageIdx == null) return;
+    setRegionExtracting(true);
+    try {
+      const resp = await fetch("/api/parse-pdf/region-extract", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          projectId,
+          page: regionExtractPageIdx,
+          bbox,
+          setId: regionExtractSetId,
+        }),
+      });
+      if (!resp.ok) {
+        const errBody = await resp.text().catch(() => "");
+        console.error("[region-extract] API error:", resp.status, errBody.slice(0, 300));
+        return;
+      }
+      const result = await resp.json();
+      const items = result.items ?? [];
+      if (items.length > 0) {
+        setHardwareSets(prev => prev.map(s => {
+          if (s.set_id !== regionExtractSetId) return s;
+          return { ...s, items };
+        }));
+      }
+      setRegionExtractSetId(null);
+      setRegionExtractPageIdx(null);
+    } catch (err) {
+      console.error("[region-extract] Failed:", err);
+    } finally {
+      setRegionExtracting(false);
+    }
+  }, [regionExtractSetId, regionExtractPageIdx, projectId]);
+
   const handleSort = useCallback(
     (field: DoorStringField) => {
       if (sortField === field) {
@@ -457,9 +501,9 @@ export default function StepReview({
                 </span>
               </button>
 
-              {/* PDF preview toggle — only when we have PDF data and a valid page */}
+              {/* PDF preview toggle + region re-scan — only when we have PDF data and a valid page */}
               {pdfBuffer && pdfPageIdx != null && (
-                <div className="mb-1">
+                <div className="mb-1 flex items-center gap-2 flex-wrap">
                   <button
                     onClick={() => togglePreview(group.setId)}
                     className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-accent-dim border border-accent text-accent text-[11px] font-medium hover:bg-tint-strong transition-colors min-h-9 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
@@ -467,6 +511,15 @@ export default function StepReview({
                   >
                     <span aria-hidden="true">{isPreviewOpen ? "\u25BE" : "\u25B8"}</span>
                     <span>{isPreviewOpen ? "Hide" : "View"} PDF page {pdfPageIdx + 1}</span>
+                  </button>
+                  <button
+                    onClick={() => {
+                      setRegionExtractSetId(group.setId);
+                      setRegionExtractPageIdx(pdfPageIdx);
+                    }}
+                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-tint border border-border-dim text-secondary text-[11px] font-medium hover:bg-tint-strong transition-colors min-h-9"
+                  >
+                    Re-scan region
                   </button>
                 </div>
               )}
@@ -721,6 +774,24 @@ export default function StepReview({
           Next
         </button>
       </div>
+
+      {/* ── Region extract modal ── */}
+      {regionExtractSetId != null && regionExtractPageIdx != null && pdfBuffer && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-surface border border-th-border rounded-xl p-5 w-full max-w-3xl max-h-[90vh] overflow-y-auto shadow-2xl">
+            <PDFRegionSelector
+              pdfBuffer={pdfBuffer}
+              pageIndex={regionExtractPageIdx}
+              loading={regionExtracting}
+              onSelect={handleRegionExtract}
+              onCancel={() => {
+                setRegionExtractSetId(null);
+                setRegionExtractPageIdx(null);
+              }}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }
