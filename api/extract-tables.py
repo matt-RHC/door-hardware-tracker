@@ -110,6 +110,7 @@ class RegionExtractionResult(BaseModel):
 EXPECTED_QTY_RANGES: dict[str, tuple[int, int]] = {
     "hinge":              (2, 5),   # 3 standard, 4-5 for tall/heavy doors
     "electric_hinge":     (1, 5),   # Per-opening, but use hinge max for cap-path compat
+    "wire_harness":       (1, 2),   # Per-leaf, paired with electric hardware
     "continuous_hinge":   (1, 2),
     "pivot":              (1, 2),
     "lockset":            (1, 1),
@@ -138,6 +139,7 @@ EXPECTED_QTY_RANGES: dict[str, tuple[int, int]] = {
 DIVISION_PREFERENCE: dict[str, str] = {
     "hinge":            "leaf",
     "electric_hinge":   "opening",     # 1 per opening, replaces one NRP position
+    "wire_harness":     "leaf",        # Per-leaf, follows electrified hardware
     "continuous_hinge": "leaf",
     "pivot":            "leaf",
     "auto_operator":    "opening",     # 1 per opening, replaces closer
@@ -176,6 +178,11 @@ _CATEGORY_PATTERNS: list[tuple[str, re.Pattern]] = [
     ("flush_bolt", re.compile(r"(?i)flush\s*bolt|surface\s*bolt")),
     # Automatic operators: replace the closer function. When both exist, flag.
     ("auto_operator", re.compile(r"(?i)auto.*operator|automatic\s*operator|power\s*operator|ada\s*operator")),
+    # Wire harness / connector: per-leaf, follows electrified hardware.
+    # Mirrors the TS taxonomy at src/lib/hardware-taxonomy.ts:205. Placed
+    # AFTER electric_hinge so "hinge CON TW8" is classified as electric_hinge,
+    # but BEFORE cylinder so standalone "CON-5" style connectors are caught.
+    ("wire_harness", re.compile(r"(?i)wire\s*harness|\bmolex\b|\bcon-\d|\bwiring\b|\bpigtail\b|\bconnector\b")),
     ("closer",    re.compile(r"(?i)\bcloser\b|door\s*check|floor\s*closer")),
     ("coordinator", re.compile(r"(?i)\bcoordinator\b")),
     ("stop",      re.compile(r"(?i)\bstop\b|wall\s*stop|floor\s*stop|overhead\s*stop|door\s*stop")),
