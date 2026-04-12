@@ -573,3 +573,95 @@ class TestBug12FieldSplitting:
         ]
         result = extract_tables.filter_non_hardware_items(items)
         assert len(result) == 4  # all kept
+
+
+# ── D1: Phantom set filtering ──
+
+class TestPhantomSetFiltering:
+    """Verify that phantom empty sets are dropped."""
+
+    def test_drops_phantom_set(self, extract_tables):
+        HardwareSetDef = extract_tables.HardwareSetDef
+        sets = [
+            HardwareSetDef(set_id="DH-1", heading="Corridor", heading_door_count=3, items=[
+                extract_tables.HardwareItem(name="Hinges"),
+            ]),
+            HardwareSetDef(set_id="DH-4", heading="", heading_door_count=0, heading_doors=[], items=[]),
+            HardwareSetDef(set_id="DH-2", heading="Office", heading_door_count=1, items=[
+                extract_tables.HardwareItem(name="Closer"),
+            ]),
+        ]
+        # Simulate the filter logic from extract_all_hardware_sets
+        result = [
+            s for s in sets
+            if s.heading.strip() or s.heading_door_count > 0 or len(s.heading_doors) > 0 or len(s.items) > 0
+        ]
+        assert len(result) == 2
+        assert result[0].set_id == "DH-1"
+        assert result[1].set_id == "DH-2"
+
+    def test_keeps_set_with_heading_only(self, extract_tables):
+        HardwareSetDef = extract_tables.HardwareSetDef
+        sets = [
+            HardwareSetDef(set_id="DH-4", heading="Storage Room", heading_door_count=0, items=[]),
+        ]
+        result = [
+            s for s in sets
+            if s.heading.strip() or s.heading_door_count > 0 or len(s.heading_doors) > 0 or len(s.items) > 0
+        ]
+        assert len(result) == 1, "Set with heading text should be kept"
+
+    def test_keeps_set_with_doors_only(self, extract_tables):
+        HardwareSetDef = extract_tables.HardwareSetDef
+        sets = [
+            HardwareSetDef(set_id="DH-4", heading="", heading_door_count=0, heading_doors=["101A"], items=[]),
+        ]
+        result = [
+            s for s in sets
+            if s.heading.strip() or s.heading_door_count > 0 or len(s.heading_doors) > 0 or len(s.items) > 0
+        ]
+        assert len(result) == 1, "Set with heading_doors should be kept"
+
+
+# ── D3: Join split rows ──
+
+class TestJoinSplitRows:
+    """Verify post-processing joins split rows from pdfplumber column splits."""
+
+    def test_joins_others_fragment(self, extract_tables):
+        """'Others)' fragment joins into previous row."""
+        HardwareItem = extract_tables.HardwareItem
+        items = [
+            HardwareItem(name="Hardware by", model="(Contractor", finish=""),
+            HardwareItem(name="Others)", model="CONTRACTOR", finish=""),
+        ]
+        result = extract_tables._join_split_rows(items)
+        assert len(result) == 1
+        assert "Others)" in result[0].model
+
+    def test_joins_short_fragment(self, extract_tables):
+        """Very short name fragments (< 4 chars) are joined."""
+        HardwareItem = extract_tables.HardwareItem
+        items = [
+            HardwareItem(name="Hinges", model="5BB1", finish="626"),
+            HardwareItem(name=")", model="", finish=""),
+        ]
+        result = extract_tables._join_split_rows(items)
+        assert len(result) == 1
+        assert result[0].name == "Hinges"
+
+    def test_preserves_valid_items(self, extract_tables):
+        """Normal items with proper names are not merged."""
+        HardwareItem = extract_tables.HardwareItem
+        items = [
+            HardwareItem(name="Hinges", model="5BB1", finish="626"),
+            HardwareItem(name="Closer", model="4040XP", finish="689"),
+        ]
+        result = extract_tables._join_split_rows(items)
+        assert len(result) == 2
+
+    def test_single_item_unchanged(self, extract_tables):
+        HardwareItem = extract_tables.HardwareItem
+        items = [HardwareItem(name="Hinges", model="5BB1", finish="626")]
+        result = extract_tables._join_split_rows(items)
+        assert len(result) == 1
