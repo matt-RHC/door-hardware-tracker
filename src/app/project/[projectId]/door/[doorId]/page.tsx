@@ -41,6 +41,7 @@ export default function DoorDetailPage() {
   const [viewingAttachment, setViewingAttachment] = useState<Attachment | null>(null);
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [issueModal, setIssueModal] = useState<{ doorNumber: string; hardwareItemName: string } | null>(null);
+  const [activeLeafTab, setActiveLeafTab] = useState<'shared' | 'leaf1' | 'leaf2'>('leaf1');
 
   const supabase = createClient();
   const fetchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -784,66 +785,53 @@ export default function DoorDetailPage() {
 
         {/* Hardware Tab */}
         {activeTab === 'hardware' && !editingOpening && (
-          <div className="space-y-5 mb-8">
+          <div className="mb-8">
             {opening.hardware_items.length === 0 ? (
               <p className="text-[var(--text-secondary)] text-center py-8">No hardware items yet</p>
-            ) : (
+            ) : isPair ? (
               <>
-                {/* --- Shared section (per_pair + per_frame items) --- */}
-                {shared.length > 0 && (
-                  <>
-                    {isPair && (
-                      <div className="flex items-center gap-3 mt-2 mb-3">
-                        <div className="h-px flex-1 bg-[var(--border)]" />
-                        <span
-                          className="text-[11px] font-semibold uppercase tracking-wider text-[var(--text-tertiary)]"
-                          style={{ fontFamily: "var(--font-display)", letterSpacing: "0.08em" }}
-                        >
-                          SHARED
-                        </span>
-                        <div className="h-px flex-1 bg-[var(--border)]" />
-                      </div>
-                    )}
-                    {shared.map((item) => renderItemCard(item, 1))}
-                  </>
-                )}
+                {/* Leaf sub-tabs for pair doors */}
+                <div className="flex gap-0.5 mb-5 bg-[var(--surface)] rounded-lg p-1">
+                  {([
+                    { key: 'shared' as const, label: 'Shared', count: shared.length, color: 'var(--text-tertiary)' },
+                    { key: 'leaf1' as const, label: 'Leaf 1', count: leaf1.length, color: 'var(--cyan)' },
+                    { key: 'leaf2' as const, label: 'Leaf 2', count: leaf2.length, color: 'var(--orange)' },
+                  ]).map((tab) => (
+                    <button
+                      key={tab.key}
+                      onClick={() => setActiveLeafTab(tab.key)}
+                      className={`flex-1 px-2 py-3 min-h-[44px] rounded-lg text-[11px] font-semibold uppercase transition-colors flex flex-col items-center gap-0.5 ${
+                        activeLeafTab === tab.key
+                          ? 'bg-[var(--surface-hover)] border border-[var(--border-hover)]'
+                          : 'text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]'
+                      }`}
+                      style={{
+                        fontFamily: "var(--font-display)",
+                        letterSpacing: "0.06em",
+                        color: activeLeafTab === tab.key ? tab.color : undefined,
+                      }}
+                    >
+                      <span>{tab.label}</span>
+                      <span className="text-[10px] opacity-60">{tab.count} items</span>
+                    </button>
+                  ))}
+                </div>
 
-                {/* --- Leaf 1 section --- */}
-                {leaf1.length > 0 && (
-                  <>
-                    {isPair && (
-                      <div className="flex items-center gap-3 mt-6 mb-3">
-                        <div className="h-px flex-1 bg-[var(--border)]" />
-                        <span
-                          className="text-[11px] font-semibold uppercase tracking-wider text-[var(--cyan)]"
-                          style={{ fontFamily: "var(--font-display)", letterSpacing: "0.08em" }}
-                        >
-                          LEAF 1 (ACTIVE)
-                        </span>
-                        <div className="h-px flex-1 bg-[var(--border)]" />
-                      </div>
-                    )}
-                    {leaf1.map((item) => renderItemCard(item, 1))}
-                  </>
-                )}
-
-                {/* --- Leaf 2 section (pair doors only) --- */}
-                {isPair && leaf2.length > 0 && (
-                  <>
-                    <div className="flex items-center gap-3 mt-6 mb-3">
-                      <div className="h-px flex-1 bg-[var(--border)]" />
-                      <span
-                        className="text-[11px] font-semibold uppercase tracking-wider text-[var(--orange)]"
-                        style={{ fontFamily: "var(--font-display)", letterSpacing: "0.08em" }}
-                      >
-                        LEAF 2 (INACTIVE)
-                      </span>
-                      <div className="h-px flex-1 bg-[var(--border)]" />
-                    </div>
-                    {leaf2.map((item) => renderItemCard(item, 2))}
-                  </>
-                )}
+                {/* Active leaf section content */}
+                <div className="space-y-5">
+                  {activeLeafTab === 'shared' && shared.map((item) => renderItemCard(item, 1))}
+                  {activeLeafTab === 'shared' && shared.length === 0 && (
+                    <p className="text-[var(--text-tertiary)] text-center py-6 text-[13px]">No shared items for this opening</p>
+                  )}
+                  {activeLeafTab === 'leaf1' && leaf1.map((item) => renderItemCard(item, 1))}
+                  {activeLeafTab === 'leaf2' && leaf2.map((item) => renderItemCard(item, 2))}
+                </div>
               </>
+            ) : (
+              /* Single door — flat list, no sub-tabs */
+              <div className="space-y-5">
+                {opening.hardware_items.map((item) => renderItemCard(item, 1))}
+              </div>
             )}
           </div>
         )}
