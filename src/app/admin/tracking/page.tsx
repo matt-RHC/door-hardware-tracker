@@ -99,13 +99,13 @@ export default function AdminTrackingPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[var(--background)] text-[var(--text-primary)] p-6">
+    <main className="min-h-screen bg-background text-primary p-6">
       <div className="max-w-7xl mx-auto">
         <header className="mb-6">
-          <h1 className="font-display text-2xl tracking-wider text-[var(--cyan)] text-glow-cyan">
+          <h1 className="font-display text-2xl tracking-wider text-info text-glow-cyan">
             Tracking Admin
           </h1>
-          <p className="text-sm text-[var(--text-secondary)] mt-2">
+          <p className="text-sm text-secondary mt-2">
             Unified view of plan items, sessions, and metric runs. Replaces the
             three Smartsheet tracking sheets.
           </p>
@@ -142,29 +142,29 @@ export default function AdminTrackingPage() {
           <section
             className={`mb-6 rounded-[var(--radius-sm)] border p-3 ${
               actionResult.ok
-                ? 'border-[var(--green)] bg-[var(--green-dim)]'
-                : 'border-[var(--red)] bg-[var(--red-dim)]'
+                ? 'border-success bg-success-dim'
+                : 'border-danger bg-danger-dim'
             }`}
           >
             <div className="flex items-start justify-between">
-              <span className="text-sm font-semibold text-[var(--text-primary)]">
+              <span className="text-sm font-semibold text-primary">
                 {actionResult.label}: {actionResult.ok ? 'OK' : 'FAILED'}
               </span>
               <button
                 type="button"
                 onClick={() => setActionResult(null)}
-                className="text-xs text-[var(--text-tertiary)] hover:text-[var(--text-primary)]"
+                className="text-xs text-tertiary hover:text-primary"
               >
                 dismiss
               </button>
             </div>
-            <pre className="mt-2 whitespace-pre-wrap break-words text-xs text-[var(--text-secondary)]">
+            <pre className="mt-2 whitespace-pre-wrap break-words text-xs text-secondary">
               {actionResult.message}
             </pre>
           </section>
         ) : null}
 
-        <nav className="mb-4 flex gap-2 border-b border-[var(--border)]">
+        <nav className="mb-4 flex gap-2 border-b border-th-border">
           {(Object.keys(TAB_LABELS) as TabKey[]).map(key => (
             <button
               key={key}
@@ -172,8 +172,8 @@ export default function AdminTrackingPage() {
               onClick={() => setTab(key)}
               className={`-mb-px border-b-2 px-4 py-2 text-sm transition-colors ${
                 tab === key
-                  ? 'border-[var(--cyan)] text-[var(--cyan)]'
-                  : 'border-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
+                  ? 'border-info text-info'
+                  : 'border-transparent text-secondary hover:text-primary'
               }`}
             >
               {TAB_LABELS[key]}
@@ -182,11 +182,11 @@ export default function AdminTrackingPage() {
         </nav>
 
         {loading ? (
-          <p className="text-sm text-[var(--text-secondary)]">Loading…</p>
+          <p className="text-sm text-secondary">Loading…</p>
         ) : error ? (
-          <p className="text-sm text-[var(--red)]">Error: {error}</p>
+          <p className="text-sm text-danger">Error: {error}</p>
         ) : items.length === 0 ? (
-          <p className="text-sm italic text-[var(--text-tertiary)]">
+          <p className="text-sm italic text-tertiary">
             No {TAB_LABELS[tab].toLowerCase()} yet. Run the import to populate.
           </p>
         ) : (
@@ -214,7 +214,7 @@ function AdminButton({
       type="button"
       onClick={() => onRun(label, path)}
       disabled={running !== null}
-      className="rounded-[var(--radius-sm)] border border-[var(--cyan)] bg-[var(--cyan-dim)] px-4 py-2 text-sm text-[var(--cyan)] transition-colors hover:bg-[var(--surface-hover)] disabled:cursor-not-allowed disabled:opacity-40"
+      className="rounded-[var(--radius-sm)] border border-info bg-info-dim px-4 py-2 text-sm text-info transition-colors hover:bg-surface-hover disabled:cursor-not-allowed disabled:opacity-40"
     >
       {isRunning ? 'Running…' : label}
     </button>
@@ -225,7 +225,7 @@ function ItemTable({ tab, items }: { tab: TabKey; items: TrackingItem[] }) {
   if (tab === 'plan_item') {
     return (
       <TableShell>
-        <thead className="bg-[var(--surface-raised)] text-[var(--text-secondary)]">
+        <thead className="bg-surface-raised text-secondary">
           <tr>
             <Th>Title</Th>
             <Th>Status</Th>
@@ -240,7 +240,7 @@ function ItemTable({ tab, items }: { tab: TabKey; items: TrackingItem[] }) {
           {items.map(item => (
             <tr
               key={item.id}
-              className="border-t border-[var(--border-dim)] hover:bg-[var(--surface-hover)]"
+              className="border-t border-border-dim hover:bg-surface-hover"
             >
               <Td primary>{item.title}</Td>
               <Td>{item.status ?? '—'}</Td>
@@ -259,7 +259,7 @@ function ItemTable({ tab, items }: { tab: TabKey; items: TrackingItem[] }) {
   if (tab === 'session') {
     return (
       <TableShell>
-        <thead className="bg-[var(--surface-raised)] text-[var(--text-secondary)]">
+        <thead className="bg-surface-raised text-secondary">
           <tr>
             <Th>Session</Th>
             <Th>Date</Th>
@@ -271,7 +271,7 @@ function ItemTable({ tab, items }: { tab: TabKey; items: TrackingItem[] }) {
           {items.map(item => (
             <tr
               key={item.id}
-              className="border-t border-[var(--border-dim)] hover:bg-[var(--surface-hover)]"
+              className="border-t border-border-dim hover:bg-surface-hover"
             >
               <Td primary>{item.title}</Td>
               <Td>{item.date_identified ?? '—'}</Td>
@@ -286,7 +286,7 @@ function ItemTable({ tab, items }: { tab: TabKey; items: TrackingItem[] }) {
 
   return (
     <TableShell>
-      <thead className="bg-[var(--surface-raised)] text-[var(--text-secondary)]">
+      <thead className="bg-surface-raised text-secondary">
         <tr>
           <Th>Run</Th>
           <Th>PDF</Th>
@@ -300,7 +300,7 @@ function ItemTable({ tab, items }: { tab: TabKey; items: TrackingItem[] }) {
         {items.map(item => (
           <tr
             key={item.id}
-            className="border-t border-[var(--border-dim)] hover:bg-[var(--surface-hover)]"
+            className="border-t border-border-dim hover:bg-surface-hover"
           >
             <Td primary>{item.title}</Td>
             <Td>{item.metric_pdf_name ?? '—'}</Td>
@@ -323,7 +323,7 @@ function ItemTable({ tab, items }: { tab: TabKey; items: TrackingItem[] }) {
 
 function TableShell({ children }: { children: React.ReactNode }) {
   return (
-    <div className="overflow-x-auto rounded-[var(--radius-sm)] border border-[var(--border)]">
+    <div className="overflow-x-auto rounded-[var(--radius-sm)] border border-th-border">
       <table className="w-full text-sm">{children}</table>
     </div>
   )
@@ -343,9 +343,9 @@ function Td({
   muted?: boolean
 }) {
   const colorClass = primary
-    ? 'text-[var(--text-primary)]'
+    ? 'text-primary'
     : muted
-      ? 'text-[var(--text-tertiary)] text-xs'
-      : 'text-[var(--text-secondary)]'
+      ? 'text-tertiary text-xs'
+      : 'text-secondary'
   return <td className={`px-3 py-2 ${colorClass}`}>{children}</td>
 }

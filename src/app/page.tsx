@@ -331,7 +331,7 @@ export default function LoginPage() {
           ].map(({ icon, label }) => (
             <div
               key={label}
-              className="flex flex-col items-center gap-1.5 py-3 px-2 rounded-lg bg-white/[0.02] border border-white/[0.04]"
+              className="flex flex-col items-center gap-1.5 py-3 px-2 rounded-lg bg-tint border border-border-dim"
             >
               <svg className="w-5 h-5 text-accent/40" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d={icon} />

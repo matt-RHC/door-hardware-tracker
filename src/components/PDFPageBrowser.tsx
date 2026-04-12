@@ -181,7 +181,7 @@ export default function PDFPageBrowser({
           )}
         </div>
         {selectedPages.size > 1 && (
-          <div className="mt-2 p-2.5 rounded-lg bg-[var(--cyan-dim)] border border-[var(--cyan-dim)]">
+          <div className="mt-2 p-2.5 rounded-lg bg-accent-dim border border-accent-dim">
             <p className="text-xs text-info">
               We&apos;ll detect columns from your first selected page and read
               door data from all selected pages.
@@ -267,7 +267,7 @@ export default function PDFPageBrowser({
 
       {/* Loading indicator for re-detection */}
       {loading && (
-        <div className="p-3 rounded-lg bg-[var(--cyan-dim)] border border-[var(--cyan-dim)]">
+        <div className="p-3 rounded-lg bg-accent-dim border border-accent-dim">
           <p className="text-sm text-info flex items-center gap-2">
             <span className="w-4 h-4 border-2 border-info border-t-transparent rounded-full animate-spin" />
             Scanning selected pages for a door schedule...
@@ -276,7 +276,7 @@ export default function PDFPageBrowser({
       )}
 
       {/* Actions */}
-      <div className="flex items-center justify-between pt-4 border-t border-[var(--border-dim)]">
+      <div className="flex items-center justify-between pt-4 border-t border-border-dim">
         <button onClick={onCancel} className="glow-btn glow-btn--ghost">
           Skip Column Mapping
         </button>

@@ -446,13 +446,13 @@ export default function StepReview({
                 {/* Mini confidence dots */}
                 <span className="flex items-center gap-1 ml-2">
                   {group.highCount > 0 && (
-                    <span className="w-2 h-2 rounded-full bg-[var(--green)]" title={`${group.highCount} ready`} />
+                    <span className="w-2 h-2 rounded-full bg-success" title={`${group.highCount} ready`} />
                   )}
                   {group.medCount > 0 && (
-                    <span className="w-2 h-2 rounded-full bg-[var(--orange)]" title={`${group.medCount} need review`} />
+                    <span className="w-2 h-2 rounded-full bg-warning" title={`${group.medCount} need review`} />
                   )}
                   {group.lowCount > 0 && (
-                    <span className="w-2 h-2 rounded-full bg-[var(--red)]" title={`${group.lowCount} missing data`} />
+                    <span className="w-2 h-2 rounded-full bg-danger" title={`${group.lowCount} missing data`} />
                   )}
                 </span>
               </button>
@@ -640,7 +640,7 @@ export default function StepReview({
                                 registerRef(door.door_number, el);
                             }}
                             className={`${confBorder(door)} border-t border-border-dim hover:bg-tint transition-colors duration-150 ${
-                              i % 2 === 1 ? "bg-white/[0.015]" : ""
+                              i % 2 === 1 ? "bg-tint" : ""
                             }`}
                             style={{ minHeight: "40px" }}
                           >

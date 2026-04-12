@@ -32,8 +32,8 @@ export default function SoundToggle() {
       onClick={handleClick}
       className={`relative p-2 rounded-md transition-all duration-200 ${
         enabled
-          ? "bg-[var(--cyan-dim)] border border-[var(--cyan-dim)] hover:border-[var(--cyan)]"
-          : "bg-[var(--tint)] border border-border-dim-strong hover:border-white/[0.15]"
+          ? "bg-accent-dim border border-accent-dim hover:border-accent"
+          : "bg-tint border border-border-dim-strong hover:border-th-border-hover"
       }`}
       title={enabled ? "Sounds enabled" : "Sounds disabled"}
       aria-label="Toggle sound effects"

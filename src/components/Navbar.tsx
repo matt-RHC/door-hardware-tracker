@@ -42,7 +42,7 @@ export default function Navbar() {
   };
 
   return (
-    <nav className="relative bg-[var(--background)]/95 backdrop-blur-xl border-b border-[var(--border)]">
+    <nav className="relative bg-background/95 backdrop-blur-xl border-b border-th-border">
       {/* Subtle bottom glow line */}
       <div
         className="absolute bottom-0 left-0 right-0 h-[1px]"
@@ -61,7 +61,7 @@ export default function Navbar() {
           {/* Logo mark */}
           <div className="relative w-8 h-8 rounded-md bg-accent-dim border border-accent flex items-center justify-center group-hover:border-accent transition-all">
             <svg
-              className="w-4 h-4 text-[var(--blue)]"
+              className="w-4 h-4 text-accent"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -76,12 +76,12 @@ export default function Navbar() {
           </div>
           <div className="flex flex-col">
             <span
-              className="font-display text-[13px] font-semibold tracking-wider text-[var(--text-primary)] group-hover:text-[var(--blue)] transition-colors"
+              className="font-display text-[13px] font-semibold tracking-wider text-primary group-hover:text-accent transition-colors"
               style={{ fontFamily: "var(--font-display)" }}
             >
               RABBIT HOLE
             </span>
-            <span className="text-[10px] text-[var(--text-tertiary)] tracking-widest uppercase">
+            <span className="text-[10px] text-tertiary tracking-widest uppercase">
               Door Hardware
             </span>
           </div>
@@ -93,12 +93,12 @@ export default function Navbar() {
           <ThemeToggle />
           {!loading && email && (
             <>
-              <span className="hidden sm:inline text-[12px] text-[var(--text-tertiary)] tabular-nums">
+              <span className="hidden sm:inline text-[12px] text-tertiary tabular-nums">
                 {email}
               </span>
               <button
                 onClick={handleSignOut}
-                className="glow-btn--ghost px-3 py-1.5 text-[12px] rounded-md border border-[var(--border)] hover:border-[var(--border-hover)] transition-all"
+                className="glow-btn--ghost px-3 py-1.5 text-[12px] rounded-md border border-th-border hover:border-th-border-hover transition-all"
               >
                 Sign Out
               </button>

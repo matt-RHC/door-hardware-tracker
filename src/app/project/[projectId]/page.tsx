@@ -186,7 +186,7 @@ export default function ProjectDetailPage() {
         <div className="mb-6">
           <button
             onClick={() => router.push("/dashboard")}
-            className="text-[var(--blue)] hover:text-[var(--blue)]/80 mb-3 text-[13px] flex items-center gap-1 transition-colors"
+            className="text-accent hover:text-accent/80 mb-3 text-[13px] flex items-center gap-1 transition-colors"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -194,7 +194,7 @@ export default function ProjectDetailPage() {
             Projects
           </button>
           <h1
-            className="text-2xl sm:text-3xl font-bold text-[var(--text-primary)] mb-4"
+            className="text-2xl sm:text-3xl font-bold text-primary mb-4"
             style={{ fontFamily: "var(--font-display)", letterSpacing: "0.02em" }}
           >
             PROJECT DETAILS
@@ -203,10 +203,10 @@ export default function ProjectDetailPage() {
           {/* Overall Progress */}
           <div className="panel p-4 rounded-lg">
             <div className="flex justify-between items-center mb-2">
-              <span className="text-[13px] text-[var(--text-secondary)] uppercase tracking-wider">
+              <span className="text-[13px] text-secondary uppercase tracking-wider">
                 Overall Progress
               </span>
-              <span className="text-[13px] text-[var(--text-tertiary)] tabular-nums">
+              <span className="text-[13px] text-tertiary tabular-nums">
                 {totalChecked} / {totalItems} items
               </span>
             </div>
@@ -230,7 +230,7 @@ export default function ProjectDetailPage() {
               onClick={() => setShowFilters(!showFilters)}
               className={`shrink-0 glow-btn text-[13px] rounded-lg ${
                 showFilters || activeFilterCount > 0
-                  ? "bg-accent-dim border-accent text-[var(--blue)]"
+                  ? "bg-accent-dim border-accent text-accent"
                   : "glow-btn--ghost"
               }`}
               style={{ padding: "0.5rem 0.875rem" }}
@@ -240,7 +240,7 @@ export default function ProjectDetailPage() {
               </svg>
               Filters
               {activeFilterCount > 0 && (
-                <span className="bg-accent-dim text-[10px] px-1.5 py-0.5 rounded-full text-[var(--blue)] font-semibold">
+                <span className="bg-accent-dim text-[10px] px-1.5 py-0.5 rounded-full text-accent font-semibold">
                   {activeFilterCount}
                 </span>
               )}
@@ -276,7 +276,7 @@ export default function ProjectDetailPage() {
             >
               {syncing ? (
                 <>
-                  <span className="w-3.5 h-3.5 border-2 border-[var(--green)] border-t-transparent rounded-full animate-spin" />
+                  <span className="w-3.5 h-3.5 border-2 border-success border-t-transparent rounded-full animate-spin" />
                   Syncing...
                 </>
               ) : (
@@ -306,8 +306,8 @@ export default function ProjectDetailPage() {
           <div
             className={`mb-5 p-3 rounded-lg flex items-center justify-between text-[13px] border animate-fade-in-up ${
               syncResult.success
-                ? "bg-success-dim border-success text-[var(--green)]"
-                : "bg-danger-dim border-danger text-[var(--red)]"
+                ? "bg-success-dim border-success text-success"
+                : "bg-danger-dim border-danger text-danger"
             }`}
           >
             <span>{syncResult.message}</span>
@@ -317,7 +317,7 @@ export default function ProjectDetailPage() {
                   href={syncResult.permalink}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="text-[var(--blue)] hover:opacity-80 underline transition-opacity text-[12px]"
+                  className="text-accent hover:opacity-80 underline transition-opacity text-[12px]"
                 >
                   Open in Smartsheet
                 </a>
@@ -338,13 +338,13 @@ export default function ProjectDetailPage() {
         {showFilters && (
           <div className="panel p-4 rounded-lg mb-5 animate-fade-in-up">
             <div className="flex justify-between items-center mb-3">
-              <span className="text-[12px] text-[var(--text-secondary)] font-medium uppercase tracking-wider">
+              <span className="text-[12px] text-secondary font-medium uppercase tracking-wider">
                 Filter Openings
               </span>
               {activeFilterCount > 0 && (
                 <button
                   onClick={clearFilters}
-                  className="text-[12px] text-[var(--blue)] hover:opacity-80 transition-opacity"
+                  className="text-[12px] text-accent hover:opacity-80 transition-opacity"
                 >
                   Clear all
                 </button>
@@ -359,7 +359,7 @@ export default function ProjectDetailPage() {
                 { label: "Hand", key: "hand", options: [["", "All"], ...filterOptions.hands.map(h => [h, h])] },
               ].map((f) => (
                 <div key={f.key}>
-                  <label className="block text-[11px] text-[var(--text-tertiary)] mb-1.5 uppercase tracking-wider">
+                  <label className="block text-[11px] text-tertiary mb-1.5 uppercase tracking-wider">
                     {f.label}
                   </label>
                   <select
@@ -374,7 +374,7 @@ export default function ProjectDetailPage() {
                 </div>
               ))}
             </div>
-            <p className="mt-3 text-[11px] text-[var(--text-tertiary)]">
+            <p className="mt-3 text-[11px] text-tertiary">
               Showing {filteredOpenings.length} of {openings.length} openings
             </p>
           </div>
@@ -383,20 +383,20 @@ export default function ProjectDetailPage() {
         {/* ── Openings Grid ── */}
         {loading ? (
           <div className="flex items-center justify-center py-20 gap-3">
-            <div className="w-5 h-5 border-2 border-[var(--blue)] border-t-transparent rounded-full animate-spin" />
-            <span className="text-[13px] text-[var(--text-tertiary)]">Loading openings...</span>
+            <div className="w-5 h-5 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+            <span className="text-[13px] text-tertiary">Loading openings...</span>
           </div>
         ) : error ? (
-          <div className="p-4 bg-danger-dim border border-danger rounded-lg text-[var(--red)] text-[14px]">
+          <div className="p-4 bg-danger-dim border border-danger rounded-lg text-danger text-[14px]">
             {error}
           </div>
         ) : filteredOpenings.length === 0 ? (
           <div className="text-center py-16">
-            <p className="text-[15px] text-[var(--text-secondary)] mb-1">
+            <p className="text-[15px] text-secondary mb-1">
               {openings.length === 0 ? "No openings found" : "No openings match your filters"}
             </p>
             {openings.length === 0 && (
-              <p className="text-[13px] text-[var(--text-tertiary)]">Upload a PDF submittal to get started</p>
+              <p className="text-[13px] text-tertiary">Upload a PDF submittal to get started</p>
             )}
           </div>
         ) : (
@@ -416,7 +416,7 @@ export default function ProjectDetailPage() {
                 >
                   {/* Door number + badges row */}
                   <div className="flex items-start justify-between mb-2">
-                    <h2 className="text-[17px] font-bold text-[var(--text-primary)] leading-tight">
+                    <h2 className="text-[17px] font-bold text-primary leading-tight">
                       {opening.door_number}
                     </h2>
                     <div className="flex items-center gap-1.5 shrink-0 ml-2">
@@ -436,7 +436,7 @@ export default function ProjectDetailPage() {
                           </svg>
                         </button>
                       )}
-                      <span className="text-[11px] text-[var(--text-tertiary)] tabular-nums">
+                      <span className="text-[11px] text-tertiary tabular-nums">
                         {progressPercent.toFixed(0)}%
                       </span>
                     </div>
@@ -455,19 +455,19 @@ export default function ProjectDetailPage() {
                       </span>
                     )}
                     {opening.door_type && (
-                      <span className="text-[10px] text-[var(--text-tertiary)] bg-[var(--surface)] border border-[var(--border)] px-2 py-0.5 rounded-full">
+                      <span className="text-[10px] text-tertiary bg-surface border border-th-border px-2 py-0.5 rounded-full">
                         {opening.door_type}
                       </span>
                     )}
                     {opening.hand && (
-                      <span className="text-[10px] text-[var(--text-tertiary)] bg-[var(--surface)] border border-[var(--border)] px-2 py-0.5 rounded-full">
+                      <span className="text-[10px] text-tertiary bg-surface border border-th-border px-2 py-0.5 rounded-full">
                         {opening.hand}
                       </span>
                     )}
                   </div>
 
                   {opening.location && (
-                    <p className="text-[12px] text-[var(--text-tertiary)] mb-3 truncate">
+                    <p className="text-[12px] text-tertiary mb-3 truncate">
                       {opening.location}
                     </p>
                   )}
@@ -476,13 +476,13 @@ export default function ProjectDetailPage() {
                   <ProgressBar value={progressPercent} size="sm" showLabel={false} />
 
                   {/* Item count */}
-                  <p className="text-[11px] text-[var(--text-tertiary)] mt-2 tabular-nums">
+                  <p className="text-[11px] text-tertiary mt-2 tabular-nums">
                     {opening.checked_items} / {opening.total_items} items
                   </p>
 
                   {/* Hover arrow */}
                   <div className="absolute bottom-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <svg className="w-3.5 h-3.5 text-[var(--blue)]/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-3.5 h-3.5 text-accent/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                     </svg>
                   </div>

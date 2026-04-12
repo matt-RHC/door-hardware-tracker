@@ -234,16 +234,16 @@ export default function DoorDetailPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-[var(--background)] flex items-center justify-center">
-        <div className="text-[var(--text-secondary)]">Loading...</div>
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-secondary">Loading...</div>
       </div>
     );
   }
 
   if (error && !opening) {
     return (
-      <div className="min-h-screen bg-[var(--background)] p-4">
-        <div className="p-4 bg-danger-dim border border-[var(--red)] rounded-lg text-[var(--red)]">
+      <div className="min-h-screen bg-background p-4">
+        <div className="p-4 bg-danger-dim border border-danger rounded-lg text-danger">
           {error}
         </div>
       </div>
@@ -341,49 +341,49 @@ export default function DoorDetailPage() {
             <div className="space-y-3">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[12px] text-[var(--text-secondary)] mb-1">Name</label>
+                  <label className="block text-[12px] text-secondary mb-1">Name</label>
                   <input
                     type="text"
                     value={editingItem.name}
                     onChange={(e) => setEditingItem({ ...editingItem, name: e.target.value })}
-                    className="w-full px-3 py-2 bg-[var(--surface)] border border-[var(--border)] rounded-lg text-[var(--text-primary)] placeholder-[var(--text-tertiary)] focus:border-[var(--blue-dim)] focus:outline-none text-[13px]"
+                    className="w-full px-3 py-2 bg-surface border border-th-border rounded-lg text-primary placeholder-tertiary focus:border-accent focus:outline-none text-[13px]"
                   />
                 </div>
                 <div>
-                  <label className="block text-[12px] text-[var(--text-secondary)] mb-1">Qty</label>
+                  <label className="block text-[12px] text-secondary mb-1">Qty</label>
                   <input
                     type="number"
                     value={editingItem.qty}
                     onChange={(e) => setEditingItem({ ...editingItem, qty: parseInt(e.target.value) || 0 })}
-                    className="w-full px-3 py-2 bg-[var(--surface)] border border-[var(--border)] rounded-lg text-[var(--text-primary)] placeholder-[var(--text-tertiary)] focus:border-[var(--blue-dim)] focus:outline-none text-[13px]"
+                    className="w-full px-3 py-2 bg-surface border border-th-border rounded-lg text-primary placeholder-tertiary focus:border-accent focus:outline-none text-[13px]"
                   />
                 </div>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <div>
-                  <label className="block text-[12px] text-[var(--text-secondary)] mb-1">Manufacturer</label>
-                  <input type="text" value={editingItem.manufacturer || ""} onChange={(e) => setEditingItem({ ...editingItem, manufacturer: e.target.value || null })} placeholder="Optional" className="w-full px-3 py-2 bg-[var(--surface)] border border-[var(--border)] rounded-lg text-[var(--text-primary)] placeholder-[var(--text-tertiary)] focus:border-[var(--blue-dim)] focus:outline-none text-[13px]" />
+                  <label className="block text-[12px] text-secondary mb-1">Manufacturer</label>
+                  <input type="text" value={editingItem.manufacturer || ""} onChange={(e) => setEditingItem({ ...editingItem, manufacturer: e.target.value || null })} placeholder="Optional" className="w-full px-3 py-2 bg-surface border border-th-border rounded-lg text-primary placeholder-tertiary focus:border-accent focus:outline-none text-[13px]" />
                 </div>
                 <div>
-                  <label className="block text-[12px] text-[var(--text-secondary)] mb-1">Model</label>
-                  <input type="text" value={editingItem.model || ""} onChange={(e) => setEditingItem({ ...editingItem, model: e.target.value || null })} placeholder="Optional" className="w-full px-3 py-2 bg-[var(--surface)] border border-[var(--border)] rounded-lg text-[var(--text-primary)] placeholder-[var(--text-tertiary)] focus:border-[var(--blue-dim)] focus:outline-none text-[13px]" />
+                  <label className="block text-[12px] text-secondary mb-1">Model</label>
+                  <input type="text" value={editingItem.model || ""} onChange={(e) => setEditingItem({ ...editingItem, model: e.target.value || null })} placeholder="Optional" className="w-full px-3 py-2 bg-surface border border-th-border rounded-lg text-primary placeholder-tertiary focus:border-accent focus:outline-none text-[13px]" />
                 </div>
                 <div>
-                  <label className="block text-[12px] text-[var(--text-secondary)] mb-1">Finish</label>
-                  <input type="text" value={editingItem.finish || ""} onChange={(e) => setEditingItem({ ...editingItem, finish: e.target.value || null })} placeholder="Optional" className="w-full px-3 py-2 bg-[var(--surface)] border border-[var(--border)] rounded-lg text-[var(--text-primary)] placeholder-[var(--text-tertiary)] focus:border-[var(--blue-dim)] focus:outline-none text-[13px]" />
+                  <label className="block text-[12px] text-secondary mb-1">Finish</label>
+                  <input type="text" value={editingItem.finish || ""} onChange={(e) => setEditingItem({ ...editingItem, finish: e.target.value || null })} placeholder="Optional" className="w-full px-3 py-2 bg-surface border border-th-border rounded-lg text-primary placeholder-tertiary focus:border-accent focus:outline-none text-[13px]" />
                 </div>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-[12px] text-[var(--text-secondary)] mb-1">Options</label>
-                  <input type="text" value={editingItem.options || ""} onChange={(e) => setEditingItem({ ...editingItem, options: e.target.value || null })} placeholder="Optional" className="w-full px-3 py-2 bg-[var(--surface)] border border-[var(--border)] rounded-lg text-[var(--text-primary)] placeholder-[var(--text-tertiary)] focus:border-[var(--blue-dim)] focus:outline-none text-[13px]" />
+                  <label className="block text-[12px] text-secondary mb-1">Options</label>
+                  <input type="text" value={editingItem.options || ""} onChange={(e) => setEditingItem({ ...editingItem, options: e.target.value || null })} placeholder="Optional" className="w-full px-3 py-2 bg-surface border border-th-border rounded-lg text-primary placeholder-tertiary focus:border-accent focus:outline-none text-[13px]" />
                 </div>
                 <div>
-                  <label className="block text-[12px] text-[var(--text-secondary)] mb-1">Install Type</label>
+                  <label className="block text-[12px] text-secondary mb-1">Install Type</label>
                   <select
                     value={editingItem.install_type || ""}
                     onChange={(e) => setEditingItem({ ...editingItem, install_type: (e.target.value as 'bench' | 'field') || null })}
-                    className="w-full px-3 py-2 min-h-[44px] bg-[var(--surface)] border border-[var(--border)] rounded-lg text-[var(--text-primary)] focus:border-accent focus:outline-none text-[13px]"
+                    className="w-full px-3 py-2 min-h-[44px] bg-surface border border-th-border rounded-lg text-primary focus:border-accent focus:outline-none text-[13px]"
                   >
                     <option value="">Not set</option>
                     <option value="bench">Bench</option>
@@ -392,16 +392,16 @@ export default function DoorDetailPage() {
                 </div>
               </div>
               <div className="flex gap-2 pt-2">
-                <button onClick={saveEditItem} disabled={savingItem} className="flex-1 px-3 py-2 min-h-[44px] bg-[var(--blue)] hover:bg-[var(--blue)]/80 disabled:bg-[var(--surface)] text-white disabled:text-[var(--text-tertiary)] rounded-lg transition-colors text-[13px] font-medium">
+                <button onClick={saveEditItem} disabled={savingItem} className="flex-1 px-3 py-2 min-h-[44px] bg-accent hover:bg-accent/80 disabled:bg-surface text-white disabled:text-tertiary rounded-lg transition-colors text-[13px] font-medium">
                   {savingItem ? "Saving..." : "Save"}
                 </button>
-                <button onClick={cancelEditItem} disabled={savingItem} className="flex-1 px-3 py-2 min-h-[44px] bg-[var(--surface)] border border-[var(--border)] hover:bg-[var(--surface-hover)] disabled:opacity-50 text-[var(--text-secondary)] rounded-lg transition-colors text-[13px] font-medium">
+                <button onClick={cancelEditItem} disabled={savingItem} className="flex-1 px-3 py-2 min-h-[44px] bg-surface border border-th-border hover:bg-surface-hover disabled:opacity-50 text-secondary rounded-lg transition-colors text-[13px] font-medium">
                   Cancel
                 </button>
               </div>
             </div>
           ) : (
-            <p className="text-[var(--text-tertiary)] text-[13px] italic text-center py-4">Editing on Leaf 1...</p>
+            <p className="text-tertiary text-[13px] italic text-center py-4">Editing on Leaf 1...</p>
           )
         ) : (
           // View mode
@@ -410,13 +410,13 @@ export default function DoorDetailPage() {
             <div className="flex justify-between items-start gap-3 mb-2">
               <div className="flex-1 min-w-0">
                 <h3
-                  className="text-[18px] font-bold uppercase text-[var(--text-primary)] leading-tight break-words"
+                  className="text-[18px] font-bold uppercase text-primary leading-tight break-words"
                   style={{ fontFamily: "var(--font-display)", letterSpacing: "0.02em" }}
                 >
                   {item.name}
                 </h3>
                 {formatSpec(item) && (
-                  <p className="text-[13px] text-[var(--text-secondary)] mt-1">
+                  <p className="text-[13px] text-secondary mt-1">
                     {formatSpec(item)}
                   </p>
                 )}
@@ -436,7 +436,7 @@ export default function DoorDetailPage() {
                     </span>
                   )}
                   {item.options && (
-                    <span className="text-[11px] text-[var(--text-tertiary)] truncate">
+                    <span className="text-[11px] text-tertiary truncate">
                       {item.options}
                     </span>
                   )}
@@ -534,10 +534,10 @@ export default function DoorDetailPage() {
             </div>
 
             {/* Bottom action row: edit + report issue */}
-            <div className="flex items-center justify-end gap-2 mt-3 pt-2 border-t border-[var(--border)]">
+            <div className="flex items-center justify-end gap-2 mt-3 pt-2 border-t border-th-border">
               <button
                 onClick={() => startEditItem(item)}
-                className="text-[var(--text-tertiary)] hover:text-[var(--text-secondary)] min-h-[44px] min-w-[44px] flex items-center justify-center transition-colors"
+                className="text-tertiary hover:text-secondary min-h-[44px] min-w-[44px] flex items-center justify-center transition-colors"
                 title="Edit item"
               >
                 <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -549,7 +549,7 @@ export default function DoorDetailPage() {
                   doorNumber: opening.door_number,
                   hardwareItemName: item.name,
                 })}
-                className="text-[11px] uppercase text-[var(--red)] hover:text-[var(--red)]/80 transition-colors min-h-[44px] px-2 flex items-center"
+                className="text-[11px] uppercase text-danger hover:text-danger/80 transition-colors min-h-[44px] px-2 flex items-center"
                 style={{ fontFamily: "var(--font-display)", letterSpacing: "0.06em" }}
               >
                 Report Issue
@@ -562,27 +562,27 @@ export default function DoorDetailPage() {
   };
 
   return (
-    <div className="min-h-screen bg-[var(--background)] pb-28">
+    <div className="min-h-screen bg-background pb-28">
       <OfflineIndicator />
 
       {/* Sticky Header */}
-      <header className="sticky top-0 z-50 bg-[var(--background)]/85 backdrop-blur-xl border-b border-[var(--border)]">
+      <header className="sticky top-0 z-50 bg-background/85 backdrop-blur-xl border-b border-th-border">
         <div className="max-w-[430px] md:max-w-[900px] mx-auto px-4 py-4 flex items-center justify-between">
           <button
             onClick={() => router.push(`/project/${projectId}`)}
-            className="text-[var(--blue)] hover:text-[var(--blue)]/80 flex items-center gap-1 text-[15px] min-h-[44px] min-w-[44px] justify-center"
+            className="text-accent hover:text-accent/80 flex items-center gap-1 text-[15px] min-h-[44px] min-w-[44px] justify-center"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
             </svg>
           </button>
-          <h1 className="text-[17px] font-semibold text-[var(--text-primary)]">
+          <h1 className="text-[17px] font-semibold text-primary">
             Door {opening.door_number}
           </h1>
           {!editingOpening && (
             <button
               onClick={startEditOpening}
-              className="text-[var(--text-tertiary)] hover:text-[var(--text-primary)] min-h-[44px] min-w-[44px] flex items-center justify-center"
+              className="text-tertiary hover:text-primary min-h-[44px] min-w-[44px] flex items-center justify-center"
               title="Edit door details"
             >
               <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -596,82 +596,82 @@ export default function DoorDetailPage() {
       <main className="max-w-[430px] md:max-w-[900px] mx-auto px-4 py-6">
         {/* Edit Opening Form (full width, above hero) */}
         {editingOpening && editingOpeningData && (
-          <div className="mb-6 bg-[var(--surface)] border border-[var(--border)] rounded-xl p-4 space-y-4">
+          <div className="mb-6 bg-surface border border-th-border rounded-xl p-4 space-y-4">
             <div>
-              <label className="block text-[13px] text-[var(--text-secondary)] mb-2">Door Number</label>
+              <label className="block text-[13px] text-secondary mb-2">Door Number</label>
               <input
                 type="text"
                 value={editingOpeningData.door_number}
                 onChange={(e) => setEditingOpeningData(prev => prev ? { ...prev, door_number: e.target.value } : null)}
-                className="w-full px-3 py-2.5 bg-[var(--surface)] border border-[var(--border)] rounded-lg text-[var(--text-primary)] placeholder-[var(--text-tertiary)] focus:border-[var(--blue-dim)] focus:outline-none text-[15px]"
+                className="w-full px-3 py-2.5 bg-surface border border-th-border rounded-lg text-primary placeholder-tertiary focus:border-accent focus:outline-none text-[15px]"
               />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
-                <label className="block text-[13px] text-[var(--text-secondary)] mb-2">HW Set</label>
+                <label className="block text-[13px] text-secondary mb-2">HW Set</label>
                 <input
                   type="text"
                   value={editingOpeningData.hw_set || ""}
                   onChange={(e) => setEditingOpeningData(prev => prev ? { ...prev, hw_set: e.target.value || null } : null)}
                   placeholder="Optional"
-                  className="w-full px-3 py-2.5 bg-[var(--surface)] border border-[var(--border)] rounded-lg text-[var(--text-primary)] placeholder-[var(--text-tertiary)] focus:border-[var(--blue-dim)] focus:outline-none text-[15px]"
+                  className="w-full px-3 py-2.5 bg-surface border border-th-border rounded-lg text-primary placeholder-tertiary focus:border-accent focus:outline-none text-[15px]"
                 />
               </div>
               <div>
-                <label className="block text-[13px] text-[var(--text-secondary)] mb-2">Location</label>
+                <label className="block text-[13px] text-secondary mb-2">Location</label>
                 <input
                   type="text"
                   value={editingOpeningData.location || ""}
                   onChange={(e) => setEditingOpeningData(prev => prev ? { ...prev, location: e.target.value || null } : null)}
                   placeholder="Optional"
-                  className="w-full px-3 py-2.5 bg-[var(--surface)] border border-[var(--border)] rounded-lg text-[var(--text-primary)] placeholder-[var(--text-tertiary)] focus:border-[var(--blue-dim)] focus:outline-none text-[15px]"
+                  className="w-full px-3 py-2.5 bg-surface border border-th-border rounded-lg text-primary placeholder-tertiary focus:border-accent focus:outline-none text-[15px]"
                 />
               </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
-                <label className="block text-[13px] text-[var(--text-secondary)] mb-2">Door Type</label>
+                <label className="block text-[13px] text-secondary mb-2">Door Type</label>
                 <input
                   type="text"
                   value={editingOpeningData.door_type || ""}
                   onChange={(e) => setEditingOpeningData(prev => prev ? { ...prev, door_type: e.target.value || null } : null)}
                   placeholder="Optional"
-                  className="w-full px-3 py-2.5 bg-[var(--surface)] border border-[var(--border)] rounded-lg text-[var(--text-primary)] placeholder-[var(--text-tertiary)] focus:border-[var(--blue-dim)] focus:outline-none text-[15px]"
+                  className="w-full px-3 py-2.5 bg-surface border border-th-border rounded-lg text-primary placeholder-tertiary focus:border-accent focus:outline-none text-[15px]"
                 />
               </div>
               <div>
-                <label className="block text-[13px] text-[var(--text-secondary)] mb-2">Frame Type</label>
+                <label className="block text-[13px] text-secondary mb-2">Frame Type</label>
                 <input
                   type="text"
                   value={editingOpeningData.frame_type || ""}
                   onChange={(e) => setEditingOpeningData(prev => prev ? { ...prev, frame_type: e.target.value || null } : null)}
                   placeholder="Optional"
-                  className="w-full px-3 py-2.5 bg-[var(--surface)] border border-[var(--border)] rounded-lg text-[var(--text-primary)] placeholder-[var(--text-tertiary)] focus:border-[var(--blue-dim)] focus:outline-none text-[15px]"
+                  className="w-full px-3 py-2.5 bg-surface border border-th-border rounded-lg text-primary placeholder-tertiary focus:border-accent focus:outline-none text-[15px]"
                 />
               </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               <div>
-                <label className="block text-[13px] text-[var(--text-secondary)] mb-2">Fire Rating</label>
+                <label className="block text-[13px] text-secondary mb-2">Fire Rating</label>
                 <input
                   type="text"
                   value={editingOpeningData.fire_rating || ""}
                   onChange={(e) => setEditingOpeningData(prev => prev ? { ...prev, fire_rating: e.target.value || null } : null)}
                   placeholder="Optional"
-                  className="w-full px-3 py-2.5 bg-[var(--surface)] border border-[var(--border)] rounded-lg text-[var(--text-primary)] placeholder-[var(--text-tertiary)] focus:border-[var(--blue-dim)] focus:outline-none text-[15px]"
+                  className="w-full px-3 py-2.5 bg-surface border border-th-border rounded-lg text-primary placeholder-tertiary focus:border-accent focus:outline-none text-[15px]"
                 />
               </div>
               <div>
-                <label className="block text-[13px] text-[var(--text-secondary)] mb-2">Hand</label>
+                <label className="block text-[13px] text-secondary mb-2">Hand</label>
                 <input
                   type="text"
                   value={editingOpeningData.hand || ""}
                   onChange={(e) => setEditingOpeningData(prev => prev ? { ...prev, hand: e.target.value || null } : null)}
                   placeholder="Optional"
-                  className="w-full px-3 py-2.5 bg-[var(--surface)] border border-[var(--border)] rounded-lg text-[var(--text-primary)] placeholder-[var(--text-tertiary)] focus:border-[var(--blue-dim)] focus:outline-none text-[15px]"
+                  className="w-full px-3 py-2.5 bg-surface border border-th-border rounded-lg text-primary placeholder-tertiary focus:border-accent focus:outline-none text-[15px]"
                 />
               </div>
             </div>
@@ -680,14 +680,14 @@ export default function DoorDetailPage() {
               <button
                 onClick={saveEditOpening}
                 disabled={savingOpening}
-                className="flex-1 px-4 py-2.5 min-h-[44px] bg-[var(--blue)] hover:bg-[var(--blue)]/80 disabled:bg-[var(--surface)] text-white disabled:text-[var(--text-tertiary)] rounded-lg transition-colors text-[15px] font-medium"
+                className="flex-1 px-4 py-2.5 min-h-[44px] bg-accent hover:bg-accent/80 disabled:bg-surface text-white disabled:text-tertiary rounded-lg transition-colors text-[15px] font-medium"
               >
                 {savingOpening ? "Saving..." : "Save"}
               </button>
               <button
                 onClick={cancelEditOpening}
                 disabled={savingOpening}
-                className="flex-1 px-4 py-2.5 min-h-[44px] bg-[var(--surface)] border border-[var(--border)] hover:bg-[var(--surface-hover)] disabled:opacity-50 text-[var(--text-secondary)] rounded-lg transition-colors text-[15px] font-medium"
+                className="flex-1 px-4 py-2.5 min-h-[44px] bg-surface border border-th-border hover:bg-surface-hover disabled:opacity-50 text-secondary rounded-lg transition-colors text-[15px] font-medium"
               >
                 Cancel
               </button>
@@ -697,14 +697,14 @@ export default function DoorDetailPage() {
 
         {/* Hero Card */}
         {!editingOpening && (
-          <div className="mb-6 bg-[var(--surface)] border border-[var(--border)] rounded-xl p-4">
-            <h1 className="text-[34px] md:text-[42px] font-bold tracking-tight text-[var(--text-primary)] mb-2">
+          <div className="mb-6 bg-surface border border-th-border rounded-xl p-4">
+            <h1 className="text-[34px] md:text-[42px] font-bold tracking-tight text-primary mb-2">
               {opening.door_number}
             </h1>
 
             {opening.hw_set && (
               <div className="mb-3 flex items-center gap-2">
-                <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-success-dim border border-[var(--green)] text-[12px] font-medium text-[var(--green)]">
+                <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-success-dim border border-success text-[12px] font-medium text-success">
                   {opening.hw_set}
                   {opening.hw_heading && ` — ${opening.hw_heading}`}
                 </span>
@@ -712,24 +712,24 @@ export default function DoorDetailPage() {
             )}
 
             {opening.location && (
-              <p className="text-[15px] text-[var(--text-secondary)] mb-3">
+              <p className="text-[15px] text-secondary mb-3">
                 {opening.location}
               </p>
             )}
 
             <div className="flex flex-wrap gap-2">
               {opening.door_type && (
-                <span className="text-[11px] font-medium uppercase text-[var(--text-tertiary)] bg-[var(--surface)] border border-[var(--border)] px-2 py-1 rounded-full">
+                <span className="text-[11px] font-medium uppercase text-tertiary bg-surface border border-th-border px-2 py-1 rounded-full">
                   {opening.door_type}
                 </span>
               )}
               {opening.fire_rating && (
-                <span className="text-[11px] font-medium uppercase text-[var(--red)] bg-danger-dim border border-[var(--red)] px-2 py-1 rounded-full">
+                <span className="text-[11px] font-medium uppercase text-danger bg-danger-dim border border-danger px-2 py-1 rounded-full">
                   {opening.fire_rating}
                 </span>
               )}
               {opening.hand && (
-                <span className="text-[11px] font-medium uppercase text-[var(--text-tertiary)] bg-[var(--surface)] border border-[var(--border)] px-2 py-1 rounded-full">
+                <span className="text-[11px] font-medium uppercase text-tertiary bg-surface border border-th-border px-2 py-1 rounded-full">
                   {opening.hand}
                 </span>
               )}
@@ -751,8 +751,8 @@ export default function DoorDetailPage() {
         {!editingOpening && (
           <div className="mb-6">
             <div className="flex justify-between items-center mb-2">
-              <span className="text-[11px] uppercase font-medium text-[var(--text-tertiary)]">Progress</span>
-              <span className="text-[13px] text-[var(--text-secondary)]">
+              <span className="text-[11px] uppercase font-medium text-tertiary">Progress</span>
+              <span className="text-[13px] text-secondary">
                 {checkedItems} / {totalItems}
               </span>
             </div>
@@ -766,15 +766,15 @@ export default function DoorDetailPage() {
 
         {/* Tab Navigation */}
         {!editingOpening && (
-          <div className="flex gap-0.5 mb-6 bg-[var(--surface)] rounded-lg p-1">
+          <div className="flex gap-0.5 mb-6 bg-surface rounded-lg p-1">
             {(['hardware', 'files', 'notes', 'qr'] as const).map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
                 className={`flex-1 px-3 py-3 min-h-[44px] rounded-lg text-[13px] font-medium uppercase transition-colors ${
                   activeTab === tab
-                    ? 'bg-[var(--surface-hover)] text-[var(--text-primary)] border border-[var(--border-hover)]'
-                    : 'text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]'
+                    ? 'bg-surface-hover text-primary border border-th-border-hover'
+                    : 'text-tertiary hover:text-secondary'
                 }`}
               >
                 {tab === 'qr' ? 'QR' : tab.charAt(0).toUpperCase() + tab.slice(1)}
@@ -787,11 +787,11 @@ export default function DoorDetailPage() {
         {activeTab === 'hardware' && !editingOpening && (
           <div className="mb-8">
             {opening.hardware_items.length === 0 ? (
-              <p className="text-[var(--text-secondary)] text-center py-8">No hardware items yet</p>
+              <p className="text-secondary text-center py-8">No hardware items yet</p>
             ) : isPair ? (
               <>
                 {/* Leaf sub-tabs for pair doors */}
-                <div className="flex gap-0.5 mb-5 bg-[var(--surface)] rounded-lg p-1">
+                <div className="flex gap-0.5 mb-5 bg-surface rounded-lg p-1">
                   {([
                     { key: 'shared' as const, label: 'Shared', count: shared.length, color: 'var(--text-tertiary)' },
                     { key: 'leaf1' as const, label: 'Leaf 1', count: leaf1.length, color: 'var(--cyan)' },
@@ -802,8 +802,8 @@ export default function DoorDetailPage() {
                       onClick={() => setActiveLeafTab(tab.key)}
                       className={`flex-1 px-2 py-3 min-h-[44px] rounded-lg text-[11px] font-semibold uppercase transition-colors flex flex-col items-center gap-0.5 ${
                         activeLeafTab === tab.key
-                          ? 'bg-[var(--surface-hover)] border border-[var(--border-hover)]'
-                          : 'text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]'
+                          ? 'bg-surface-hover border border-th-border-hover'
+                          : 'text-tertiary hover:text-secondary'
                       }`}
                       style={{
                         fontFamily: "var(--font-display)",
@@ -821,7 +821,7 @@ export default function DoorDetailPage() {
                 <div className="space-y-5">
                   {activeLeafTab === 'shared' && shared.map((item) => renderItemCard(item, 1))}
                   {activeLeafTab === 'shared' && shared.length === 0 && (
-                    <p className="text-[var(--text-tertiary)] text-center py-6 text-[13px]">No shared items for this opening</p>
+                    <p className="text-tertiary text-center py-6 text-[13px]">No shared items for this opening</p>
                   )}
                   {activeLeafTab === 'leaf1' && leaf1.map((item) => renderItemCard(item, 1))}
                   {activeLeafTab === 'leaf2' && leaf2.map((item) => renderItemCard(item, 2))}
@@ -853,8 +853,8 @@ export default function DoorDetailPage() {
                   onClick={() => setActiveCategory(cat.value)}
                   className={`text-[12px] font-medium px-3 py-1.5 min-h-[44px] rounded-full transition-colors ${
                     activeCategory === cat.value
-                      ? 'bg-accent-dim border border-[var(--blue)] text-[var(--blue)]'
-                      : 'bg-[var(--surface)] border border-[var(--border)] text-[var(--text-secondary)] hover:bg-[var(--surface-hover)]'
+                      ? 'bg-accent-dim border border-accent text-accent'
+                      : 'bg-surface border border-th-border text-secondary hover:bg-surface-hover'
                   }`}
                 >
                   {cat.label}
@@ -875,10 +875,10 @@ export default function DoorDetailPage() {
                       <button
                         key={attachment.id}
                         onClick={() => setViewingAttachment(attachment)}
-                        className="w-full text-left bg-[var(--surface)] border border-[var(--border)] rounded-xl overflow-hidden hover:bg-[var(--surface-hover)] hover:border-[var(--border-hover)] transition-colors group"
+                        className="w-full text-left bg-surface border border-th-border rounded-xl overflow-hidden hover:bg-surface-hover hover:border-th-border-hover transition-colors group"
                       >
                         {/* Preview area */}
-                        <div className="relative w-full h-40 bg-[var(--surface)] overflow-hidden">
+                        <div className="relative w-full h-40 bg-surface overflow-hidden">
                           {isImage ? (
                             <img
                               src={attachment.file_url}
@@ -887,15 +887,15 @@ export default function DoorDetailPage() {
                             />
                           ) : isPdf ? (
                             <div className="w-full h-full flex flex-col items-center justify-center gap-2">
-                              <svg className="w-10 h-10 text-[var(--red)]" fill="currentColor" viewBox="0 0 24 24">
+                              <svg className="w-10 h-10 text-danger" fill="currentColor" viewBox="0 0 24 24">
                                 <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8l-6-6zM6 20V4h7v5h5v11H6z" />
                                 <path d="M8 14h2v2H8v-2zm3 0h2v2h-2v-2zm3 0h2v2h-2v-2z" />
                               </svg>
-                              <span className="text-[11px] font-medium text-[var(--red)] uppercase tracking-wider">PDF</span>
+                              <span className="text-[11px] font-medium text-danger uppercase tracking-wider">PDF</span>
                             </div>
                           ) : (
                             <div className="w-full h-full flex items-center justify-center">
-                              <svg className="w-10 h-10 text-[var(--text-tertiary)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                              <svg className="w-10 h-10 text-tertiary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                               </svg>
                             </div>
@@ -912,16 +912,16 @@ export default function DoorDetailPage() {
                         {/* File info */}
                         <div className="p-3 flex items-center justify-between gap-2">
                           <div className="min-w-0 flex-1">
-                            <p className="text-[13px] font-medium text-[var(--text-primary)] truncate">
+                            <p className="text-[13px] font-medium text-primary truncate">
                               {attachment.file_name}
                             </p>
-                            <p className="text-[11px] text-[var(--text-tertiary)] mt-0.5 capitalize">
+                            <p className="text-[11px] text-tertiary mt-0.5 capitalize">
                               {(attachment.category || 'general').replace('_', ' ')}
                               {attachment.uploaded_at && ` · ${new Date(attachment.uploaded_at).toLocaleDateString()}`}
                             </p>
                           </div>
-                          <div className="flex-shrink-0 w-8 h-8 rounded-full bg-[var(--surface)] border border-[var(--border)] flex items-center justify-center">
-                            <svg className="w-4 h-4 text-[var(--blue)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <div className="flex-shrink-0 w-8 h-8 rounded-full bg-surface border border-th-border flex items-center justify-center">
+                            <svg className="w-4 h-4 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
                             </svg>
@@ -933,16 +933,16 @@ export default function DoorDetailPage() {
               </div>
             ) : (
               <div className="text-center py-8">
-                <svg className="w-12 h-12 text-[var(--text-tertiary)] mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-12 h-12 text-tertiary mx-auto mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
                 </svg>
-                <p className="text-[var(--text-secondary)] text-[15px]">No files yet</p>
-                <p className="text-[var(--text-tertiary)] text-[12px] mt-1">Upload drawings, plans, or photos</p>
+                <p className="text-secondary text-[15px]">No files yet</p>
+                <p className="text-tertiary text-[12px] mt-1">Upload drawings, plans, or photos</p>
               </div>
             )}
 
             {/* Upload button */}
-            <label className="block p-4 min-h-[44px] bg-[var(--surface)] border border-dashed border-[var(--border)] rounded-xl text-center cursor-pointer hover:bg-[var(--surface-hover)] active:bg-[var(--surface-hover)] transition-colors">
+            <label className="block p-4 min-h-[44px] bg-surface border border-dashed border-th-border rounded-xl text-center cursor-pointer hover:bg-surface-hover active:bg-surface-hover transition-colors">
               <input
                 type="file"
                 onChange={(e) => {
@@ -954,14 +954,14 @@ export default function DoorDetailPage() {
                 accept="image/*,application/pdf"
               />
               <div className="flex items-center justify-center gap-2">
-                <svg className="w-5 h-5 text-[var(--blue)]" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-5 h-5 text-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
                 </svg>
-                <p className="text-[15px] font-medium text-[var(--text-primary)]">
+                <p className="text-[15px] font-medium text-primary">
                   {attachmentLoading ? "Uploading..." : "Upload File"}
                 </p>
               </div>
-              <p className="text-[12px] text-[var(--text-tertiary)] mt-1">
+              <p className="text-[12px] text-tertiary mt-1">
                 Images or PDF · Tap to browse
               </p>
             </label>
@@ -975,12 +975,12 @@ export default function DoorDetailPage() {
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder="Add notes about this opening..."
-              className="w-full px-4 py-3 bg-[var(--surface)] border border-[var(--border)] rounded-xl text-[var(--text-primary)] placeholder-[var(--text-tertiary)] focus:border-[var(--blue-dim)] focus:outline-none min-h-32 resize-none text-[15px]"
+              className="w-full px-4 py-3 bg-surface border border-th-border rounded-xl text-primary placeholder-tertiary focus:border-accent focus:outline-none min-h-32 resize-none text-[15px]"
             />
             <button
               onClick={handleSaveNotes}
               disabled={savingNotes}
-              className="mt-4 px-4 py-2.5 min-h-[44px] bg-[var(--blue)] hover:bg-[var(--blue)]/80 disabled:bg-[var(--surface)] text-white disabled:text-[var(--text-tertiary)] rounded-lg transition-colors text-[15px] font-medium"
+              className="mt-4 px-4 py-2.5 min-h-[44px] bg-accent hover:bg-accent/80 disabled:bg-surface text-white disabled:text-tertiary rounded-lg transition-colors text-[15px] font-medium"
             >
               {savingNotes ? "Saving..." : notesSaved ? "Saved!" : "Save Notes"}
             </button>
@@ -990,7 +990,7 @@ export default function DoorDetailPage() {
         {/* QR Tab */}
         {activeTab === 'qr' && !editingOpening && (
           <div className="flex flex-col items-center justify-center py-8 mb-8">
-            <div className="bg-[var(--surface)] border border-[var(--border)] rounded-xl p-4 mb-4">
+            <div className="bg-surface border border-th-border rounded-xl p-4 mb-4">
               <QRCodeSVG
                 value={qrUrl}
                 size={200}
@@ -998,10 +998,10 @@ export default function DoorDetailPage() {
                 includeMargin={true}
               />
             </div>
-            <p className="text-[15px] text-[var(--text-secondary)] text-center mb-4">
+            <p className="text-[15px] text-secondary text-center mb-4">
               Scan to open this door on mobile
             </p>
-            <button className="px-4 py-2.5 min-h-[44px] bg-[var(--blue)] hover:bg-[var(--blue)]/80 text-white rounded-lg transition-colors text-[15px] font-medium">
+            <button className="px-4 py-2.5 min-h-[44px] bg-accent hover:bg-accent/80 text-white rounded-lg transition-colors text-[15px] font-medium">
               Share
             </button>
           </div>
@@ -1009,15 +1009,15 @@ export default function DoorDetailPage() {
       </main>
 
       {/* Bottom Navigation Bar */}
-      <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[430px] md:max-w-[900px] bg-[var(--background)]/90 backdrop-blur-xl border-t border-[var(--border)] pb-[env(safe-area-inset-bottom)] h-16 flex items-center justify-around z-50">
+      <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[430px] md:max-w-[900px] bg-background/90 backdrop-blur-xl border-t border-th-border pb-[env(safe-area-inset-bottom)] h-16 flex items-center justify-around z-50">
         {(['hardware', 'files', 'notes', 'qr'] as const).map((tab) => (
           <button
             key={tab}
             onClick={() => setActiveTab(tab)}
             className={`flex flex-col items-center gap-1 px-3 py-2 min-h-[44px] min-w-[44px] transition-colors ${
               activeTab === tab
-                ? 'text-[var(--blue)]'
-                : 'text-[var(--text-tertiary)] hover:text-[var(--text-secondary)]'
+                ? 'text-accent'
+                : 'text-tertiary hover:text-secondary'
             }`}
           >
             {tab === 'hardware' && (
@@ -1070,16 +1070,16 @@ export default function DoorDetailPage() {
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto">
           <div className="panel corner-brackets w-full max-w-sm p-5 animate-fade-in-up">
             <h3
-              className="text-[15px] font-bold text-[var(--text-primary)] mb-3"
+              className="text-[15px] font-bold text-primary mb-3"
               style={{ fontFamily: "var(--font-display)", letterSpacing: "0.03em" }}
             >
               APPLY TO ALL?
             </h3>
-            <p className="text-[13px] text-[var(--text-secondary)] mb-1">
-              <span className="text-[var(--text-primary)] font-medium">{classifyPrompt.itemName}</span> appears in{" "}
-              <span className="text-[var(--blue)] font-medium">{classifyPrompt.totalCount}</span> openings.
+            <p className="text-[13px] text-secondary mb-1">
+              <span className="text-primary font-medium">{classifyPrompt.itemName}</span> appears in{" "}
+              <span className="text-accent font-medium">{classifyPrompt.totalCount}</span> openings.
             </p>
-            <p className="text-[13px] text-[var(--text-secondary)] mb-4">
+            <p className="text-[13px] text-secondary mb-4">
               Classify all as{" "}
               <span
                 className="font-medium"
@@ -1117,9 +1117,9 @@ export default function DoorDetailPage() {
                 type="checkbox"
                 checked={dontAskClassify}
                 onChange={(e) => setDontAskClassify(e.target.checked)}
-                className="w-4 h-4 rounded border-[var(--border)] bg-transparent accent-[var(--blue)]"
+                className="w-4 h-4 rounded border-th-border bg-transparent accent-accent"
               />
-              <span className="text-[11px] text-[var(--text-tertiary)]">Don&apos;t ask again (apply to all automatically)</span>
+              <span className="text-[11px] text-tertiary">Don&apos;t ask again (apply to all automatically)</span>
             </label>
           </div>
         </div>
@@ -1130,22 +1130,22 @@ export default function DoorDetailPage() {
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto">
           <div className="panel corner-brackets w-full max-w-sm p-5 animate-fade-in-up">
             <h3
-              className="text-[15px] font-bold text-[var(--text-primary)] mb-3"
+              className="text-[15px] font-bold text-primary mb-3"
               style={{ fontFamily: "var(--font-display)", letterSpacing: "0.03em" }}
             >
               APPLY EDIT TO ALL?
             </h3>
-            <p className="text-[13px] text-[var(--text-secondary)] mb-1">
-              <span className="text-[var(--text-primary)] font-medium">{editApplyAllPrompt.originalName}</span> appears in{" "}
-              <span className="text-[var(--blue)] font-medium">{editApplyAllPrompt.totalCount}</span> openings.
+            <p className="text-[13px] text-secondary mb-1">
+              <span className="text-primary font-medium">{editApplyAllPrompt.originalName}</span> appears in{" "}
+              <span className="text-accent font-medium">{editApplyAllPrompt.totalCount}</span> openings.
             </p>
-            <p className="text-[13px] text-[var(--text-secondary)] mb-1">
+            <p className="text-[13px] text-secondary mb-1">
               Changed fields:{" "}
-              <span className="text-[var(--text-primary)]">
+              <span className="text-primary">
                 {Object.keys(editApplyAllPrompt.updates).join(", ")}
               </span>
             </p>
-            <p className="text-[13px] text-[var(--text-secondary)] mb-4">
+            <p className="text-[13px] text-secondary mb-4">
               Apply these changes to all matching items?
             </p>
 
@@ -1176,9 +1176,9 @@ export default function DoorDetailPage() {
                 type="checkbox"
                 checked={dontAskEditApplyAll}
                 onChange={(e) => setDontAskEditApplyAll(e.target.checked)}
-                className="w-4 h-4 rounded border-[var(--border)] bg-transparent accent-[var(--blue)]"
+                className="w-4 h-4 rounded border-th-border bg-transparent accent-accent"
               />
-              <span className="text-[11px] text-[var(--text-tertiary)]">Don&apos;t ask again (apply to all automatically)</span>
+              <span className="text-[11px] text-tertiary">Don&apos;t ask again (apply to all automatically)</span>
             </label>
           </div>
         </div>
