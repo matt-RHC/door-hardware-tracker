@@ -216,7 +216,7 @@ export default function StepCompare({
                 <span className={subStep === idx ? "text-accent font-semibold" : subStep > idx ? "text-success" : ""}>
                   {subStep > idx ? "✓ " : ""}{label}
                 </span>
-                {i < 3 && <span className="text-white/[0.1]">→</span>}
+                {i < 3 && <span className="text-primary/[0.1]">→</span>}
               </div>
             );
           })}
