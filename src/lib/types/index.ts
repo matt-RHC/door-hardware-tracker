@@ -28,6 +28,9 @@ export interface ExtractedHardwareItem {
   qty_total?: number
   qty_door_count?: number
   qty_source?: string
+  /** Original qty before Punchy auto-correction. Set when qty_source
+   *  becomes 'auto_corrected'. Used by StepReview to show revert button. */
+  qty_before_correction?: number
   name: string
   model: string
   finish: string

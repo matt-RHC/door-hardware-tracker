@@ -86,7 +86,7 @@ interface StepReviewProps {
 
 export default function StepReview({
   doors: initialDoors,
-  hardwareSets,
+  hardwareSets: initialHardwareSets,
   hasExistingData,
   classifyResult,
   pdfBuffer,
@@ -94,6 +94,8 @@ export default function StepReview({
   onBack,
   onRemapColumns,
 }: StepReviewProps) {
+  // Local copy of hardware sets to support Punchy revert without modifying parent state
+  const [hardwareSets, setHardwareSets] = useState(initialHardwareSets);
   const { registerRef } = usePunchHighlight();
   const [doors, setDoors] = useState<DoorEntry[]>(initialDoors);
   // Which set groups have their PDF preview open (lazy-mounted when expanded)
@@ -495,15 +497,43 @@ export default function StepReview({
                   manufacturer: item.manufacturer ?? null,
                   model: item.model ?? null,
                   finish: item.finish ?? null,
+                  qty_source: item.qty_source ?? null,
+                  qty_before_correction: item.qty_before_correction ?? null,
+                  _setId: hwSet.set_id,
+                  _itemIdx: idx,
                 }));
                 const grouped = groupItemsByLeaf(items, lc);
+                const handleRevert = (setId: string, itemIdx: number, originalQty: number) => {
+                  setHardwareSets(prev => prev.map(s => {
+                    if (s.set_id !== setId) return s;
+                    const updatedItems = (s.items ?? []).map((it, i) => {
+                      if (i !== itemIdx) return it;
+                      return { ...it, qty: originalQty, qty_source: 'reverted', qty_before_correction: undefined };
+                    });
+                    return { ...s, items: updatedItems };
+                  }));
+                };
                 const renderItems = (arr: typeof items, leafIdx: number) => arr.map(item => {
                   const scope = classifyItemScope(item.name);
                   const dq = getLeafDisplayQty(item, lc, scope);
+                  const isCorrected = item.qty_source === 'auto_corrected' && item.qty_before_correction != null;
                   return (
-                    <div key={`${item.id}-l${leafIdx}`} className="flex items-center gap-3 py-1 text-[12px]">
+                    <div key={`${item.id}-l${leafIdx}`} className={`flex items-center gap-3 py-1 text-[12px] ${isCorrected ? 'bg-[var(--cyan-dim)] rounded px-1 -mx-1' : ''}`}>
                       <span className="text-primary font-medium truncate">{item.name}</span>
-                      <span className="text-accent text-[11px] shrink-0">qty {dq}</span>
+                      <span className={`text-[11px] shrink-0 ${isCorrected ? 'text-[var(--cyan)] font-bold' : 'text-accent'}`}>
+                        qty {dq}
+                        {isCorrected && (
+                          <span className="text-tertiary font-normal ml-1">(was {item.qty_before_correction})</span>
+                        )}
+                      </span>
+                      {isCorrected && (
+                        <button
+                          onClick={() => handleRevert(item._setId, item._itemIdx, item.qty_before_correction!)}
+                          className="text-[10px] text-[var(--orange)] hover:text-[var(--red)] shrink-0 underline"
+                        >
+                          revert
+                        </button>
+                      )}
                       {item.model && <span className="text-tertiary truncate">{item.model}</span>}
                       {item.finish && <span className="text-tertiary truncate">{item.finish}</span>}
                     </div>
@@ -516,6 +546,14 @@ export default function StepReview({
                         Hardware Items
                       </span>
                       <span className="text-[10px] text-tertiary">({(hwSet.items?.length ?? 0)} items)</span>
+                      {(() => {
+                        const correctedCount = items.filter(i => i.qty_source === 'auto_corrected' && i.qty_before_correction != null).length;
+                        return correctedCount > 0 ? (
+                          <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-[var(--cyan-dim)] text-[var(--cyan)] border border-[var(--cyan)]">
+                            {correctedCount} corrected
+                          </span>
+                        ) : null;
+                      })()}
                       {isPairSet && (
                         <span className="text-[9px] font-semibold uppercase px-1.5 py-0.5 rounded bg-accent-dim text-accent border border-accent ml-auto">
                           PAIR
