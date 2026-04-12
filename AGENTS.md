@@ -45,15 +45,22 @@ Git operations run directly in the working directory. See CLAUDE.md for git iden
 - If a session only produced documents and no code, flag that as a problem in the audit log.
 - Clean up at end of session: archive stale files, remove loose artifacts from repo root.
 
-## Smartsheet Quick Reference
+## Tracking Items (cross-session state)
 
-These are the cross-session sources of truth. Read at session start, update at session end.
+All plan items, session logs, and metric runs live in the `tracking_items` Supabase table. Read at session start, update at session end. The three legacy Smartsheet sheets (4722023373688708, 1895373728599940, 2206493777547140) are **retired** — do not read from or write to them.
 
-| Sheet | ID | Purpose |
-|---|---|---|
-| Project Plan | 4722023373688708 | All bugs, features, tech debt — Status, Priority, Area |
-| Session Log | 1895373728599940 | Session history — topics, decisions, tasks, status |
-| Metrics Log | 2206493777547140 | Extraction quality per PDF per session |
+**CLI** (requires `.env.local` with `NEXT_PUBLIC_SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY`):
+
+```
+npm run tracking -- list                              # all items
+npm run tracking -- list --type plan_item --status Open  # open plan items only
+npm run tracking -- add-item --title "..." --priority "P2 - Medium" --area "API" --description "..."
+npm run tracking -- update-item <uuid> --status Done --resolved-pr 110
+npm run tracking -- add-session --session-id S-087 --topics "..." --status complete
+npm run tracking -- add-metric --session-id S-087 --pdf small.pdf --doors-exp 104 --doors-ext 104
+```
+
+**Fallback** (cloud sandbox without `.env.local`): ask user for `/admin/tracking` paste, or compose SQL for Supabase Studio.
 
 See CLAUDE.md "Session Protocol" for the full read/write rules.
 
