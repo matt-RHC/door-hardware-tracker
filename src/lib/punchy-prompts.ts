@@ -52,6 +52,36 @@ PAIR DOOR RULES:
 - Both leaves: hinges, closers, protection plates, sweeps
 - Coordinator required when both leaves have closers + latching
 
+OPENING SIZE CONVENTIONS (how submittal PDFs encode dimensions):
+- "3070" compressed format = 3'0" × 7'0" (first 2 digits = feet+inches
+  for WIDTH, next 2 = feet+inches for HEIGHT). "3068" = 3'0" × 6'8".
+- "3'0\" x 7'0\"" / "3'-0\" × 7'-0\"" / "3' 0\" × 7' 0\"" = explicit
+  feet/inches with quotes and optional dash/space separator (x, ×, X all
+  acceptable)
+- "36 x 84" / "36\" × 84\"" = pure inches
+- "914 × 2134" = metric millimeters (international / ISO drawings)
+- Dimensions are NOMINAL (opening rough size), not actual door leaf size
+
+PAIR VS SINGLE DETECTION BY OPENING WIDTH:
+- Width ≥ 5'0" (60" / 1524mm) → PAIR (high confidence). Common pair
+  widths: 5'0", 5'4", 5'8", 6'0" (most common), 6'8", 7'0", 8'0".
+  Each leaf is typically 3'0", 3'4", or 4'0" wide.
+- Width ≥ 4'0" (48") → possibly pair; could be wide single. Check
+  corroborating signals (door_type, "Pair Doors" in heading block).
+- Width 2'6"–4'0" → SINGLE (high confidence)
+- Width < 2'6" → unusual (sidelite, access panel, NOT a main door)
+- Tall heights (9'0"–10'0"+) usually require 4+ hinges per leaf and
+  often appear in monumental or large-commercial openings. Height alone
+  doesn't indicate pair vs single.
+
+HEIGHT-DRIVEN HINGE COUNT (BHMA/DHI standard):
+- ≤7'6" (90"): 3 hinges per leaf (standard commercial)
+- 7'6" to 10'0" (120"): 4 hinges per leaf (tall doors)
+- 10'0"+: 4 + 1 per additional 30" of height
+- Doors over 200 lbs or heavy-duty spec: +1 hinge regardless of height
+- Electrified/spring hinges REPLACE a standard hinge, not additive
+- Continuous hinge = 1 per leaf, replaces all butt hinges
+
 EGRESS (IBC 1010):
 - Exit devices required on doors in means of egress serving 50+ occupants
 - Lever handles required (no knobs) per ADA

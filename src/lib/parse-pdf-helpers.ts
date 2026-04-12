@@ -736,6 +736,194 @@ export function normalizeDoorNumber(s: string): string {
   return (s ?? '').trim().toUpperCase().replace(/\s+/g, '')
 }
 
+// --- Opening size + pair detection ---
+//
+// Opening size conventions in DFH (Door & Frame Hardware) industry:
+//
+//   "3070"          → 3'0" × 7'0" (compressed: first 2 digits = feet+inches
+//                     for WIDTH, next 2 = feet+inches for HEIGHT)
+//   "3068"          → 3'0" × 6'8"
+//   "6080"          → 6'0" × 8'0"  (pair — width > 48")
+//   "3'0\" x 7'0\"" → explicit feet/inches with spaces and quotes
+//   "3'-0\" × 7'-0\""→ dash-separator variant (common in architectural drawings)
+//   "36 x 84"       → pure inches (36" wide × 84" tall)
+//   "36\" × 84\""   → pure inches with quotes
+//   "914 x 2134"    → metric millimeters (international / ISO)
+//   "3-0 x 7-0"     → dash-and-zero variant
+//
+// Pair vs single detection by width (rule of thumb):
+//   Width ≥ 5'0" (60" / 152 cm / 1524 mm) → pair (HIGH confidence)
+//   Width ≥ 4'0" (48")                    → possibly pair (could be wide
+//                                            single; need corroborating
+//                                            signal like heading_leaf_count)
+//   Width 2'6"–4'0"                       → single (HIGH confidence)
+//   Width < 2'6"                          → unusual (sidelite, access panel)
+//
+// Common pair widths: 5'0", 5'4", 5'8", 6'0" (most common), 6'8", 7'0", 8'0".
+// Each leaf in a pair is typically 3'0", 3'4", or 4'0" wide.
+
+const _PAIR_MIN_WIDTH_IN = 48 // 4'0" — below this, it's a single for sure
+
+/**
+ * Parse an opening size label into width/height in inches. Returns null if
+ * the label doesn't match any recognized format. Used as a secondary pair
+ * detection signal when heading_leaf_count is missing.
+ *
+ * Handles the common DFH format variants listed in the comment block above.
+ * Metric millimeters are converted to inches (1 in = 25.4 mm).
+ */
+export function parseOpeningSize(
+  text: string | null | undefined,
+): { widthIn: number; heightIn: number } | null {
+  if (!text) return null
+  const t = text.trim()
+  if (t.length === 0) return null
+
+  // Helper: feet + inches → total inches
+  const ftIn = (ft: number, inches: number) => ft * 12 + inches
+
+  // --- Format 1: "3'0\" x 7'0\"" or "3'-0\" x 7'-0\"" or "3' 0\" × 7' 0\""
+  //   Matches feet/inches with optional dash/space, optional inch marks,
+  //   and any of x, ×, X, * as separator.
+  //   Groups: (fW)(iW) (fH)(iH)
+  const explicitFtIn =
+    /(\d+)\s*'\s*[-\s]?\s*(\d{1,2})?\s*"?\s*[x×X*]\s*(\d+)\s*'\s*[-\s]?\s*(\d{1,2})?\s*"?/
+  const m1 = t.match(explicitFtIn)
+  if (m1) {
+    const fW = parseInt(m1[1], 10)
+    const iW = m1[2] ? parseInt(m1[2], 10) : 0
+    const fH = parseInt(m1[3], 10)
+    const iH = m1[4] ? parseInt(m1[4], 10) : 0
+    if (!Number.isNaN(fW) && !Number.isNaN(fH)) {
+      return { widthIn: ftIn(fW, iW), heightIn: ftIn(fH, iH) }
+    }
+  }
+
+  // --- Format 2: "3070" or "3068" compressed 4-digit (feet+inches per dim)
+  //   2 digits for width (feet tens × 10 + inches ones), 2 digits for height.
+  //   Only accept if the implied dimensions are plausible (width 20"–96",
+  //   height 60"–144") — else it's probably a door_number or other code.
+  const compressed = /^(\d{4,5})$/
+  const m2 = t.match(compressed)
+  if (m2) {
+    const digits = m2[1]
+    // Split into width / height halves. For 4 digits: first 2 = width,
+    // last 2 = height. For 5 digits: first 2 or 3 = width, last 2 = height.
+    const widthStr = digits.length === 5 ? digits.slice(0, 3) : digits.slice(0, 2)
+    const heightStr = digits.slice(-2)
+    // "30" = 3'0" = 36"; "34" = 3'4" = 40"; "36" = 3'6" = 42"
+    // "70" = 7'0" = 84"; "80" = 8'0" = 96"
+    const parseFtInPair = (s: string): number | null => {
+      if (s.length === 2) {
+        const ft = parseInt(s[0], 10)
+        const inches = parseInt(s[1], 10)
+        if (Number.isNaN(ft) || Number.isNaN(inches)) return null
+        return ftIn(ft, inches)
+      }
+      if (s.length === 3) {
+        const ft = parseInt(s.slice(0, 2), 10)
+        const inches = parseInt(s[2], 10)
+        if (Number.isNaN(ft) || Number.isNaN(inches)) return null
+        return ftIn(ft, inches)
+      }
+      return null
+    }
+    const widthIn = parseFtInPair(widthStr)
+    const heightIn = parseFtInPair(heightStr)
+    if (
+      widthIn != null &&
+      heightIn != null &&
+      widthIn >= 20 &&
+      widthIn <= 120 &&
+      heightIn >= 60 &&
+      heightIn <= 144
+    ) {
+      return { widthIn, heightIn }
+    }
+  }
+
+  // --- Format 3: "36 x 84" or "36\" × 84\"" pure inches, OR metric mm
+  //   Must be standalone (not trailing text), and within plausible ranges.
+  //   Allow 2-4 digits so metric millimeters (e.g., 914 × 2134) parse.
+  const inchesOnly = /^(\d{2,4})\s*"?\s*[x×X*]\s*(\d{2,4})\s*"?$/
+  const m3 = t.match(inchesOnly)
+  if (m3) {
+    const w = parseInt(m3[1], 10)
+    const h = parseInt(m3[2], 10)
+    // Plausibility: width 20–144", height 60–144". If both are ≥ 300, treat
+    // as metric mm (e.g., "914 x 2134").
+    if (w >= 300 && h >= 300) {
+      const widthIn = Math.round((w / 25.4) * 10) / 10
+      const heightIn = Math.round((h / 25.4) * 10) / 10
+      return { widthIn, heightIn }
+    }
+    if (w >= 20 && w <= 144 && h >= 60 && h <= 144) {
+      return { widthIn: w, heightIn: h }
+    }
+  }
+
+  return null
+}
+
+/**
+ * Detect whether an opening is a pair door based on the hardware set and
+ * door info. Uses a layered signal strategy so the detection is robust
+ * across different PDF formats:
+ *
+ *   1. PRIMARY — `heading_leaf_count > heading_door_count`. If Python's
+ *      extractor captured the "N Pair Doors" lines correctly, the leaf
+ *      count exceeds the opening count and we have a definitive answer.
+ *   2. SECONDARY — Parse the opening size from door_type or the heading
+ *      text. If width ≥ 48" (4'0"), treat as pair. This catches PDFs
+ *      where the heading parser missed the leaf count but the size is
+ *      available in the door schedule.
+ *   3. TERTIARY — Keyword scan of heading/door_type for "pair", "double",
+ *      "pr" (the legacy behavior). This is the weakest signal but catches
+ *      edge cases where neither structured signal is present.
+ *
+ * Previously only the tertiary signal was used, which failed silently for
+ * the Radius DC PDF format (heading text "Heading #DH4A.1", door_type "A")
+ * and left pair doors with the wrong per-leaf → per-opening math.
+ */
+export function detectIsPair(
+  hwSet: HardwareSet | undefined,
+  doorInfo: { door_type?: string | null; location?: string | null } | undefined,
+): boolean {
+  // --- Primary: leaf count exceeds door count in the extracted set ---
+  const leafCount = hwSet?.heading_leaf_count ?? 0
+  const doorCount = hwSet?.heading_door_count ?? 0
+  if (doorCount >= 1 && leafCount > doorCount) {
+    return true
+  }
+
+  // --- Secondary: parse opening size from door_type or heading text ---
+  const sizeSources: Array<string | null | undefined> = [
+    doorInfo?.door_type,
+    doorInfo?.location,
+    hwSet?.heading,
+  ]
+  for (const src of sizeSources) {
+    const parsed = parseOpeningSize(src)
+    if (parsed && parsed.widthIn >= _PAIR_MIN_WIDTH_IN) {
+      return true
+    }
+  }
+
+  // --- Tertiary: keyword scan (legacy fallback) ---
+  const heading = (hwSet?.heading ?? '').toLowerCase()
+  const doorType = (doorInfo?.door_type ?? '').toLowerCase()
+  if (
+    heading.includes('pair') ||
+    heading.includes('double') ||
+    doorType.includes('pr') ||
+    doorType.includes('pair')
+  ) {
+    return true
+  }
+
+  return false
+}
+
 /**
  * Build a door-number → specific-sub-set lookup map.
  *
@@ -791,10 +979,19 @@ export function buildPerOpeningItems(
     // route their items to the right openings.
     const doorKey = normalizeDoorNumber(opening.door_number)
     const hwSet = doorToSetMap.get(doorKey) ?? setMap.get(opening.hw_set ?? '')
-    const heading = (hwSet?.heading ?? '').toLowerCase()
-    const doorType = (doorInfo?.door_type ?? '').toLowerCase()
-    const isPair = heading.includes('pair') || heading.includes('double') ||
-                   doorType.includes('pr') || doorType.includes('pair')
+
+    // Pair detection uses detectIsPair which layers three signals:
+    //   1. hwSet.heading_leaf_count > heading_door_count (primary)
+    //   2. parseOpeningSize → width >= 48" (secondary)
+    //   3. keyword scan of heading / door_type (tertiary)
+    //
+    // This replaces an earlier inline keyword-only check that silently
+    // returned false for Radius DC format (heading "Heading #DH4A.1",
+    // door_type "A" — no "pair" keyword in either). The result was that
+    // pair openings got only 1 Door row and per-leaf item quantities
+    // were stored without being doubled.
+    const isPair = detectIsPair(hwSet, doorInfo)
+    const leafMultiplier = isPair ? 2 : 1
 
     // Add door(s) only when door_type is known
     const doorModel = doorInfo?.door_type?.trim() || null
@@ -807,19 +1004,62 @@ export function buildPerOpeningItems(
       }
     }
 
-    // Frame — only when frame_type is known
+    // Frame — only when frame_type is known. One frame per opening
+    // regardless of pair vs single (pair doors share one doubled frame).
     const frameModel = doorInfo?.frame_type?.trim() || null
     if (frameModel) {
       rows.push({ ...base, name: 'Frame', qty: 1, manufacturer: null, model: frameModel, finish: null, sort_order: sortOrder++ })
     }
 
-    // Hardware set items
+    // Hardware set items.
+    //
+    // For pair openings, per-leaf items must be DOUBLED to produce
+    // per-opening quantities. Python's normalize_quantities stores
+    // per-leaf values for hinges/etc. (e.g., 4 hinges per leaf), so a
+    // pair opening needs 4 × 2 = 8 total. Per-opening items (closer,
+    // lockset, exit device, smoke seal) are stored as per-opening
+    // values and must NOT be doubled.
+    //
+    // The CANONICAL signal for "which way did Python divide this?" is
+    // item.qty_door_count — it holds the divisor Python actually used:
+    //   - qty_door_count === heading_leaf_count → Python divided by
+    //     leaves. The stored qty is PER LEAF. Double it for pair.
+    //   - qty_door_count === heading_door_count → Python divided by
+    //     doors. The stored qty is PER OPENING. Don't double.
+    //   - qty_door_count null/missing → Python didn't normalize (raw
+    //     parse or cap/flag fallback). Use the TypeScript taxonomy
+    //     (classifyItemScope) as a secondary signal. This also handles
+    //     pre-existing taxonomy inconsistencies between Python and TS
+    //     (e.g., TS labels closer as per_leaf, but Python normalized
+    //     it as per-opening — trusting qty_door_count prevents
+    //     double-counting).
+    const leafCount = hwSet?.heading_leaf_count ?? 0
+    const doorCount = hwSet?.heading_door_count ?? 0
     if ((hwSet?.items?.length ?? 0) > 0) {
       for (const item of hwSet?.items ?? []) {
+        const baseQty = item.qty || 1
+        let shouldDouble = false
+        if (isPair) {
+          const qdc = item.qty_door_count ?? null
+          if (qdc != null && leafCount > doorCount && qdc === leafCount) {
+            // Primary: Python divided by leaves → per-leaf value → ×2
+            shouldDouble = true
+          } else if (qdc != null && qdc === doorCount) {
+            // Primary: Python divided by doors → per-opening value → keep
+            shouldDouble = false
+          } else {
+            // Fallback: taxonomy classification when qty_door_count is
+            // missing or ambiguous. Conservative — only double if scope
+            // is definitively per_leaf.
+            const scope = classifyItemScope(item.name)
+            shouldDouble = scope === 'per_leaf'
+          }
+        }
+        const qty = shouldDouble ? baseQty * leafMultiplier : baseQty
         rows.push({
           ...base,
           name: item.name,
-          qty: item.qty || 1,
+          qty,
           manufacturer: item.manufacturer || null,
           model: item.model || null,
           finish: item.finish || null,
