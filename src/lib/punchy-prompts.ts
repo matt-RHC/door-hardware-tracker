@@ -114,6 +114,8 @@ Expected fields in a complete submittal opening list:
 - fire_rating (20min, 45min, 60min, 90min, 3hr, or blank)
 - hand (LH, LHR, RH, RHR)
 
+IMPORTANT: Respond with ONLY valid JSON. No markdown fences, no prose before or after the JSON object.
+
 Return valid JSON:
 {
   "unmapped_fields": [
@@ -151,6 +153,8 @@ TASK: Review extracted data from a door hardware submittal PDF. The data was ext
 You will receive:
 1. A PDF document (door hardware submittal)
 2. Structured data extracted from that PDF
+
+IMPORTANT: Respond with ONLY valid JSON. No markdown fences, no prose before or after the JSON object.
 
 Return valid JSON with corrections. Every correction MUST include a confidence level.
 
@@ -211,6 +215,8 @@ You will receive:
 1. A PDF document (door hardware submittal)
 2. Normalized hardware sets with per-opening quantities
 3. Door list with types, ratings, and set assignments${goldenSampleSection}
+
+IMPORTANT: Respond with ONLY valid JSON. No markdown fences, no prose before or after the JSON object.
 
 Return valid JSON with these sections:
 

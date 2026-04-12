@@ -1,8 +1,13 @@
 /**
  * Extract a JSON object or array from an LLM response that may contain
  * prose, markdown code blocks, or other non-JSON text.
+ *
+ * Returns `null` when no valid JSON can be extracted, allowing callers
+ * to fall back to safe defaults instead of crashing the wizard.
  */
-export function extractJSON(raw: string): object {
+export function extractJSON(raw: string): object | null {
+  if (!raw || raw.trim().length === 0) return null
+
   // Try direct parse first
   try {
     return JSON.parse(raw)
@@ -26,6 +31,7 @@ export function extractJSON(raw: string): object {
     } catch { /* fall through */ }
   }
 
-  // All extraction attempts failed
-  throw new Error(`LLM returned non-JSON response: ${raw.substring(0, 200)}...`)
+  // All extraction attempts failed — return null so callers can use safe defaults
+  console.error(`extractJSON: all strategies failed. Raw response (first 300 chars): ${raw.substring(0, 300)}`)
+  return null
 }

@@ -170,12 +170,14 @@ export async function callPunchyColumnReview(
       return { unmapped_fields: [], mapping_issues: [], notes: 'Punchy returned no text' }
     }
 
-    let text = textBlock.text.trim()
-    if (text.startsWith('```')) {
-      text = text.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '')
+    const text = textBlock.text.trim()
+    const parsed = extractJSON(text)
+    if (!parsed) {
+      console.warn('Punchy column review returned unparseable response:', text.substring(0, 300))
+      return { unmapped_fields: [], mapping_issues: [], notes: 'Punchy returned unparseable response' }
     }
 
-    return extractJSON(text) as PunchyColumnReview
+    return parsed as PunchyColumnReview
   } catch (err) {
     console.error('Punchy column review failed:', err instanceof Error ? err.message : String(err))
     return { unmapped_fields: [], mapping_issues: [], notes: `Punchy column review failed: ${err instanceof Error ? err.message : String(err)}` }
@@ -231,12 +233,14 @@ export async function callPunchyPostExtraction(
       return { notes: 'Punchy returned no text' }
     }
 
-    let text = textBlock.text.trim()
-    if (text.startsWith('```')) {
-      text = text.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '')
+    const text = textBlock.text.trim()
+    const parsed = extractJSON(text)
+    if (!parsed) {
+      console.warn('Punchy post-extraction review returned unparseable response:', text.substring(0, 300))
+      return { notes: 'Punchy returned unparseable response' }
     }
 
-    return extractJSON(text) as PunchyCorrections
+    return parsed as PunchyCorrections
   } catch (err) {
     console.error('Punchy post-extraction review failed:', err instanceof Error ? err.message : String(err))
     return { notes: `Punchy review failed: ${err instanceof Error ? err.message : String(err)}` }
@@ -309,19 +313,21 @@ export async function callPunchyQuantityCheck(
       return { flags: [], compliance_issues: [], notes: 'Punchy returned no text' }
     }
 
-    let text = textBlock.text.trim()
-    if (text.startsWith('```')) {
-      text = text.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '')
+    const text = textBlock.text.trim()
+    const parsed = extractJSON(text)
+    if (!parsed) {
+      console.warn('Punchy quantity check returned unparseable response:', text.substring(0, 300))
+      return { flags: [], compliance_issues: [], notes: 'Punchy returned unparseable response' }
     }
 
-    const parsed = extractJSON(text) as PunchyQuantityCheck
     // Ensure backward compat: default missing arrays
+    const typed = parsed as PunchyQuantityCheck
     return {
-      auto_corrections: parsed.auto_corrections ?? [],
-      questions: parsed.questions ?? [],
-      flags: parsed.flags ?? [],
-      compliance_issues: parsed.compliance_issues ?? [],
-      notes: parsed.notes,
+      auto_corrections: typed.auto_corrections ?? [],
+      questions: typed.questions ?? [],
+      flags: typed.flags ?? [],
+      compliance_issues: typed.compliance_issues ?? [],
+      notes: typed.notes,
     }
   } catch (err) {
     console.error('Punchy quantity check failed:', err instanceof Error ? err.message : String(err))
@@ -403,18 +409,11 @@ export async function callDeepExtraction(
       return { ok: false, error: 'LLM response had no text content' }
     }
 
-    let text = textBlock.text.trim()
-    if (text.startsWith('```')) {
-      text = text.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '')
-    }
-
-    let parsed: unknown
-    try {
-      parsed = extractJSON(text)
-    } catch (parseErr) {
-      const message = parseErr instanceof Error ? parseErr.message : String(parseErr)
-      console.error('Deep extraction JSON parse failed:', message, '\nRaw text:', text.slice(0, 500))
-      return { ok: false, error: `Could not parse LLM response as JSON: ${message}` }
+    const text = textBlock.text.trim()
+    const parsed = extractJSON(text)
+    if (!parsed) {
+      console.error('Deep extraction JSON parse failed. Raw text:', text.slice(0, 500))
+      return { ok: false, error: 'Could not parse LLM response as JSON' }
     }
 
     // Handle both array and { sets: [...] } response shapes
