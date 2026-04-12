@@ -321,6 +321,33 @@ class TestCategoryAwareDivision:
         assert item.qty == 2
         assert item.qty_door_count == 3  # openings
 
+    def test_wire_harness_divides_by_leaves(self, extract_tables):
+        """Wire harness is per-leaf (follows electrified hardware placement).
+        Previously unclassified in Python — items fell through to the
+        unknown/legacy path. Phase 2b added it to _CATEGORY_PATTERNS and
+        DIVISION_PREFERENCE so it divides by leaves like hinges do:
+        4 wire harnesses across 2 pair openings (4 leaves) → 1 per leaf."""
+        hw = self._make_set(extract_tables, 4, 2, 4, "CON-5 Wire Harness")
+        extract_tables.normalize_quantities([hw], [])
+        item = hw.items[0]
+        assert item.qty == 1
+        assert item.qty_door_count == 4  # leaves
+
+    def test_wire_harness_matches_connector_variants(self, extract_tables):
+        """The wire_harness classifier should catch the common name variants
+        from the TS taxonomy: 'wire harness', 'molex', 'con-N', 'pigtail',
+        'connector'. Don't accidentally classify them as something else
+        (especially not as electric_hinge, which uses 'hinge .* CON')."""
+        names = [
+            "Wire Harness 12in",
+            "Molex Connector 4-pin",
+            "CON-5 pigtail",
+            "Pigtail wiring assembly",
+        ]
+        for name in names:
+            cat = extract_tables._classify_hardware_item(name)
+            assert cat == "wire_harness", f"{name!r} → {cat} (expected wire_harness)"
+
 
 # ── Unit tests: expanded heading regex ──
 

@@ -42,6 +42,7 @@ export async function GET(
           finish,
           options,
           sort_order,
+          leaf_side,
           created_at
         ),
         checklist_progress(

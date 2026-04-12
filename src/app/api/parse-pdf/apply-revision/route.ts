@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import type { DoorEntry, HardwareSet } from '@/lib/types'
-import { buildPerOpeningItems, buildDoorToSetMap } from '@/lib/parse-pdf-helpers'
+import { buildPerOpeningItems, buildDoorToSetMap, normalizeQuantities } from '@/lib/parse-pdf-helpers'
 
 // User decisions from the wizard
 interface RemovedDecision {
@@ -63,34 +63,20 @@ export async function POST(request: NextRequest) {
     }
     const doorToSetMap = buildDoorToSetMap(hardwareSets)
 
-    // --- Quantity correction (heading-based, same strategy as save/route.ts) ---
-    // Iterate hardwareSets directly to avoid double-iteration from setMap
-    // having each set under both set_id and generic_set_id keys.
-    for (const set of hardwareSets) {
-      const leafCount = (set.heading_leaf_count ?? 0) > 1 ? (set.heading_leaf_count ?? 0) : 0
-      const doorCount = (set.heading_door_count ?? 0) > 1 ? (set.heading_door_count ?? 0) : 0
-      if (leafCount <= 1 && doorCount <= 1) continue
-
-      for (const item of set.items ?? []) {
-        if (item.qty_source === 'divided' || item.qty_source === 'flagged' || item.qty_source === 'capped') continue
-        let divided = false
-        if (leafCount > 1 && item.qty >= leafCount) {
-          const perLeaf = item.qty / leafCount
-          if (Number.isInteger(perLeaf)) {
-            item.qty = perLeaf
-            item.qty_source = 'divided'  // prevent re-division
-            divided = true
-          }
-        }
-        if (!divided && doorCount > 1 && doorCount !== leafCount && item.qty >= doorCount) {
-          const perOpening = item.qty / doorCount
-          if (Number.isInteger(perOpening)) {
-            item.qty = perOpening
-            item.qty_source = 'divided'
-          }
-        }
-      }
-    }
+    // --- Quantity correction ---
+    //
+    // Revisions don't run through chunk/route.ts's Punchy pipeline the way a
+    // fresh upload does, so this is the ONLY normalization pass between the
+    // wizard and the DB. Call the authoritative category-aware normalizer
+    // from parse-pdf-helpers.ts (per_leaf / per_opening / per_pair / per_frame
+    // handling, sub-heading detection, max-qty sanity check, doorsPerSet
+    // fallback for older PDFs with missing heading counts).
+    //
+    // Phase 4 of groovy-tumbling-backus: this used to be a trimmed inline
+    // loop that lacked category awareness — revisions normalized differently
+    // than fresh extractions. Collapsed to the shared helper so the two
+    // flows can't drift.
+    normalizeQuantities(hardwareSets, allDoors)
 
     const doorMap = new Map<string, DoorEntry>()
     for (const door of allDoors) {

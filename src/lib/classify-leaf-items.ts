@@ -1,14 +1,26 @@
 /**
  * Groups hardware items into Shared / Leaf 1 / Leaf 2 sections for pair doors.
  *
- * Uses the hardware taxonomy's install_scope to classify each item:
- *   - per_leaf   → appears on both Leaf 1 and Leaf 2 (stored qty is per-leaf)
- *   - per_opening → appears on both leaves (UI shows qty / leafCount per leaf)
- *   - per_pair   → Shared section (coordinator, flush bolt, astragal)
- *   - per_frame  → Shared section (threshold, seals, etc.)
- *   - unknown    → defaults to per-leaf behavior (appears on both leaves)
+ * Phase 3 of groovy-tumbling-backus: prefer the persisted
+ * `hardware_items.leaf_side` value (migration 013) when it is set, falling
+ * back to the taxonomy-regex logic below when it is NULL. That fallback
+ * stays in place for two reasons:
  *
- * Special structural items (Door, Frame) are classified by name:
+ *   1. Existing rows backfilled only at the unambiguous cases (structural
+ *      Door/Frame rows plus `per_pair` / `per_frame` items). per_leaf and
+ *      per_opening items on pair doors still carry NULL and are classified
+ *      at render time like before.
+ *   2. The wizard preview operates on items that haven't been saved yet and
+ *      therefore have no leaf_side — it relies on the render-time path.
+ *
+ * Taxonomy scope → default leaf routing (when leaf_side is NULL):
+ *   - per_leaf    → appears on both Leaf 1 and Leaf 2 (stored qty is per-leaf)
+ *   - per_opening → appears on both leaves (UI shows qty / leafCount per leaf)
+ *   - per_pair    → Shared section (coordinator, flush bolt, astragal)
+ *   - per_frame   → Shared section (threshold, seals, etc.)
+ *   - unknown     → defaults to per-leaf behavior (appears on both leaves)
+ *
+ * Structural items are classified by name:
  *   - "Door (Active Leaf)"   → leaf1
  *   - "Door (Inactive Leaf)" → leaf2
  *   - "Door"                 → leaf1 (single door)
@@ -29,6 +41,8 @@ export interface LeafGroupableItem {
   options?: string | null
   sort_order?: number
   install_type?: string | null
+  /** Persisted leaf attribution from migration 013. NULL → fall back to regex. */
+  leaf_side?: 'active' | 'inactive' | 'shared' | 'both' | null
   progress?: any
   progress_by_leaf?: any[]
   [key: string]: any
@@ -85,6 +99,29 @@ export function groupItemsByLeaf<T extends LeafGroupableItem>(
   const isPair = leafCount >= 2
 
   for (const item of items) {
+    // Phase 3: prefer persisted leaf_side when the DB carries a value.
+    // Migration 013 backfilled the unambiguous cases and the save path
+    // stamps it going forward. When null/undefined (older rows, wizard
+    // preview, or deliberately ambiguous per_leaf/per_opening pair items)
+    // we fall through to the legacy taxonomy-regex classification below.
+    if (item.leaf_side === 'shared') {
+      shared.push(item)
+      continue
+    }
+    if (item.leaf_side === 'active') {
+      leaf1.push(item)
+      continue
+    }
+    if (item.leaf_side === 'inactive') {
+      if (isPair) leaf2.push(item)
+      continue
+    }
+    if (item.leaf_side === 'both') {
+      leaf1.push(item)
+      if (isPair) leaf2.push(item)
+      continue
+    }
+
     // Structural items: classified by name
     if (item.name === 'Door (Active Leaf)') {
       leaf1.push(item)

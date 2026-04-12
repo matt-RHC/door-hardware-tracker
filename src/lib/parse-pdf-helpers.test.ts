@@ -8,6 +8,7 @@ import {
   parseOpeningSize,
   detectIsPair,
   buildPerOpeningItems,
+  computeLeafSide,
 } from './parse-pdf-helpers'
 import type { HardwareSet, DoorEntry } from '@/lib/types'
 
@@ -292,6 +293,45 @@ describe('normalizeQuantities — category-aware division', () => {
 
     expect(sets[0].items[0].qty).toBe(6)
     expect(sets[0].items[1].qty).toBe(4)
+  })
+
+  it('does not re-normalize Punchy-corrected or user-authored qty_sources', () => {
+    // Regression test for the P0 bug where normalizeQuantities divided qty
+    // values that were already final (per-opening) because the skip list
+    // only covered 'divided' / 'flagged' / 'capped'. Every terminal
+    // qty_source in NEVER_RENORMALIZE must survive a normalize pass unchanged.
+    //
+    // Scenario: pair-door set with 2 leaves and 2 doors. Each item below has
+    // a per-opening qty that, if wrongly re-divided by leafCount=2, would
+    // become half its intended value.
+    const sets = [makeSet('DH_TERMINAL', [
+      { name: 'Hinge', qty: 4, qty_source: 'llm_override' },
+      { name: 'Closer', qty: 2, qty_source: 'auto_corrected' },
+      { name: 'Exit Device', qty: 2, qty_source: 'deep_extract' },
+      { name: 'Lockset', qty: 2, qty_source: 'region_extract' },
+      { name: 'Flush Bolt', qty: 2, qty_source: 'propagated' },
+      { name: 'Kick Plate', qty: 2, qty_source: 'reverted' },
+      { name: 'Wire Harness', qty: 2, qty_source: 'manual_placeholder' },
+    ], { heading_leaf_count: 2, heading_door_count: 2 })]
+    const doors = [makeDoor('2001', 'DH_TERMINAL'), makeDoor('2002', 'DH_TERMINAL')]
+
+    normalizeQuantities(sets, doors)
+
+    // Every item must keep its original qty and qty_source.
+    expect(sets[0].items[0].qty).toBe(4)
+    expect(sets[0].items[0].qty_source).toBe('llm_override')
+    expect(sets[0].items[1].qty).toBe(2)
+    expect(sets[0].items[1].qty_source).toBe('auto_corrected')
+    expect(sets[0].items[2].qty).toBe(2)
+    expect(sets[0].items[2].qty_source).toBe('deep_extract')
+    expect(sets[0].items[3].qty).toBe(2)
+    expect(sets[0].items[3].qty_source).toBe('region_extract')
+    expect(sets[0].items[4].qty).toBe(2)
+    expect(sets[0].items[4].qty_source).toBe('propagated')
+    expect(sets[0].items[5].qty).toBe(2)
+    expect(sets[0].items[5].qty_source).toBe('reverted')
+    expect(sets[0].items[6].qty).toBe(2)
+    expect(sets[0].items[6].qty_source).toBe('manual_placeholder')
   })
 
   it('skips sets where both leafCount and doorCount are <= 1', () => {
@@ -966,5 +1006,64 @@ describe('buildPerOpeningItems — pair detection', () => {
     expect(doorRows).toHaveLength(2) // pair detected via size
     const hinge = rows.find(r => r.name === 'Hinges')
     expect(hinge?.qty).toBe(4) // stored per-leaf, UI handles the split
+  })
+})
+
+// ── Phase 3 (leaf_side) tests ─────────────────────────────────────────
+
+describe('computeLeafSide — per-item leaf attribution', () => {
+  it('returns shared for Frame rows', () => {
+    expect(computeLeafSide('Frame', 1)).toBe('shared')
+    expect(computeLeafSide('Frame', 2)).toBe('shared')
+  })
+
+  it('returns active for Door (Active Leaf)', () => {
+    expect(computeLeafSide('Door (Active Leaf)', 2)).toBe('active')
+  })
+
+  it('returns inactive for Door (Inactive Leaf)', () => {
+    expect(computeLeafSide('Door (Inactive Leaf)', 2)).toBe('inactive')
+  })
+
+  it('returns active for a bare Door on a single opening', () => {
+    expect(computeLeafSide('Door', 1)).toBe('active')
+  })
+
+  it('returns null for a bare Door on a pair opening (unexpected shape)', () => {
+    // Pair openings should have been split into active + inactive rows
+    // by buildPerOpeningItems. If we see 'Door' on a pair it's data from
+    // a pre-Phase-2 save — let render-time classification handle it.
+    expect(computeLeafSide('Door', 2)).toBeNull()
+  })
+
+  it('returns shared for per_pair items (coordinator, flush bolt, astragal)', () => {
+    expect(computeLeafSide('Coordinator', 2)).toBe('shared')
+    expect(computeLeafSide('Flush Bolt Kit FB32', 2)).toBe('shared')
+    expect(computeLeafSide('Astragal', 2)).toBe('shared')
+  })
+
+  it('returns shared for per_frame items (threshold, seals, silencer)', () => {
+    expect(computeLeafSide('Threshold 655BK', 2)).toBe('shared')
+    expect(computeLeafSide('Gasketing', 2)).toBe('shared')
+    expect(computeLeafSide('Silencer', 2)).toBe('shared')
+    expect(computeLeafSide('Weatherstrip', 2)).toBe('shared')
+  })
+
+  it('returns null for per_leaf items on pairs (ambiguous — render-time decides)', () => {
+    // Hinges, exit devices, kick plates: could go on active, inactive,
+    // or both leaves depending on spec. Keep NULL so the UI keeps the
+    // existing behavior until the triage UI lets users set it explicitly.
+    expect(computeLeafSide('Hinges 5BB1 4.5x4.5 NRP', 2)).toBeNull()
+    expect(computeLeafSide('Exit Device 9875', 2)).toBeNull()
+    expect(computeLeafSide('Kick Plate', 2)).toBeNull()
+  })
+
+  it('returns null for per_opening items on pairs (ambiguous)', () => {
+    expect(computeLeafSide('Closer 4040XP', 2)).toBeNull()
+    expect(computeLeafSide('Mortise Lockset L9080', 2)).toBeNull()
+  })
+
+  it('returns null for unknown / unclassified items', () => {
+    expect(computeLeafSide('Widget XYZ-123', 2)).toBeNull()
   })
 })
