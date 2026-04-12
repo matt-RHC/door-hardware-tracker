@@ -101,7 +101,7 @@ class ExtractionResult(BaseModel):
 # Values outside these ranges are likely aggregate/total quantities.
 EXPECTED_QTY_RANGES: dict[str, tuple[int, int]] = {
     "hinge":              (2, 5),   # 3 standard, 4-5 for tall/heavy doors
-    "electric_hinge":     (1, 1),   # Replaces one NRP position, 1 per opening
+    "electric_hinge":     (1, 5),   # Per-opening, but use hinge max for cap-path compat
     "continuous_hinge":   (1, 2),
     "pivot":              (1, 2),
     "lockset":            (1, 1),
