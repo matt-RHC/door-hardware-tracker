@@ -80,6 +80,11 @@ export interface HardwareSet {
    *  openings to their exact sub-set when multiple sub-headings share a
    *  generic_set_id (e.g., DH4A.0 and DH4A.1 under "DH4A"). */
   heading_doors?: string[]
+  /** Quantity convention detected from preamble text.
+   *  "per_opening" = quantities are per-opening (e.g., "Each opening to have:")
+   *  "aggregate"   = quantities are totals across all doors in the heading
+   *  "unknown"     = could not determine (falls back to statistical heuristic) */
+  qty_convention?: 'per_opening' | 'aggregate' | 'unknown'
   /** 0-based PDF page index where this set's definition lives. Populated
    *  at wizard extraction time via findPageForSet() and persisted to
    *  openings.pdf_page on save. null if the set could not be matched to a
@@ -172,6 +177,8 @@ export interface PunchyCorrections {
     heading_door_count?: number
     /** Total leaves across those openings (pairs count as 2). */
     heading_leaf_count?: number
+    /** Quantity convention detected from preamble text. */
+    qty_convention?: 'per_opening' | 'aggregate' | 'unknown'
     items: ExtractedHardwareItem[]
     confidence?: PunchyConfidence
   }>

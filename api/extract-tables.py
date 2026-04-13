@@ -105,6 +105,7 @@ class HardwareSetDef(BaseModel):
     heading_door_count: int = 0   # openings listed in heading block
     heading_leaf_count: int = 0   # total leaves (pairs × 2, singles × 1)
     heading_doors: list[str] = [] # specific door numbers listed under this sub-heading
+    qty_convention: str = "unknown"  # "per_opening" | "aggregate" | "unknown" — detected from preamble text
     items: list[HardwareItem] = []
 
 
@@ -264,6 +265,78 @@ def _max_qty_for_category(category: str | None) -> int:
     if category and category in EXPECTED_QTY_RANGES:
         return EXPECTED_QTY_RANGES[category][1]
     return 4  # Conservative default for unknown categories
+
+
+# --- Quantity Convention Detection ---
+# Preamble phrases that definitively indicate per-opening quantities.
+# These appear in schedule-format PDFs (sched-Barnstable, sched-Claymont, etc.)
+# and are strong enough to override the statistical heuristic.
+_PER_OPENING_PREAMBLES: list[re.Pattern] = [
+    re.compile(r"(?i)each\s+opening\s+to\s+have\s*:"),
+    re.compile(r"(?i)each\s+to\s+receive\s*:"),
+    re.compile(r"(?i)each\s+to\s+have\s*:"),
+    re.compile(r"(?i)each\s+door\s+leaf\s+shall\s+have\s*:"),
+    re.compile(r"(?i)each\s+door\s+to\s+have\s*:"),
+    re.compile(r"(?i)per\s+opening\s*:"),
+]
+
+# Dual-quantity format: "(total) per_door EA" — used by SpecWorks/kinship PDFs.
+# E.g., "(42) 3 EA" means 42 total, 3 per door.
+_DUAL_QTY_RE = re.compile(r"\((\d+)\)\s*(\d+)\s*EA\b", re.IGNORECASE)
+
+
+def detect_quantity_convention(text: str, door_count: int = 0) -> str:
+    """Detect whether a hardware set uses per-opening or aggregate quantities.
+
+    Scans the text for definitive preamble phrases. If a per-opening preamble
+    is found, returns "per_opening". If no preamble is found and quantities
+    are much larger than expected for single-door counts, returns "aggregate".
+    Otherwise returns "unknown".
+
+    Args:
+        text: The raw text of the hardware set section (heading + items).
+        door_count: Number of doors assigned to this heading (0 if unknown).
+
+    Returns:
+        "per_opening", "aggregate", or "unknown"
+    """
+    # Definitive: per-opening preamble phrases
+    for pattern in _PER_OPENING_PREAMBLES:
+        if pattern.search(text):
+            return "per_opening"
+
+    # Dual-quantity format "(total) per_door EA" — definitively per-opening
+    # because the per-door number is explicitly provided.
+    if _DUAL_QTY_RE.search(text):
+        return "per_opening"
+
+    # Supportive: absence of per-opening preambles + quantities >> door count
+    # suggests aggregate. Only classify as aggregate if we have a door count
+    # AND the text contains item lines with large quantities.
+    # Exclude door assignment lines (e.g., "1 SGL Door:101") which start with
+    # small numbers but are not hardware item quantities.
+    if door_count > 1:
+        item_qtys = []
+        for m in re.finditer(r"^\s*(\d{1,3})\s+(.+)", text, re.MULTILINE):
+            rest = m.group(2).strip()
+            # Skip door assignment lines
+            if re.match(r"(?i)(SGL|PR|PRA|PRI|Pair)\s+(Door|Opening)", rest):
+                continue
+            item_qtys.append(int(m.group(1)))
+        if item_qtys:
+            over_threshold = sum(1 for v in item_qtys if v > 6)
+            if len(item_qtys) >= 2 and over_threshold / len(item_qtys) > 0.6:
+                return "aggregate"
+
+    return "unknown"
+
+
+def extract_dual_qty(text: str) -> list[tuple[int, int]]:
+    """Extract dual-quantity pairs from SpecWorks "(total) per_door EA" format.
+
+    Returns list of (total, per_door) tuples found in the text.
+    """
+    return [(int(m.group(1)), int(m.group(2))) for m in _DUAL_QTY_RE.finditer(text)]
 
 
 # --- Hardware Item Dedup (Level 1: within-chunk/within-page) ---
@@ -2574,6 +2647,7 @@ def extract_hardware_sets_from_page(page, page_text: str, heading_format: str = 
             heading_door_count=door_count,
             heading_leaf_count=leaf_count,
             heading_doors=extract_heading_door_numbers(page_text),
+            qty_convention=detect_quantity_convention(page_text, door_count),
             items=items,
         ))
         return sets
@@ -2630,6 +2704,7 @@ def extract_hardware_sets_from_page(page, page_text: str, heading_format: str = 
                     heading_door_count=sec_door_count,
                     heading_leaf_count=sec_leaf_count,
                     heading_doors=extract_heading_door_numbers(section_text),
+                    qty_convention=detect_quantity_convention(section_text, sec_door_count),
                     items=sec_items,
                 ))
         return sets
@@ -2681,6 +2756,7 @@ def extract_hardware_sets_from_page(page, page_text: str, heading_format: str = 
             heading_door_count=heading_door_count,
             heading_leaf_count=heading_leaf_count,
             heading_doors=extract_heading_door_numbers(page_text),
+            qty_convention=detect_quantity_convention(page_text, heading_door_count),
             items=items,
         ))
 
@@ -2769,6 +2845,9 @@ def extract_all_hardware_sets(pdf: pdfplumber.PDF) -> list[HardwareSetDef]:
                 for dn in hw_set.heading_doors:
                     if dn not in existing.heading_doors:
                         existing.heading_doors.append(dn)
+                # Merge qty_convention: definitive signals override "unknown"
+                if existing.qty_convention == "unknown" and hw_set.qty_convention != "unknown":
+                    existing.qty_convention = hw_set.qty_convention
             else:
                 # First occurrence of this specific set_id (preserve suffix)
                 seen_set_ids[hw_set.set_id] = len(all_sets)
@@ -3661,6 +3740,28 @@ def normalize_quantities(
                 f"sub={door_count}d/{leaf_count}l, "
                 f"generic={generic_doors}d/{generic_leaves}l"
             )
+
+        # --- Per-heading quantity convention check ---
+        #
+        # When qty_convention is "per_opening" (detected from preamble phrases
+        # like "Each opening to have:"), quantities are already per-opening and
+        # should NOT be divided, regardless of door count.
+        #
+        # When a heading has only 1 door assigned, quantities are inherently
+        # per-opening regardless of the global/detected convention.
+        #
+        # This check runs BEFORE the division logic to short-circuit correctly.
+        convention = hw_set.qty_convention
+        if convention == "per_opening" and door_count > 1:
+            logger.info(
+                f"[qty-norm] {hw_set.set_id}: qty_convention='per_opening' — "
+                f"skipping division (quantities are already per-opening)"
+            )
+            for item in hw_set.items:
+                item.qty_source = "parsed"
+                item.qty_total = item.qty
+                item.qty_door_count = door_count or None
+            continue
 
         # --- Single door or unknown: annotate as 'needs_cap' if qty looks like an aggregate ---
         #

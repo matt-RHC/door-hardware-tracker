@@ -101,6 +101,7 @@ export async function POST(request: NextRequest) {
       heading_door_count: s.heading_door_count,
       heading_leaf_count: s.heading_leaf_count,
       heading_doors: s.heading_doors ?? [],
+      qty_convention: s.qty_convention ?? 'unknown',
       items: (s.items ?? []).map(i => ({
         qty: i.qty,
         qty_total: i.qty_total,
