@@ -150,16 +150,29 @@ export default function StepTriage({
 
         const allDoors: DoorEntry[] = [];
         const allSets: HardwareSet[] = [];
+        // Collect punchyQuantityCheck flags across all chunks so the qty
+        // review phase has data even for large PDFs. Flags are merged by
+        // appending — the qty check UI deduplicates by set_id on render.
+        const allQtyFlags: PunchyQuantityCheck["flags"] = [];
+        const allQtyComplianceIssues: PunchyQuantityCheck["compliance_issues"] = [];
 
         for (let i = 0; i < chunks.length; i++) {
           setStatus(`Extracting chunk ${i + 1} of ${chunks.length}...`);
           setProgress(20 + Math.round((i / chunks.length) * 40));
 
-          const chunkResp = await fetch("/api/parse-pdf?parseOnly=true", {
+          // Route to the dedicated chunk endpoint which accepts chunkIndex /
+          // totalChunks / knownSetIds and returns the correct response shape
+          // including punchyQuantityCheck. The main /api/parse-pdf route does
+          // not consume these fields and silently ignores ?parseOnly=true.
+          const knownSetIds = allSets.map((s) => s.set_id);
+          const chunkResp = await fetch("/api/parse-pdf/chunk", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              pdfBase64: chunks[i],
+              chunkBase64: chunks[i],
+              chunkIndex: i,
+              totalChunks: chunks.length,
+              knownSetIds,
               userColumnMapping: mappingPayload,
             }),
           });
@@ -173,7 +186,24 @@ export default function StepTriage({
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           const chunkResult: any = await chunkResp.json();
           allDoors.push(...(chunkResult.doors ?? []));
-          allSets.push(...(chunkResult.sets ?? []));
+          allSets.push(...(chunkResult.hardwareSets ?? []));
+
+          // Accumulate quantity check data from each chunk
+          if (chunkResult.punchyQuantityCheck) {
+            allQtyFlags.push(...(chunkResult.punchyQuantityCheck.flags ?? []));
+            allQtyComplianceIssues.push(
+              ...(chunkResult.punchyQuantityCheck.compliance_issues ?? [])
+            );
+          }
+        }
+
+        // Set merged qty check state if any chunk produced data
+        if (allQtyFlags.length > 0 || allQtyComplianceIssues.length > 0) {
+          setQtyCheck({
+            flags: allQtyFlags,
+            compliance_issues: allQtyComplianceIssues,
+            notes: `Quantity check across ${chunks.length} chunk(s): ${allQtyFlags.length} flag(s), ${allQtyComplianceIssues.length} compliance issue(s).`,
+          });
         }
 
         extractedDoors = mergeDoors(allDoors);
@@ -191,7 +221,7 @@ export default function StepTriage({
           parseBody.pdfBase64 = arrayBufferToBase64(arrayBuffer);
         }
 
-        const parseResp = await fetch("/api/parse-pdf?parseOnly=true", {
+        const parseResp = await fetch("/api/parse-pdf", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(parseBody),
