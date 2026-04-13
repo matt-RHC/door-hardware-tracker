@@ -14,6 +14,7 @@ import {
   normalizeName,
   createAnthropicClient,
   selectRepresentativeSample,
+  calculateExtractionConfidence,
 } from './parse-pdf-helpers'
 import type { HardwareSet, DoorEntry, PunchyCorrections } from '@/lib/types'
 
@@ -1648,5 +1649,325 @@ describe('selectRepresentativeSample', () => {
       return num > 15
     })
     expect(hasLaterDoors).toBe(true)
+  })
+})
+
+// ── calculateExtractionConfidence ────────────────────────────────
+
+describe('calculateExtractionConfidence', () => {
+  /** Helper to build a hardware item with all fields populated. */
+  function makeItem(
+    name: string,
+    opts: {
+      qty?: number
+      qty_source?: string
+      manufacturer?: string
+      model?: string
+      finish?: string
+    } = {},
+  ) {
+    return {
+      name,
+      qty: opts.qty ?? 1,
+      qty_source: opts.qty_source,
+      manufacturer: opts.manufacturer ?? 'Hager',
+      model: opts.model ?? '5BB1',
+      finish: opts.finish ?? '626',
+    }
+  }
+
+  function makeFullSet(set_id: string, items: ReturnType<typeof makeItem>[], opts: Partial<HardwareSet> = {}): HardwareSet {
+    return {
+      set_id,
+      heading: `Set ${set_id}`,
+      items,
+      ...opts,
+    }
+  }
+
+  const emptyCorrections: PunchyCorrections = {
+    hardware_sets_corrections: [],
+    doors_corrections: [],
+    missing_doors: [],
+    missing_sets: [],
+    notes: '',
+  }
+
+  it('test_confidence_all_fields_populated — item with all fields → high confidence', () => {
+    const sets: HardwareSet[] = [
+      makeFullSet('DH1', [
+        makeItem('Butt Hinge', { manufacturer: 'Hager', model: '5BB1', finish: '626' }),
+        makeItem('Closer', { manufacturer: 'LCN', model: '4040XP', finish: '689' }),
+        makeItem('Lockset', { manufacturer: 'Schlage', model: 'L9010', finish: '626' }),
+      ], { qty_convention: 'per_opening' }),
+    ]
+    const doors = [makeDoor('101', 'DH1'), makeDoor('102', 'DH1')]
+
+    const result = calculateExtractionConfidence(sets, doors, emptyCorrections)
+
+    expect(result.overall).toBe('high')
+    expect(result.score).toBeGreaterThanOrEqual(80)
+
+    // Each item should have high confidence on all fields
+    const hingeConf = result.item_confidence['DH1:Butt Hinge']
+    expect(hingeConf).toBeDefined()
+    expect(hingeConf.overall).toBe('high')
+    expect(hingeConf.name.level).toBe('high')
+    expect(hingeConf.manufacturer.level).toBe('high')
+    expect(hingeConf.model.level).toBe('high')
+    expect(hingeConf.finish.level).toBe('high')
+    expect(hingeConf.qty.level).toBe('high')
+  })
+
+  it('test_confidence_empty_fields — item with empty mfr/model → low on those fields', () => {
+    const sets: HardwareSet[] = [
+      makeFullSet('DH1', [
+        makeItem('Butt Hinge', { manufacturer: '', model: '', finish: '' }),
+      ]),
+    ]
+    const doors = [makeDoor('101', 'DH1')]
+
+    const result = calculateExtractionConfidence(sets, doors, emptyCorrections)
+
+    const conf = result.item_confidence['DH1:Butt Hinge']
+    expect(conf).toBeDefined()
+    expect(conf.manufacturer.level).toBe('low')
+    expect(conf.model.level).toBe('low')
+    expect(conf.finish.level).toBe('low')
+    expect(conf.overall).toBe('low')
+
+    // Name and qty should still be high (populated)
+    expect(conf.name.level).toBe('high')
+    expect(conf.qty.level).toBe('high')
+  })
+
+  it('test_confidence_punchy_corrected — item that Punchy corrected → medium', () => {
+    const sets: HardwareSet[] = [
+      makeFullSet('DH1', [
+        makeItem('Butt Hinge', { manufacturer: 'Hager', model: '5BB1', finish: '626' }),
+      ]),
+    ]
+    const doors = [makeDoor('101', 'DH1')]
+
+    const corrections: PunchyCorrections = {
+      hardware_sets_corrections: [{
+        set_id: 'DH1',
+        items_to_fix: [{
+          name: 'Butt Hinge',
+          field: 'manufacturer',
+          old_value: 'Ives',
+          new_value: 'Hager',
+        }],
+      }],
+      notes: 'Fixed manufacturer',
+    }
+
+    const result = calculateExtractionConfidence(sets, doors, corrections)
+
+    const conf = result.item_confidence['DH1:Butt Hinge']
+    expect(conf).toBeDefined()
+    expect(conf.manufacturer.level).toBe('medium')
+    expect(conf.manufacturer.reason).toContain('Punchy corrected')
+    // Other fields should be high
+    expect(conf.name.level).toBe('high')
+    expect(conf.model.level).toBe('high')
+
+    // Signals should mention corrections
+    expect(result.signals.some(s => s.includes('correction'))).toBe(true)
+  })
+
+  it('test_confidence_llm_override_qty — qty_source = llm_override → medium qty confidence', () => {
+    const sets: HardwareSet[] = [
+      makeFullSet('DH1', [
+        makeItem('Closer', { qty: 1, qty_source: 'llm_override', manufacturer: 'LCN', model: '4040XP', finish: '689' }),
+      ]),
+    ]
+    const doors = [makeDoor('101', 'DH1')]
+
+    const result = calculateExtractionConfidence(sets, doors, emptyCorrections)
+
+    const conf = result.item_confidence['DH1:Closer']
+    expect(conf).toBeDefined()
+    expect(conf.qty.level).toBe('medium')
+    expect(conf.qty.reason).toContain('Punchy corrected')
+  })
+
+  it('test_confidence_overall_score — verify the 0-100 score calculation', () => {
+    // Perfect extraction: all fields populated, preamble convention, no corrections
+    const perfectSets: HardwareSet[] = [
+      makeFullSet('DH1', [
+        makeItem('Butt Hinge'),
+        makeItem('Closer', { manufacturer: 'LCN', model: '4040XP', finish: '689' }),
+        makeItem('Lockset', { manufacturer: 'Schlage', model: 'L9010', finish: '626' }),
+      ], { qty_convention: 'per_opening' }),
+    ]
+    const perfectDoors = [makeDoor('101', 'DH1'), makeDoor('102', 'DH1')]
+
+    const perfect = calculateExtractionConfidence(perfectSets, perfectDoors, emptyCorrections)
+    expect(perfect.score).toBeGreaterThanOrEqual(90)
+
+    // Poor extraction: empty fields, statistical convention
+    const poorSets: HardwareSet[] = [
+      makeFullSet('DH1', [
+        makeItem('Butt Hinge', { manufacturer: '', model: '', finish: '' }),
+        makeItem('Closer', { manufacturer: '', model: '', finish: '' }),
+      ], { qty_convention: 'unknown' }),
+    ]
+    const poorDoors = [makeDoor('101', 'DH1')]
+
+    const poor = calculateExtractionConfidence(poorSets, poorDoors, emptyCorrections)
+    expect(poor.score).toBeLessThan(perfect.score)
+    expect(poor.score).toBeLessThan(80)
+
+    // Score is bounded 0-100
+    expect(perfect.score).toBeLessThanOrEqual(100)
+    expect(perfect.score).toBeGreaterThanOrEqual(0)
+    expect(poor.score).toBeLessThanOrEqual(100)
+    expect(poor.score).toBeGreaterThanOrEqual(0)
+  })
+
+  it('test_confidence_auto_fallback_threshold — >30% empty mfr triggers suggestion', () => {
+    // 4 items, 2 with empty manufacturer+model = 50% > 30%
+    const sets: HardwareSet[] = [
+      makeFullSet('DH1', [
+        makeItem('Butt Hinge', { manufacturer: '', model: '' }),
+        makeItem('Closer', { manufacturer: '', model: '' }),
+        makeItem('Lockset', { manufacturer: 'Schlage', model: 'L9010', finish: '626' }),
+        makeItem('Exit Device', { manufacturer: 'VonDuprin', model: '99', finish: '626' }),
+      ]),
+    ]
+    const doors = [makeDoor('101', 'DH1')]
+
+    const result = calculateExtractionConfidence(sets, doors, emptyCorrections)
+
+    expect(result.suggest_deep_extraction).toBe(true)
+    expect(result.deep_extraction_reasons.length).toBeGreaterThan(0)
+    expect(result.deep_extraction_reasons[0]).toContain('empty manufacturer + model')
+    expect(result.overall).toBe('low')
+  })
+
+  it('does not suggest deep extraction when fields are well-populated', () => {
+    const sets: HardwareSet[] = [
+      makeFullSet('DH1', [
+        makeItem('Butt Hinge'),
+        makeItem('Closer', { manufacturer: 'LCN', model: '4040XP', finish: '689' }),
+      ]),
+    ]
+    const doors = [makeDoor('101', 'DH1')]
+
+    const result = calculateExtractionConfidence(sets, doors, emptyCorrections)
+
+    expect(result.suggest_deep_extraction).toBe(false)
+    expect(result.deep_extraction_reasons).toHaveLength(0)
+  })
+
+  it('handles empty hardware sets gracefully', () => {
+    const sets: HardwareSet[] = [
+      makeFullSet('DH1', []),
+    ]
+    const doors = [makeDoor('101', 'DH1')]
+
+    const result = calculateExtractionConfidence(sets, doors, emptyCorrections)
+
+    expect(result.signals.some(s => s.includes('zero hardware items'))).toBe(true)
+    expect(result.score).toBeLessThan(100)
+  })
+
+  it('detects doors assigned to undefined sets', () => {
+    const sets: HardwareSet[] = [
+      makeFullSet('DH1', [makeItem('Hinge')]),
+    ]
+    // Door assigned to DH2 which doesn't exist
+    const doors = [makeDoor('101', 'DH2')]
+
+    const result = calculateExtractionConfidence(sets, doors, emptyCorrections)
+
+    expect(result.signals.some(s => s.includes('undefined hardware sets'))).toBe(true)
+  })
+
+  it('signals when all qty conventions are preamble-detected', () => {
+    const sets: HardwareSet[] = [
+      makeFullSet('DH1', [makeItem('Hinge')], { qty_convention: 'per_opening' }),
+      makeFullSet('DH2', [makeItem('Closer')], { qty_convention: 'aggregate' }),
+    ]
+    const doors = [makeDoor('101', 'DH1'), makeDoor('102', 'DH2')]
+
+    const result = calculateExtractionConfidence(sets, doors, emptyCorrections)
+
+    expect(result.signals.some(s => s.includes('preamble'))).toBe(true)
+  })
+
+  it('signals statistical qty convention fallback', () => {
+    const sets: HardwareSet[] = [
+      makeFullSet('DH1', [makeItem('Hinge')], { qty_convention: 'unknown' }),
+    ]
+    const doors = [makeDoor('101', 'DH1')]
+
+    const result = calculateExtractionConfidence(sets, doors, emptyCorrections)
+
+    expect(result.signals.some(s => s.includes('statistical'))).toBe(true)
+  })
+
+  it('populates item.confidence on each hardware item', () => {
+    const sets: HardwareSet[] = [
+      makeFullSet('DH1', [
+        makeItem('Butt Hinge'),
+        makeItem('Closer', { manufacturer: 'LCN', model: '4040XP', finish: '689' }),
+      ]),
+    ]
+    const doors = [makeDoor('101', 'DH1')]
+
+    calculateExtractionConfidence(sets, doors, emptyCorrections)
+
+    // The function mutates items to add confidence
+    for (const item of sets[0].items) {
+      expect(item.confidence).toBeDefined()
+      expect(item.confidence!.overall).toBeDefined()
+      expect(item.confidence!.name.level).toBeDefined()
+      expect(item.confidence!.qty.level).toBeDefined()
+    }
+  })
+
+  it('qty_source flagged → low qty confidence', () => {
+    const sets: HardwareSet[] = [
+      makeFullSet('DH1', [
+        makeItem('Hinge', { qty: 3, qty_source: 'flagged' }),
+      ]),
+    ]
+    const doors = [makeDoor('101', 'DH1')]
+
+    const result = calculateExtractionConfidence(sets, doors, emptyCorrections)
+
+    const conf = result.item_confidence['DH1:Hinge']
+    expect(conf.qty.level).toBe('low')
+    expect(conf.qty.reason).toContain('non-integer')
+  })
+
+  it('fuzzy-matched Punchy corrections → medium on corrected fields', () => {
+    const sets: HardwareSet[] = [
+      makeFullSet('DH1', [
+        makeItem('Butt Hinge'),
+      ]),
+    ]
+    const doors = [makeDoor('101', 'DH1')]
+
+    const corrections: PunchyCorrections = {
+      hardware_sets_corrections: [{
+        set_id: 'DH1',
+        items_to_fix: [{
+          name: 'Butt Hinge',
+          field: 'model',
+          old_value: '5B1',
+          new_value: '5BB1',
+          confidence: 'low', // low confidence = fuzzy match
+        }],
+      }],
+    }
+
+    const result = calculateExtractionConfidence(sets, doors, corrections)
+
+    const conf = result.item_confidence['DH1:Butt Hinge']
+    expect(conf.model.level).toBe('medium')
+    expect(conf.model.reason).toContain('fuzzy')
   })
 })

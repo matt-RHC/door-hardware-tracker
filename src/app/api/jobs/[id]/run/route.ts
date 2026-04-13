@@ -16,9 +16,11 @@ import {
   callPunchyQuantityCheck,
   applyCorrections,
   normalizeQuantities,
+  calculateExtractionConfidence,
   createAnthropicClient,
   type PdfplumberResult,
 } from '@/lib/parse-pdf-helpers'
+import type { ExtractionConfidence } from '@/lib/types/confidence'
 import {
   splitPDFByPages,
   splitPDFFixed,
@@ -450,6 +452,7 @@ export async function POST(
     const allQtyFlags: NonNullable<PunchyQuantityCheck['flags']> = []
     const allQtyComplianceIssues: NonNullable<PunchyQuantityCheck['compliance_issues']> = []
     let failedChunks: Array<{ index: number; error: string }> = []
+    let extractionConfidence: ExtractionConfidence | null = null
 
     if (pdfByteLength > CHUNK_SIZE_THRESHOLD) {
       // ── Chunked extraction ──
@@ -505,6 +508,11 @@ export async function POST(
             allQtyFlags.push(...(chunkResult.punchyQuantityCheck.flags ?? []))
             allQtyComplianceIssues.push(...(chunkResult.punchyQuantityCheck.compliance_issues ?? []))
           }
+
+          // Keep worst confidence across chunks
+          if (!extractionConfidence || chunkResult.confidence.score < extractionConfidence.score) {
+            extractionConfidence = chunkResult.confidence
+          }
         } catch (chunkErr) {
           const errorMsg = chunkErr instanceof Error ? chunkErr.message : String(chunkErr)
           console.warn(`[job-orchestrator] Job ${jobId}: chunk ${i + 1} failed:`, errorMsg)
@@ -529,6 +537,7 @@ export async function POST(
 
       extractedDoors = singleResult.doors
       extractedSets = singleResult.hardwareSets
+      extractionConfidence = singleResult.confidence
 
       if (singleResult.punchyQuantityCheck) {
         allQtyFlags.push(...(singleResult.punchyQuantityCheck.flags ?? []))
@@ -572,6 +581,11 @@ export async function POST(
         compliance_issues: allQtyComplianceIssues.length,
         partial: extractionIsPartial,
         failedChunks: extractionIsPartial ? failedChunks : undefined,
+        confidence: extractionConfidence ? {
+          overall: extractionConfidence.overall,
+          score: extractionConfidence.score,
+          suggest_deep_extraction: extractionConfidence.suggest_deep_extraction,
+        } : undefined,
       },
     })
 
@@ -778,6 +792,7 @@ async function processChunk(
   doors: DoorEntry[]
   hardwareSets: HardwareSet[]
   punchyQuantityCheck: PunchyQuantityCheck | null
+  confidence: ExtractionConfidence
 }> {
   // Step 1: Pdfplumber extraction
   let pdfplumberResult: PdfplumberResult | null = null
@@ -859,5 +874,8 @@ async function processChunk(
     console.error('[job] Punchy quantity check error:', err instanceof Error ? err.message : String(err))
   }
 
-  return { doors, hardwareSets, punchyQuantityCheck: quantityCheck }
+  // Step 5: Confidence Scoring
+  const confidence = calculateExtractionConfidence(hardwareSets, doors, corrections)
+
+  return { doors, hardwareSets, punchyQuantityCheck: quantityCheck, confidence }
 }

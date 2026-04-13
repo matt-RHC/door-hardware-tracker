@@ -17,9 +17,11 @@ import {
   callPunchyQuantityCheck,
   applyCorrections,
   normalizeQuantities,
+  calculateExtractionConfidence,
   createAnthropicClient,
   type PdfplumberResult,
 } from '@/lib/parse-pdf-helpers'
+import type { ExtractionConfidence } from '@/lib/types/confidence'
 
 // Vercel Fluid Compute: 800s timeout (Pro plan max)
 export const maxDuration = 800
@@ -56,6 +58,7 @@ async function extractFromPDF(
   corrections: PunchyCorrections
   punchyObservations: PunchyObservation[]
   punchyQuantityCheck: PunchyQuantityCheck | null
+  confidence: ExtractionConfidence
   stats: { tables_found: number; hw_sets_found: number; method: string }
 }> {
   let pdfplumberResult: PdfplumberResult | null = null
@@ -185,12 +188,18 @@ async function extractFromPDF(
     console.error('Punchy quantity check error:', err instanceof Error ? err.message : String(err))
   }
 
+  // ==========================================
+  // Confidence Scoring (runs after full pipeline)
+  // ==========================================
+  const confidence = calculateExtractionConfidence(hardwareSets, allDoors, corrections)
+
   return {
     hardwareSets,
     doors: allDoors,
     corrections,
     punchyObservations,
     punchyQuantityCheck,
+    confidence,
     stats: {
       tables_found: pdfplumberResult?.tables_found ?? 0,
       hw_sets_found: pdfplumberResult?.hw_sets_found ?? 0,
@@ -240,7 +249,7 @@ export async function POST(request: NextRequest) {
     // the submittal. Matches the shape already accepted by deep-extract.
     const goldenSample: GoldenSampleInput = body.goldenSample ?? undefined
     const requestOrigin = new URL(request.url).origin
-    const { hardwareSets, doors, corrections, punchyObservations, punchyQuantityCheck, stats } = await extractFromPDF(base64, filteredPdfBase64, userColumnMapping, projectId, goldenSample, requestOrigin)
+    const { hardwareSets, doors, corrections, punchyObservations, punchyQuantityCheck, confidence, stats } = await extractFromPDF(base64, filteredPdfBase64, userColumnMapping, projectId, goldenSample, requestOrigin)
 
     return NextResponse.json({
       success: true,
@@ -251,6 +260,7 @@ export async function POST(request: NextRequest) {
       reviewNotes: corrections.notes,
       punchyObservations,
       punchyQuantityCheck,
+      confidence,
     })
   } catch (error) {
     console.error('Parse PDF error:', error)
