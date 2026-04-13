@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
-import Anthropic from '@anthropic-ai/sdk'
 import { fetchProjectPdfBase64 } from '@/lib/pdf-storage'
+import { createAnthropicClient } from '@/lib/parse-pdf-helpers'
+import type Anthropic from '@anthropic-ai/sdk'
 
 // Bump to 800s — large door lists (100+) with Sonnet can take several minutes
 export const maxDuration = 800
@@ -141,7 +142,7 @@ ${candidateSummary}`
     })
 
     // Call Claude with streaming
-    const client = new Anthropic()
+    const client = createAnthropicClient()
     let classifications: TriageClassification[] = []
 
     try {

@@ -20,6 +20,22 @@ export async function GET(
 
     const { projectId } = await params
 
+    // Verify project membership. PR #141 added this check to the POST
+    // handler (where it was also structurally broken, see commit
+    // 79b9666) but left GET auth-only, letting any signed-in user read
+    // any project's decisions by guessing projectId. Same membership
+    // gate now applied here.
+    const { data: membership } = await supabase
+      .from('project_members')
+      .select('id')
+      .eq('project_id', projectId)
+      .eq('user_id', user.id)
+      .maybeSingle()
+
+    if (!membership) {
+      return NextResponse.json({ error: 'Not a project member' }, { status: 403 })
+    }
+
     const { data, error } = await supabase
       .from('extraction_decisions')
       .select('*')

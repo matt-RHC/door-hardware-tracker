@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
-import Anthropic from '@anthropic-ai/sdk'
 import { extractFireRatings } from '@/lib/fire-rating'
 import { fetchProjectPdfBase64 } from '@/lib/pdf-storage'
 import type {
@@ -18,6 +17,7 @@ import {
   callPunchyQuantityCheck,
   applyCorrections,
   normalizeQuantities,
+  createAnthropicClient,
   type PdfplumberResult,
 } from '@/lib/parse-pdf-helpers'
 
@@ -26,7 +26,30 @@ export const maxDuration = 800
 
 // --- Core extraction logic (non-chunked flow orchestrator) ---
 
-async function extractFromPDF(base64: string, filteredPdfBase64?: string, userColumnMapping?: Record<string, number> | null, projectId?: string): Promise<{
+/**
+ * Shape of the optional user-confirmed golden sample threaded through to
+ * Punchy's post-extraction review (CP2) and quantity check (CP3) so the
+ * LLM can treat that sample as the naming / quantity baseline for the
+ * submittal. Matches the shape accepted by the deep-extract route.
+ */
+type GoldenSampleInput = {
+  set_id: string
+  items: Array<{
+    qty: number
+    name: string
+    manufacturer?: string
+    model?: string
+    finish?: string
+  }>
+} | null | undefined
+
+async function extractFromPDF(
+  base64: string,
+  filteredPdfBase64?: string,
+  userColumnMapping?: Record<string, number> | null,
+  projectId?: string,
+  goldenSample?: GoldenSampleInput,
+): Promise<{
   hardwareSets: HardwareSet[]
   doors: DoorEntry[]
   corrections: PunchyCorrections
@@ -76,7 +99,7 @@ async function extractFromPDF(base64: string, filteredPdfBase64?: string, userCo
 
   let allDoors: DoorEntry[] = pdfplumberResult?.openings || []
 
-  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+  const client = createAnthropicClient()
   const punchyObservations: PunchyObservation[] = []
 
   // Use filtered PDF for Punchy review if available (fewer pages = cheaper + faster)
@@ -123,7 +146,7 @@ async function extractFromPDF(base64: string, filteredPdfBase64?: string, userCo
     hw_sets_found: 0,
     method: 'none',
     error: 'pdfplumber failed',
-  }, knownSetIds, { projectId })
+  }, knownSetIds, { projectId, goldenSample: goldenSample ?? undefined })
 
   if (corrections.notes) {
     punchyObservations.push({
@@ -148,7 +171,7 @@ async function extractFromPDF(base64: string, filteredPdfBase64?: string, userCo
   // ==========================================
   let punchyQuantityCheck: PunchyQuantityCheck | null = null
   try {
-    punchyQuantityCheck = await callPunchyQuantityCheck(client, reviewPdf, hardwareSets, allDoors, undefined, { projectId })
+    punchyQuantityCheck = await callPunchyQuantityCheck(client, reviewPdf, hardwareSets, allDoors, goldenSample ?? undefined, { projectId })
     if ((punchyQuantityCheck.flags?.length ?? 0) > 0 || (punchyQuantityCheck.compliance_issues?.length ?? 0) > 0) {
       punchyObservations.push({
         checkpoint: 'quantity_check',
@@ -210,7 +233,11 @@ export async function POST(request: NextRequest) {
 
     const userColumnMapping = body.userColumnMapping ?? null
     const projectId: string | undefined = body.projectId ?? undefined
-    const { hardwareSets, doors, corrections, punchyObservations, punchyQuantityCheck, stats } = await extractFromPDF(base64, filteredPdfBase64, userColumnMapping, projectId)
+    // Optional user-confirmed golden sample — threaded to Punchy CP2/CP3
+    // so naming + quantity conventions are treated as the baseline for
+    // the submittal. Matches the shape already accepted by deep-extract.
+    const goldenSample: GoldenSampleInput = body.goldenSample ?? undefined
+    const { hardwareSets, doors, corrections, punchyObservations, punchyQuantityCheck, stats } = await extractFromPDF(base64, filteredPdfBase64, userColumnMapping, projectId, goldenSample)
 
     return NextResponse.json({
       success: true,

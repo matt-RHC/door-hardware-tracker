@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
-import Anthropic from '@anthropic-ai/sdk'
 import { extractFireRatings } from '@/lib/fire-rating'
 import type {
   DoorEntry,
@@ -17,6 +16,7 @@ import {
   callPunchyQuantityCheck,
   applyCorrections,
   normalizeQuantities,
+  createAnthropicClient,
   type PdfplumberResult,
 } from '@/lib/parse-pdf-helpers'
 
@@ -39,13 +39,33 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { chunkBase64, chunkIndex, totalChunks, knownSetIds, userColumnMapping, projectId } = body as {
+    const {
+      chunkBase64,
+      chunkIndex,
+      totalChunks,
+      knownSetIds,
+      userColumnMapping,
+      projectId,
+      goldenSample,
+    } = body as {
       chunkBase64: string
       chunkIndex: number
       totalChunks: number
       knownSetIds?: string[]
       userColumnMapping?: Record<string, number> | null
       projectId?: string
+      // Optional user-confirmed golden sample for Punchy CP2/CP3 baselining.
+      // Matches the shape the wizard already sends to /deep-extract.
+      goldenSample?: {
+        set_id: string
+        items: Array<{
+          qty: number
+          name: string
+          manufacturer?: string
+          model?: string
+          finish?: string
+        }>
+      }
     }
 
     if (!chunkBase64) {
@@ -100,7 +120,7 @@ export async function POST(request: NextRequest) {
     // Step 2: Punchy Checkpoint 1 — Column Mapping Review
     // (only on first chunk when user provided a mapping)
     // ==========================================
-    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+    const client = createAnthropicClient()
     const punchyObservations: PunchyObservation[] = []
 
     if (chunkIndex === 0 && userColumnMapping) {
@@ -138,7 +158,7 @@ export async function POST(request: NextRequest) {
       hw_sets_found: 0,
       method: 'none',
       error: 'pdfplumber failed',
-    }, knownSetIds, { projectId })
+    }, knownSetIds, { projectId, goldenSample })
 
     // Track Punchy's post-extraction observations
     if (corrections.notes) {
@@ -165,7 +185,7 @@ export async function POST(request: NextRequest) {
     // ==========================================
     let quantityCheck: PunchyQuantityCheck | null = null
     try {
-      quantityCheck = await callPunchyQuantityCheck(client, chunkBase64, hardwareSets, doors, undefined, { projectId })
+      quantityCheck = await callPunchyQuantityCheck(client, chunkBase64, hardwareSets, doors, goldenSample, { projectId })
       if ((quantityCheck.flags?.length ?? 0) > 0 || (quantityCheck.compliance_issues?.length ?? 0) > 0) {
         punchyObservations.push({
           checkpoint: 'quantity_check',

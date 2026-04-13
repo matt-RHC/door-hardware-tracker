@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
-import Anthropic from '@anthropic-ai/sdk'
 import { fetchProjectPdfBase64 } from '@/lib/pdf-storage'
-import { callDeepExtraction } from '@/lib/parse-pdf-helpers'
+import { callDeepExtraction, createAnthropicClient } from '@/lib/parse-pdf-helpers'
 
 // Haiku is fast — 300s is generous
 export const maxDuration = 300
@@ -48,7 +47,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'No empty sets provided' }, { status: 400 })
     }
 
-    const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY })
+    const client = createAnthropicClient()
 
     const outcome = await callDeepExtraction(
       client,

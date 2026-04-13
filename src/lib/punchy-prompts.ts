@@ -80,8 +80,23 @@ HEIGHT-DRIVEN HINGE COUNT (BHMA/DHI standard):
 - 7'6" to 10'0" (120"): 4 hinges per leaf (tall doors)
 - 10'0"+: 4 + 1 per additional 30" of height
 - Doors over 200 lbs or heavy-duty spec: +1 hinge regardless of height
-- Electrified/spring hinges REPLACE a standard hinge, not additive
 - Continuous hinge = 1 per leaf, replaces all butt hinges
+
+HINGE VARIANTS — additive vs replacement (IMPORTANT, these rules look
+contradictory but aren't — which rule applies depends on WHAT the hinge
+does):
+- Electric TRANSFER hinges (ETH, EPT, CON TW8, "power transfer",
+  "transfer hinge") carry wiring and are ADDITIVE — they are installed
+  ALONGSIDE the standard hinges. Example: 3 standard + 1 transfer = 4
+  per leaf on an electrified opening is CORRECT.
+- Spring hinges ("spring hinge", SCH series) self-close and REPLACE one
+  of the standard hinges — do NOT count both.
+- Electrified lock/monitor hinges (hinges with a switch or strike built
+  in, not transfer) also REPLACE a standard hinge.
+- When unsure whether a given electric-flavored hinge is transfer vs
+  replacement: if the item name contains "transfer" or a catalog code
+  in {ETH, EPT, CON TW8} treat it as additive; otherwise treat it as
+  replacement.
 
 EGRESS (IBC 1010):
 - Exit devices required on doors in means of egress serving 50+ occupants
