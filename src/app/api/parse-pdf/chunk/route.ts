@@ -77,7 +77,7 @@ export async function POST(request: NextRequest) {
     // ==========================================
     let pdfplumberResult: PdfplumberResult | null = null
     try {
-      pdfplumberResult = await callPdfplumber(chunkBase64, userColumnMapping)
+      pdfplumberResult = await callPdfplumber(chunkBase64, userColumnMapping, new URL(request.url).origin)
       console.debug(
         `Chunk ${chunkIndex + 1}/${totalChunks}: pdfplumber extracted ` +
         `${pdfplumberResult.hw_sets_found} sets, ${pdfplumberResult.openings.length} doors`
