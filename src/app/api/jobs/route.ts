@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { createAdminSupabaseClient } from '@/lib/supabase/admin'
+import { checkExtractionRateLimit } from '@/lib/extraction-rate-limit'
+import { logActivity } from '@/lib/activity-log'
 
 export const maxDuration = 30
 
@@ -58,6 +60,18 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Rate limit: max 5 extraction jobs per project per hour
+    const rateLimit = await checkExtractionRateLimit(projectId)
+    if (!rateLimit.allowed) {
+      return NextResponse.json(
+        {
+          error: `Too many recent extractions for this project (${rateLimit.recentCount}/${rateLimit.limit} in the last hour). Please wait before starting another.`,
+          retryAfterSeconds: rateLimit.retryAfterSeconds,
+        },
+        { status: 429, headers: { 'Retry-After': String(rateLimit.retryAfterSeconds ?? 3600) } }
+      )
+    }
+
     // Create extraction_jobs row
     const { data: job, error: insertError } = await adminSupabase
       .from('extraction_jobs')
@@ -81,6 +95,19 @@ export async function POST(request: NextRequest) {
     }
 
     const jobId = job.id
+
+    // Audit trail
+    await logActivity({
+      projectId,
+      userId: user.id,
+      action: 'extraction_job_created',
+      entityType: 'extraction_job',
+      entityId: jobId,
+      details: {
+        pdfHash: projectRow.last_pdf_hash,
+        pageCount: projectRow.pdf_page_count,
+      },
+    })
 
     // Fire-and-forget: kick off the run endpoint
     const requestOrigin = new URL(request.url).origin

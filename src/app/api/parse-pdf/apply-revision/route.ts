@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import type { DoorEntry, HardwareSet } from '@/lib/types'
 import { buildPerOpeningItems, buildDoorToSetMap, normalizeQuantities } from '@/lib/parse-pdf-helpers'
+import { logActivity } from '@/lib/activity-log'
 
 // User decisions from the wizard
 interface RemovedDecision {
@@ -285,17 +286,26 @@ export async function POST(request: NextRequest) {
       doorsAdded = insertedOpenings.length
     }
 
-    return NextResponse.json({
-      success: true,
-      summary: {
-        doors_deleted: doorsDeleted,
-        doors_updated: doorsUpdated,
-        doors_added: doorsAdded,
-        progress_transferred: progressTransferred,
-        progress_reset: progressReset,
-        doors_kept: removed_decisions.filter(d => d.action === 'keep').length,
-      },
+    const summary = {
+      doors_deleted: doorsDeleted,
+      doors_updated: doorsUpdated,
+      doors_added: doorsAdded,
+      progress_transferred: progressTransferred,
+      progress_reset: progressReset,
+      doors_kept: removed_decisions.filter(d => d.action === 'keep').length,
+    }
+
+    // Audit trail
+    await logActivity({
+      projectId,
+      userId: user.id,
+      action: 'extraction_promoted',
+      entityType: 'project',
+      entityId: projectId,
+      details: { revision: true, ...summary },
     })
+
+    return NextResponse.json({ success: true, summary })
   } catch (error) {
     console.error('Apply revision error:', error)
     const message = error instanceof Error ? error.message : 'Internal server error'
