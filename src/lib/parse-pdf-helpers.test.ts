@@ -46,11 +46,11 @@ function makeDoor(door_number: string, hw_set: string): DoorEntry {
   return {
     door_number,
     hw_set,
-    door_type: null,
-    frame_type: null,
-    fire_rating: null,
-    hand: null,
-    location: null,
+    door_type: '',
+    frame_type: '',
+    fire_rating: '',
+    hand: '',
+    location: '',
   } as DoorEntry
 }
 

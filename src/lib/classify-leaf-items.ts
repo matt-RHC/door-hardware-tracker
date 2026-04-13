@@ -34,15 +34,15 @@ import type { InstallScope } from '@/lib/hardware-taxonomy'
 export interface LeafGroupableItem {
   id?: string
   name: string
-  qty: number
+  qty: number | null
   manufacturer?: string | null
   model?: string | null
   finish?: string | null
   options?: string | null
-  sort_order?: number
+  sort_order?: number | null
   install_type?: string | null
   /** Persisted leaf attribution from migration 013. NULL → fall back to regex. */
-  leaf_side?: 'active' | 'inactive' | 'shared' | 'both' | null
+  leaf_side?: string | null
   progress?: any
   progress_by_leaf?: any[]
   [key: string]: any
@@ -65,10 +65,11 @@ export function getLeafDisplayQty(
   leafCount: number,
   scope: InstallScope | null,
 ): number {
+  const qty = item.qty ?? 0
   if (scope === 'per_opening' && leafCount > 1) {
-    return Math.ceil(item.qty / leafCount)
+    return Math.ceil(qty / leafCount)
   }
-  return item.qty
+  return qty
 }
 
 /**

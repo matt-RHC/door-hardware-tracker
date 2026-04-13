@@ -1175,3 +1175,100 @@ export const Constants = {
     Enums: {},
   },
 } as const
+
+// ─── Convenience row type aliases ────────────────────────────────────────────
+// These are re-exported so callers don't have to write the full
+// Database['public']['Tables']['foo']['Row'] path everywhere.
+
+export type Project = Database['public']['Tables']['projects']['Row']
+export type ProjectInsert = Database['public']['Tables']['projects']['Insert']
+export type ProjectUpdate = Database['public']['Tables']['projects']['Update']
+
+export type ProjectMember = Database['public']['Tables']['project_members']['Row']
+export type ProjectMemberInsert = Database['public']['Tables']['project_members']['Insert']
+export type ProjectMemberUpdate = Database['public']['Tables']['project_members']['Update']
+
+export type Opening = Database['public']['Tables']['openings']['Row']
+export type OpeningInsert = Database['public']['Tables']['openings']['Insert']
+export type OpeningUpdate = Database['public']['Tables']['openings']['Update']
+
+export type HardwareItem = Database['public']['Tables']['hardware_items']['Row']
+export type HardwareItemInsert = Database['public']['Tables']['hardware_items']['Insert']
+export type HardwareItemUpdate = Database['public']['Tables']['hardware_items']['Update']
+
+export type ChecklistProgress = Database['public']['Tables']['checklist_progress']['Row']
+export type ChecklistProgressInsert = Database['public']['Tables']['checklist_progress']['Insert']
+export type ChecklistProgressUpdate = Database['public']['Tables']['checklist_progress']['Update']
+
+export type Attachment = Database['public']['Tables']['attachments']['Row']
+export type AttachmentInsert = Database['public']['Tables']['attachments']['Insert']
+export type AttachmentUpdate = Database['public']['Tables']['attachments']['Update']
+
+export type Issue = Database['public']['Tables']['issues']['Row']
+export type IssueInsert = Database['public']['Tables']['issues']['Insert']
+export type IssueUpdate = Database['public']['Tables']['issues']['Update']
+
+export type Delivery = Database['public']['Tables']['deliveries']['Row']
+export type DeliveryInsert = Database['public']['Tables']['deliveries']['Insert']
+export type DeliveryUpdate = Database['public']['Tables']['deliveries']['Update']
+
+export type TrackingItem = Database['public']['Tables']['tracking_items']['Row']
+export type TrackingItemInsert = Database['public']['Tables']['tracking_items']['Insert']
+export type TrackingItemUpdate = Database['public']['Tables']['tracking_items']['Update']
+
+// --- Shared composite types ---
+
+/** HardwareItem joined with its checklist_progress row. */
+export interface HardwareItemWithProgress extends HardwareItem {
+  progress?: ChecklistProgress
+}
+
+/** HardwareItem row shape returned by Supabase joins that embed checklist_progress. */
+export interface HardwareItemRow {
+  id: string
+  install_type: 'bench' | 'field' | null
+  checklist_progress: Array<{
+    received: boolean
+    pre_install: boolean
+    installed: boolean
+    qa_qc: boolean
+  }>
+}
+
+/** Opening row shape returned by Supabase joins that embed hardware_items. */
+export interface OpeningRow {
+  id: string
+  door_number: string
+  hw_set: string | null
+  hw_heading: string | null
+  location: string | null
+  door_type: string | null
+  frame_type: string | null
+  fire_rating: string | null
+  hand: string | null
+  hardware_items: HardwareItemRow[]
+}
+
+/** Opening row shape with full hardware items for CSV export. */
+export interface OpeningWithHardware {
+  id: string
+  door_number: string
+  hw_set: string | null
+  hw_heading: string | null
+  location: string | null
+  door_type: string | null
+  frame_type: string | null
+  fire_rating: string | null
+  hand: string | null
+  notes: string | null
+  hardware_items: Array<{
+    id: string
+    name: string
+    qty: number
+    manufacturer: string | null
+    model: string | null
+    finish: string | null
+    sort_order: number
+    checklist_progress: Array<{ checked: boolean }>
+  }>
+}

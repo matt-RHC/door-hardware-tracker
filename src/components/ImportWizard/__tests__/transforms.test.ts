@@ -30,8 +30,11 @@ function transformClassifyResponse(raw: Record<string, unknown>): ClassifyPagesR
       submittal_pages: pageClassifications
         .filter((p) => p.type === 'reference')
         .map((p) => p.index),
+      cover_pages: pageClassifications
+        .filter((p) => p.type === 'cover')
+        .map((p) => p.index),
       other_pages: pageClassifications
-        .filter((p) => p.type === 'other' || p.type === 'cover')
+        .filter((p) => p.type === 'other')
         .map((p) => p.index),
     },
   }

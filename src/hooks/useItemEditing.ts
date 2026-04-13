@@ -47,12 +47,12 @@ export function useItemEditing({ projectId, doorId, opening, fetchOpeningData }:
     setEditingItem({
       itemId: item.id,
       name: item.name,
-      qty: item.qty,
+      qty: item.qty ?? 0,
       manufacturer: item.manufacturer,
       model: item.model,
       finish: item.finish,
       options: item.options,
-      install_type: item.install_type || null,
+      install_type: (item.install_type as 'bench' | 'field' | null) || null,
     })
   }, [])
 
