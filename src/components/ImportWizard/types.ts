@@ -23,6 +23,58 @@ export enum WizardStep {
   Confirm = 7,
 }
 
+/**
+ * Steps for the job-based wizard flow (feature-flagged).
+ * Upload → Questions → Review → Products → Compare? → Confirm
+ */
+export enum JobWizardStep {
+  Upload = 0,
+  Questions = 1,
+  Review = 2,
+  Products = 3,
+  Compare = 4,
+  Confirm = 5,
+}
+
+// ─── Job-related types ───
+
+export type JobStatus =
+  | 'queued'
+  | 'processing'
+  | 'classifying'
+  | 'extracting'
+  | 'triaging'
+  | 'validating'
+  | 'completed'
+  | 'failed'
+  | 'cancelled'
+
+export interface JobStatusResponse {
+  id: string
+  projectId: string
+  status: JobStatus
+  progress: number
+  statusMessage: string | null
+  extractionRunId: string | null
+  constraintFlags: Record<string, unknown> | null
+  classifyResult: ClassifyPagesResponse | null
+  extractionSummary: Record<string, unknown> | null
+  error: { message: string; phase: string } | null
+  startedAt: string | null
+  completedAt: string | null
+  durationMs: number | null
+  createdAt: string
+}
+
+export interface JobResultsResponse {
+  doors: import('@/lib/types').DoorEntry[]
+  hardwareSets: import('@/lib/types').HardwareSet[]
+  triageResult: TriageResult | null
+  constraintFlags: Record<string, unknown> | null
+  classifyResult: ClassifyPagesResponse | null
+  extractionRunId: string | null
+}
+
 // ─── API response types ───
 
 /** Response from /api/classify-pages */

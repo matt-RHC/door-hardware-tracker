@@ -31,6 +31,44 @@ Tracks decisions, issues, and deviations for the background extraction job featu
 
 ### Future Phases
 
-- **Phase 2**: UI integration — polling UI, guided questions during job execution, results review
 - **Phase 3**: Email notifications on completion, batch import support
 - **Phase 4**: Job cancellation, retry logic, priority queue
+
+---
+
+## Phase 2 — Wizard UI Refactor + Guided Questions
+
+### Decisions
+
+1. **Feature flag approach**: Simple env var + query param check (`NEXT_PUBLIC_USE_JOB_WIZARD=true` or `?jobWizard=true`). No external feature flag service — this is a lightweight toggle that can be removed once the new flow is stable. The `useJobWizardEnabled()` helper lives in `src/lib/feature-flags.ts` and is called once at the top of ImportWizard.
+
+2. **Separate step enum for job flow**: Added `JobWizardStep` enum (Upload=0, Questions=1, Review=2, Products=3, Compare=4, Confirm=5) alongside the existing `WizardStep`. This avoids modifying the existing enum values which could break the old flow's step comparisons and navigation.
+
+3. **Early return pattern in ImportWizard**: When the feature flag is on, the component returns early with the job wizard JSX. When off, it falls through to the original render block — zero changes to the legacy flow. This pattern is simpler and more auditable than deeply interleaving conditionals.
+
+4. **PunchAssistant omitted from job flow**: The new Questions step replaces the Punchy-driven triage questions. The PunchAssistant drawer is not shown during the job flow since the guided questions serve the same purpose in a more structured format. The Review/Products/Confirm steps inherit the same PunchAssistant behavior if needed in a future iteration.
+
+5. **StepUpload reused as-is**: The Upload step is identical in both flows. In the job flow, `onComplete` fires `job.createJob()` after upload finishes instead of advancing to ScanResults. StepUpload still runs classify-pages and uploads the PDF — the background job reads the stored PDF from the same storage path.
+
+6. **useExtractionJob hook**: Polls every 2 seconds (matching spec's "every 2 seconds" requirement). Uses `setInterval` with cleanup on unmount. Transient poll errors are logged but don't stop polling — the interval retries automatically. Terminal statuses (completed, failed, cancelled) stop polling.
+
+7. **Debounced answer saving**: Question answers are auto-saved with a 1.5-second debounce to avoid spamming the server on every keystroke. A final flush happens when the user clicks "Continue to Review".
+
+8. **Back from Questions goes to Upload**: Going back from the Questions step returns to Upload. Since the job may already be running, re-uploading will create a new job. The old job is left in whatever state it's in (no cancellation implemented yet — Phase 4).
+
+### Deviations from Scope
+
+- **No Punchy avatar**: The spec suggested showing a Punchy avatar near the progress indicator. This was deferred to avoid adding new image assets in this PR. The gear icon with pulse animation serves as the working indicator.
+- **No success animation**: The spec mentioned a "success animation/indicator" when the job completes. The progress bar turning green and the checkmark icon serve this purpose without adding a separate animation system.
+- **onRemapColumns not available in job flow**: The Review step in the job flow doesn't offer "Remap Columns" since column mapping was done automatically by the background job. The prop is omitted.
+
+### Files Added
+
+- `src/lib/feature-flags.ts` — Feature flag utility
+- `src/hooks/useExtractionJob.ts` — Job lifecycle hook (create, poll, submit answers, fetch results)
+- `src/components/ImportWizard/StepQuestions.tsx` — Guided questions UI + progress indicator
+
+### Files Modified
+
+- `src/components/ImportWizard/types.ts` — Added `JobWizardStep` enum, `JobStatus`, `JobStatusResponse`, `JobResultsResponse` types
+- `src/components/ImportWizard/ImportWizard.tsx` — Added job wizard flow with feature flag gate, `JobStepIndicator`, job flow callbacks
