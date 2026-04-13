@@ -308,6 +308,96 @@ export type Database = {
           },
         ]
       }
+      extraction_jobs: {
+        Row: {
+          id: string
+          project_id: string
+          created_by: string
+          status: string
+          progress: number
+          status_message: string | null
+          pdf_storage_path: string
+          pdf_hash: string | null
+          pdf_page_count: number | null
+          extraction_run_id: string | null
+          classify_result: Json | null
+          detect_result: Json | null
+          extraction_summary: Json | null
+          constraint_flags: Json | null
+          started_at: string | null
+          completed_at: string | null
+          duration_ms: number | null
+          error_message: string | null
+          error_phase: string | null
+          retry_count: number | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          project_id: string
+          created_by: string
+          status?: string
+          progress?: number
+          status_message?: string | null
+          pdf_storage_path: string
+          pdf_hash?: string | null
+          pdf_page_count?: number | null
+          extraction_run_id?: string | null
+          classify_result?: Json | null
+          detect_result?: Json | null
+          extraction_summary?: Json | null
+          constraint_flags?: Json | null
+          started_at?: string | null
+          completed_at?: string | null
+          duration_ms?: number | null
+          error_message?: string | null
+          error_phase?: string | null
+          retry_count?: number | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          project_id?: string
+          created_by?: string
+          status?: string
+          progress?: number
+          status_message?: string | null
+          pdf_storage_path?: string
+          pdf_hash?: string | null
+          pdf_page_count?: number | null
+          extraction_run_id?: string | null
+          classify_result?: Json | null
+          detect_result?: Json | null
+          extraction_summary?: Json | null
+          constraint_flags?: Json | null
+          started_at?: string | null
+          completed_at?: string | null
+          duration_ms?: number | null
+          error_message?: string | null
+          error_phase?: string | null
+          retry_count?: number | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "extraction_jobs_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "extraction_jobs_extraction_run_id_fkey"
+            columns: ["extraction_run_id"]
+            isOneToOne: false
+            referencedRelation: "extraction_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       extraction_runs: {
         Row: {
           completed_at: string | null
@@ -323,6 +413,7 @@ export type Database = {
           extraction_notes: string[] | null
           hw_sets_extracted: number | null
           id: string
+          job_id: string | null
           pdf_hash: string | null
           pdf_page_count: number | null
           pdf_source_type: string | null
@@ -348,6 +439,7 @@ export type Database = {
           extraction_notes?: string[] | null
           hw_sets_extracted?: number | null
           id?: string
+          job_id?: string | null
           pdf_hash?: string | null
           pdf_page_count?: number | null
           pdf_source_type?: string | null
@@ -373,6 +465,7 @@ export type Database = {
           extraction_notes?: string[] | null
           hw_sets_extracted?: number | null
           id?: string
+          job_id?: string | null
           pdf_hash?: string | null
           pdf_page_count?: number | null
           pdf_source_type?: string | null
@@ -390,6 +483,45 @@ export type Database = {
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "extraction_runs_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "extraction_jobs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      job_user_constraints: {
+        Row: {
+          id: string
+          job_id: string
+          question_key: string
+          answer_value: Json
+          answered_at: string
+        }
+        Insert: {
+          id?: string
+          job_id: string
+          question_key: string
+          answer_value: Json
+          answered_at?: string
+        }
+        Update: {
+          id?: string
+          job_id?: string
+          question_key?: string
+          answer_value?: Json
+          answered_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "job_user_constraints_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "extraction_jobs"
             referencedColumns: ["id"]
           },
         ]
