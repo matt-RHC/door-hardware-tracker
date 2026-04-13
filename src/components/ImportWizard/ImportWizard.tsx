@@ -158,6 +158,34 @@ export default function ImportWizard({
     itemsCount?: number;
   } | null>(null);
 
+  // ─── Close confirmation ───
+  const [showCloseConfirm, setShowCloseConfirm] = useState(false);
+
+  // Determine whether closing should require confirmation:
+  // - Job wizard: past Upload step
+  // - Legacy wizard: past Upload step (i.e., user has loaded data)
+  const hasUnsavedProgress = useJobWizard
+    ? jobStep > JobWizardStep.Upload
+    : state.currentStep > WizardStep.Upload;
+
+  const handleCloseAttempt = useCallback(() => {
+    if (hasUnsavedProgress) {
+      setShowCloseConfirm(true);
+    } else {
+      onClose();
+    }
+  }, [hasUnsavedProgress, onClose]);
+
+  // Browser beforeunload warning when wizard has unsaved progress
+  useEffect(() => {
+    if (!hasUnsavedProgress) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [hasUnsavedProgress]);
+
   // ─── Triage validation questions ───
   const [triageQuestions, setTriageQuestions] = useState<PunchQuestion[]>([]);
   const [dismissStreak, setDismissStreak] = useState(0);
@@ -505,7 +533,7 @@ export default function ImportWizard({
           <div className="flex items-center gap-4">
             <JobStepIndicator currentStep={jobStep} hasExistingData={state.hasExistingData} />
             <button
-              onClick={onClose}
+              onClick={handleCloseAttempt}
               className="text-tertiary hover:text-primary text-xl leading-none transition-colors ml-4"
             >
               &times;
@@ -584,6 +612,32 @@ export default function ImportWizard({
             )}
           </div>
         </div>
+
+        {/* Close confirmation modal */}
+        {showCloseConfirm && (
+          <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+            <div className="panel w-full max-w-sm p-6 animate-fade-in-up">
+              <h2 className="text-primary font-semibold text-lg mb-3">Discard Import?</h2>
+              <p className="text-secondary text-sm mb-6">
+                You have an import in progress. Closing will discard all changes. Are you sure?
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowCloseConfirm(false)}
+                  className="glow-btn--ghost flex-1 min-h-11 rounded-lg text-sm font-medium"
+                >
+                  Continue Editing
+                </button>
+                <button
+                  onClick={() => { setShowCloseConfirm(false); onClose(); }}
+                  className="glow-btn--danger flex-1 min-h-11 rounded-lg text-sm font-semibold"
+                >
+                  Discard &amp; Close
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     );
   }
@@ -599,7 +653,7 @@ export default function ImportWizard({
         <div className="flex items-center gap-4">
           <StepIndicator currentStep={state.currentStep} hasExistingData={state.hasExistingData} />
           <button
-            onClick={onClose}
+            onClick={handleCloseAttempt}
             className="text-tertiary hover:text-primary text-xl leading-none transition-colors ml-4"
           >
             &times;
@@ -715,6 +769,32 @@ export default function ImportWizard({
           </div>
         </div>
       </PunchHighlightProvider>
+
+      {/* Close confirmation modal */}
+      {showCloseConfirm && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="panel w-full max-w-sm p-6 animate-fade-in-up">
+            <h2 className="text-primary font-semibold text-lg mb-3">Discard Import?</h2>
+            <p className="text-secondary text-sm mb-6">
+              You have an import in progress. Closing will discard all changes. Are you sure?
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowCloseConfirm(false)}
+                className="glow-btn--ghost flex-1 min-h-11 rounded-lg text-sm font-medium"
+              >
+                Continue Editing
+              </button>
+              <button
+                onClick={() => { setShowCloseConfirm(false); onClose(); }}
+                className="glow-btn--danger flex-1 min-h-11 rounded-lg text-sm font-semibold"
+              >
+                Discard &amp; Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

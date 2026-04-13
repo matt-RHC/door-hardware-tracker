@@ -84,6 +84,12 @@ export default function StepTriage({
   } | null>(null);
   const [qtyCheck, setQtyCheck] = useState<PunchyQuantityCheck | null>(null);
   const [pdfBuffer, setPdfBuffer] = useState<ArrayBuffer | null>(null);
+  const [failedChunks, setFailedChunks] = useState<Array<{ index: number; error: string }>>([]);
+  const [totalChunks, setTotalChunks] = useState(0);
+  const [retryingChunks, setRetryingChunks] = useState(false);
+  // Store chunk data for retry
+  const chunksRef = useRef<string[]>([]);
+  const mappingPayloadRef = useRef<Record<string, number> | null>(null);
 
   // Keep refs to latest answers and generated questions
   const answersRef = useRef(questionAnswers);
@@ -155,6 +161,11 @@ export default function StepTriage({
         // appending — the qty check UI deduplicates by set_id on render.
         const allQtyFlags: PunchyQuantityCheck["flags"] = [];
         const allQtyComplianceIssues: PunchyQuantityCheck["compliance_issues"] = [];
+        const chunkFailures: Array<{ index: number; error: string }> = [];
+
+        setTotalChunks(chunks.length);
+        chunksRef.current = chunks;
+        mappingPayloadRef.current = mappingPayload;
 
         for (let i = 0; i < chunks.length; i++) {
           setStatus(`Extracting chunk ${i + 1} of ${chunks.length}...`);
@@ -179,7 +190,9 @@ export default function StepTriage({
 
           if (!chunkResp.ok) {
             const err = await chunkResp.json().catch(() => ({}));
-            console.warn(`Chunk ${i + 1} failed:`, err.error);
+            const errorMsg = err.error || `HTTP ${chunkResp.status}`;
+            console.warn(`Chunk ${i + 1} failed:`, errorMsg);
+            chunkFailures.push({ index: i, error: errorMsg });
             continue;
           }
 
@@ -195,6 +208,10 @@ export default function StepTriage({
               ...(chunkResult.punchyQuantityCheck.compliance_issues ?? [])
             );
           }
+        }
+
+        if (chunkFailures.length > 0) {
+          setFailedChunks(chunkFailures);
         }
 
         // Set merged qty check state if any chunk produced data
@@ -290,6 +307,63 @@ export default function StepTriage({
       onError(err instanceof Error ? err.message : "Extraction failed");
     }
   }, [file, pdfStoragePath, projectId, columnMappings, classifyResult, onError]);
+
+  // ─── Retry failed chunks ───
+  const retryFailedChunks = useCallback(async () => {
+    if (failedChunks.length === 0 || chunksRef.current.length === 0) return;
+    setRetryingChunks(true);
+    setStatus(`Retrying ${failedChunks.length} failed chunk(s)...`);
+
+    const chunks = chunksRef.current;
+    const mappingPayload = mappingPayloadRef.current;
+    const stillFailed: Array<{ index: number; error: string }> = [];
+    const allSets = hardwareSetsRef.current;
+
+    for (const fc of failedChunks) {
+      const i = fc.index;
+      if (i >= chunks.length) continue;
+      setStatus(`Retrying chunk ${i + 1} of ${chunks.length}...`);
+
+      const knownSetIds = allSets.map((s) => s.set_id);
+      const chunkResp = await fetch("/api/parse-pdf/chunk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          chunkBase64: chunks[i],
+          chunkIndex: i,
+          totalChunks: chunks.length,
+          knownSetIds,
+          userColumnMapping: mappingPayload,
+        }),
+      });
+
+      if (!chunkResp.ok) {
+        const err = await chunkResp.json().catch(() => ({}));
+        stillFailed.push({ index: i, error: err.error || `HTTP ${chunkResp.status}` });
+        continue;
+      }
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const chunkResult: any = await chunkResp.json();
+      const newDoors: DoorEntry[] = chunkResult.doors ?? [];
+      const newSets: HardwareSet[] = chunkResult.hardwareSets ?? [];
+
+      if (newDoors.length > 0) {
+        setDoors((prev) => mergeDoors([...prev, ...newDoors]));
+      }
+      if (newSets.length > 0) {
+        setHardwareSets((prev) => mergeHardwareSets([...prev, ...newSets]));
+      }
+    }
+
+    setFailedChunks(stillFailed);
+    if (stillFailed.length === 0) {
+      setStatus("All chunks recovered successfully.");
+    } else {
+      setStatus(`${stillFailed.length} chunk(s) still failing. You can continue with partial data.`);
+    }
+    setRetryingChunks(false);
+  }, [failedChunks]);
 
   // ─── Deep Extract: LLM-based item extraction for empty sets ───
   // Accepts optional opts:
@@ -686,6 +760,34 @@ export default function StepTriage({
               className="h-full rounded-full transition-all duration-500 ease-out bg-accent"
               style={{ width: `${progress}%` }}
             />
+          </div>
+        </div>
+      )}
+
+      {/* Chunk failure warning banner */}
+      {failedChunks.length > 0 && !isLoading && (
+        <div className="mb-4 p-4 bg-warning-dim border border-warning rounded-xl">
+          <div className="flex items-start gap-2 mb-2">
+            <span className="text-warning text-lg leading-none" aria-label="Warning">&#x26A0;</span>
+            <p className="text-warning text-sm font-semibold">
+              {failedChunks.length} of {totalChunks} extraction chunk{totalChunks !== 1 ? "s" : ""} failed. Some doors may be missing from the results.
+            </p>
+          </div>
+          <div className="ml-6 space-y-1 mb-3">
+            {failedChunks.map((fc) => (
+              <p key={fc.index} className="text-secondary text-xs">
+                Chunk {fc.index + 1}: {fc.error}
+              </p>
+            ))}
+          </div>
+          <div className="ml-6">
+            <button
+              onClick={retryFailedChunks}
+              disabled={retryingChunks}
+              className="text-xs px-3 py-1.5 rounded-lg bg-warning text-white hover:bg-warning/80 transition-colors disabled:opacity-50"
+            >
+              {retryingChunks ? "Retrying..." : `Retry ${failedChunks.length} Failed Chunk${failedChunks.length !== 1 ? "s" : ""}`}
+            </button>
           </div>
         </div>
       )}

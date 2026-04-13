@@ -380,6 +380,7 @@ export async function POST(
     let extractedSets: HardwareSet[]
     const allQtyFlags: NonNullable<PunchyQuantityCheck['flags']> = []
     const allQtyComplianceIssues: NonNullable<PunchyQuantityCheck['compliance_issues']> = []
+    let failedChunks: Array<{ index: number; error: string }> = []
 
     if (pdfByteLength > CHUNK_SIZE_THRESHOLD) {
       // ── Chunked extraction ──
@@ -407,6 +408,7 @@ export async function POST(
 
       const allDoors: DoorEntry[] = []
       const allSets: HardwareSet[] = []
+      failedChunks = []
 
       for (let i = 0; i < chunks.length; i++) {
         const chunkProgress = 20 + Math.round(((i + 1) / chunks.length) * 40)
@@ -435,7 +437,9 @@ export async function POST(
             allQtyComplianceIssues.push(...(chunkResult.punchyQuantityCheck.compliance_issues ?? []))
           }
         } catch (chunkErr) {
-          console.warn(`[job-orchestrator] Job ${jobId}: chunk ${i + 1} failed:`, chunkErr instanceof Error ? chunkErr.message : String(chunkErr))
+          const errorMsg = chunkErr instanceof Error ? chunkErr.message : String(chunkErr)
+          console.warn(`[job-orchestrator] Job ${jobId}: chunk ${i + 1} failed:`, errorMsg)
+          failedChunks.push({ index: i, error: errorMsg })
         }
       }
 
@@ -486,15 +490,19 @@ export async function POST(
       set.pdf_page = page
     }
 
+    const extractionIsPartial = failedChunks.length > 0
+
     await updateJob(adminSupabase, jobId, {
       status: 'triaging',
       progress: 70,
-      status_message: `Extraction complete: ${extractedDoors.length} doors, ${extractedSets.length} sets. Running triage...`,
+      status_message: `Extraction complete: ${extractedDoors.length} doors, ${extractedSets.length} sets${extractionIsPartial ? ` (${failedChunks.length} chunk(s) failed)` : ''}. Running triage...`,
       extraction_summary: {
         doors_extracted: extractedDoors.length,
         sets_extracted: extractedSets.length,
         qty_flags: allQtyFlags.length,
         compliance_issues: allQtyComplianceIssues.length,
+        partial: extractionIsPartial,
+        failedChunks: extractionIsPartial ? failedChunks : undefined,
       },
     })
 
@@ -564,6 +572,8 @@ export async function POST(
         sets_extracted: extractedSets.length,
         qty_flags: allQtyFlags.length,
         compliance_issues: allQtyComplianceIssues.length,
+        partial: extractionIsPartial,
+        failedChunks: extractionIsPartial ? failedChunks : undefined,
         triage: triageSummary,
       },
       constraint_flags: allQtyFlags,
