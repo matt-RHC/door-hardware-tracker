@@ -20,6 +20,7 @@ import {
   createAnthropicClient,
   type PdfplumberResult,
 } from '@/lib/parse-pdf-helpers'
+import { shouldAutoTriggerDeepExtraction } from '@/lib/types/confidence'
 
 // Vercel Fluid Compute: 800s timeout (Pro plan max)
 export const maxDuration = 800
@@ -207,11 +208,13 @@ export async function POST(request: NextRequest) {
     // Step 5: Confidence Scoring
     // ==========================================
     const confidence = calculateExtractionConfidence(hardwareSets, doors, corrections)
+    const suggestDeep = shouldAutoTriggerDeepExtraction(confidence)
 
     console.debug(
       `Chunk ${chunkIndex + 1}/${totalChunks}: Punchy pipeline complete: ` +
       `${hardwareSets.length} sets, ${doors.length} doors, ` +
-      `${punchyObservations.length} observations, confidence: ${confidence.score}/100`
+      `${punchyObservations.length} observations, confidence: ${confidence.score}/100` +
+      `${suggestDeep ? ' (deep extraction suggested)' : ''}`
     )
 
     return NextResponse.json({
@@ -223,6 +226,13 @@ export async function POST(request: NextRequest) {
       punchyObservations,
       punchyQuantityCheck: quantityCheck,
       confidence,
+      suggest_deep_extraction: suggestDeep,
+      extraction_confidence: {
+        overall: confidence.overall,
+        score: confidence.score,
+        suggest_deep_extraction: confidence.suggest_deep_extraction,
+        deep_extraction_reasons: confidence.deep_extraction_reasons,
+      },
     })
   } catch (error) {
     console.error('Chunk processing error:', error)
