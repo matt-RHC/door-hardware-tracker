@@ -1,9 +1,9 @@
 """
 MCA-specific extraction tests (BUG-11).
 
-MCA Hardware.pdf (LARGE_MCA.pdf, 82 pages) has a known field concatenation
-issue (BUG-12) where name, manufacturer, model, and finish get merged into
-one field. Tests that depend on BUG-12 being fixed are marked xfail.
+MCA Hardware.pdf (LARGE_MCA.pdf, 82 pages) had a field concatenation issue
+(BUG-12) where name, manufacturer, model, and finish were merged into one
+field. Fixed by running apply_field_splitting() inside extract_all_hardware_sets().
 """
 import re
 
@@ -11,14 +11,12 @@ import pdfplumber
 import pytest
 
 
-# ── Field Separation (BUG-12 xfail) ──────────────────────────────────────────
+# ── Field Separation (BUG-12) ─────────────────────────────────────────────────
 
 @pytest.mark.bug12
 class TestMCAFieldSeparation:
-    """Tests that MCA extraction correctly separates hardware item fields.
-    All tests xfail until BUG-12 (field concatenation) is fixed."""
+    """Tests that MCA extraction correctly separates hardware item fields."""
 
-    @pytest.mark.xfail(reason="BUG-12: MCA field concatenation")
     def test_items_have_separate_manufacturer(self, extract_tables, large_pdf_path):
         with pdfplumber.open(str(large_pdf_path), unicode_norm="NFKC") as pdf:
             hw_sets = extract_tables.extract_all_hardware_sets(pdf)
@@ -30,7 +28,6 @@ class TestMCAFieldSeparation:
             f"Only {with_mfr}/{len(all_items)} ({ratio:.0%}) items have manufacturer"
         )
 
-    @pytest.mark.xfail(reason="BUG-12: MCA field concatenation")
     def test_items_have_separate_model(self, extract_tables, large_pdf_path):
         with pdfplumber.open(str(large_pdf_path), unicode_norm="NFKC") as pdf:
             hw_sets = extract_tables.extract_all_hardware_sets(pdf)
@@ -42,7 +39,6 @@ class TestMCAFieldSeparation:
             f"Only {with_model}/{len(all_items)} ({ratio:.0%}) items have model"
         )
 
-    @pytest.mark.xfail(reason="BUG-12: MCA field concatenation")
     def test_items_have_separate_finish(self, extract_tables, large_pdf_path):
         with pdfplumber.open(str(large_pdf_path), unicode_norm="NFKC") as pdf:
             hw_sets = extract_tables.extract_all_hardware_sets(pdf)
@@ -54,7 +50,6 @@ class TestMCAFieldSeparation:
             f"Only {with_finish}/{len(all_items)} ({ratio:.0%}) items have finish"
         )
 
-    @pytest.mark.xfail(reason="BUG-12: MCA field concatenation")
     def test_at_least_3_sets_fully_parsed(self, extract_tables, large_pdf_path):
         with pdfplumber.open(str(large_pdf_path), unicode_norm="NFKC") as pdf:
             hw_sets = extract_tables.extract_all_hardware_sets(pdf)
