@@ -3,6 +3,29 @@
  * Canonical implementations extracted from chunk/route.ts (S-067 consolidation).
  */
 import Anthropic from '@anthropic-ai/sdk'
+
+/**
+ * Construct an Anthropic client tuned for this app's workload.
+ *
+ *   - `maxRetries: 4` (up from the SDK default of 2). The SDK retries on
+ *     429 and 5xx with exponential backoff; we see transient rate-limit
+ *     errors during multi-chunk imports where 6+ Punchy calls race
+ *     against each other, and two retries aren't always enough.
+ *   - `timeout: 290_000` ms keeps a stuck request from consuming the
+ *     full 800s Vercel Fluid Compute window — Punchy calls should never
+ *     take more than ~5 minutes; beyond that, we'd rather fail fast and
+ *     return an observable error than block the whole chunk.
+ *
+ * Use this factory everywhere we'd otherwise call `new Anthropic(...)`
+ * so the tuning stays consistent.
+ */
+export function createAnthropicClient(): Anthropic {
+  return new Anthropic({
+    apiKey: process.env.ANTHROPIC_API_KEY,
+    maxRetries: 4,
+    timeout: 290_000,
+  })
+}
 import {
   getColumnMappingReviewPrompt,
   getPostExtractionReviewPrompt,
@@ -20,7 +43,7 @@ import type {
 } from '@/lib/types'
 import { extractJSON } from '@/lib/extractJSON'
 import { HARDWARE_TAXONOMY, type InstallScope } from '@/lib/hardware-taxonomy'
-import { createAdminSupabaseClient } from '@/lib/supabase/server'
+import { createAdminSupabaseClient } from '@/lib/supabase/admin'
 
 // --- Punchy observation logging (fire-and-forget) ---
 
@@ -41,8 +64,12 @@ function logPunchyCall(opts: {
 }): void {
   try {
     const supabase = createAdminSupabaseClient()
-    supabase
-      .from('punchy_logs')
+    // `punchy_logs` was added by migration 014 (PR #135) but the generated
+    // Database type in `src/lib/types/database.ts` has not been regenerated,
+    // so the typed client rejects the insert. Cast through `any` until the
+    // types can be regenerated against the live Supabase schema.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const insertPromise = (supabase.from('punchy_logs') as any)
       .insert({
         project_id: opts.projectId ?? null,
         extraction_run_id: opts.extractionRunId ?? null,
@@ -53,7 +80,8 @@ function logPunchyCall(opts: {
         input_tokens: opts.inputTokens ?? null,
         output_tokens: opts.outputTokens ?? null,
         latency_ms: opts.latencyMs,
-      })
+      }) as Promise<{ error: { message: string } | null }>
+    insertPromise
       .then(({ error }) => {
         if (error) console.warn('Punchy log insert failed:', error.message)
       })

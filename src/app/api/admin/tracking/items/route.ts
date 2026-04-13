@@ -9,7 +9,8 @@
 //   ?relevance=<relevance>               (optional — exact match)
 
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerSupabaseClient, createAdminSupabaseClient } from '@/lib/supabase/server'
+import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { createAdminSupabaseClient } from '@/lib/supabase/admin'
 import { requireTrackingAdmin, TrackingRecordType } from '@/lib/tracking/constants'
 
 export const runtime = 'nodejs'

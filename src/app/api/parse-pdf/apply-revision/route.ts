@@ -140,18 +140,55 @@ export async function POST(request: NextRequest) {
       }
 
       if (!decision.transfer_progress) {
-        // Reset: delete old hardware items and checklist, insert new ones
-        await (supabase as any)
-          .from('hardware_items')
-          .delete()
-          .eq('opening_id', decision.existing_id)
+        // Reset the CHECKLIST WORKFLOW (received → pre_install → installed →
+        // qa_qc) but preserve user-classified hardware items.
+        //
+        // The previous implementation deleted ALL hardware_items plus ALL
+        // checklist_progress for the opening, then re-inserted items from
+        // the new PDF. That silently destroyed:
+        //   - user classifications (install_type = bench/field)
+        //   - user edits to qty / model / finish / options
+        //   - any manually-added items not present in the new PDF
+        //
+        // "Reset progress" in the UI means "restart the workflow on this
+        // door," not "wipe everything I've edited." Fix: delete only
+        // checklist_progress; preserve items the user has touched
+        // (install_type set), and refresh only untouched items from the
+        // new PDF.
 
+        // 1. Reset the workflow.
         await (supabase as any)
           .from('checklist_progress')
           .delete()
           .eq('opening_id', decision.existing_id)
 
-        // Insert new hardware items via shared builder
+        // 2. Fetch existing items to decide which to preserve.
+        const { data: existingItems } = await (supabase as any)
+          .from('hardware_items')
+          .select('id, name, install_type')
+          .eq('opening_id', decision.existing_id)
+
+        type ExistingRow = { id: string; name: string | null; install_type: string | null }
+        const rows: ExistingRow[] = (existingItems ?? []) as ExistingRow[]
+        const preserved = rows.filter(r => r.install_type !== null)
+        const preservedNames = new Set(
+          preserved.map(r => (r.name ?? '').toLowerCase()),
+        )
+        const toDeleteIds = rows
+          .filter(r => r.install_type === null)
+          .map(r => r.id)
+
+        // 3. Delete only untouched (un-classified) existing items.
+        if (toDeleteIds.length > 0) {
+          await (supabase as any)
+            .from('hardware_items')
+            .delete()
+            .in('id', toDeleteIds)
+        }
+
+        // 4. Insert fresh items from the new PDF, skipping any whose name
+        //    collides with a preserved item (case-insensitive) so the
+        //    user's edit wins.
         const doorInfoMap = new Map([[parsedDoor.door_number, {
           door_type: parsedDoor.door_type || '',
           frame_type: parsedDoor.frame_type || '',
@@ -162,10 +199,14 @@ export async function POST(request: NextRequest) {
           setMap,
           doorToSetMap,
         )
-        if (newItems.length > 0) {
+        const itemsToInsert = newItems.filter(item => {
+          const itemName = typeof item.name === 'string' ? item.name : ''
+          return !preservedNames.has(itemName.toLowerCase())
+        })
+        if (itemsToInsert.length > 0) {
           await (supabase as any)
             .from('hardware_items')
-            .insert(newItems)
+            .insert(itemsToInsert)
         }
 
         progressReset++

@@ -11,6 +11,7 @@ import {
   computeLeafSide,
   applyCorrections,
   findItemFuzzy,
+  createAnthropicClient,
 } from './parse-pdf-helpers'
 import type { HardwareSet, DoorEntry, PunchyCorrections } from '@/lib/types'
 
@@ -1298,5 +1299,17 @@ describe('applyCorrections', () => {
     }
     applyCorrections(sets, [], corrections)
     expect(sets[0].items?.map(i => i.name)).toEqual(['Spring Hinge'])
+  })
+})
+
+// ─── createAnthropicClient — retry + timeout config ───
+
+describe('createAnthropicClient', () => {
+  it('configures maxRetries=4 and timeout=290000', () => {
+    // We can\'t send a live request in tests, but the SDK exposes the
+    // resolved config on the client so we can confirm our tuning stuck.
+    const client = createAnthropicClient()
+    expect(client.maxRetries).toBe(4)
+    expect(client.timeout).toBe(290_000)
   })
 })
