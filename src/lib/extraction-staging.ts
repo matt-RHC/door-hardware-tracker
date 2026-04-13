@@ -175,14 +175,24 @@ export async function writeStagingData(
     }
   }
 
-  // Insert staging openings in chunks
-  const CHUNK_SIZE = 50
-  const insertedOpenings: Array<{ id: string; door_number: string; hw_set: string | null }> = []
+  // Build the full payload: each opening with its matched hardware items
+  const payload = openings.map(o => {
+    const doorKey = normalizeDoor(o.door_number)
+    const hwSet = doorToSetMap.get(doorKey) ?? setMap.get(o.hw_set ?? '')
+    const items = (hwSet?.items ?? []).map(item => ({
+      name: item.name,
+      qty: item.qty ?? 1,
+      qty_total: item.qty_total ?? null,
+      qty_door_count: item.qty_door_count ?? null,
+      qty_source: item.qty_source ?? null,
+      manufacturer: item.manufacturer ?? null,
+      model: item.model ?? null,
+      finish: item.finish ?? null,
+      options: item.options ?? null,
+      sort_order: item.sort_order ?? 0,
+    }))
 
-  for (let i = 0; i < openings.length; i += CHUNK_SIZE) {
-    const chunk = openings.slice(i, i + CHUNK_SIZE).map(o => ({
-      extraction_run_id: runId,
-      project_id: projectId,
+    return {
       door_number: o.door_number,
       hw_set: o.hw_set ?? null,
       hw_heading: o.hw_heading ?? setMap.get(o.hw_set ?? '')?.heading ?? null,
@@ -197,64 +207,25 @@ export async function writeStagingData(
       is_flagged: o.is_flagged ?? false,
       flag_reason: o.flag_reason ?? null,
       field_confidence: o.field_confidence ?? null,
-    }))
-
-    const { data, error } = await supabase
-      .from('staging_openings')
-      .insert(chunk)
-      .select('id, door_number, hw_set')
-
-    if (error) {
-      console.error(`Error inserting staging openings chunk at ${i}:`, error)
-    } else if (data) {
-      insertedOpenings.push(...data)
+      items,
     }
+  })
+
+  const { data, error } = await supabase.rpc('write_staging_data', {
+    p_extraction_run_id: runId,
+    p_project_id: projectId,
+    p_payload: payload,
+  })
+
+  if (error) {
+    throw new Error(`Failed to write staging data: ${error.message}`)
   }
 
-  // Insert staging hardware items
-  const allItems: Array<Record<string, unknown>> = []
-
-  for (const opening of insertedOpenings) {
-    // Try door-number lookup first (handles multi-heading sub-sets),
-    // fall back to hw_set lookup for legacy/single-heading cases.
-    const doorKey = normalizeDoor(opening.door_number)
-    const hwSet = doorToSetMap.get(doorKey) ?? setMap.get(opening.hw_set ?? '')
-    if (!hwSet?.items?.length) continue
-
-    for (const item of hwSet.items) {
-      allItems.push({
-        staging_opening_id: opening.id,
-        extraction_run_id: runId,
-        name: item.name,
-        qty: item.qty ?? 1,
-        qty_total: item.qty_total ?? null,
-        qty_door_count: item.qty_door_count ?? null,
-        qty_source: item.qty_source ?? null,
-        manufacturer: item.manufacturer ?? null,
-        model: item.model ?? null,
-        finish: item.finish ?? null,
-        options: item.options ?? null,
-        sort_order: item.sort_order ?? 0,
-      })
-    }
+  if (!data.success) {
+    throw new Error(`Failed to write staging data: ${data.error}`)
   }
 
-  let itemsInserted = 0
-  for (let i = 0; i < allItems.length; i += CHUNK_SIZE) {
-    const chunk = allItems.slice(i, i + CHUNK_SIZE)
-    const { data, error } = await supabase
-      .from('staging_hardware_items')
-      .insert(chunk)
-      .select('id')
-
-    if (error) {
-      console.error(`Error inserting staging hw items chunk at ${i}:`, error)
-    } else if (data) {
-      itemsInserted += data.length
-    }
-  }
-
-  return { openingsCount: insertedOpenings.length, itemsCount: itemsInserted }
+  return { openingsCount: data.openings_count, itemsCount: data.items_count }
 }
 
 // --- Promote ---
@@ -263,8 +234,17 @@ export async function promoteExtraction(
   supabase: SupabaseClient,
   runId: string,
   userId: string
-): Promise<{ success: boolean; openingsPromoted?: number; itemsPromoted?: number; error?: string }> {
-  const { data, error } = await supabase.rpc('promote_extraction', {
+): Promise<{
+  success: boolean
+  openingsPromoted?: number
+  itemsPromoted?: number
+  added?: number
+  updated?: number
+  unchanged?: number
+  deactivated?: number
+  error?: string
+}> {
+  const { data, error } = await supabase.rpc('merge_extraction', {
     p_extraction_run_id: runId,
     p_user_id: userId,
   })
@@ -275,8 +255,13 @@ export async function promoteExtraction(
 
   return {
     success: data.success,
-    openingsPromoted: data.openings_promoted,
+    // Backwards-compatible: total promoted = added + updated + unchanged
+    openingsPromoted: (data.added ?? 0) + (data.updated ?? 0) + (data.unchanged ?? 0),
     itemsPromoted: data.items_promoted,
+    added: data.added,
+    updated: data.updated,
+    unchanged: data.unchanged,
+    deactivated: data.deactivated,
     error: data.error,
   }
 }

@@ -1171,8 +1171,16 @@ export type Database = {
         Args: { p_retention_days?: number }
         Returns: number
       }
+      merge_extraction: {
+        Args: { p_extraction_run_id: string; p_user_id: string }
+        Returns: Json
+      }
       promote_extraction: {
         Args: { p_extraction_run_id: string; p_user_id: string }
+        Returns: Json
+      }
+      write_staging_data: {
+        Args: { p_extraction_run_id: string; p_project_id: string; p_payload: Json }
         Returns: Json
       }
     }
