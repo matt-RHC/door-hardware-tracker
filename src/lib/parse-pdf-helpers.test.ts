@@ -13,6 +13,7 @@ import {
   findItemFuzzy,
   normalizeName,
   createAnthropicClient,
+  selectRepresentativeSample,
 } from './parse-pdf-helpers'
 import type { HardwareSet, DoorEntry, PunchyCorrections } from '@/lib/types'
 
@@ -1540,5 +1541,112 @@ describe('createAnthropicClient', () => {
     const client = createAnthropicClient()
     expect(client.maxRetries).toBe(4)
     expect(client.timeout).toBe(290_000)
+  })
+})
+
+// ─── selectRepresentativeSample — smart door sampling ───
+
+describe('selectRepresentativeSample', () => {
+  it('covers all hardware sets', () => {
+    // 5 sets, 100 doors — 20 per set
+    const sets: HardwareSet[] = Array.from({ length: 5 }, (_, i) =>
+      makeSet(`S${i + 1}`, [{ name: 'Hinge', qty: 3 }, { name: 'Closer', qty: 1 }]),
+    )
+    const doors: DoorEntry[] = []
+    for (let s = 0; s < 5; s++) {
+      for (let d = 0; d < 20; d++) {
+        doors.push(makeDoor(`${s + 1}${String.fromCharCode(65 + d)}`, `S${s + 1}`))
+      }
+    }
+    const sample = selectRepresentativeSample(doors, sets)
+    // Every set should have at least one representative
+    const setsInSample = new Set(sample.map(d => d.hw_set))
+    expect(setsInSample.size).toBe(5)
+    for (let i = 1; i <= 5; i++) {
+      expect(setsInSample.has(`S${i}`)).toBe(true)
+    }
+  })
+
+  it('prioritises pair doors in remaining slots', () => {
+    const sets: HardwareSet[] = [
+      makeSet('A', [{ name: 'Hinge', qty: 3 }]),
+      makeSet('B', [{ name: 'Hinge', qty: 3 }]),
+    ]
+    // 30 doors: 15 in set A, 15 in set B
+    const doors: DoorEntry[] = []
+    for (let i = 0; i < 15; i++) {
+      doors.push(makeDoor(`A${i}`, 'A'))
+    }
+    for (let i = 0; i < 15; i++) {
+      const d = makeDoor(`B${i}`, 'B')
+      // Mark last 5 of set B as pair doors
+      if (i >= 10) d.leaf_count = 2
+      doors.push(d)
+    }
+    const sample = selectRepresentativeSample(doors, sets)
+    // All pair doors (5) should be in the sample
+    const pairDoorsInSample = sample.filter(d => (d.leaf_count ?? 1) > 1)
+    expect(pairDoorsInSample.length).toBe(5)
+  })
+
+  it('returns all doors when project is small', () => {
+    const sets: HardwareSet[] = [makeSet('X', [{ name: 'Lock', qty: 1 }])]
+    const doors: DoorEntry[] = Array.from({ length: 8 }, (_, i) =>
+      makeDoor(`D${i + 1}`, 'X'),
+    )
+    const sample = selectRepresentativeSample(doors, sets)
+    expect(sample.length).toBe(8)
+    // Should be the same doors (order preserved)
+    expect(sample.map(d => d.door_number)).toEqual(doors.map(d => d.door_number))
+  })
+
+  it('respects maxSample limit', () => {
+    const sets: HardwareSet[] = Array.from({ length: 20 }, (_, i) =>
+      makeSet(`S${i}`, [{ name: 'Hinge', qty: 3 }]),
+    )
+    const doors: DoorEntry[] = []
+    for (let s = 0; s < 20; s++) {
+      for (let d = 0; d < 5; d++) {
+        doors.push(makeDoor(`${s}-${d}`, `S${s}`))
+      }
+    }
+    // Default max is 15
+    const sample15 = selectRepresentativeSample(doors, sets)
+    expect(sample15.length).toBe(15)
+
+    // Explicit max of 10
+    const sample10 = selectRepresentativeSample(doors, sets, 10)
+    expect(sample10.length).toBe(10)
+  })
+
+  it('picks diverse doors when all share one set', () => {
+    const sets: HardwareSet[] = [
+      makeSet('ONLY', [
+        { name: 'Hinge', qty: 3 },
+        { name: 'Closer', qty: 1 },
+        { name: 'Lock', qty: 1 },
+      ]),
+    ]
+    const doors: DoorEntry[] = []
+    for (let i = 0; i < 30; i++) {
+      const d = makeDoor(`D${i + 1}`, 'ONLY')
+      // Vary door characteristics: some pair, some different types
+      if (i >= 25) d.leaf_count = 2
+      if (i < 10) d.door_type = 'Wood'
+      else if (i < 20) d.door_type = 'HM'
+      else d.door_type = 'AL'
+      doors.push(d)
+    }
+    const sample = selectRepresentativeSample(doors, sets)
+    expect(sample.length).toBe(15)
+    // Should include pair doors (indices 25-29)
+    const pairDoorsInSample = sample.filter(d => (d.leaf_count ?? 1) > 1)
+    expect(pairDoorsInSample.length).toBeGreaterThan(0)
+    // Should not just be the first 15 — pair doors are at index 25+
+    const hasLaterDoors = sample.some(d => {
+      const num = parseInt(d.door_number.replace('D', ''), 10)
+      return num > 15
+    })
+    expect(hasLaterDoors).toBe(true)
   })
 })

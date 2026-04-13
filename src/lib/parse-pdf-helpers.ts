@@ -381,6 +381,116 @@ export async function callPunchyColumnReview(
   }
 }
 
+// ── Representative door sampling for Punchy checkpoints ──────────────
+
+/**
+ * Select a representative subset of doors that maximises coverage for Punchy review.
+ *
+ * Strategy (in priority order):
+ *   1. One door per unique hardware set — ensures every set gets reviewed.
+ *   2. Prioritise pair doors (leaf_count > 1) since they are architecturally
+ *      interesting and prone to quantity issues.
+ *   3. Prioritise doors with the most hardware items (via set membership).
+ *   4. Fill remaining slots from under-represented sets (sets with more total
+ *      doors receive proportionally *less* extra representation).
+ *
+ * If the project has fewer doors than maxSample, all doors are returned.
+ */
+export function selectRepresentativeSample(
+  doors: DoorEntry[],
+  hardwareSets: HardwareSet[],
+  maxSample: number = 15,
+): DoorEntry[] {
+  if (doors.length <= maxSample) return [...doors]
+
+  // Build lookup: set_id → item count (for diversity scoring)
+  const setItemCount = new Map<string, number>()
+  for (const s of hardwareSets) {
+    setItemCount.set(s.set_id, s.items?.length ?? 0)
+  }
+
+  // Group doors by hw_set
+  const doorsBySet = new Map<string, DoorEntry[]>()
+  for (const d of doors) {
+    const key = d.hw_set ?? ''
+    const arr = doorsBySet.get(key)
+    if (arr) arr.push(d)
+    else doorsBySet.set(key, [d])
+  }
+
+  const selected: DoorEntry[] = []
+  const selectedIndices = new Set<number>()
+
+  const addDoor = (d: DoorEntry): boolean => {
+    const idx = doors.indexOf(d)
+    if (selectedIndices.has(idx)) return false
+    selectedIndices.add(idx)
+    selected.push(d)
+    return true
+  }
+
+  // Phase 1: one door per unique hardware set.
+  // Prefer pair doors within each set, then doors with many items.
+  for (const [, setDoors] of doorsBySet) {
+    if (selected.length >= maxSample) break
+    // Sort candidates: pair doors first, then by item count descending
+    const sorted = [...setDoors].sort((a, b) => {
+      const aPair = (a.leaf_count ?? 1) > 1 ? 1 : 0
+      const bPair = (b.leaf_count ?? 1) > 1 ? 1 : 0
+      if (bPair !== aPair) return bPair - aPair
+      const aItems = setItemCount.get(a.hw_set ?? '') ?? 0
+      const bItems = setItemCount.get(b.hw_set ?? '') ?? 0
+      return bItems - aItems
+    })
+    addDoor(sorted[0])
+  }
+
+  if (selected.length >= maxSample) return selected
+
+  // Phase 2: add pair doors not already selected
+  const remaining = () => maxSample - selected.length
+  const pairDoors = doors.filter(d => (d.leaf_count ?? 1) > 1 && !selectedIndices.has(doors.indexOf(d)))
+  for (const d of pairDoors) {
+    if (remaining() <= 0) break
+    addDoor(d)
+  }
+
+  if (selected.length >= maxSample) return selected
+
+  // Phase 3: doors with the most hardware items (via their set)
+  const unselected = () => doors.filter((_, i) => !selectedIndices.has(i))
+  const byItemCount = unselected().sort((a, b) => {
+    return (setItemCount.get(b.hw_set ?? '') ?? 0) - (setItemCount.get(a.hw_set ?? '') ?? 0)
+  })
+  for (const d of byItemCount) {
+    if (remaining() <= 0) break
+    addDoor(d)
+  }
+
+  if (selected.length >= maxSample) return selected
+
+  // Phase 4: fill from under-represented sets (sets with more doors get less extra)
+  const setRepCount = new Map<string, number>()
+  for (const d of selected) {
+    const key = d.hw_set ?? ''
+    setRepCount.set(key, (setRepCount.get(key) ?? 0) + 1)
+  }
+  // Score: lower is better (under-represented). Ratio = selected / total.
+  const candidatesByUnderRep = unselected().sort((a, b) => {
+    const aKey = a.hw_set ?? ''
+    const bKey = b.hw_set ?? ''
+    const aRatio = (setRepCount.get(aKey) ?? 0) / (doorsBySet.get(aKey)?.length ?? 1)
+    const bRatio = (setRepCount.get(bKey) ?? 0) / (doorsBySet.get(bKey)?.length ?? 1)
+    return aRatio - bRatio
+  })
+  for (const d of candidatesByUnderRep) {
+    if (remaining() <= 0) break
+    addDoor(d)
+  }
+
+  return selected
+}
+
 export async function callPunchyPostExtraction(
   client: Anthropic,
   base64: string,
@@ -439,8 +549,11 @@ export async function callPunchyPostExtraction(
       hw_set: d.hw_set,
       fire_rating: d.fire_rating ?? '',
     })),
-    // Rich sample for detailed field review (first 10 with all fields)
-    doors_sample: allOpenings.slice(0, 10),
+    // Representative sample for detailed field review (up to 15, covering all sets)
+    doors_sample: selectRepresentativeSample(
+      allOpenings,
+      (pdfplumberResult?.hardware_sets ?? []) as HardwareSet[],
+    ),
     total_doors: allOpenings.length,
     known_set_ids: knownSetIds ?? [],
   }, null, 2)
@@ -546,7 +659,7 @@ export async function callPunchyQuantityCheck(
         finish: i.finish,
       })),
     })),
-    doors: doors.slice(0, 20).map(d => ({
+    doors: selectRepresentativeSample(doors, hardwareSets, 20).map(d => ({
       door_number: d.door_number,
       hw_set: d.hw_set,
       fire_rating: d.fire_rating,
