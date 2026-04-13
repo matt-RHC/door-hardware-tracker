@@ -92,7 +92,7 @@ export async function POST(request: NextRequest) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-service-role': process.env.SUPABASE_SERVICE_ROLE_KEY!,
+        'x-internal-secret': process.env.CRON_SECRET!,
       },
     }).catch(err => {
       console.error(`Fire-and-forget /api/jobs/${jobId}/run failed:`, err)

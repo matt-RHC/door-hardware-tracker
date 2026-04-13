@@ -277,9 +277,10 @@ export async function POST(
 ) {
   const { id: jobId } = await params
 
-  // Verify service role auth
-  const serviceRoleHeader = request.headers.get('x-service-role')
-  if (!serviceRoleHeader || serviceRoleHeader !== process.env.SUPABASE_SERVICE_ROLE_KEY) {
+  // Verify internal auth via CRON_SECRET (never send service-role key over the wire)
+  const internalSecret = request.headers.get('x-internal-secret')
+  const cronSecret = process.env.CRON_SECRET
+  if (!cronSecret || !internalSecret || internalSecret !== cronSecret) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
