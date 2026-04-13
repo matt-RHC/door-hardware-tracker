@@ -12,13 +12,6 @@ export type Database = {
           submittal_date: string | null
           created_at: string
           created_by: string | null
-          smartsheet_sheet_id: number | null
-          smartsheet_last_synced: string | null
-          smartsheet_webhook_id: number | null
-          smartsheet_submittal_sheet_id: number | null
-          smartsheet_delivery_sheet_id: number | null
-          smartsheet_issues_sheet_id: number | null
-          smartsheet_folder_id: number | null
           last_pdf_hash: string | null
           last_pdf_uploaded_at: string | null
           pdf_storage_path: string | null
@@ -34,13 +27,6 @@ export type Database = {
           submittal_date?: string | null
           created_at?: string
           created_by?: string | null
-          smartsheet_sheet_id?: number | null
-          smartsheet_last_synced?: string | null
-          smartsheet_webhook_id?: number | null
-          smartsheet_submittal_sheet_id?: number | null
-          smartsheet_delivery_sheet_id?: number | null
-          smartsheet_issues_sheet_id?: number | null
-          smartsheet_folder_id?: number | null
           last_pdf_hash?: string | null
           last_pdf_uploaded_at?: string | null
           pdf_storage_path?: string | null
@@ -56,13 +42,6 @@ export type Database = {
           submittal_date?: string | null
           created_at?: string
           created_by?: string | null
-          smartsheet_sheet_id?: number | null
-          smartsheet_last_synced?: string | null
-          smartsheet_webhook_id?: number | null
-          smartsheet_submittal_sheet_id?: number | null
-          smartsheet_delivery_sheet_id?: number | null
-          smartsheet_issues_sheet_id?: number | null
-          smartsheet_folder_id?: number | null
           last_pdf_hash?: string | null
           last_pdf_uploaded_at?: string | null
           pdf_storage_path?: string | null
@@ -380,84 +359,6 @@ export type Database = {
           updated_at?: string
         }
       }
-      smartsheet_row_map: {
-        Row: {
-          id: string
-          sheet_type: string
-          local_record_id: string
-          smartsheet_sheet_id: number
-          smartsheet_row_id: number
-          sync_hash: string | null
-          last_synced: string
-        }
-        Insert: {
-          id?: string
-          sheet_type: string
-          local_record_id: string
-          smartsheet_sheet_id: number
-          smartsheet_row_id: number
-          sync_hash?: string | null
-          last_synced?: string
-        }
-        Update: {
-          id?: string
-          sheet_type?: string
-          local_record_id?: string
-          smartsheet_sheet_id?: number
-          smartsheet_row_id?: number
-          sync_hash?: string | null
-          last_synced?: string
-        }
-      }
-      smartsheet_webhooks: {
-        Row: {
-          id: string
-          project_id: string
-          sheet_type: string
-          smartsheet_webhook_id: number
-          smartsheet_sheet_id: number
-          active: boolean
-          created_at: string
-        }
-        Insert: {
-          id?: string
-          project_id: string
-          sheet_type: string
-          smartsheet_webhook_id: number
-          smartsheet_sheet_id: number
-          active?: boolean
-          created_at?: string
-        }
-        Update: {
-          id?: string
-          project_id?: string
-          sheet_type?: string
-          smartsheet_webhook_id?: number
-          smartsheet_sheet_id?: number
-          active?: boolean
-          created_at?: string
-        }
-      }
-      smartsheet_portfolio: {
-        Row: {
-          id: string
-          project_id: string
-          smartsheet_row_id: number | null
-          last_synced: string | null
-        }
-        Insert: {
-          id?: string
-          project_id: string
-          smartsheet_row_id?: number | null
-          last_synced?: string | null
-        }
-        Update: {
-          id?: string
-          project_id?: string
-          smartsheet_row_id?: number | null
-          last_synced?: string | null
-        }
-      }
       punchy_logs: {
         Row: {
           id: string
@@ -651,10 +552,6 @@ export type IssueUpdate = Database['public']['Tables']['issues']['Update']
 export type Delivery = Database['public']['Tables']['deliveries']['Row']
 export type DeliveryInsert = Database['public']['Tables']['deliveries']['Insert']
 export type DeliveryUpdate = Database['public']['Tables']['deliveries']['Update']
-
-export type SmartsheetRowMap = Database['public']['Tables']['smartsheet_row_map']['Row']
-export type SmartsheetWebhook = Database['public']['Tables']['smartsheet_webhooks']['Row']
-export type SmartsheetPortfolio = Database['public']['Tables']['smartsheet_portfolio']['Row']
 
 export type TrackingItem = Database['public']['Tables']['tracking_items']['Row']
 export type TrackingItemInsert = Database['public']['Tables']['tracking_items']['Insert']

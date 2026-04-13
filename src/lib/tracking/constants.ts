@@ -1,23 +1,11 @@
 // Shared constants + admin gate for the tracking dashboard.
-//
-// M1 of the Smartsheet-replacement project (see /root/.claude/plans/mutable-dazzling-tide.md).
-// The three sheet IDs below are the cross-session tracking sheets we are
-// migrating off of. They remain readable via Smartsheet's API as the source
-// of truth until M2 actually runs the import.
 
 import type { SupabaseClient } from '@supabase/supabase-js'
 
 /** Admin email allowed to access the tracking dashboard and admin API routes. */
 export const TRACKING_ADMIN_EMAIL = 'matt@rabbitholeconsultants.com'
 
-/** Smartsheet sheet IDs for the three tracking sheets. */
-export const TRACKING_SHEET_IDS = {
-  plan_item: 4722023373688708,
-  session: 1895373728599940,
-  metric_run: 2206493777547140,
-} as const
-
-export type TrackingRecordType = keyof typeof TRACKING_SHEET_IDS
+export type TrackingRecordType = 'plan_item' | 'session' | 'metric_run'
 
 /**
  * Verify the current Supabase session belongs to the tracking admin.

@@ -106,24 +106,11 @@ export default function AdminTrackingPage() {
             Tracking Admin
           </h1>
           <p className="text-sm text-secondary mt-2">
-            Unified view of plan items, sessions, and metric runs. Replaces the
-            three Smartsheet tracking sheets.
+            Unified view of plan items, sessions, and metric runs.
           </p>
         </header>
 
         <section className="mb-6 flex flex-wrap gap-3">
-          <AdminButton
-            label="Import (dry run)"
-            path="/api/admin/tracking/import?dryRun=1"
-            running={running}
-            onRun={runAction}
-          />
-          <AdminButton
-            label="Import"
-            path="/api/admin/tracking/import"
-            running={running}
-            onRun={runAction}
-          />
           <AdminButton
             label="Refresh status (dry run)"
             path="/api/admin/tracking/refresh-status?dryRun=1"

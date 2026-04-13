@@ -90,15 +90,6 @@ export async function POST(
       return NextResponse.json({ error: 'Failed to create delivery' }, { status: 500 })
     }
 
-    // Auto-sync to Smartsheet
-    try {
-      const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://trackdoorhardware.app'
-      fetch(`${appUrl}/api/projects/${projectId}/sync-delivery`, {
-        method: 'POST',
-        headers: { cookie: request.headers.get('cookie') || '' },
-      }).catch(err => { console.error('[smartsheet-sync] Background delivery sync failed:', err) })
-    } catch {}
-
     return NextResponse.json(delivery, { status: 201 })
   } catch (error) {
     console.error('Deliveries POST error:', error)
