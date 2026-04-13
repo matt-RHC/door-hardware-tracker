@@ -11,6 +11,7 @@ import {
   computeLeafSide,
   applyCorrections,
   findItemFuzzy,
+  normalizeName,
   createAnthropicClient,
 } from './parse-pdf-helpers'
 import type { HardwareSet, DoorEntry, PunchyCorrections } from '@/lib/types'
@@ -1255,6 +1256,84 @@ describe('findItemFuzzy', () => {
 
   it('returns undefined when no exact or CI match exists', () => {
     expect(findItemFuzzy(items, 'Pivot', 't')).toBeUndefined()
+  })
+})
+
+// ─── findItemFuzzy — enhanced fuzzy matching tiers ───
+
+describe('findItemFuzzy enhanced matching', () => {
+  function mkItem(name: string) {
+    return { name, qty: 1, model: '', finish: '', manufacturer: '' }
+  }
+
+  it('matches when item has trailing dimension specs', () => {
+    // Tier 3: normalized match strips trailing dimensions
+    const items = [mkItem('CONTINUOUS HINGE, 83"')]
+    expect(findItemFuzzy(items, 'Continuous Hinge', 't')?.name).toBe('CONTINUOUS HINGE, 83"')
+  })
+
+  it('matches when item has trailing model number', () => {
+    // Tier 4: substring match — "Exit Device" is contained in the item name
+    const items = [mkItem('Exit Device 99EO US26D')]
+    expect(findItemFuzzy(items, 'Exit Device', 't')?.name).toBe('Exit Device 99EO US26D')
+  })
+
+  it('matches when item has trailing punctuation', () => {
+    // Tier 3: normalized match strips trailing commas
+    const items = [mkItem('Door Closer,')]
+    expect(findItemFuzzy(items, 'Door Closer', 't')?.name).toBe('Door Closer,')
+  })
+
+  it('does NOT match across different hardware categories', () => {
+    // Category guard: "Hinge" and "Door Closer" have different category keywords
+    const items = [mkItem('Door Closer')]
+    expect(findItemFuzzy(items, 'Hinge', 't')).toBeUndefined()
+  })
+
+  it('skips correction when two items score equally (ambiguous)', () => {
+    // Two items that normalize identically — ambiguous match should return undefined
+    const items = [mkItem('Door Closer, 4000'), mkItem('Door Closer, 5000')]
+    expect(findItemFuzzy(items, 'Door Closer', 't')).toBeUndefined()
+  })
+
+  it('does not substring-match short names (< 8 chars)', () => {
+    // "Pin" is only 3 chars — below the 8-char minimum for substring matching
+    const items = [mkItem('Hinge Pin Stop'), mkItem('Pivot Pin Assembly')]
+    expect(findItemFuzzy(items, 'Pin', 't')).toBeUndefined()
+  })
+
+  it('prefers exact match even when fuzzy matches exist', () => {
+    // Exact match should win over normalized or substring matches
+    const items = [mkItem('Hinge'), mkItem('Hinge, 4-1/2" x 4-1/2"')]
+    expect(findItemFuzzy(items, 'Hinge', 't')?.name).toBe('Hinge')
+  })
+})
+
+// ─── normalizeName — unit tests for the normalizer ───
+
+describe('normalizeName', () => {
+  it('strips trailing dimension pattern', () => {
+    expect(normalizeName('CONTINUOUS HINGE, 83"')).toBe('continuous hinge')
+  })
+
+  it('strips trailing model numbers', () => {
+    expect(normalizeName('Exit Device 99EO US26D')).toBe('exit device')
+  })
+
+  it('strips parenthesized finish codes', () => {
+    expect(normalizeName('Lockset (US26D)')).toBe('lockset')
+  })
+
+  it('strips trailing commas and periods', () => {
+    expect(normalizeName('Door Closer,')).toBe('door closer')
+  })
+
+  it('collapses whitespace', () => {
+    expect(normalizeName('Door   Closer')).toBe('door closer')
+  })
+
+  it('handles combined trailing specs', () => {
+    expect(normalizeName('Continuous Hinge 224XY')).toBe('continuous hinge')
   })
 })
 
