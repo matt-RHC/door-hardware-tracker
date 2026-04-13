@@ -320,7 +320,7 @@ def detect_quantity_convention(text: str, door_count: int = 0) -> str:
         for m in re.finditer(r"^\s*(\d{1,3})\s+(.+)", text, re.MULTILINE):
             rest = m.group(2).strip()
             # Skip door assignment lines
-            if re.match(r"(?i)(SGL|PR|PRA|PRI|Pair)\s+(Door|Opening)", rest):
+            if re.match(r"(?i)(SGL|PRA/PRI|PR|Pair)\s+(Door|Opening)", rest):
                 continue
             item_qtys.append(int(m.group(1)))
         if item_qtys:
@@ -987,12 +987,15 @@ OPTION_HEADER = re.compile(
 # 4. "SET: I1S-7B" / "Set: AD2"        — colon-separated
 # 5. "HARDWARE GROUP 04" / "HW GROUP 04" — group keyword
 # 6. "04 - Hardware Set"               — ID-first format
+# 7. "Heading #: E1-XL.1 3 X 7 IWM"   — ESC/AKN format (colon after #)
 HW_SET_HEADING_PATTERN = re.compile(
     r"(?i)"
     r"(?:"
     r"heading\s*#?\s*([A-Z0-9][A-Z0-9.\-:]*)\s*\((?:hw\s*)?set\s*#?\s*([A-Z0-9][A-Z0-9.\-:]*)\)"  # Format 3: Heading #X (Set #Y) or (HwSet Y)
     r"|"
-    r"(?:hardware\s+|hw\s+)(?:set|group)\s*[:# ]\s*(?!for|that|numbers|should|shall|must|will|with|each|from|into|this|which|their|these|have|been|were|they|also|such|only|when|more|than|some|other|does|both|same|very|much|just|like|make|many|most|made|over|upon|after|being|under|where)([A-Z0-9][A-Z0-9.\-]{0,14})\b"  # Format 2/5: HARDWARE SET/GROUP #X (with spec-language blocklist)
+    r"heading\s*#:\s*([A-Z0-9][A-Z0-9.\-]{0,30})\b"  # Format 7: Heading #: ID (ESC/AKN)
+    r"|"
+    r"(?:hardware\s+|hw\s+)(?:set|group)\s*[:# ]\s*(?!for|that|numbers|should|shall|must|will|with|each|from|into|this|which|their|these|have|been|were|they|also|such|only|when|more|than|some|other|does|both|same|very|much|just|like|make|many|most|made|over|upon|after|being|under|where|added|built)([A-Z0-9][A-Z0-9.\-]{0,14})\b"  # Format 2/5: HARDWARE SET/GROUP #X (with spec-language blocklist)
     r"|"
     r"([A-Z0-9][A-Z0-9.\-]{0,14})\s+[-–—]\s+(?:hardware\s+)?set\b"  # Format 6: ID - Hardware Set
     r"|"
@@ -1971,11 +1974,18 @@ def parse_hw_set_id_from_text(text: str) -> tuple[str, str, str]:
     if not m:
         return ("", "", "")
 
+    # Reject if the match is inside a numbered list item (e.g., "33. HW Set EL-XL1").
+    # These are notes that reference set IDs, not actual hardware set headings.
+    match_line = text[max(0, text.rfind("\n", 0, m.start()) + 1): m.end()]
+    if re.match(r"\d+\.\s", match_line.lstrip()):
+        return ("", "", "")
+
     # Group 1 = heading ID from "Heading #X (Set #Y)" (includes :1/.PR4 suffix)
     # Group 2 = generic set ID from same format (from parenthetical)
-    # Group 3 = set ID from "HARDWARE SET/GROUP #X" format
-    # Group 4 = set ID from "ID - Hardware Set" format (ID-first)
-    # Group 5 = set ID from "SET #X" / "SET: X" format (bare set)
+    # Group 3 = set ID from "Heading #: ID" (ESC/AKN format)
+    # Group 4 = set ID from "HARDWARE SET/GROUP #X" format
+    # Group 5 = set ID from "ID - Hardware Set" format (ID-first)
+    # Group 6 = set ID from "SET #X" / "SET: X" format (bare set)
     heading_id = ""
     generic_set_id = ""
 
@@ -1984,17 +1994,21 @@ def parse_hw_set_id_from_text(text: str) -> tuple[str, str, str]:
         heading_id = m.group(1).strip()
         generic_set_id = m.group(2).strip()
     elif m.group(3):
-        # "HARDWARE SET DH1" / "HW GROUP 04"
+        # "Heading #: E1-XL.1" (ESC/AKN format)
         heading_id = m.group(3).strip()
         generic_set_id = m.group(3).strip()
     elif m.group(4):
-        # "04 - Hardware Set" (ID-first format)
+        # "HARDWARE SET DH1" / "HW GROUP 04"
         heading_id = m.group(4).strip()
         generic_set_id = m.group(4).strip()
     elif m.group(5):
-        # "SET #04" / "SET: AD2"
+        # "04 - Hardware Set" (ID-first format)
         heading_id = m.group(5).strip()
         generic_set_id = m.group(5).strip()
+    elif m.group(6):
+        # "SET #04" / "SET: AD2"
+        heading_id = m.group(6).strip()
+        generic_set_id = m.group(6).strip()
     elif m.group(1):
         # Heading number only (fallback)
         heading_id = m.group(1).strip()
@@ -2005,6 +2019,14 @@ def parse_hw_set_id_from_text(text: str) -> tuple[str, str, str]:
     lines = text.split("\n")
     for line in lines:
         if HW_SET_HEADING_PATTERN.search(line):
+            # ESC/AKN format: "Heading #: ID DESCRIPTION" — strip prefix + ID
+            esc_match = re.match(
+                r"(?i)heading\s*#:\s*([A-Z0-9][A-Z0-9.\-]*)\s+(.*)",
+                line,
+            )
+            if esc_match:
+                heading = esc_match.group(2).strip()
+                break
             # Try to extract description after dash
             dash_match = re.search(
                 r"(?:heading\s*#?\s*[A-Z0-9][A-Z0-9.\-:]*)\s*[-–—]\s*(.+?)(?:\(|$)",
@@ -2099,6 +2121,12 @@ def extract_heading_door_numbers(section_text: str) -> list[str]:
     for m in re.finditer(r"#\s*(\S+)", section_text):
         door_num = m.group(1).strip().rstrip(",;:").upper()
         if door_num and door_num not in seen and is_valid_door_number(door_num):
+            seen.add(door_num)
+            doors.append(door_num)
+    # Tertiary: ESC/AKN format "N SGL|PR|PRA/PRI Door:XXX.XX.Y.ZZ"
+    for sd in _parse_specworks_door_assignments(section_text):
+        door_num = sd["door_number"].upper()
+        if door_num and door_num not in seen:
             seen.add(door_num)
             doors.append(door_num)
     return doors
@@ -2260,6 +2288,8 @@ _HEADING_LINE_PATTERN = re.compile(
     r"(?i)^(?:"
     r"heading\s+#?([A-Z0-9][A-Z0-9.\-:]*)\s*\((?:hw\s*)?set"  # SpecWorks: "Heading XXX (HwSet YYY)" or Himmel: "Heading #X (Set Y)"
     r"|"
+    r"heading\s+#:\s*([A-Z0-9][A-Z0-9.\-]*)"  # ESC/AKN: "Heading #: E1-XL.1"
+    r"|"
     r"heading\s+#([A-Z0-9][A-Z0-9.\-:]*)"  # Bare: "Heading #X"
     r"|"
     r"(?:hardware\s+|hw\s+)(?:set|group)\s*[:#\s]\s*([A-Z0-9][A-Z0-9.\-:]*)"
@@ -2304,9 +2334,10 @@ _SPECWORKS_ITEM_RE = re.compile(
     r"^\(\s*(\d+)\)\s+(\d+)\s+(EA|SET|PR)\s+(.+)"
 )
 
-# SpecWorks door assignment: "N SGL|PR DOOR(S)DOOR_NUM..."
+# SpecWorks/ESC door assignment: "N SGL|PR|PRA/PRI Door(S):DOOR_NUM..." or "N SGL Door:DOOR_NUM..."
 _SPECWORKS_DOOR_RE = re.compile(
-    r"^\s*(\d+)\s+(SGL|PR)\s+DOOR\(S\)(\d\.\d{2}\.[A-Z]\.\S+)"
+    r"^\s*(\d+)\s+(SGL|PRA/PRI|PR)\s+DOOR(?:\(S\)|:)(\d{1,3}\.\d{2}\.[A-Z]\.\S+)",
+    re.IGNORECASE,
 )
 
 # Footer line: "Project: ..." or "SpecWorks..."
@@ -2462,12 +2493,12 @@ def _count_specworks_doors(page_text: str) -> tuple[int, int]:
             count = int(m.group(1))
             door_type = m.group(2).upper()
             opening_count += count
-            leaf_count += count * (2 if door_type == "PR" else 1)
+            leaf_count += count * (2 if door_type in ("PR", "PRA/PRI") else 1)
     return opening_count, leaf_count
 
 
 def _parse_specworks_door_assignments(page_text: str) -> list[dict]:
-    """Extract door assignments from a SpecWorks-format set page.
+    """Extract door assignments from a SpecWorks/ESC-format set page.
 
     Returns list of dicts with door_number, hand, door_type.
     """
@@ -2475,11 +2506,12 @@ def _parse_specworks_door_assignments(page_text: str) -> list[dict]:
     for line in page_text.split("\n"):
         m = _SPECWORKS_DOOR_RE.match(line.strip())
         if m:
-            door_type = "PR" if m.group(2).upper() == "PR" else "SGL"
+            raw_type = m.group(2).upper()
+            door_type = "PR" if raw_type in ("PR", "PRA/PRI") else "SGL"
             # Door number is concatenated — extract up to the location text
             raw_door = m.group(3)
             # Door number is 4-part dot notation: X.XX.Y.ZZ[A]
-            dn_match = re.match(r"(\d\.\d{2}\.[A-Z]\.\d{2}[A-Z]?)", raw_door)
+            dn_match = re.match(r"(\d{1,3}\.\d{2}\.[A-Z]\.\d{2}[A-Z]?)", raw_door)
             door_number = dn_match.group(1) if dn_match else raw_door
 
             # Extract handing from the line
@@ -2494,6 +2526,269 @@ def _parse_specworks_door_assignments(page_text: str) -> list[dict]:
                 "door_type": door_type,
             })
     return doors
+
+
+# --- ESC/AKN Format Item Parser ---
+#
+# ESC/AKN item format (different from SpecWorks dual-quantity):
+#   QTY EA Description CatalogNumber FinishCode (RefCode) Manufacturer
+#   CONTINUATION_TEXT
+#
+# Examples:
+#   3 EA Hinge, Full Mortise, Hvy 5BB1HW 4-1/2" x 4-1/2" NRP 630 (HI-1) Ives
+#   Wt                          ← continuation of description
+#   1 EA Threshold 625A x 36" (TH-10) Zero
+#   International               ← continuation of manufacturer
+#   0 EA Door Position Switch Tane Alarm SD-72C By Security (EC-7) Miscellaneous
+
+# Match: "QTY EA|SET|PR <rest>"
+_ESC_ITEM_RE = re.compile(r"^\s*(\d+)\s+(EA|SET|PR)\s+(.+)", re.IGNORECASE)
+
+# Reference code pattern in parentheses: (HI-1), (ED-3), (CL-3), (TH-10), (GA-40)
+_ESC_REF_CODE_RE = re.compile(r"\(([A-Z]{2,4}-\d{1,3})\)")
+
+# Lines that are NOT hardware items or continuations — they're notes, comments, door sizes
+_ESC_SKIP_LINE_RE = re.compile(
+    r"(?i)^(?:"
+    r"\d+['-]"                  # Door size: 3' 0" x 7' 0" or 2-3' 0"
+    r"|Phase:"                  # Phase header
+    r"|Project\s*ID:"           # Project ID header
+    r"|Hardware\s*Schedule"     # Page title
+    r"|Engineering\s*Special"   # Footer
+    r"|Heading\s*#"             # Heading line
+    r"|HEI:"                    # SpecWorks editor notes
+    r"|Page\s+\d"               # Page number
+    r"|\d+\s+(?:SGL|PR)"       # Door assignment line
+    r")"
+)
+
+# Footer line for ESC format (at bottom of page, NOT headers at top)
+_ESC_FOOTER_RE = re.compile(
+    r"^(?:Engineering\s*Special|SpecWorks|Supplier:)"
+)
+
+
+def _is_esc_format(page_text: str) -> bool:
+    """Detect if page uses ESC/AKN format (Heading #: ID with QTY EA items).
+
+    Distinguishes from SpecWorks dual-quantity format which uses (total) per_opening EA.
+    """
+    return bool(re.search(r"(?i)heading\s*#:\s*[A-Z0-9]", page_text))
+
+
+def _parse_esc_items(section_text: str) -> list[HardwareItem]:
+    """Parse hardware items from an ESC/AKN-format section.
+
+    ESC item format:
+        QTY EA Description CatalogNumber Finish (RefCode) Manufacturer
+        CONTINUATION_TEXT
+
+    Items appear after door assignments and door size line.
+    Multi-line wrapping: continuation lines lack the QTY EA prefix.
+    Reference code (XX-N) in parentheses is used as anchor to split
+    finish and manufacturer from the description.
+    """
+    items: list[HardwareItem] = []
+    lines = section_text.split("\n")
+    current_item: dict | None = None
+    past_doors = False  # Track when we're past the door assignment section
+
+    for line in lines:
+        stripped = line.strip()
+
+        if not stripped:
+            continue
+
+        # Skip page headers/footers
+        if _ESC_FOOTER_RE.match(stripped):
+            break
+
+        # Skip heading line itself
+        if re.match(r"(?i)^Heading\s*#", stripped):
+            continue
+
+        # Skip door assignment lines
+        if _SPECWORKS_DOOR_RE.match(stripped):
+            past_doors = True
+            continue
+
+        # Skip door size lines (e.g., "3' 0\" x 7' 0\" x 1 3/4\" HMD/HMF")
+        if re.match(r"^\d+['\u2032-]", stripped):
+            past_doors = True
+            continue
+
+        # Skip "Phase:" and "Project ID:" headers
+        if re.match(r"(?i)^(?:Phase:|Project\s*ID:|Hardware\s*Schedule)", stripped):
+            continue
+
+        # Try to match a new item line: "QTY EA Description..."
+        m = _ESC_ITEM_RE.match(stripped)
+        if m:
+            past_doors = True
+            # Save previous item
+            if current_item:
+                items.append(_finalize_esc_item(current_item))
+
+            qty = int(m.group(1))
+            rest = m.group(3).strip()
+
+            current_item = {
+                "qty": qty,
+                "first_line": rest,
+                "continuations": [],
+            }
+        elif current_item and past_doors:
+            # Continuation line — could extend description or manufacturer
+            # Skip lines that are standalone notes/annotations, not item continuations
+            if (
+                not re.match(r"(?i)^(?:Phase:|Project\s*ID:|Hardware\s*Schedule|Heading\s*#)", stripped)
+                and not _SPECWORKS_DOOR_RE.match(stripped)
+                # Skip installation note annotations like "At header only", "At jamb legs only"
+                and not re.match(r"(?i)^at\s+(?:header|jamb|hinge|lock|latch|pull)", stripped)
+            ):
+                current_item["continuations"].append(stripped)
+
+    # Save last item
+    if current_item:
+        items.append(_finalize_esc_item(current_item))
+
+    return items
+
+
+def _finalize_esc_item(item_data: dict) -> HardwareItem:
+    """Split an ESC/AKN item's first line + continuations into name/model/finish/mfr.
+
+    Uses the reference code (XX-N) in parentheses as an anchor point.
+    Format: Description CatalogNumber Finish (RefCode) Manufacturer
+    """
+    first_line = item_data["first_line"]
+    continuations = item_data.get("continuations", [])
+    qty = item_data["qty"]
+
+    # Join first line with continuations for full text analysis
+    # But manufacturer name wraps are handled specially
+    full_text = first_line
+
+    # Check if first_line has a reference code
+    ref_match = _ESC_REF_CODE_RE.search(first_line)
+
+    manufacturer = ""
+    finish = ""
+    name = ""
+    model = ""
+    ref_code = ""
+
+    if ref_match:
+        ref_code = ref_match.group(1)
+        before_ref = first_line[:ref_match.start()].strip()
+        after_ref = first_line[ref_match.end():].strip()
+
+        # Manufacturer is after the ref code on the first line
+        manufacturer = after_ref
+
+        # If manufacturer wraps to continuation lines, join them
+        # (but only if first line had no manufacturer text after ref code)
+        mfr_continuations = []
+        desc_continuations = []
+        for cont in continuations:
+            # Only consider manufacturer continuation if the first line
+            # had no manufacturer text (e.g., "Zero\nInternational" where
+            # "Zero" is the last word before line break)
+            if (
+                not desc_continuations
+                and not mfr_continuations
+                and not _ESC_ITEM_RE.match(cont)
+                and not manufacturer  # No mfr on first line → this continues it
+            ):
+                # Check if this looks like a manufacturer continuation
+                if (
+                    re.match(r"^[A-Z][a-z]", cont)
+                    and not re.match(r"(?i)^(?:at\s|per\s|extended|mortise\s*door|concealed|gasketing\s*change|please|EU\s*=|permanent|length|coordinator|closer)", cont)
+                    and len(cont.split()) <= 3
+                ):
+                    mfr_continuations.append(cont)
+                    continue
+            # If manufacturer IS present and continuation is a known company
+            # name suffix (e.g., "International", "Closers", "Builders Hardware")
+            elif (
+                not desc_continuations
+                and not mfr_continuations
+                and manufacturer
+                and re.match(r"^(?:International|Closers|Builders\s*Hardware|Products|Industries|Corp|Inc)$", cont, re.IGNORECASE)
+            ):
+                mfr_continuations.append(cont)
+                continue
+            desc_continuations.append(cont)
+
+        if mfr_continuations:
+            manufacturer = (manufacturer + " " + " ".join(mfr_continuations)).strip()
+
+        # Parse the before-ref part: Description CatalogNumber Finish
+        # Work backwards from the end: finish is the last BHMA-pattern token
+        tokens = before_ref.split()
+
+        # Extract finish: last token(s) that match finish pattern
+        while tokens and FINISH_CODE_PATTERN.match(tokens[-1]):
+            finish = (tokens.pop() + " " + finish).strip() if finish else tokens.pop()
+
+        # Rejoin and split into name/model
+        before_finish = " ".join(tokens)
+
+        # Find where description ends and catalog number begins
+        name = before_finish
+        model = ""
+        parts = before_finish.split()
+        for i, part in enumerate(parts):
+            # Catalog numbers start with digits: 5BB1HW, 4040XP, 705, 9553
+            if re.match(r"^\d", part) and i > 0:
+                name = " ".join(parts[:i])
+                model = " ".join(parts[i:])
+                break
+            # Letter-digit codes: L9010, QEL-9849, FB51T
+            if re.match(r"^[A-Z]+\d", part) and i > 0 and len(part) >= 3:
+                name = " ".join(parts[:i])
+                model = " ".join(parts[i:])
+                break
+
+        # Prepend description continuations to name
+        if desc_continuations:
+            # Filter out obvious note lines from description continuations
+            hw_conts = []
+            for dc in desc_continuations:
+                # Stop at note-like lines
+                if re.match(r"(?i)^(?:gasketing\s*change|please|ESC\s|per\s|EU\s*=|permanent|length|coordinator|closer\s*mounted|mortise\s*door\s*bottom|concealed\s*OH|extended\s*lip)", dc):
+                    break
+                hw_conts.append(dc)
+            if hw_conts:
+                name = name + " " + " ".join(hw_conts)
+
+    else:
+        # No reference code — simpler parsing
+        # Join continuations
+        if continuations:
+            full_text = first_line + " " + " ".join(continuations)
+
+        # Try to find name/model split
+        parts = full_text.split()
+        name = full_text
+        for i, part in enumerate(parts):
+            if re.match(r"^\d", part) and i > 0:
+                name = " ".join(parts[:i])
+                model = " ".join(parts[i:])
+                break
+            if re.match(r"^[A-Z]+\d", part) and i > 0 and len(part) >= 3:
+                name = " ".join(parts[:i])
+                model = " ".join(parts[i:])
+                break
+
+    return HardwareItem(
+        qty=qty,
+        qty_source="parsed",
+        name=name.strip(",. "),
+        manufacturer=manufacturer.strip(),
+        model=model.strip(),
+        finish=finish.strip(),
+    )
 
 
 def parse_items_from_raw_tables(tables: list) -> list[HardwareItem]:
@@ -2650,6 +2945,30 @@ def extract_hardware_sets_from_page(page, page_text: str, heading_format: str = 
             qty_convention=detect_quantity_convention(page_text, door_count),
             items=items,
         ))
+        return sets
+
+    # ESC/AKN format: "Heading #: ID" with "QTY EA Description" items.
+    # May have multiple headings per page — split and parse each section.
+    if _is_esc_format(page_text):
+        sections = _split_page_at_headings(page_text)
+        for section_text in sections:
+            sec_id, sec_generic, sec_heading = parse_hw_set_id_from_text(section_text)
+            if not sec_id:
+                continue
+            door_count, leaf_count = _count_specworks_doors(section_text)
+            items = _parse_esc_items(section_text)
+            if items:
+                items = deduplicate_hardware_items(items)
+            sets.append(HardwareSetDef(
+                set_id=sec_id,
+                generic_set_id=sec_generic,
+                heading=sec_heading,
+                heading_door_count=door_count,
+                heading_leaf_count=leaf_count,
+                heading_doors=extract_heading_door_numbers(section_text),
+                qty_convention=detect_quantity_convention(section_text, door_count),
+                items=items,
+            ))
         return sets
 
     # Extract door counts from the FULL page text BEFORE splitting so that
