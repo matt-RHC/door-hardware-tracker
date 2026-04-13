@@ -82,6 +82,20 @@ export interface PdfplumberFlaggedDoor {
 /** Confidence level for a Punchy observation or correction. */
 export type PunchyConfidence = 'high' | 'medium' | 'low'
 
+/**
+ * Coerce an unknown value (typically a raw LLM string) to a valid
+ * PunchyConfidence. Punchy's JSON is free-text at runtime — casting a
+ * surprise value like "fair" to the union pollutes downstream UI logic
+ * (colored pills, sort order) that assumes high/medium/low. Defaults to
+ * 'medium' when the value isn't recognized.
+ */
+export function toPunchyConfidence(
+  value: unknown,
+  fallback: PunchyConfidence = 'medium',
+): PunchyConfidence {
+  return value === 'high' || value === 'medium' || value === 'low' ? value : fallback
+}
+
 /** A single observation from Punchy at a pipeline checkpoint. */
 export interface PunchyObservation {
   checkpoint: 'column_mapping' | 'post_extraction' | 'quantity_check'
@@ -123,7 +137,13 @@ export interface PunchyCorrections {
   missing_doors?: Array<DoorEntry & { confidence?: PunchyConfidence }>
   missing_sets?: Array<{
     set_id: string
+    /** Optional parent/generic set id when Punchy detects a sub-variant. */
+    generic_set_id?: string
     heading: string
+    /** Openings assigned to this set in the heading block (if known). */
+    heading_door_count?: number
+    /** Total leaves across those openings (pairs count as 2). */
+    heading_leaf_count?: number
     items: ExtractedHardwareItem[]
     confidence?: PunchyConfidence
   }>
