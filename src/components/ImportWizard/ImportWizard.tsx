@@ -163,6 +163,7 @@ export default function ImportWizard({
   // Clear questions when leaving the triage step
   useEffect(() => {
     if (state.currentStep !== WizardStep.Triage) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- synchronous reset on step change
       setTriageQuestions([]);
       setDismissStreak(0);
       setQuestionsSuppressed(false);

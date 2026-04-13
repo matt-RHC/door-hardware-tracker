@@ -15,6 +15,7 @@ export default function SoundToggle() {
 
   // Prevent hydration mismatch
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- hydration guard on mount
     setMounted(true);
   }, []);
 

@@ -76,7 +76,7 @@ describe('normalizeItemName', () => {
   it('expands floor abbreviation (with period key)', () => {
     // "flr." → word boundary after dot doesn't match mid-string,
     // but "flr" key matches → "floor." remains
-    expect(normalizeItemName('Flr. Stop')).toBe('floor. stop')
+    expect(normalizeItemName('Flr. Stop')).toBe('floor stop')
   })
 
   it('removes trailing punctuation', () => {

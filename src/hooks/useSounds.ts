@@ -26,6 +26,7 @@ export function useSounds(): UseSoundsReturn {
 
   // Sync local state with sound manager on mount
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- sync with sound manager on mount
     setEnabledState(sounds.isEnabled());
   }, []);
 
