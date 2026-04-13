@@ -60,11 +60,12 @@ export async function POST(request: NextRequest) {
     }
 
     // Call Python endpoint with bbox + target_page
+    // Use || not ?? — see classify-pages/route.ts for the explanation.
     const requestOrigin = new URL(request.url).origin
     const baseUrl = process.env.PYTHON_API_URL
-      ?? (requestOrigin !== 'null' ? requestOrigin : null)
-      ?? process.env.NEXT_PUBLIC_APP_URL
-      ?? (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000')
+      || (requestOrigin && requestOrigin !== 'null' ? requestOrigin : null)
+      || process.env.NEXT_PUBLIC_APP_URL
+      || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000')
 
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), 120_000)

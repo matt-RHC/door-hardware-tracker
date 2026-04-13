@@ -256,10 +256,14 @@ export async function callPdfplumber(
   // requestOrigin (derived from new URL(request.url).origin in the route handler)
   // is used as the primary fallback so relative-path fetch errors never occur on
   // preview/production deployments where NEXT_PUBLIC_APP_URL is unset.
+  // Use || not ?? for env vars: next.config.ts bakes unset vars as ""
+  // (empty string), and "" ?? x returns "" because ?? only short-circuits
+  // on null/undefined. || treats "" as falsy so the chain reaches
+  // requestOrigin, which is always a valid absolute origin.
   const baseUrl = process.env.PYTHON_API_URL
-    ?? (requestOrigin && requestOrigin !== 'null' ? requestOrigin : null)
-    ?? process.env.NEXT_PUBLIC_APP_URL
-    ?? (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000')
+    || (requestOrigin && requestOrigin !== 'null' ? requestOrigin : null)
+    || process.env.NEXT_PUBLIC_APP_URL
+    || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000')
 
   const payload: Record<string, unknown> = { pdf_base64: base64 }
   if (userColumnMapping) {

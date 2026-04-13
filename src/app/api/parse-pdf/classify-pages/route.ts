@@ -27,11 +27,15 @@ export async function POST(request: NextRequest) {
     // Derive origin from the incoming request so this proxy always targets
     // the same deployment as the caller — works on preview, production, and
     // localhost without any env var configuration.
+    // Use || not ?? for env vars: next.config.ts bakes unset vars as ""
+    // (empty string), and "" ?? x still returns "" because ?? only
+    // short-circuits on null/undefined. || treats "" as falsy, so the
+    // chain falls through to requestOrigin as intended.
     const requestOrigin = new URL(request.url).origin
     const baseUrl = process.env.PYTHON_API_URL
-      ?? (requestOrigin !== 'null' ? requestOrigin : null)
-      ?? process.env.NEXT_PUBLIC_APP_URL
-      ?? (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000')
+      || (requestOrigin && requestOrigin !== 'null' ? requestOrigin : null)
+      || process.env.NEXT_PUBLIC_APP_URL
+      || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000')
 
     const internalToken = process.env.PYTHON_INTERNAL_SECRET ?? ''
 
