@@ -55,8 +55,6 @@ export default function ProjectDetailPage() {
   const [filters, setFilters] = useState<Filters>(defaultFilters);
   const [showFilters, setShowFilters] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);
-  const [syncing, setSyncing] = useState(false);
-  const [syncResult, setSyncResult] = useState<{ success: boolean; message: string; permalink?: string } | null>(null);
 
   const handleViewPdfPage = useCallback(
     async (pageIndex: number) => {
@@ -139,34 +137,6 @@ export default function ProjectDetailPage() {
   const overallProgress = totalItems > 0 ? (totalChecked / totalItems) * 100 : 0;
   const updateFilter = (key: keyof Filters, value: string) => {
     setFilters((prev) => ({ ...prev, [key]: value }));
-  };
-
-  const syncToSmartsheet = async () => {
-    setSyncing(true);
-    setSyncResult(null);
-    try {
-      const response = await fetch(`/api/projects/${projectId}/sync-smartsheet`, {
-        method: "POST",
-      });
-      const data = await response.json();
-      if (!response.ok) {
-        setSyncResult({ success: false, message: data.error || "Sync failed" });
-      } else {
-        const verb = data.created ? "Created" : "Updated";
-        setSyncResult({
-          success: true,
-          message: `${verb} Smartsheet with ${data.rowsSynced} openings`,
-          permalink: data.permalink,
-        });
-      }
-    } catch (err) {
-      setSyncResult({
-        success: false,
-        message: err instanceof Error ? err.message : "Sync failed",
-      });
-    } finally {
-      setSyncing(false);
-    }
   };
 
   // Card border color based on progress
@@ -262,33 +232,6 @@ export default function ProjectDetailPage() {
               CSV
             </button>
             <button
-              onClick={() => router.push(`/project/${projectId}/dashboard`)}
-              className="shrink-0 glow-btn glow-btn--ghost text-[13px] rounded-lg"
-              style={{ padding: "0.5rem 0.875rem" }}
-            >
-              Dashboard
-            </button>
-            <button
-              onClick={syncToSmartsheet}
-              disabled={syncing}
-              className="shrink-0 glow-btn glow-btn--success text-[13px] rounded-lg"
-              style={{ padding: "0.5rem 0.875rem" }}
-            >
-              {syncing ? (
-                <>
-                  <span className="w-3.5 h-3.5 border-2 border-success border-t-transparent rounded-full animate-spin" />
-                  Syncing...
-                </>
-              ) : (
-                <>
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                  </svg>
-                  Smartsheet
-                </>
-              )}
-            </button>
-            <button
               onClick={() => setShowUploadModal(true)}
               className="shrink-0 glow-btn glow-btn--primary text-[13px] rounded-lg"
               style={{ padding: "0.5rem 0.875rem" }}
@@ -300,39 +243,6 @@ export default function ProjectDetailPage() {
             </button>
           </div>
         </div>
-
-        {/* Sync Result */}
-        {syncResult && (
-          <div
-            className={`mb-5 p-3 rounded-lg flex items-center justify-between text-[13px] border animate-fade-in-up ${
-              syncResult.success
-                ? "bg-success-dim border-success text-success"
-                : "bg-danger-dim border-danger text-danger"
-            }`}
-          >
-            <span>{syncResult.message}</span>
-            <div className="flex items-center gap-3">
-              {syncResult.permalink && (
-                <a
-                  href={syncResult.permalink}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-accent hover:opacity-80 underline transition-opacity text-[12px]"
-                >
-                  Open in Smartsheet
-                </a>
-              )}
-              <button
-                onClick={() => setSyncResult(null)}
-                className="text-current opacity-50 hover:opacity-100 transition-opacity"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-          </div>
-        )}
 
         {/* ── Filter Panel ── */}
         {showFilters && (
