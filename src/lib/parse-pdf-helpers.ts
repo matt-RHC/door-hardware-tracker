@@ -740,13 +740,9 @@ export function applyCorrections(
 
       // Remove items (fuzzy match)
       if (corr.items_to_remove) {
-        const removeLower = corr.items_to_remove.map(n => n.toLowerCase())
+        const removeLower = new Set(corr.items_to_remove.map(n => n.toLowerCase()))
         set.items = (set.items ?? []).filter(
-          item => !removeLower.some(
-            rn => item.name.toLowerCase() === rn
-              || item.name.toLowerCase().includes(rn)
-              || rn.includes(item.name.toLowerCase()),
-          ),
+          item => !removeLower.has(item.name.toLowerCase()),
         )
       }
 

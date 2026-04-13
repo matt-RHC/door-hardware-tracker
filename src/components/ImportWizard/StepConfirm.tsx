@@ -80,7 +80,8 @@ export default function StepConfirm({
   // Count doors that reference non-existent sets (blocks save unless overridden)
   const doorsWithUnmatchedSets = findDoorsWithUnmatchedSets(doors, definedSetIds);
   const saveBlocked =
-    doorsWithUnmatchedSets.length > 0 && !overrideUnmatched;
+    doors.length === 0 ||
+    (doorsWithUnmatchedSets.length > 0 && !overrideUnmatched);
 
   // ─── Save flow: createExtractionRun + writeStagingData + promoteExtraction ───
   const handleSave = async () => {
