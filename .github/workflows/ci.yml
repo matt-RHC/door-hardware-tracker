@@ -1,4 +1,4 @@
-name: PDF Extraction Tests
+name: CI
 
 on:
   push:
@@ -55,3 +55,15 @@ jobs:
       - run: npm ci
       - run: npm run lint
       - run: npx tsc --noEmit
+
+  test-ts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - name: Run TypeScript unit tests
+        run: npm run test
