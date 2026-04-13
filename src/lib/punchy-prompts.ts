@@ -142,12 +142,19 @@ If everything looks correctly mapped, return: {"unmapped_fields": [], "mapping_i
 
 // ── Checkpoint 2: Post-Extraction Review ────────────────────────
 
-export function getPostExtractionReviewPrompt(): string {
+export function getPostExtractionReviewPrompt(goldenSample?: {
+  set_id: string
+  items: Array<{ qty: number; name: string; manufacturer?: string; model?: string; finish?: string }>
+}): string {
+  const goldenSection = goldenSample
+    ? `\n\nGOLDEN SAMPLE (user-verified baseline):\nThe user confirmed set "${goldenSample.set_id}" is correctly extracted:\n${JSON.stringify(goldenSample.items, null, 2)}\nUse this as the naming/convention baseline for this submittal. If other sets use the same manufacturer abbreviations, finish codes, or naming patterns, treat those as correct — do not flag them as errors.`
+    : ''
+
   return `${PUNCHY_PERSONA}
 
 ${DFH_DOMAIN_KNOWLEDGE}
 
-${getTaxonomyPromptText()}
+${getTaxonomyPromptText()}${goldenSection}
 
 TASK: Review extracted data from a door hardware submittal PDF. The data was extracted by an automated tool (pdfplumber). Your job is to find errors and missing data.
 

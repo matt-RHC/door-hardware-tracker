@@ -342,10 +342,18 @@ export async function callPunchyPostExtraction(
   base64: string,
   pdfplumberResult: PdfplumberResult,
   knownSetIds?: string[],
-  opts?: { projectId?: string; extractionRunId?: string },
+  opts?: {
+    projectId?: string
+    extractionRunId?: string
+    goldenSample?: {
+      set_id: string
+      items: Array<{ qty: number; name: string; manufacturer?: string; model?: string; finish?: string }>
+    }
+  },
 ): Promise<PunchyCorrections> {
-  const systemPrompt = getPostExtractionReviewPrompt()
+  const systemPrompt = getPostExtractionReviewPrompt(opts?.goldenSample)
 
+  const allOpenings = pdfplumberResult?.openings ?? []
   const extractedSummary = JSON.stringify({
     hardware_sets: (pdfplumberResult?.hardware_sets ?? []).map(s => ({
       set_id: s.set_id,
@@ -353,9 +361,16 @@ export async function callPunchyPostExtraction(
       item_count: s.items?.length ?? 0,
       items: s.items ?? [],
     })),
-    doors_count: pdfplumberResult?.openings?.length ?? 0,
-    doors_sample: (pdfplumberResult?.openings ?? []).slice(0, 10),
-    total_doors: pdfplumberResult?.openings?.length ?? 0,
+    // Compact full door list: every door_number + hw_set (~2KB for 200 doors)
+    // so Punchy can detect missing doors and wrong assignments across the full project.
+    all_doors: allOpenings.map(d => ({
+      door_number: d.door_number,
+      hw_set: d.hw_set,
+      fire_rating: d.fire_rating ?? '',
+    })),
+    // Rich sample for detailed field review (first 10 with all fields)
+    doors_sample: allOpenings.slice(0, 10),
+    total_doors: allOpenings.length,
     known_set_ids: knownSetIds ?? [],
   }, null, 2)
 
@@ -465,6 +480,14 @@ export async function callPunchyQuantityCheck(
       fire_rating: d.fire_rating,
       door_type: d.door_type,
       hand: d.hand,
+      leaf_count: d.leaf_count ?? 1,
+    })),
+    // Compact full door list for pair-door compliance checks across all openings
+    all_doors_compact: doors.map(d => ({
+      door_number: d.door_number,
+      hw_set: d.hw_set,
+      fire_rating: d.fire_rating ?? '',
+      leaf_count: d.leaf_count ?? 1,
     })),
     total_doors: doors.length,
   }, null, 2)
@@ -668,6 +691,40 @@ export async function callDeepExtraction(
   }
 }
 
+/**
+ * Fuzzy item matcher: exact name first, then case-insensitive, then substring.
+ * Logs warnings when fuzzy or no match occurs for observability.
+ */
+function findItemFuzzy(
+  items: ExtractedHardwareItem[],
+  name: string,
+  context: string,
+): ExtractedHardwareItem | undefined {
+  // 1. Exact match
+  const exact = items.find(i => i.name === name)
+  if (exact) return exact
+
+  // 2. Case-insensitive match
+  const lower = name.toLowerCase()
+  const ci = items.find(i => i.name.toLowerCase() === lower)
+  if (ci) {
+    console.debug(`Punchy correction fuzzy match (case): "${name}" → "${ci.name}" [${context}]`)
+    return ci
+  }
+
+  // 3. Substring containment (either direction)
+  const sub = items.find(
+    i => i.name.toLowerCase().includes(lower) || lower.includes(i.name.toLowerCase()),
+  )
+  if (sub) {
+    console.debug(`Punchy correction fuzzy match (substring): "${name}" → "${sub.name}" [${context}]`)
+    return sub
+  }
+
+  console.warn(`Punchy correction could not match item "${name}" [${context}]`)
+  return undefined
+}
+
 export function applyCorrections(
   hardwareSets: HardwareSet[],
   doors: DoorEntry[],
@@ -681,17 +738,22 @@ export function applyCorrections(
 
       if (corr.heading) set.heading = corr.heading
 
-      // Remove items
+      // Remove items (fuzzy match)
       if (corr.items_to_remove) {
+        const removeLower = corr.items_to_remove.map(n => n.toLowerCase())
         set.items = (set.items ?? []).filter(
-          item => !corr.items_to_remove!.includes(item.name)
+          item => !removeLower.some(
+            rn => item.name.toLowerCase() === rn
+              || item.name.toLowerCase().includes(rn)
+              || rn.includes(item.name.toLowerCase()),
+          ),
         )
       }
 
-      // Fix items
+      // Fix items (fuzzy match)
       if (corr.items_to_fix) {
         for (const fix of corr.items_to_fix) {
-          const item = (set.items ?? []).find(i => i.name === fix.name)
+          const item = findItemFuzzy(set.items ?? [], fix.name, `set ${corr.set_id} fix ${fix.field}`)
           if (item && fix.field in item) {
             const val = fix.new_value
             if (fix.field === 'qty') {
@@ -707,10 +769,11 @@ export function applyCorrections(
         }
       }
 
-      // Add missing items
+      // Add missing items (fuzzy duplicate check)
       if (corr.items_to_add) {
         for (const newItem of corr.items_to_add) {
-          if (!(set.items ?? []).some(i => i.name === newItem.name)) {
+          const existing = findItemFuzzy(set.items ?? [], newItem.name, `set ${corr.set_id} add`)
+          if (!existing) {
             if (!set.items) set.items = []
             set.items.push(newItem)
           }
@@ -844,6 +907,14 @@ export function normalizeQuantities(
       }
 
       const scope = classifyItemScope(item.name)
+      const maxPerOpening = MAX_QTY[scope ?? 'per_opening'] ?? 2
+
+      // Safety: if qty is already within per-opening range, it's almost certainly
+      // already normalized. Dividing a 3-hinge qty by a 3-door count would
+      // incorrectly yield 1. Skip division when qty <= maxPerOpening.
+      if (item.qty <= maxPerOpening) {
+        continue
+      }
 
       // per_pair / per_frame → never divide (one per opening/frame regardless of leaf count)
       if (scope === 'per_pair' || scope === 'per_frame') {
