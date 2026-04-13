@@ -8,16 +8,16 @@
   "reference_code_count": 0,
   "hardware_sets": [
     {
-      "set_id": "04",
+      "set_id": "04.PR4",
       "heading": "Heading #04.PR4",
       "item_count": 11,
       "items": [
         {
           "name": "Continuous Hinge A515 83-1/8\" CUT TO CUSTOM LENGTH PT LH US32D AB",
           "qty": 1,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
+          "qty_source": "flagged",
+          "qty_total": 1,
+          "qty_door_count": 1,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -25,9 +25,9 @@
         {
           "name": "Electrified Mortise Lockset L9092 EU H 01A 50-231 CON RX LH 622 SC",
           "qty": 1,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
+          "qty_source": "flagged",
+          "qty_total": 1,
+          "qty_door_count": 1,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -35,9 +35,9 @@
         {
           "name": "Interchangeable Core 80-037 50-002-VKC GMK 622 SC",
           "qty": 1,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
+          "qty_source": "flagged",
+          "qty_total": 1,
+          "qty_door_count": 1,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -45,9 +45,9 @@
         {
           "name": "Closer 4040XP REGARM 4040-18 TBSRT 622 LC",
           "qty": 1,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
+          "qty_source": "flagged",
+          "qty_total": 1,
+          "qty_door_count": 1,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -55,9 +55,9 @@
         {
           "name": "Overhead Holder 1013 S4 AB",
           "qty": 1,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
+          "qty_source": "flagged",
+          "qty_total": 1,
+          "qty_door_count": 1,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -65,9 +65,9 @@
         {
           "name": "Floor Stop RM446 S4 AB",
           "qty": 1,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
+          "qty_source": "flagged",
+          "qty_total": 1,
+          "qty_door_count": 1,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -75,9 +75,9 @@
         {
           "name": "Card Reader(By Others) CARD READER BY SECURITY VENDOR MISC",
           "qty": 1,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
+          "qty_source": "flagged",
+          "qty_total": 1,
+          "qty_door_count": 1,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -85,9 +85,9 @@
         {
           "name": "Power Transfer PT1000EZ S4 AB",
           "qty": 1,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
+          "qty_source": "flagged",
+          "qty_total": 1,
+          "qty_door_count": 1,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -95,9 +95,9 @@
         {
           "name": "Wire Harness EZAL-192 AB",
           "qty": 1,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
+          "qty_source": "flagged",
+          "qty_total": 1,
+          "qty_door_count": 1,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -105,9 +105,9 @@
         {
           "name": "Wire Harness EZAL-38-1 AB",
           "qty": 1,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
+          "qty_source": "flagged",
+          "qty_total": 1,
+          "qty_door_count": 1,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -115,9 +115,9 @@
         {
           "name": "Door Silencer SR64 GRY IV",
           "qty": 3,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
+          "qty_source": "flagged",
+          "qty_total": 3,
+          "qty_door_count": 1,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -259,9 +259,9 @@
         {
           "name": "Single Door #10-83A OPEN OFFICE 10-13 from 105\u00b0 RHR",
           "qty": 1,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
+          "qty_source": "flagged",
+          "qty_total": 1,
+          "qty_door_count": 1,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -269,9 +269,9 @@
         {
           "name": "Back to Back Pull Set ABH 5240 60\" CTC/OVERALL BTB SET S4 S4 HIMM",
           "qty": 1,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
+          "qty_source": "flagged",
+          "qty_total": 1,
+          "qty_door_count": 1,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -279,9 +279,9 @@
         {
           "name": "Mortise Cylinder 80-131 50-002-VKC GMK GRN Core L583- 622 SC",
           "qty": 1,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
+          "qty_source": "flagged",
+          "qty_total": 1,
+          "qty_door_count": 1,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -289,19 +289,19 @@
         {
           "name": "Interchangeable Core 80-037 50-002-VKC GMK 622 SC",
           "qty": 1,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
+          "qty_source": "flagged",
+          "qty_total": 1,
+          "qty_door_count": 1,
           "manufacturer": "",
           "model": "",
           "finish": ""
         },
         {
           "name": "Card Reader(By Others) CARD READER BY SECURITY VENDOR MISC",
-          "qty": 2,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
+          "qty": 1,
+          "qty_source": "divided",
+          "qty_total": 2,
+          "qty_door_count": 2,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -309,9 +309,9 @@
         {
           "name": "Key Switch 653-04 L2 SF-613 LO",
           "qty": 1,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
+          "qty_source": "flagged",
+          "qty_total": 1,
+          "qty_door_count": 1,
           "manufacturer": "",
           "model": "",
           "finish": ""
@@ -579,8 +579,8 @@
         },
         {
           "name": "Auto Door Bottom 364AA 36\" Z49 ZE",
-          "qty": 2,
-          "qty_source": "flagged",
+          "qty": 1,
+          "qty_source": "divided",
           "qty_total": 2,
           "qty_door_count": 2,
           "manufacturer": "",

@@ -292,10 +292,12 @@ class TestCAANashvilleBaseline:
             f"HW set count changed: expected {baseline['hw_set_count']}, got {len(hw_sets)}"
         )
 
-    def test_25_hardware_sets(self, extract_tables, caa_pdf_path):
-        """CAA Nashville must extract exactly 25 hardware sets."""
+    def test_32_hardware_sets(self, extract_tables, caa_pdf_path):
+        """CAA Nashville must extract exactly 32 hardware sets.
+        Was 25 before sub-heading preservation (S-073→S-086); now 32
+        because sub-variants (.0, .1) are kept as distinct sets."""
         hw_sets, *_ = _run_full_pipeline(extract_tables, caa_pdf_path)
-        assert len(hw_sets) == 25, f"CAA set count: expected 25, got {len(hw_sets)}"
+        assert len(hw_sets) == 32, f"CAA set count: expected 32, got {len(hw_sets)}"
 
     def test_set_ids_match(self, extract_tables, caa_pdf_path):
         baseline = _load_baseline("caa-nashville-baseline.json")
