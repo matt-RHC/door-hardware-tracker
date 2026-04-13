@@ -16,6 +16,7 @@ import {
   callPunchyQuantityCheck,
   applyCorrections,
   normalizeQuantities,
+  calculateExtractionConfidence,
   createAnthropicClient,
   type PdfplumberResult,
 } from '@/lib/parse-pdf-helpers'
@@ -202,10 +203,15 @@ export async function POST(request: NextRequest) {
       console.error('Punchy quantity check error:', err instanceof Error ? err.message : String(err))
     }
 
+    // ==========================================
+    // Step 5: Confidence Scoring
+    // ==========================================
+    const confidence = calculateExtractionConfidence(hardwareSets, doors, corrections)
+
     console.debug(
       `Chunk ${chunkIndex + 1}/${totalChunks}: Punchy pipeline complete: ` +
       `${hardwareSets.length} sets, ${doors.length} doors, ` +
-      `${punchyObservations.length} observations`
+      `${punchyObservations.length} observations, confidence: ${confidence.score}/100`
     )
 
     return NextResponse.json({
@@ -216,6 +222,7 @@ export async function POST(request: NextRequest) {
       reviewNotes: corrections.notes,
       punchyObservations,
       punchyQuantityCheck: quantityCheck,
+      confidence,
     })
   } catch (error) {
     console.error('Chunk processing error:', error)

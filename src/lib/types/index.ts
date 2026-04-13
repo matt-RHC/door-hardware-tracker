@@ -5,6 +5,15 @@
  * rows. For database row types, import from '@/lib/types/database'.
  */
 
+// Re-export confidence types for convenience
+export type {
+  ConfidenceLevel,
+  FieldConfidence,
+  ItemConfidence,
+  ExtractionConfidence,
+} from './confidence'
+import type { ItemConfidence } from './confidence'
+
 // ── Core domain types ─────────────────────────────────────────────
 
 /** A door/opening parsed from a PDF document. */
@@ -67,6 +76,9 @@ export interface ExtractedHardwareItem {
    *  "L9010", "4040XP"). Populated by Python extraction, validated/filled
    *  client-side if missing. Used for product family grouping in StepProducts. */
   base_series?: string
+  /** Per-field confidence scores computed after the full extraction pipeline.
+   *  Optional — only populated when confidence scoring is enabled. */
+  confidence?: ItemConfidence
 }
 
 /** A hardware set grouping items for a set of doors. */

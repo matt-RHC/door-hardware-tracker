@@ -41,6 +41,12 @@ import type {
   PunchyCorrections,
   PunchyQuantityCheck,
 } from '@/lib/types'
+import type {
+  ConfidenceLevel,
+  FieldConfidence,
+  ItemConfidence,
+  ExtractionConfidence,
+} from '@/lib/types/confidence'
 import { extractJSON } from '@/lib/extractJSON'
 import { HARDWARE_TAXONOMY, classifyItem, type InstallScope } from '@/lib/hardware-taxonomy'
 import { createAdminSupabaseClient } from '@/lib/supabase/admin'
@@ -1651,6 +1657,335 @@ export function normalizeQuantities(
         }
       }
     }
+  }
+}
+
+// --- Extraction confidence scoring ---
+
+const CONFIDENCE_RANK: Record<ConfidenceLevel, number> = {
+  high: 3,
+  medium: 2,
+  low: 1,
+  unverified: 0,
+}
+
+function worstConfidence(levels: ConfidenceLevel[]): ConfidenceLevel {
+  if (levels.length === 0) return 'unverified'
+  let worst: ConfidenceLevel = 'high'
+  for (const l of levels) {
+    if (CONFIDENCE_RANK[l] < CONFIDENCE_RANK[worst]) worst = l
+  }
+  return worst
+}
+
+/** Expected hardware categories for a "complete" set. */
+const EXPECTED_SET_CATEGORIES = ['hinge', 'lockset', 'closer']
+
+function itemHasCategory(name: string, category: string): boolean {
+  return name.toLowerCase().includes(category)
+}
+
+/**
+ * Score a single field's confidence based on whether it's populated and
+ * whether the item was corrected by Punchy.
+ */
+function scoreItemFieldConfidence(
+  value: string,
+  fieldName: string,
+  qtySource: string | undefined,
+  correctedFields: Set<string>,
+  fuzzyCorrectedFields: Set<string>,
+): FieldConfidence {
+  // Quantity field uses qty_source as the primary signal
+  if (fieldName === 'qty') {
+    if (qtySource === 'llm_override' || qtySource === 'auto_corrected') {
+      return { level: 'medium', reason: 'Punchy corrected this quantity' }
+    }
+    if (qtySource === 'deep_extract' || qtySource === 'region_extract') {
+      return { level: 'medium', reason: 'Extracted via Claude vision from PDF region' }
+    }
+    if (qtySource === 'flagged') {
+      return { level: 'low', reason: 'Division produced non-integer result (rounded)' }
+    }
+    if (qtySource === 'manual_placeholder') {
+      return { level: 'low', reason: 'Placeholder quantity — needs user input' }
+    }
+    return { level: 'high', reason: 'Quantity extracted cleanly from PDF' }
+  }
+
+  // Other fields: check correction status first
+  if (fuzzyCorrectedFields.has(fieldName)) {
+    return { level: 'medium', reason: 'Punchy corrected via fuzzy match' }
+  }
+  if (correctedFields.has(fieldName)) {
+    return { level: 'medium', reason: 'Punchy corrected this value' }
+  }
+
+  // Empty field
+  if (!value || value.trim() === '') {
+    return { level: 'low', reason: `Empty ${fieldName} — not extracted from PDF` }
+  }
+
+  return { level: 'high', reason: 'Extracted cleanly from PDF' }
+}
+
+/**
+ * Calculate field-level and extraction-level confidence after the full
+ * pipeline (extraction + Punchy review + normalization) completes.
+ *
+ * This function is designed to be lightweight (<50ms) — no LLM calls,
+ * no PDF re-reading, just analysis of the data already in memory.
+ */
+export function calculateExtractionConfidence(
+  hardwareSets: HardwareSet[],
+  doors: DoorEntry[],
+  corrections: PunchyCorrections,
+): ExtractionConfidence {
+  const signals: string[] = []
+  const itemConfidenceMap: Record<string, ItemConfidence> = {}
+  const deepExtractionReasons: string[] = []
+
+  // ── Build correction tracking maps ──
+  // Track which set+item+field combinations were corrected by Punchy
+  const correctedItemFields = new Map<string, Set<string>>()
+  const fuzzyCorrectedItemFields = new Map<string, Set<string>>()
+
+  if (corrections.hardware_sets_corrections) {
+    for (const corr of corrections.hardware_sets_corrections) {
+      if (corr.items_to_fix) {
+        for (const fix of corr.items_to_fix) {
+          const key = `${corr.set_id}:${fix.name}`
+          if (!correctedItemFields.has(key)) correctedItemFields.set(key, new Set())
+          correctedItemFields.get(key)!.add(fix.field)
+          // Low-confidence Punchy corrections (fuzzy match tier 3+)
+          if (fix.confidence === 'low' || fix.confidence === 'medium') {
+            if (!fuzzyCorrectedItemFields.has(key)) fuzzyCorrectedItemFields.set(key, new Set())
+            fuzzyCorrectedItemFields.get(key)!.add(fix.field)
+          }
+        }
+      }
+    }
+  }
+
+  // Count total corrections and fuzzy corrections
+  let totalCorrections = 0
+  let fuzzyCorrections = 0
+  if (corrections.hardware_sets_corrections) {
+    for (const corr of corrections.hardware_sets_corrections) {
+      totalCorrections += (corr.items_to_fix?.length ?? 0)
+        + (corr.items_to_add?.length ?? 0)
+        + (corr.items_to_remove?.length ?? 0)
+      if (corr.items_to_fix) {
+        for (const fix of corr.items_to_fix) {
+          if (fix.confidence === 'low' || fix.confidence === 'medium') {
+            fuzzyCorrections++
+          }
+        }
+      }
+    }
+  }
+
+  // ── Score each item ──
+  let totalItems = 0
+  let emptyMfrModelCount = 0
+  let emptyFieldItems = 0
+
+  for (const set of hardwareSets) {
+    for (const item of set.items) {
+      totalItems++
+      const key = `${set.set_id}:${item.name}`
+      const corrFields = correctedItemFields.get(key) ?? new Set<string>()
+      const fuzzyCorrFields = fuzzyCorrectedItemFields.get(key) ?? new Set<string>()
+
+      const nameConf = scoreItemFieldConfidence(item.name, 'name', item.qty_source, corrFields, fuzzyCorrFields)
+      const qtyConf = scoreItemFieldConfidence(String(item.qty), 'qty', item.qty_source, corrFields, fuzzyCorrFields)
+      const mfrConf = scoreItemFieldConfidence(item.manufacturer, 'manufacturer', item.qty_source, corrFields, fuzzyCorrFields)
+      const modelConf = scoreItemFieldConfidence(item.model, 'model', item.qty_source, corrFields, fuzzyCorrFields)
+      const finishConf = scoreItemFieldConfidence(item.finish, 'finish', item.qty_source, corrFields, fuzzyCorrFields)
+
+      const overall = worstConfidence([
+        nameConf.level,
+        qtyConf.level,
+        mfrConf.level,
+        modelConf.level,
+        finishConf.level,
+      ])
+
+      const itemConf: ItemConfidence = {
+        name: nameConf,
+        qty: qtyConf,
+        manufacturer: mfrConf,
+        model: modelConf,
+        finish: finishConf,
+        overall,
+      }
+
+      itemConfidenceMap[key] = itemConf
+      item.confidence = itemConf
+
+      // Track empty field stats
+      if (!item.manufacturer?.trim() && !item.model?.trim()) {
+        emptyMfrModelCount++
+      }
+      if (!item.manufacturer?.trim() || !item.model?.trim() || !item.finish?.trim()) {
+        emptyFieldItems++
+      }
+    }
+
+    // ── Per-set signals ──
+    if (set.items.length === 0) {
+      signals.push(`Set ${set.set_id} has zero hardware items`)
+    }
+
+    // Check for expected categories
+    const setCategories = new Set<string>()
+    for (const item of set.items) {
+      const lower = item.name.toLowerCase()
+      for (const cat of EXPECTED_SET_CATEGORIES) {
+        if (lower.includes(cat)) setCategories.add(cat)
+      }
+    }
+    if (set.items.length > 0 && setCategories.size === EXPECTED_SET_CATEGORIES.length) {
+      signals.push(`Set ${set.set_id} has expected categories (hinges, lockset, closer)`)
+    }
+  }
+
+  // ── Door-level signals ──
+  const definedSetIds = new Set<string>()
+  for (const set of hardwareSets) {
+    definedSetIds.add(set.set_id)
+    if (set.generic_set_id) definedSetIds.add(set.generic_set_id)
+  }
+
+  let validDoorNumbers = 0
+  let doorsWithoutSets = 0
+  for (const door of doors) {
+    if (door.door_number && door.door_number.trim()) {
+      validDoorNumbers++
+    }
+    if (door.hw_set && !definedSetIds.has(door.hw_set)) {
+      doorsWithoutSets++
+    }
+  }
+
+  if (doors.length > 0 && validDoorNumbers === doors.length) {
+    signals.push('All doors have valid door numbers')
+  }
+  if (doorsWithoutSets > 0) {
+    signals.push(`${doorsWithoutSets} door(s) assigned to undefined hardware sets`)
+  }
+
+  // ── Punchy correction signals ──
+  if (totalCorrections === 0) {
+    signals.push('Punchy reviewed and made no corrections')
+  } else {
+    signals.push(`Punchy made ${totalCorrections} correction(s)`)
+  }
+  if (fuzzyCorrections > 0) {
+    signals.push(`${fuzzyCorrections} correction(s) used fuzzy matching`)
+  }
+
+  // ── Quantity convention signals ──
+  let preambleConventionSets = 0
+  let statisticalConventionSets = 0
+  for (const set of hardwareSets) {
+    if (set.qty_convention === 'per_opening' || set.qty_convention === 'aggregate') {
+      preambleConventionSets++
+    } else {
+      statisticalConventionSets++
+    }
+  }
+  if (preambleConventionSets > 0 && statisticalConventionSets === 0) {
+    signals.push('All quantity conventions detected via preamble')
+  }
+  if (statisticalConventionSets > 0) {
+    signals.push(`${statisticalConventionSets} set(s) used statistical quantity convention fallback`)
+  }
+
+  // ── Critical signals: auto-fallback triggers ──
+  if (totalItems > 0 && emptyMfrModelCount / totalItems > 0.3) {
+    deepExtractionReasons.push(
+      `${Math.round((emptyMfrModelCount / totalItems) * 100)}% of items have empty manufacturer + model (threshold: 30%)`
+    )
+  }
+  if (totalCorrections > 0 && fuzzyCorrections / totalCorrections > 0.5) {
+    deepExtractionReasons.push(
+      `${Math.round((fuzzyCorrections / totalCorrections) * 100)}% of Punchy corrections used fuzzy matching (threshold: 50%)`
+    )
+  }
+
+  // Punchy flagged >20% of items (items_to_fix + items_to_add as proxy for "flagged")
+  const punchyFlaggedCount = totalCorrections
+  if (totalItems > 0 && punchyFlaggedCount / totalItems > 0.2) {
+    deepExtractionReasons.push(
+      `Punchy flagged ${Math.round((punchyFlaggedCount / totalItems) * 100)}% of items (threshold: 20%)`
+    )
+  }
+
+  // ── Compute overall score (0-100) ──
+  let score = 100
+
+  // Negative: empty fields
+  if (totalItems > 0) {
+    const emptyFieldRatio = emptyFieldItems / totalItems
+    score -= Math.round(emptyFieldRatio * 30) // up to -30 for all items having empty fields
+  }
+
+  // Negative: Punchy corrections
+  if (totalItems > 0) {
+    const correctionRatio = totalCorrections / totalItems
+    score -= Math.min(20, Math.round(correctionRatio * 20)) // up to -20
+  }
+
+  // Negative: fuzzy corrections
+  if (totalCorrections > 0) {
+    const fuzzyRatio = fuzzyCorrections / totalCorrections
+    score -= Math.min(10, Math.round(fuzzyRatio * 10)) // up to -10
+  }
+
+  // Negative: statistical qty convention fallback
+  if (hardwareSets.length > 0) {
+    const statRatio = statisticalConventionSets / hardwareSets.length
+    score -= Math.round(statRatio * 10) // up to -10
+  }
+
+  // Negative: doors without matching sets
+  if (doors.length > 0) {
+    const unmatchedRatio = doorsWithoutSets / doors.length
+    score -= Math.round(unmatchedRatio * 15) // up to -15
+  }
+
+  // Negative: empty sets
+  const emptySets = hardwareSets.filter(s => s.items.length === 0).length
+  if (hardwareSets.length > 0) {
+    score -= Math.round((emptySets / hardwareSets.length) * 15) // up to -15
+  }
+
+  // Positive: Punchy made no corrections
+  if (totalCorrections === 0) {
+    score = Math.min(100, score + 5)
+  }
+
+  score = Math.max(0, Math.min(100, score))
+
+  // ── Derive overall confidence level from score ──
+  let overall: ConfidenceLevel
+  if (score >= 80) overall = 'high'
+  else if (score >= 50) overall = 'medium'
+  else overall = 'low'
+
+  // Override to low if any critical signal triggered
+  if (deepExtractionReasons.length > 0) {
+    overall = 'low'
+  }
+
+  return {
+    overall,
+    score,
+    signals,
+    item_confidence: itemConfidenceMap,
+    suggest_deep_extraction: deepExtractionReasons.length > 0,
+    deep_extraction_reasons: deepExtractionReasons,
   }
 }
 
