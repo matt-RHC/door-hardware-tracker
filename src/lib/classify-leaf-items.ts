@@ -56,9 +56,39 @@ export interface LeafGroupedItems<T extends LeafGroupableItem = LeafGroupableIte
 
 /**
  * Compute the display quantity for an item on a specific leaf.
+ *
  * - per_leaf items: stored qty IS the per-leaf qty (show as-is)
- * - per_opening items: stored qty is per-opening total; divide by leafCount
- * - shared items: show stored qty as-is
+ * - per_opening items: stored qty is already per-opening (show as-is)
+ * - shared items (per_pair / per_frame): show stored qty as-is
+ *
+ * IMPORTANT — WHY per_opening IS NOT FURTHER DIVIDED HERE:
+ *
+ * Before the 2026-04-13 qty normalization overhaul, this function divided
+ * per_opening items by leafCount again ("Math.ceil(qty / leafCount)"). That
+ * was wrong for two reasons:
+ *
+ *   1. normalizeQuantities() in parse-pdf-helpers.ts already divided
+ *      per_opening items by doorCount when it set qty_source='divided'.
+ *      Dividing again by leafCount would compound the division:
+ *      1 closer / 2 leaves = 0.5 (ceil → 1 — "worked" only by coincidence
+ *      when qty was already 1, but breaks for qty=2 pair).
+ *
+ *   2. Electric transfer hinges (CON TW8, ETH, EPT) are classified as
+ *      per_opening in hardware-taxonomy.ts. They carry wiring and are
+ *      installed ADDITIVELY alongside standard hinges on the active leaf
+ *      only (see HINGE RULES in punchy-prompts.ts). Their stored qty is
+ *      already 1 per opening (1 per pair) after normalizeQuantities(). In
+ *      the UI, groupItemsByLeaf() puts them on BOTH leaves because
+ *      leaf_side is null for items without a persisted attribution. The
+ *      correct display qty is the stored value (typically 1), not 0.5.
+ *
+ * The routing of PER_OPENING items to the correct leaf (active vs both) is
+ * handled by groupItemsByLeaf() + persisted leaf_side values (migration 013),
+ * not by dividing the displayed qty here.
+ *
+ * If you believe this function should divide per_opening by leafCount: verify
+ * first that normalizeQuantities() is NOT already doing that division. The
+ * two must not stack.
  */
 export function getLeafDisplayQty(
   item: LeafGroupableItem,
@@ -66,9 +96,15 @@ export function getLeafDisplayQty(
   scope: InstallScope | null,
 ): number {
   const qty = item.qty ?? 0
-  if (scope === 'per_opening' && leafCount > 1) {
-    return Math.ceil(qty / leafCount)
-  }
+  // per_opening: display the stored qty as-is. normalizeQuantities() already
+  // divided the PDF total by doorCount. Further division by leafCount here
+  // would double-divide (see JSDoc above).
+  //
+  // per_leaf / per_pair / per_frame / null: all show stored qty as-is.
+  // The leafCount parameter is retained in the signature for callers that may
+  // need it for other purposes (e.g., rendering a "per leaf" label).
+  void leafCount  // intentionally unused after removing the per_opening division
+  void scope      // reserved for future scope-aware display logic
   return qty
 }
 

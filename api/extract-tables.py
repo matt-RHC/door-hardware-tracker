@@ -3479,20 +3479,64 @@ def normalize_quantities(
     hardware_sets: list[HardwareSetDef],
     openings: list[DoorEntry],
 ) -> None:
-    """Normalize item qty from project totals → per-opening/per-leaf.
+    """Annotate items with division context — does NOT mutate item.qty.
 
-    Mutates hardware_sets in place. Sets qty_total, qty_door_count, qty_source
-    on each HardwareItem.
+    # ─── WHY THIS FUNCTION EXISTS AND WHAT IT MUST NOT DO ─────────────────────
+    #
+    # PHILOSOPHY (2026-04-13 overhaul — see PR #fix/qty-normalization-pipeline-overhaul):
+    #
+    #   The user's goal is faithful extraction, not silent quantity adjustment.
+    #   Every number in this system should be traceable back to the PDF.
+    #   Silently changing qty in Python caused cascading bugs:
+    #
+    #     1. Item names like '5BB1 HW 4 1/2 x 4 1/2 NRP' are catalog numbers,
+    #        not English descriptions. _classify_hardware_item() returns None for
+    #        them, so DIVISION_PREFERENCE defaulted to 'opening', dividing
+    #        42 hinges by 6 doors → 7 per leaf instead of ~3-4 per leaf.
+    #
+    #     2. Non-integer division was rounded silently (42 ÷ 12 = 3.5 → 4),
+    #        marked 'flagged', frozen by NEVER_RENORMALIZE in the TS layer,
+    #        and the user had no way to see that the value came from an
+    #        imprecise approximation.
+    #
+    #     3. The TS normalizeQuantities() pass received already-divided values
+    #        and had to use the NEVER_RENORMALIZE guard to avoid double-dividing.
+    #        That guard relies on Python having set qty_source correctly, which
+    #        failed for unclassified items (source stayed 'parsed', not 'divided').
+    #
+    #     4. Punchy CP2 was told "quantities are already per-opening — don't change
+    #        them" but was looking at Python-divided values. It had no way to
+    #        distinguish a faithfully-extracted per-opening qty from a rounded
+    #        approximation, so its domain expertise was effectively disabled.
+    #
+    # NEW CONTRACT:
+    #
+    #   Python's job is: determine HOW to divide (divisor, strategy), record that
+    #   intention in metadata fields, but leave item.qty as the raw PDF number.
+    #
+    #   The single authoritative division pass lives in TS normalizeQuantities()
+    #   in src/lib/parse-pdf-helpers.ts. It runs ONCE, after Punchy CP2 has seen
+    #   the raw PDF values, and uses Python's annotations as hints.
+    #
+    #   qty_source values set here:
+    #     'needs_division'  — Python determined a divisor; TS must divide
+    #     'parsed'          — qty is already per-opening (door_count <= 1,
+    #                         qty is plausible, no division needed)
+    #     'needs_cap'       — single-door set, qty exceeds category max;
+    #                         TS should apply the category cap (not Python)
+    #
+    #   Fields set here (never mutate item.qty):
+    #     qty_total         — set to item.qty (the raw PDF value) when division
+    #                         is recommended, so TS always has the original
+    #     qty_door_count    — the recommended divisor (leaf_count or door_count)
+    #
+    # ─────────────────────────────────────────────────────────────────────────
 
-    Strategy:
+    Strategy for determining the divisor (unchanged from before):
       Primary: heading block door count (most accurate)
       Fallback 1: Opening List hw_heading match
       Fallback 2: Opening List hw_set (generic) match
-      Last resort: category cap
-
-    Division: try leaf count first (per-leaf items: hinges, closers),
-    then opening count (per-opening: coordinators, flush bolts).
-    If neither divides evenly, flag for AI review.
+      Fallback 3: cross-field fuzzy match
     """
     # Build fallback dicts from Opening List
     doors_per_heading: dict[str, int] = {}
@@ -3615,7 +3659,11 @@ def normalize_quantities(
                 f"generic={generic_doors}d/{generic_leaves}l"
             )
 
-        # --- Single door or unknown: category cap fallback ---
+        # --- Single door or unknown: annotate as 'needs_cap' if qty looks like an aggregate ---
+        #
+        # We no longer mutate item.qty here. Instead we signal to the TS layer
+        # that it should apply a category cap if the raw value is implausibly high.
+        # This preserves the raw PDF number while still flagging suspicious values.
         if door_count <= 1 and leaf_count <= 1:
             for item in hw_set.items:
                 category = _classify_hardware_item(item.name)
@@ -3623,196 +3671,112 @@ def normalize_quantities(
                 raw_qty = item.qty
                 if raw_qty > max_qty:
                     logger.warning(
-                        f"[qty-cap-fallback] {hw_set.set_id}: '{item.name}' "
-                        f"qty {raw_qty} capped to {max_qty} (no door count)"
+                        f"[qty-norm] {hw_set.set_id}: '{item.name}' "
+                        f"qty {raw_qty} exceeds category max {max_qty} "
+                        f"(no door count available) — annotating needs_cap"
                     )
-                    item.qty = max_qty
-                    item.qty_source = "capped"
-                    item.qty_total = raw_qty
-                    item.qty_door_count = None
+                    # Do NOT mutate item.qty. The TS layer reads 'needs_cap'
+                    # and applies the cap with user-visible logging.
+                    item.qty_source = "needs_cap"
+                    item.qty_total = raw_qty      # preserve raw PDF value
+                    item.qty_door_count = None    # no divisor known
             continue
 
-        # --- Multi-door set: divide quantities (category-aware) ---
+        # --- Multi-door set: annotate with recommended divisor ---
+        #
+        # CRITICAL: we set qty_total, qty_door_count, qty_source='needs_division'
+        # but we do NOT change item.qty. The TS normalizeQuantities() function
+        # reads these annotations and performs the actual division ONCE.
+        #
+        # Rationale: Python can determine the correct divisor (leaf vs opening)
+        # using DIVISION_PREFERENCE and the counts from the heading block, but
+        # it cannot reliably classify items whose names are catalog numbers
+        # (e.g. '5BB1 HW 4 1/2 x 4 1/2 NRP') rather than English descriptions.
+        # Doing the math here silently produces wrong results for those items.
+        # The TS taxonomy has the same limitation, but by deferring the division
+        # to TS we at least ensure:
+        #   1. Punchy CP2 sees the raw PDF qty and can apply domain knowledge
+        #      (e.g. "42 hinges for 6 pair doors is 3-4 per leaf")
+        #   2. The division happens exactly once
+        #   3. The raw value is preserved in qty_total for audit/display
         for item in hw_set.items:
             raw_qty = item.qty
-            item.qty_total = raw_qty
-            divided = False
+            item.qty_total = raw_qty   # always preserve raw PDF value
 
             category = _classify_hardware_item(item.name)
             pref = DIVISION_PREFERENCE.get(category, "opening")
 
-            if pref == "leaf" and leaf_count > 1 and raw_qty >= leaf_count:
-                # Per-leaf items (hinges, pivots, continuous hinges).
-                #
-                # HARD RULE: when leaf_count > 1, ALWAYS divide by leaf_count.
-                # Never fall back to door_count. The old fallback silently
-                # produced wrong per-opening quantities for pair-door sets
-                # whose raw totals didn't divide cleanly by leaves. Example:
-                # 42 hinges across 6 pair doors (12 leaves) → 42/12=3.5 used
-                # to fail the integer-only check and fall through to
-                # 42/6=7 per opening (an integer, but wrong — the real
-                # answer is ~4 per leaf). The sanity check at the end would
-                # flag qty>max but the quantity itself stayed wrong.
-                #
-                # New behavior: if leaf division doesn't divide cleanly,
-                # round to the nearest integer and set qty_source='flagged'
-                # so downstream consumers (Punchy quantity check, wizard
-                # UI) know to scrutinize. Non-clean per-leaf math usually
-                # means mixed leaf configurations or extra prep hardware
-                # counted as hinges — both cases benefit from user review.
-                per_unit, ok = _try_divide(raw_qty, leaf_count)
-                if ok:
-                    item.qty = per_unit
-                    item.qty_door_count = leaf_count
-                    item.qty_source = "divided"
-                    divided = True
-                    logger.info(
-                        f"[qty-norm] {hw_set.set_id}: '{item.name}' "
-                        f"{raw_qty} ÷ {leaf_count} leaves = {item.qty} "
-                        f"(category={category}, pref=leaf)"
-                    )
-                else:
-                    rounded = round(raw_qty / leaf_count)
-                    item.qty = rounded
-                    item.qty_door_count = leaf_count
-                    item.qty_source = "flagged"
-                    divided = True
-                    logger.warning(
-                        f"[qty-norm] {hw_set.set_id}: '{item.name}' "
-                        f"{raw_qty} ÷ {leaf_count} leaves = "
-                        f"{raw_qty / leaf_count:.2f} → rounded to "
-                        f"{rounded} (category={category}, flagged for "
-                        f"review — non-clean per-leaf division)"
-                    )
-            elif pref == "leaf":
-                # Per-leaf item but leaf_count is missing/<=1 OR raw_qty is
-                # already smaller than leaf_count. Fall back to opening
-                # division if possible; otherwise the "Neither worked"
-                # handler below will mark it as 'parsed' or 'flagged'.
-                if door_count > 1 and raw_qty >= door_count:
-                    per_unit, ok = _try_divide(raw_qty, door_count)
-                    if ok:
-                        item.qty = per_unit
-                        item.qty_door_count = door_count
-                        item.qty_source = "divided"
-                        divided = True
-                        logger.info(
-                            f"[qty-norm] {hw_set.set_id}: '{item.name}' "
-                            f"{raw_qty} ÷ {door_count} openings = {item.qty} "
-                            f"(category={category}, pref=leaf, leaf_count missing)"
-                        )
-            elif pref == "opening_only":
-                # Per-opening-only items: never divide by leaves
-                divisors = [
-                    (door_count, "openings"),
-                ]
-                for divisor, label in divisors:
-                    if divided:
-                        break
-                    per_unit, ok = _try_divide(raw_qty, divisor)
-                    if ok:
-                        item.qty = per_unit
-                        item.qty_door_count = divisor
-                        item.qty_source = "divided"
-                        divided = True
-                        logger.info(
-                            f"[qty-norm] {hw_set.set_id}: '{item.name}' "
-                            f"{raw_qty} ÷ {divisor} {label} = {item.qty} "
-                            f"(category={category}, pref={pref})"
-                        )
-            else:  # "opening"
-                # Per-opening items: try openings first, then leaves
-                divisors = [
-                    (door_count, "openings"),
-                    (leaf_count, "leaves"),
-                ]
-                for divisor, label in divisors:
-                    if divided:
-                        break
-                    per_unit, ok = _try_divide(raw_qty, divisor)
-                    if ok:
-                        item.qty = per_unit
-                        item.qty_door_count = divisor
-                        item.qty_source = "divided"
-                        divided = True
-                        logger.info(
-                            f"[qty-norm] {hw_set.set_id}: '{item.name}' "
-                            f"{raw_qty} ÷ {divisor} {label} = {item.qty} "
-                            f"(category={category}, pref={pref})"
-                        )
+            # --- Determine the recommended divisor ---
+            recommended_divisor: int | None = None
+            recommended_strategy: str = "unknown"
 
-            # Neither worked
-            if not divided:
-                if raw_qty < min(door_count, leaf_count):
-                    # qty smaller than door count → likely already per-unit
-                    item.qty_source = "parsed"
-                    item.qty_door_count = leaf_count
-                else:
-                    # Doesn't divide evenly → flag
-                    item.qty_source = "flagged"
-                    item.qty_door_count = leaf_count
-                    logger.warning(
-                        f"[qty-norm] {hw_set.set_id}: '{item.name}' "
-                        f"qty {raw_qty} doesn't divide evenly by "
-                        f"{leaf_count} leaves or {door_count} openings "
-                        f"(category={category}), flagged"
-                    )
+            if pref == "leaf" and leaf_count > 1:
+                # Per-leaf items (hinges, pivots, continuous hinges):
+                # recommend dividing by leaf count.
+                # If leaf_count is not available, fall back to door_count.
+                recommended_divisor = leaf_count
+                recommended_strategy = "leaf"
+            elif pref == "leaf" and door_count > 1:
+                # Per-leaf item but leaf_count is not available.
+                # Fall back to door_count as best-available divisor.
+                recommended_divisor = door_count
+                recommended_strategy = "door_fallback"
+            elif pref == "opening_only" and door_count > 1:
+                # Items that exist once per opening, never per-leaf.
+                # (coordinators, astragals, seals, thresholds, flush bolts)
+                recommended_divisor = door_count
+                recommended_strategy = "opening_only"
+            elif pref == "opening" and door_count > 1:
+                # Per-opening items (closers, locksets): divide by door count.
+                # Note: the old code tried leaf_count as a fallback here, which
+                # was wrong — a closer is 1 per opening not 1 per leaf.
+                recommended_divisor = door_count
+                recommended_strategy = "opening"
 
-        # Sanity-check: if divided qty still exceeds category max, try
-        # generic set total (for sub-headings) before falling back to flag.
-        for item in hw_set.items:
-            if item.qty_source in ("divided", "flagged"):
-                category = _classify_hardware_item(item.name)
-                max_qty = _max_qty_for_category(category)
-                if item.qty > max_qty:
-                    # If this is a sub-heading, the item may be a set-level
-                    # total that was incorrectly divided by the sub-heading
-                    # count. Try the generic set's total count instead.
-                    if is_sub_heading:
-                        pref = DIVISION_PREFERENCE.get(category, "opening")
-                        alt_divisor = (
-                            generic_leaves if pref == "leaf" and generic_leaves > 1
-                            else generic_doors
-                        )
-                        raw = item.qty_total if item.qty_total else item.qty
-                        if alt_divisor > 1:
-                            alt_unit, alt_ok = _try_divide(raw, alt_divisor)
-                            if alt_ok and alt_unit <= max_qty:
-                                logger.info(
-                                    f"[qty-norm] {hw_set.set_id}: '{item.name}' "
-                                    f"re-divided by generic total: "
-                                    f"{raw} ÷ {alt_divisor} = {alt_unit} "
-                                    f"(sub-heading gave {item.qty}, "
-                                    f"exceeds max {max_qty})"
-                                )
-                                item.qty = alt_unit
-                                item.qty_door_count = alt_divisor
-                                item.qty_source = "divided"
-                                continue
-                            elif alt_divisor > 0:
-                                rounded = round(raw / alt_divisor)
-                                if rounded <= max_qty:
-                                    logger.info(
-                                        f"[qty-norm] {hw_set.set_id}: "
-                                        f"'{item.name}' re-divided "
-                                        f"(rounded) by generic total: "
-                                        f"{raw} ÷ {alt_divisor} ≈ "
-                                        f"{rounded} (sub-heading gave "
-                                        f"{item.qty}, exceeds max "
-                                        f"{max_qty})"
-                                    )
-                                    item.qty = rounded
-                                    item.qty_door_count = alt_divisor
-                                    item.qty_source = "flagged"
-                                    continue
-                    # No generic total available or still exceeds max → flag
-                    if item.qty_source == "divided":
-                        logger.warning(
-                            f"[qty-norm] {hw_set.set_id}: '{item.name}' "
-                            f"divided qty {item.qty} exceeds category max "
-                            f"{max_qty}, flagging for review"
-                        )
-                        item.qty_source = "flagged"
+            if recommended_divisor and recommended_divisor > 1 and raw_qty >= recommended_divisor:
+                # Annotate: TS should divide raw_qty by recommended_divisor.
+                item.qty_door_count = recommended_divisor
+                item.qty_source = "needs_division"
+                logger.info(
+                    f"[qty-norm] {hw_set.set_id}: '{item.name}' "
+                    f"raw={raw_qty}, recommend ÷{recommended_divisor} "
+                    f"(category={category}, strategy={recommended_strategy})"
+                )
+            elif raw_qty < (recommended_divisor or 2):
+                # raw qty is smaller than the divisor — it is likely already
+                # per-opening (e.g. a single closer in a multi-door set).
+                item.qty_source = "parsed"
+                item.qty_door_count = recommended_divisor or door_count or None
+                logger.info(
+                    f"[qty-norm] {hw_set.set_id}: '{item.name}' "
+                    f"raw={raw_qty} < divisor={recommended_divisor} "
+                    f"— treating as already per-opening (parsed)"
+                )
+            else:
+                # No divisor determined (counts unavailable or item is
+                # unclassified with raw qty that doesn't fit any pattern).
+                # Leave qty_source as 'parsed' and let TS/Punchy flag it.
+                item.qty_source = "parsed"
+                item.qty_door_count = None
+                logger.warning(
+                    f"[qty-norm] {hw_set.set_id}: '{item.name}' "
+                    f"raw={raw_qty} — no divisor determined "
+                    f"(category={category}, pref={pref}, "
+                    f"door_count={door_count}, leaf_count={leaf_count})"
+                )
+
+        # --- Sub-heading: record generic set context for TS sub-heading logic ---
+        #
+        # If this set is a sub-heading under a larger generic group (e.g. DH3.0
+        # under DH3), the TS layer needs to know the generic total so it can
+        # re-divide items that are set-level totals rather than sub-heading totals.
+        # We do this by stamping qty_door_count with the sub-heading divisor above
+        # and trusting the heading_door_count / heading_leaf_count fields on the
+        # set for the TS sub-heading sanity pass (those are already populated).
+        #
+        # No additional mutation needed here — TS reads hw_set.heading_door_count
+        # and hw_set.generic_set_id to reconstruct the generic total on its own.
+        pass  # sub-heading annotation is implicit via heading metadata fields
 
     # === Cross-item combination rules ===
     # These rules catch patterns that single-item normalization can't detect.
@@ -3840,17 +3804,21 @@ def normalize_quantities(
                     hands.add(m.group(1).upper()[:2])  # normalize to RH/LH
             if len(hands) >= 2:
                 # Both RH and LH present — each variant's qty should be 1
-                # (one per door of that hand). If not 1, check if the total
-                # across variants matches and each should be 1.
+                # (one per door of that hand). If not 1, annotate so the TS
+                # layer can override.
+                #
+                # We no longer mutate v.qty here; instead we signal via
+                # qty_source='rhr_lhr_pair' so the TS layer can set qty=1
+                # with the user's awareness. The raw PDF total is preserved
+                # in qty_total as always.
                 for v in variants:
-                    if v.qty > 1 and v.qty_source in ("divided", "flagged"):
+                    if v.qty_source == "needs_division":
                         logger.info(
                             f"[qty-norm] {hw_set.set_id}: '{v.name}' "
-                            f"RHR/LHR variant pair detected — qty {v.qty} "
-                            f"→ 1 (each door gets ONE hand variant)"
+                            f"RHR/LHR variant pair detected — annotating "
+                            f"rhr_lhr_pair so TS sets qty=1"
                         )
-                        v.qty = 1
-                        v.qty_source = "divided"
+                        v.qty_source = "rhr_lhr_pair"
 
         # --- Rule: Auto operator + closer conflict ---
         # When an automatic operator is present, it typically replaces the
@@ -3867,9 +3835,11 @@ def normalize_quantities(
                         f"closer both present — closer '{item.name}' may "
                         f"be redundant (operator replaces closer function)"
                     )
-                    # Don't auto-remove — flag for user review
-                    if item.qty_source == "divided":
-                        item.qty_source = "flagged"
+                    # Don't auto-remove — flag for user review.
+                    # If division was recommended, change to 'needs_review'
+                    # so the TS layer and Punchy both see this as ambiguous.
+                    if item.qty_source == "needs_division":
+                        item.qty_source = "needs_review"
 
 
 # --- Vercel Handler ---

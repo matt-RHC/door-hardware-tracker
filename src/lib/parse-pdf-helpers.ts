@@ -400,8 +400,34 @@ export async function callPunchyPostExtraction(
     hardware_sets: (pdfplumberResult?.hardware_sets ?? []).map(s => ({
       set_id: s.set_id,
       heading: s.heading,
+      heading_door_count: s.heading_door_count ?? null,
+      heading_leaf_count: s.heading_leaf_count ?? null,
       item_count: s.items?.length ?? 0,
-      items: s.items ?? [],
+      // Pass full annotation context to Punchy CP2 so it sees RAW PDF quantities.
+      //
+      // ARCHITECTURE NOTE (2026-04-13 overhaul):
+      // Python no longer mutates item.qty. It sets:
+      //   qty       = raw PDF value (unchanged)
+      //   qty_total = same raw PDF value (explicitly preserved)
+      //   qty_door_count = recommended divisor (how many doors/leaves Python thinks this total covers)
+      //   qty_source = 'needs_division' | 'needs_cap' | 'needs_review' | 'rhr_lhr_pair' | 'parsed'
+      //
+      // Punchy CP2 runs HERE, BEFORE normalizeQuantities divides anything.
+      // This means Punchy sees the raw totals from the PDF and can apply
+      // domain expertise: "42 hinges for 6 pair doors (12 leaves) should be
+      // 3-4 per leaf, not 7" — that's an insight Punchy can have but a
+      // simple divider cannot. If Punchy changes a qty, it sets qty_source='llm_override',
+      // which is in NEVER_RENORMALIZE and will not be divided again.
+      items: (s.items ?? []).map(item => ({
+        qty: item.qty,
+        qty_total: item.qty_total ?? item.qty,  // raw PDF total (same as qty before division)
+        qty_door_count: item.qty_door_count ?? null,  // Python's recommended divisor
+        qty_source: item.qty_source ?? null,  // Python's annotation ('needs_division', etc.)
+        name: item.name,
+        manufacturer: item.manufacturer,
+        model: item.model,
+        finish: item.finish,
+      })),
     })),
     // Compact full door list: every door_number + hw_set (~2KB for 200 doors)
     // so Punchy can detect missing doors and wrong assignments across the full project.
@@ -891,10 +917,22 @@ export function applyCorrections(
           heading_door_count: newSet.heading_door_count ?? 0,
           heading_leaf_count: newSet.heading_leaf_count ?? 0,
           heading_doors: [],
-          // Mark all items in Punchy-injected sets as llm_override so the
-          // save route's normalizeQuantities safety net skips re-dividing
-          // quantities that Punchy deliberately set (NEVER_RENORMALIZE).
-          items: (newSet.items ?? []).map(item => ({ ...item, qty_source: 'llm_override' })),
+          // Use the item's explicit qty_source if Punchy set one (e.g. 'llm_override'
+          // when Punchy has already verified the qty as per-opening), otherwise
+          // fall back to 'parsed' so normalizeQuantities PATH 5 can divide these
+          // items by the heading counts we just forwarded above.
+          //
+          // WHY NOT 'llm_override' by default (changed 2026-04-13):
+          // Punchy CP2 sees RAW PDF totals and uses missing_sets to inject sets
+          // it found in the PDF but pdfplumber missed. Those raw PDF totals need
+          // division just like any other set's items. Blanket-marking them
+          // 'llm_override' was blocking the normalizeQuantities PATH 5 division
+          // for every Punchy-discovered set. Now only items where Punchy
+          // explicitly sets qty_source='llm_override' are protected.
+          items: (newSet.items ?? []).map(item => ({
+            ...item,
+            qty_source: (item as any).qty_source ?? 'parsed',
+          })),
         })
       }
     }
@@ -937,36 +975,115 @@ export function applyCorrections(
 }
 
 /**
- * Post-Punchy quantity re-normalization (category-aware).
+ * THE SINGLE AUTHORITATIVE QTY DIVISION PASS.
  *
- * Punchy may revert normalized quantities back to PDF totals.
- * This re-divides them using the Opening List door counts as ground truth,
- * with division strategy based on hardware taxonomy install_scope:
+ * ─── ARCHITECTURE (2026-04-13 overhaul) ─────────────────────────────────────
  *
- *   per_leaf    → divide by leafCount first (hinges, pivots)
- *   per_opening → divide by doorCount only (closers, locksets)
- *   per_pair    → never divide (coordinators, astragals)
- *   per_frame   → never divide (thresholds, seals)
- *   unknown     → legacy behavior: try leaf then door (backward compat)
+ * Before this overhaul, Python's normalize_quantities() mutated item.qty
+ * in place, and this TS function ran again afterwards as a "safety net".
+ * That produced several compounding bugs (see PR fix/qty-normalization-pipeline-overhaul
+ * and the diagnosis in the PR description for the full evidence chain):
  *
- * Mirrors Python's normalize_quantities() DIVISION_PREFERENCE logic
- * at extract-tables.py:127-147.
+ *   1. Catalog-number item names ('5BB1 HW 4 1/2 x 4 1/2 NRP') aren't
+ *      classified by either Python's or TS's pattern matchers, so they
+ *      defaulted to the wrong divisor silently.
+ *
+ *   2. Punchy CP2 received already-divided values but was told they were
+ *      raw PDF values. Its domain expertise was effectively disabled because
+ *      it couldn't distinguish a faithful extraction from an approximation.
+ *
+ *   3. Non-integer division was silently rounded and frozen by NEVER_RENORMALIZE,
+ *      with no way for the user to see that the value was estimated.
+ *
+ *   4. The TS function ran a THIRD time in save/route.ts as another
+ *      "safety net", compounding the confusion further.
+ *
+ * NEW CONTRACT:
+ *
+ *   Python's job (extract-tables.py normalize_quantities):
+ *     - Determine the correct divisor (leaf_count or door_count)
+ *     - Record it in qty_door_count
+ *     - Set qty_source='needs_division' (or 'needs_cap', 'needs_review', etc.)
+ *     - Leave item.qty UNCHANGED (raw PDF value)
+ *     - Always set qty_total = raw PDF value
+ *
+ *   This function's job (runs ONCE, after Punchy CP2):
+ *     - Read Python's annotations ('needs_division', 'needs_cap', etc.)
+ *     - Perform the actual division using Python's recommended divisor
+ *     - Fall back to TS taxonomy when Python couldn't classify the item
+ *     - Set qty_source to 'divided', 'flagged', or 'capped' after acting
+ *     - NEVER touch items whose qty_source is in NEVER_RENORMALIZE
+ *
+ *   Punchy CP2's job (runs before this function, sees raw PDF qtys):
+ *     - Review the raw PDF quantities against the PDF itself
+ *     - Apply domain expertise: "42 hinges for 6 pair doors is ~3-4 per leaf"
+ *     - Correct obvious extraction errors (wrong set IDs, missing items, etc.)
+ *     - Set qty_source='llm_override' when it changes a qty
+ *     - Items with llm_override are in NEVER_RENORMALIZE and will not be
+ *       re-divided here
+ *
+ * ─── CALL SITES ──────────────────────────────────────────────────────────────
+ *
+ *   chunk/route.ts  : called ONCE, after applyCorrections (Punchy CP2 output)
+ *   parse-pdf/route.ts: same, once after applyCorrections
+ *   save/route.ts   : NOT called — removed in this overhaul. The save route
+ *                     receives data from the wizard client which already went
+ *                     through the chunk pipeline. Calling it again there was
+ *                     the third redundant pass.
+ *
+ * ─── DIVISION STRATEGY ───────────────────────────────────────────────────────
+ *
+ *   1. If Python annotated needs_division: trust Python's qty_door_count as
+ *      the divisor. Python has better context (heading block counts, fallback
+ *      lookup chains) than TS does at this point.
+ *
+ *   2. If Python set needs_cap: apply the category max as a cap (single-door
+ *      set where qty is implausibly high — likely an aggregate with no count).
+ *
+ *   3. If Python set needs_review or rhr_lhr_pair: apply RHR/LHR rule or
+ *      leave for Punchy CP3 and the user.
+ *
+ *   4. If qty_source is 'parsed' or unset (Python couldn't classify):
+ *      fall through to TS taxonomy-based division as a best-effort.
+ *      This handles items that arrived from Punchy CP2 additions or sets
+ *      that Python didn't see (e.g., empty sets filled by deep_extract).
+ *
+ * ─── TAXONOMY SCOPE → DIVISOR MAPPING ───────────────────────────────────────
+ *
+ *   per_leaf    → divide by leafCount (hinges go on each leaf)
+ *   per_opening → divide by doorCount (closer = 1 per opening, not per leaf)
+ *   per_pair    → never divide (coordinator = 1 per pair regardless)
+ *   per_frame   → never divide (seal = 1 per frame regardless)
+ *   null/unknown → try leafCount, then doorCount (conservative fallback)
+ *
+ * ─── ELECTRIC HINGE SCOPE NOTE ───────────────────────────────────────────────
+ *
+ *   Electric/conductor hinges (CON TW8, ETH, EPT) are classified as
+ *   'per_opening' in hardware-taxonomy.ts and DIVISION_PREFERENCE='opening'
+ *   in Python. This means they are divided by door_count, not leaf_count.
+ *   The UI (getLeafDisplayQty in classify-leaf-items.ts) shows them on the
+ *   active leaf only — they are NOT further divided by leafCount there.
+ *   See the separate fix in classify-leaf-items.ts for that display logic.
  */
 export function normalizeQuantities(
   hardwareSets: HardwareSet[],
   doors: DoorEntry[],
 ): void {
+  // Build door-count lookup from opening list (fallback when heading counts are 0)
   const doorsPerSet = new Map<string, number>()
+  const leavesPerSet = new Map<string, number>()
   for (const door of doors) {
     if (door.hw_set) {
-      doorsPerSet.set(door.hw_set.toUpperCase(), (doorsPerSet.get(door.hw_set.toUpperCase()) ?? 0) + 1)
+      const key = door.hw_set.toUpperCase()
+      doorsPerSet.set(key, (doorsPerSet.get(key) ?? 0) + 1)
+      leavesPerSet.set(key, (leavesPerSet.get(key) ?? 0) + ((door.leaf_count ?? 1)))
     }
   }
 
-  // Pre-compute generic set totals for sub-heading normalization.
-  // When multiple sub-headings (e.g., DH3.0, DH3.1) share a generic_set_id,
-  // item quantities may be set-level totals that should be divided by the
-  // TOTAL door count, not just the sub-heading's count.
+  // Pre-compute generic set totals for sub-heading re-division.
+  // When multiple sub-headings (DH3.0, DH3.1) share a generic_set_id (DH3),
+  // item qtys may be set-level totals. After dividing by the sub-heading count
+  // we check if the result is implausibly high and try the generic total.
   const genericTotals = new Map<string, { doors: number; leaves: number }>()
   for (const set of hardwareSets) {
     const gid = (set.generic_set_id ?? set.set_id).toUpperCase()
@@ -976,65 +1093,167 @@ export function normalizeQuantities(
       leaves: prev.leaves + (set.heading_leaf_count ?? 0),
     })
   }
-  // Fill in from opening list when heading counts are 0
+  // Fill from opening list when heading counts are 0
   for (const [gid, totals] of genericTotals) {
     if (totals.doors === 0) {
-      const olCount = doorsPerSet.get(gid) ?? 0
-      if (olCount > 0) {
-        genericTotals.set(gid, { doors: olCount, leaves: olCount })
-      }
+      const olDoors = doorsPerSet.get(gid) ?? 0
+      const olLeaves = leavesPerSet.get(gid) ?? 0
+      if (olDoors > 0) genericTotals.set(gid, { doors: olDoors, leaves: olLeaves || olDoors })
     }
   }
 
-  // Max expected per-opening quantities (mirrors Python EXPECTED_QTY_RANGES)
+  // Per-scope category max (used for post-division sanity on sub-headings)
   const MAX_QTY: Record<string, number> = {
     per_leaf: 5, per_opening: 2, per_pair: 1, per_frame: 1,
   }
 
   for (const set of hardwareSets) {
+    // Resolve leaf and door counts for this set.
+    // heading_leaf_count and heading_door_count come from Python's heading
+    // block parsing (most accurate). Fall back to opening list if unavailable.
     const leafCount = (set.heading_leaf_count ?? 0) > 1 ? (set.heading_leaf_count ?? 0) : 0
     const doorCount = (set.heading_door_count ?? 0) > 1
       ? (set.heading_door_count ?? 0)
       : (doorsPerSet.get((set.generic_set_id ?? set.set_id).toUpperCase()) ?? 0)
 
-    // Check if this is a sub-heading within a larger generic group
     const gid = (set.generic_set_id ?? set.set_id).toUpperCase()
     const genericTotal = genericTotals.get(gid) ?? { doors: 0, leaves: 0 }
     const isSubHeading = (
-      set.generic_set_id
+      set.generic_set_id != null
       && set.generic_set_id !== set.set_id
       && genericTotal.doors > doorCount
     )
 
     console.debug(
       `[qty-norm] set=${set.set_id} generic=${set.generic_set_id ?? '?'} ` +
-      `headingDoorCount=${set.heading_door_count ?? 0} headingLeafCount=${set.heading_leaf_count ?? 0} ` +
-      `resolvedLeafCount=${leafCount} resolvedDoorCount=${doorCount}` +
-      (isSubHeading ? ` (sub-heading: generic=${genericTotal.doors}d/${genericTotal.leaves}l)` : '')
+      `headingDoors=${set.heading_door_count ?? 0} headingLeaves=${set.heading_leaf_count ?? 0} ` +
+      `resolvedLeaves=${leafCount} resolvedDoors=${doorCount}` +
+      (isSubHeading ? ` sub-heading(generic=${genericTotal.doors}d/${genericTotal.leaves}l)` : '')
     )
-    if (leafCount <= 1 && doorCount <= 1) continue
 
     for (const item of set.items ?? []) {
+      // ── GUARD: terminal states are never re-normalized ──────────────────────
+      // See NEVER_RENORMALIZE definition above for the full list and rationale.
+      // The key invariant: any qty that was explicitly set by Punchy, the user,
+      // or a prior authoritative division must not be changed here.
       if (NEVER_RENORMALIZE.has(item.qty_source ?? '')) {
         continue
       }
 
-      const scope = classifyItemScope(item.name)
-      const maxPerOpening = MAX_QTY[scope ?? 'per_opening'] ?? 2
-
-      // Safety: if qty is already within per-opening range, it's almost certainly
-      // already normalized. Dividing a 3-hinge qty by a 3-door count would
-      // incorrectly yield 1. Skip division when qty <= maxPerOpening.
-      if (item.qty <= maxPerOpening) {
+      // ── PATH 1: Python annotated this item with a recommended divisor ───────
+      //
+      // Python's normalize_quantities() determined the divisor from the heading
+      // block (most accurate source) and recorded it in qty_door_count without
+      // mutating item.qty. We trust that divisor and perform the division here.
+      //
+      // This path handles both cleanly-divisible and non-integer cases. For
+      // non-integer results we round and mark 'flagged' so Punchy CP3 and the
+      // UI both surface it for user review. We do NOT silently discard the
+      // fractional part as was done previously.
+      if (item.qty_source === 'needs_division' && item.qty_door_count != null && item.qty_door_count > 1) {
+        const raw = item.qty_total ?? item.qty  // qty_total = raw PDF value (set by Python)
+        const divisor = item.qty_door_count
+        const result = raw / divisor
+        item.qty_total = raw
+        if (Number.isInteger(result)) {
+          item.qty = result
+          item.qty_source = 'divided'
+          console.debug(
+            `[qty-norm] ${set.set_id}: "${item.name}" ${raw} ÷ ${divisor} = ${result} (python-annotated)`
+          )
+        } else {
+          // Non-integer: round and flag for user review.
+          // Do NOT silently accept a rounded value without flagging it.
+          item.qty = Math.round(result)
+          item.qty_source = 'flagged'
+          console.warn(
+            `[qty-norm] ${set.set_id}: "${item.name}" ${raw} ÷ ${divisor} = ${result.toFixed(2)} ` +
+            `→ rounded to ${item.qty} (flagged for review — non-integer per-leaf/per-opening)`
+          )
+        }
         continue
       }
 
-      // per_pair / per_frame → never divide (one per opening/frame regardless of leaf count)
+      // ── PATH 2: Python flagged a single-door set with an implausibly high qty ─
+      //
+      // 'needs_cap' means door_count was <= 1 but qty exceeded the category max,
+      // suggesting this is an aggregate total from a PDF with no door count.
+      // We cap it at the category max and mark it so the user sees it was capped.
+      if (item.qty_source === 'needs_cap') {
+        const scope = classifyItemScope(item.name)
+        const maxQty = MAX_QTY[scope ?? 'per_leaf'] ?? 5
+        item.qty_total = item.qty
+        item.qty = Math.min(item.qty, maxQty)
+        item.qty_source = 'capped'
+        console.warn(
+          `[qty-norm] ${set.set_id}: "${item.name}" qty ${item.qty_total} capped to ${item.qty} ` +
+          `(no door count, category max=${maxQty})`
+        )
+        continue
+      }
+
+      // ── PATH 3: RHR/LHR variant pair ────────────────────────────────────────
+      //
+      // Python detected both a RH and LH variant of the same item in this set.
+      // Each door gets exactly ONE variant based on its hand, so qty=1 per variant.
+      // We set qty=1 here. Punchy CP3 will see this and can question if wrong.
+      if (item.qty_source === 'rhr_lhr_pair') {
+        item.qty_total = item.qty
+        item.qty = 1
+        item.qty_source = 'divided'
+        console.debug(
+          `[qty-norm] ${set.set_id}: "${item.name}" RHR/LHR pair → qty=1 per variant`
+        )
+        continue
+      }
+
+      // ── PATH 4: needs_review (auto-operator + closer conflict) ───────────────
+      //
+      // Leave qty unchanged but mark as 'flagged' so Punchy CP3 and the UI
+      // surface it. We don't attempt division because the conflict itself is
+      // the signal — a closer alongside an auto-operator may be redundant.
+      if (item.qty_source === 'needs_review') {
+        item.qty_source = 'flagged'
+        continue
+      }
+
+      // ── PATH 5: TS taxonomy fallback (qty_source='parsed' or unset) ──────────
+      //
+      // Python marked this item 'parsed' meaning either:
+      //   a) Python thinks qty is already per-opening (smaller than divisor)
+      //   b) Python couldn't determine a divisor (unclassified item name)
+      //   c) This item was added by Punchy CP2 and has no Python annotation
+      //
+      // We attempt TS taxonomy-based division as a best-effort. This path uses
+      // the same NEVER_RENORMALIZE guard but does NOT rely on Python's divisor.
+      // Because Python's classification failed, we must use TS scope + counts.
+      //
+      // KEY DIFFERENCE FROM OLD CODE: we no longer have the 'qty <= maxPerOpening'
+      // early-exit guard that silently skipped items with small qtys. That guard
+      // prevented re-division of already-normalized items but also prevented
+      // correct classification of legitimately small aggregates. Instead, we
+      // rely on the invariant that Python already set qty_total correctly, so
+      // if qty_total == qty (Python didn't divide), we know this is still raw.
+      if (leafCount <= 1 && doorCount <= 1) {
+        // No counts available — nothing to divide by, leave as-is.
+        continue
+      }
+
+      const scope = classifyItemScope(item.name)
+
+      // per_pair / per_frame: never divide regardless of count
       if (scope === 'per_pair' || scope === 'per_frame') {
         continue
       }
 
-      // per_opening → divide by doorCount only (skip leafCount)
+      // per_opening: divide by doorCount only.
+      // A closer is 1 per opening. It is NOT 1 per leaf. Dividing by leafCount
+      // for a closer on a pair door would incorrectly yield 0.5.
+      //
+      // Use >= (not >) because: if qty == doorCount, that's exactly the case
+      // we want to catch (e.g. 2 closers for 2 doors → 1 per opening). The
+      // integer check handles under-division naturally (1 closer / 2 doors = 0.5
+      // → not integer → skipped without mutation).
       if (scope === 'per_opening') {
         if (doorCount > 1 && item.qty >= doorCount) {
           const perOpening = item.qty / doorCount
@@ -1044,24 +1263,13 @@ export function normalizeQuantities(
             item.qty = perOpening
             item.qty_source = 'divided'
           }
+          // Non-integer: don't round. Leave for Punchy CP3 to assess.
         }
         continue
       }
 
-      // per_leaf items must divide by leafCount when leafCount is known.
-      //
-      // Historical bug: the old code required Number.isInteger(qty/leafCount)
-      // and otherwise fell back to dividing by doorCount. For pair-door sets
-      // with mixed hinge rows (e.g., 42 standard + 6 electric across 12
-      // leaves), 42/12=3.5 is NOT an integer, so the code fell back to
-      // 42/6=7 per opening. That number happens to be an integer and looks
-      // plausible but is silently wrong — the correct answer is ~4 per leaf.
-      //
-      // Fix: if leafCount > 1, ALWAYS divide by leafCount for per_leaf items.
-      // Use Math.round for non-integer results and flag the item so Punchy's
-      // quantity check and the UI can surface it for verification. Only fall
-      // back to doorCount when leafCount is missing (single-door sets where
-      // Python couldn't compute a leaf count).
+      // per_leaf: divide by leafCount (preferred) or doorCount (fallback).
+      // Use Math.round for non-integer results and flag for review.
       if (scope === 'per_leaf') {
         if (leafCount > 1 && item.qty >= leafCount) {
           const perLeaf = item.qty / leafCount
@@ -1071,14 +1279,10 @@ export function normalizeQuantities(
             item.qty = perLeaf
             item.qty_source = 'divided'
           } else {
-            // Non-integer per-leaf. Could be mixed configurations (some
-            // leaves get 4 hinges, some 3) or a different count elsewhere
-            // in the set. Round to nearest and flag for review.
             item.qty = Math.round(perLeaf)
             item.qty_source = 'flagged'
           }
         } else if (doorCount > 1 && item.qty >= doorCount) {
-          // Leaf count unknown — fall back to doorCount.
           const perOpening = item.qty / doorCount
           if (Number.isInteger(perOpening)) {
             item.qty_total = item.qty
@@ -1090,9 +1294,10 @@ export function normalizeQuantities(
         continue
       }
 
-      // Unknown scope → legacy behavior: try leafCount first, then doorCount.
-      // This is the conservative fallback for items we can't classify.
-      let divided = false
+      // Unknown scope: conservative fallback. Try leafCount, then doorCount.
+      // This handles catalog-number names (e.g. '5BB1 HW...') that neither
+      // Python nor TS can classify. Both patterns require a clean integer result
+      // to avoid silently introducing rounded approximations.
       if (leafCount > 1 && item.qty >= leafCount) {
         const perLeaf = item.qty / leafCount
         if (Number.isInteger(perLeaf)) {
@@ -1100,10 +1305,10 @@ export function normalizeQuantities(
           item.qty_door_count = leafCount
           item.qty = perLeaf
           item.qty_source = 'divided'
-          divided = true
+          continue
         }
       }
-      if (!divided && doorCount > 1 && doorCount !== leafCount && item.qty >= doorCount) {
+      if (doorCount > 1 && doorCount !== leafCount && item.qty >= doorCount) {
         const perOpening = item.qty / doorCount
         if (Number.isInteger(perOpening)) {
           item.qty_total = item.qty
@@ -1112,41 +1317,52 @@ export function normalizeQuantities(
           item.qty_source = 'divided'
         }
       }
+      // If neither divided cleanly, leave qty as-is (raw PDF value).
+      // Punchy CP3 will see the raw value and can flag or correct it.
     }
 
-    // Post-division sanity check: if divided qty exceeds category max,
-    // try the generic set total for sub-headings.
+    // ── Post-division sub-heading sanity ───────────────────────────────────────
+    //
+    // If this set is a sub-heading (e.g. DH3.0 within generic DH3) and a
+    // divided qty still exceeds the category max, the item was likely a
+    // set-level total that should have been divided by the generic total
+    // instead of the sub-heading count. Try the generic total as a corrective.
+    //
+    // We only do this AFTER all items have been divided (hence separate loop)
+    // and only for items that are 'divided' or 'flagged' (i.e., we already
+    // acted on them).
     if (isSubHeading) {
       for (const item of set.items ?? []) {
         if (item.qty_source !== 'divided' && item.qty_source !== 'flagged') continue
         const scope = classifyItemScope(item.name)
         const maxQty = MAX_QTY[scope ?? 'per_opening'] ?? 4
-        if (item.qty > maxQty) {
-          const raw = item.qty_total ?? item.qty
-          const altDivisor = scope === 'per_leaf' && genericTotal.leaves > 1
-            ? genericTotal.leaves
-            : genericTotal.doors
-          if (altDivisor > 1) {
-            const altPerUnit = raw / altDivisor
-            if (Number.isInteger(altPerUnit) && altPerUnit <= maxQty) {
+        if (item.qty <= maxQty) continue
+
+        const raw = item.qty_total ?? item.qty
+        const altDivisor = scope === 'per_leaf' && genericTotal.leaves > 1
+          ? genericTotal.leaves
+          : genericTotal.doors
+
+        if (altDivisor > 1) {
+          const altPerUnit = raw / altDivisor
+          if (Number.isInteger(altPerUnit) && altPerUnit <= maxQty) {
+            console.debug(
+              `[qty-norm] ${set.set_id}: "${item.name}" re-divided by generic: ` +
+              `${raw} ÷ ${altDivisor} = ${altPerUnit} (sub-heading gave ${item.qty}, max=${maxQty})`
+            )
+            item.qty = altPerUnit
+            item.qty_door_count = altDivisor
+            item.qty_source = 'divided'
+          } else {
+            const rounded = Math.round(raw / altDivisor)
+            if (rounded <= maxQty) {
               console.debug(
-                `[qty-norm] ${set.set_id}: "${item.name}" re-divided by generic total: ` +
-                `${raw} ÷ ${altDivisor} = ${altPerUnit} (sub-heading gave ${item.qty}, max=${maxQty})`
+                `[qty-norm] ${set.set_id}: "${item.name}" re-divided (rounded) by generic: ` +
+                `${raw} ÷ ${altDivisor} ≈ ${rounded} (sub-heading gave ${item.qty}, max=${maxQty})`
               )
-              item.qty = altPerUnit
+              item.qty = rounded
               item.qty_door_count = altDivisor
-              item.qty_source = 'divided'
-            } else if (altDivisor > 0) {
-              const rounded = Math.round(raw / altDivisor)
-              if (rounded <= maxQty) {
-                console.debug(
-                  `[qty-norm] ${set.set_id}: "${item.name}" re-divided (rounded) by generic total: ` +
-                  `${raw} ÷ ${altDivisor} ≈ ${rounded} (sub-heading gave ${item.qty}, max=${maxQty})`
-                )
-                item.qty = rounded
-                item.qty_door_count = altDivisor
-                item.qty_source = 'flagged'
-              }
+              item.qty_source = 'flagged'
             }
           }
         }

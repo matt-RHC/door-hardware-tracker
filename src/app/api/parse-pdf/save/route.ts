@@ -3,7 +3,7 @@ import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { createExtractionRun, updateExtractionRun, writeStagingData, promoteExtraction } from '@/lib/extraction-staging'
 import type { StagingOpening } from '@/lib/extraction-staging'
 import type { DoorEntry, HardwareSet } from '@/lib/types'
-import { buildPerOpeningItems, buildDoorToSetMap, detectIsPair, normalizeDoorNumber, normalizeQuantities } from '@/lib/parse-pdf-helpers'
+import { buildPerOpeningItems, buildDoorToSetMap, detectIsPair, normalizeDoorNumber } from '@/lib/parse-pdf-helpers'
 
 // --- Shared: check for unmatched sets ---
 //
@@ -74,20 +74,37 @@ export async function POST(request: NextRequest) {
     // like DH4A.0 vs DH4A.1 that share a generic_set_id)
     const doorToSetMap = buildDoorToSetMap(hardwareSets)
 
-    // --- Final qty normalization safety net ---
+    // NOTE (2026-04-13, fix/qty-normalization-pipeline-overhaul):
     //
-    // Python did primary normalization upstream, and chunk/route.ts already
-    // ran normalizeQuantities through the Punchy review pipeline. Most items
-    // here are marked with a NEVER_RENORMALIZE source and will short-circuit.
-    // This call catches items from single-door sets or sets where upstream
-    // door counts weren't resolvable, using the same category-aware logic as
-    // parse-pdf-helpers.ts (per_leaf / per_opening / per_pair / per_frame,
-    // sub-heading detection, MAX_QTY post-division sanity).
+    // normalizeQuantities() is intentionally NOT called here.
     //
-    // Phase 4 of groovy-tumbling-backus: this used to be ~100 lines of
-    // inline logic that drifted from parse-pdf-helpers' version. Collapsed
-    // to a single call so divergence can't silently reappear.
-    normalizeQuantities(hardwareSets, doors)
+    // CONTEXT: normalizeQuantities() used to be called three times:
+    //   1. Inside chunk/route.ts (after Punchy CP2)
+    //   2. Inside parse-pdf/route.ts (same)
+    //   3. HERE — as a "final safety net"
+    //
+    // The third call was architecturally wrong. By the time save/route.ts
+    // runs, the wizard client has already received the fully-normalized
+    // HardwareSets from the chunk pipeline, reviewed them with Punchy CP2+CP3,
+    // and the user has made (or approved) any manual edits. The data is final.
+    //
+    // Calling normalizeQuantities() again here would:
+    //   a) Re-divide items that already went through PATH 1-4 (Python-annotated
+    //      paths). The NEVER_RENORMALIZE guard catches the ones correctly marked,
+    //      but items that fell through to PATH 5 and were divided there do NOT
+    //      have a terminal qty_source — they have 'divided', 'flagged', etc.
+    //      Those ARE in NEVER_RENORMALIZE, so they're protected.
+    //   b) However, any item that somehow arrives here with qty_source='parsed'
+    //      or undefined would be re-processed by the TS taxonomy fallback. That
+    //      is specifically what we're eliminating: silent double-division.
+    //
+    // If you are tempted to add a safety net here again: solve it upstream
+    // instead (in Python annotation or Punchy CP2 feedback). Do not add a
+    // third division pass — the value of having a SINGLE authoritative pass
+    // is that bugs are visible and traceable.
+    //
+    // Build doorInfoMap
+    // (moved comment anchor — see normalizeQuantities call removed above)
 
     // Build doorInfoMap (needed by both staging and production paths)
     const doorInfoMap = new Map<string, { door_type: string; frame_type: string }>()

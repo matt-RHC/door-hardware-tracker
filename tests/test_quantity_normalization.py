@@ -32,97 +32,85 @@ class TestQuantityDivision:
         )
 
     def test_exact_division_by_leaves(self, extract_tables):
-        """12 hinges ÷ 4 leaves = 3 per leaf (exact division)."""
+        """12 hinges with 4 leaves → annotate needs_division, qty preserved."""
         hw = self._make_set(extract_tables, qty=12, door_count=2, leaf_count=4)
         extract_tables.normalize_quantities([hw], [])
         item = hw.items[0]
-        assert item.qty == 3
-        assert item.qty_source == "divided"
+        assert item.qty == 12                    # raw PDF value preserved
+        assert item.qty_source == "needs_division"
         assert item.qty_total == 12
         assert item.qty_door_count == 4
 
-    def test_non_exact_per_leaf_rounds_and_flags(self, extract_tables):
-        """13 hinges ÷ 4 leaves = 3.25 → rounded to 3, flagged for review.
+    def test_non_exact_per_leaf_annotates_needs_division(self, extract_tables):
+        """13 hinges with 4 leaves → annotate needs_division, qty preserved.
 
-        This asserts the fix for the pair-door quantity bug. The old
-        behavior rejected non-integer results and left the item
-        unflagged/undivided. The new behavior rounds and flags so the
-        user can see and correct it. qty_source MUST be 'flagged' (not
-        'divided'), and qty_door_count MUST be leaf_count (4), not
-        door_count (2) — per-leaf items never silently fall back to
-        door_count division when leaf_count > 1.
+        Python no longer rounds or flags — it annotates the raw value and
+        divisor. The TS layer performs the actual division.
+        qty_door_count MUST be leaf_count (4), not door_count (2) —
+        per-leaf items use leaf_count as the recommended divisor.
         """
         hw = self._make_set(extract_tables, qty=13, door_count=2, leaf_count=4)
         extract_tables.normalize_quantities([hw], [])
         item = hw.items[0]
-        assert item.qty == 3, f"Expected 3 (round(13/4)), got {item.qty}"
-        assert item.qty_source == "flagged"
-        assert item.qty_door_count == 4, "must divide by leaf_count, not door_count"
+        assert item.qty == 13                    # raw PDF value preserved
+        assert item.qty_source == "needs_division"
+        assert item.qty_door_count == 4          # leaf_count, not door_count
         assert item.qty_total == 13
 
     def test_per_leaf_never_falls_back_to_door_count_when_leaf_count_gt_1(self, extract_tables):
-        """10 hinges on 5 doors / 7 leaves must divide by leaves (rounded), not 10/5=2.
+        """10 hinges on 5 doors / 7 leaves → annotate with leaf_count divisor.
 
-        This tests the exact anti-pattern from the DH4A.0 / DH1.01 pair-door
-        bug. Old buggy behavior: 10 / 7 leaves fails integer check, falls
-        back to 10 / 5 openings = 2, silently 'divided'. That hides the
-        underlying data problem. New behavior: round(10/7) = 1 per leaf,
-        flagged for review. Even if the number is 'wrong' in an absolute
-        sense, flagging surfaces the issue to the user.
+        Python no longer divides or rounds. It annotates with the correct
+        divisor (leaf_count=7) so the TS layer can divide. The key invariant
+        is that qty_door_count must be 7 (leaves), not 5 (openings).
         """
         hw = self._make_set(extract_tables, qty=10, door_count=5, leaf_count=7)
         extract_tables.normalize_quantities([hw], [])
         item = hw.items[0]
-        # MUST NOT be 2 (the old buggy fallback to 10/5=2)
-        assert item.qty != 2, "regression: fell back to door_count division"
-        # MUST be round(10/7) = 1
-        assert item.qty == 1
-        assert item.qty_source == "flagged"
-        assert item.qty_door_count == 7, "must preserve leaf_count, not fall back to door_count"
+        assert item.qty == 10                    # raw PDF value preserved
+        assert item.qty_source == "needs_division"
+        assert item.qty_door_count == 7          # leaf_count, not door_count
+        assert item.qty_total == 10
 
-    def test_pair_door_42_hinges_on_12_leaves_rounds_to_4(self, extract_tables):
-        """42 hinges across 6 pair doors (12 leaves) → 4 per leaf, flagged.
+    def test_pair_door_42_hinges_on_12_leaves_annotates_correctly(self, extract_tables):
+        """42 hinges across 6 pair doors (12 leaves) → annotate needs_division.
 
-        This is the exact Radius DC DH4A.0 scenario from the April 2026
-        production report. 42/12 = 3.5, rounds to 4. Old code fell back
-        to 42/6 = 7 per opening (an integer, but wildly wrong — tall
-        commercial doors use 3-5 hinges per leaf per DHI standards).
-        New code flags it at 4 per leaf for user confirmation.
+        This is the exact Radius DC DH4A.0 scenario. Python preserves the
+        raw qty=42 and records divisor=12 (leaf_count). The TS layer will
+        perform 42/12 = 3.5 and handle rounding/flagging.
         """
         hw = self._make_set(extract_tables, qty=42, door_count=6, leaf_count=12)
         extract_tables.normalize_quantities([hw], [])
         item = hw.items[0]
-        assert item.qty == 4, (
-            f"Expected 4 (round(42/12)), got {item.qty}. The old buggy "
-            f"fallback produced 7 (42/6 per opening). If this assertion "
-            f"fails with qty=7, the fallback-to-door_count bug has regressed."
-        )
-        assert item.qty_source == "flagged"
+        assert item.qty == 42                    # raw PDF value preserved
+        assert item.qty_source == "needs_division"
         assert item.qty_door_count == 12
         assert item.qty_total == 42
 
-    def test_pair_door_48_hinges_on_12_leaves_divides_cleanly(self, extract_tables):
-        """48 hinges across 6 pair doors (12 leaves) → 4 per leaf, divided.
+    def test_pair_door_48_hinges_on_12_leaves_annotates_correctly(self, extract_tables):
+        """48 hinges across 6 pair doors (12 leaves) → annotate needs_division.
 
-        Clean companion case: when the per-leaf math divides cleanly,
-        qty_source should be 'divided' (not flagged). This verifies that
-        the new rounding path only engages for non-integer results, not
-        for every per-leaf item.
+        Python no longer distinguishes clean vs non-clean division. Both
+        cases get qty_source='needs_division'. The TS layer handles the
+        actual math and decides whether to flag non-integer results.
         """
         hw = self._make_set(extract_tables, qty=48, door_count=6, leaf_count=12)
         extract_tables.normalize_quantities([hw], [])
         item = hw.items[0]
-        assert item.qty == 4
-        assert item.qty_source == "divided", "clean division must not be flagged"
+        assert item.qty == 48                    # raw PDF value preserved
+        assert item.qty_source == "needs_division"
         assert item.qty_door_count == 12
+        assert item.qty_total == 48
 
     def test_large_exact_division(self, extract_tables):
-        """42 hinges ÷ 14 leaves = 3 per leaf (the actual BUG-9 scenario)."""
+        """42 hinges with 14 leaves → annotate needs_division (BUG-9 scenario)."""
         hw = self._make_set(extract_tables, qty=42, door_count=7, leaf_count=14)
         extract_tables.normalize_quantities([hw], [])
         item = hw.items[0]
-        assert item.qty == 3, f"Expected 3, got {item.qty} (BUG-9 regression)"
-        assert item.qty_source == "divided"
+        assert item.qty == 42                    # raw PDF value preserved
+        assert item.qty_source == "needs_division"
+        assert item.qty_door_count == 14
+        assert item.qty_total == 42
 
 
 # ── Unit tests: pair door leaf count from opening list ──
@@ -253,8 +241,10 @@ class TestFuzzyIDMatching:
         ]
         extract_tables.normalize_quantities([hw], openings)
         item = hw.items[0]
-        assert item.qty == 3
-        assert item.qty_source == "divided"
+        assert item.qty == 9                     # raw PDF value preserved
+        assert item.qty_source == "needs_division"
+        assert item.qty_door_count == 3
+        assert item.qty_total == 9
 
 
 # ── Unit tests: category-aware division ──
@@ -273,65 +263,76 @@ class TestCategoryAwareDivision:
         )
 
     def test_hinge_divides_by_leaves_first(self, extract_tables):
-        """Hinges prefer leaf division: 12 ÷ 4 leaves = 3."""
+        """Hinges prefer leaf division: recommend ÷4 leaves, qty preserved."""
         hw = self._make_set(extract_tables, 12, 2, 4, "Hinge 5BB1")
         extract_tables.normalize_quantities([hw], [])
         item = hw.items[0]
-        assert item.qty == 3
-        assert item.qty_door_count == 4  # divided by leaves
+        assert item.qty == 12                    # raw PDF value preserved
+        assert item.qty_source == "needs_division"
+        assert item.qty_door_count == 4          # divided by leaves
+        assert item.qty_total == 12
 
     def test_closer_divides_by_openings_first(self, extract_tables):
-        """Closers prefer opening division: 4 ÷ 2 openings = 2."""
+        """Closers prefer opening division: recommend ÷2 openings, qty preserved."""
         hw = self._make_set(extract_tables, 4, 2, 4, "Closer 4040XP")
         extract_tables.normalize_quantities([hw], [])
         item = hw.items[0]
-        assert item.qty == 2
-        assert item.qty_door_count == 2  # divided by openings, not leaves
+        assert item.qty == 4                     # raw PDF value preserved
+        assert item.qty_source == "needs_division"
+        assert item.qty_door_count == 2          # divided by openings, not leaves
+        assert item.qty_total == 4
 
     def test_threshold_never_divides_by_leaves(self, extract_tables):
-        """Thresholds are opening_only: 4 ÷ 4 leaves should NOT happen,
-        should divide by 2 openings instead."""
+        """Thresholds are opening_only: recommend ÷2 openings, not leaves."""
         hw = self._make_set(extract_tables, 4, 2, 4, "Threshold 655BK")
         extract_tables.normalize_quantities([hw], [])
         item = hw.items[0]
-        assert item.qty == 2
-        assert item.qty_door_count == 2  # openings, not leaves
+        assert item.qty == 4                     # raw PDF value preserved
+        assert item.qty_source == "needs_division"
+        assert item.qty_door_count == 2          # openings, not leaves
+        assert item.qty_total == 4
 
     def test_flush_bolt_divides_by_openings(self, extract_tables):
-        """Flush bolts are opening_only."""
+        """Flush bolts are opening_only: recommend ÷3 openings."""
         hw = self._make_set(extract_tables, 6, 3, 6, "Flush Bolt FB32")
         extract_tables.normalize_quantities([hw], [])
         item = hw.items[0]
-        assert item.qty == 2
-        assert item.qty_door_count == 3  # openings
+        assert item.qty == 6                     # raw PDF value preserved
+        assert item.qty_source == "needs_division"
+        assert item.qty_door_count == 3          # openings
+        assert item.qty_total == 6
 
     def test_lockset_divides_by_openings(self, extract_tables):
-        """Locksets are per-opening."""
+        """Locksets are per-opening: recommend ÷4 openings."""
         hw = self._make_set(extract_tables, 8, 4, 8, "Mortise Lockset L9080")
         extract_tables.normalize_quantities([hw], [])
         item = hw.items[0]
-        assert item.qty == 2
-        assert item.qty_door_count == 4  # openings
+        assert item.qty == 8                     # raw PDF value preserved
+        assert item.qty_source == "needs_division"
+        assert item.qty_door_count == 4          # openings
+        assert item.qty_total == 8
 
-    def test_exit_device_divides_by_openings(self, extract_tables):
-        """Exit devices are per-opening."""
+    def test_exit_device_divides_by_leaves(self, extract_tables):
+        """Exit devices are per-leaf: recommend ÷6 leaves (each leaf gets its own)."""
         hw = self._make_set(extract_tables, 6, 3, 6, "Exit Device 9875")
         extract_tables.normalize_quantities([hw], [])
         item = hw.items[0]
-        assert item.qty == 2
-        assert item.qty_door_count == 3  # openings
+        assert item.qty == 6                     # raw PDF value preserved
+        assert item.qty_source == "needs_division"
+        assert item.qty_door_count == 6          # leaves, not openings
+        assert item.qty_total == 6
 
     def test_wire_harness_divides_by_leaves(self, extract_tables):
-        """Wire harness is per-leaf (follows electrified hardware placement).
-        Previously unclassified in Python — items fell through to the
-        unknown/legacy path. Phase 2b added it to _CATEGORY_PATTERNS and
-        DIVISION_PREFERENCE so it divides by leaves like hinges do:
-        4 wire harnesses across 2 pair openings (4 leaves) → 1 per leaf."""
+        """Wire harness is per-leaf: recommend ÷4 leaves, qty preserved.
+        Phase 2b added it to _CATEGORY_PATTERNS and DIVISION_PREFERENCE
+        so it uses leaves as the divisor like hinges do."""
         hw = self._make_set(extract_tables, 4, 2, 4, "CON-5 Wire Harness")
         extract_tables.normalize_quantities([hw], [])
         item = hw.items[0]
-        assert item.qty == 1
-        assert item.qty_door_count == 4  # leaves
+        assert item.qty == 4                     # raw PDF value preserved
+        assert item.qty_source == "needs_division"
+        assert item.qty_door_count == 4          # leaves
+        assert item.qty_total == 4
 
     def test_wire_harness_matches_connector_variants(self, extract_tables):
         """The wire_harness classifier should catch the common name variants
@@ -403,7 +404,7 @@ class TestNormalizeWithOpeningsFallback:
 
     def test_pair_opening_fallback_divides_correctly(self, extract_tables):
         """Set with 0 heading counts but opening list has 3 pair doors →
-        qty 18 ÷ 6 leaves = 3."""
+        annotate needs_division with divisor=6 (leaf count)."""
         hw = extract_tables.HardwareSetDef(
             set_id="A",
             generic_set_id="A",
@@ -421,8 +422,10 @@ class TestNormalizeWithOpeningsFallback:
         ]
         extract_tables.normalize_quantities([hw], openings)
         item = hw.items[0]
-        assert item.qty == 3
-        assert item.qty_source == "divided"
+        assert item.qty == 18                    # raw PDF value preserved
+        assert item.qty_source == "needs_division"
+        assert item.qty_door_count == 6          # 3 pair doors = 6 leaves
+        assert item.qty_total == 18
 
 
 # ── Golden PDF regression tests ──
@@ -445,43 +448,52 @@ class TestGoldenPDFQuantities:
                     )
 
     def test_small_pdf_hinges_reasonable(self, extract_tables, pipeline_results):
-        """SMALL PDF: hinge quantities should be ≤ 6 per leaf (reasonable max)."""
+        """SMALL PDF: hinge items marked needs_division should have a valid divisor."""
         result = pipeline_results.get("SMALL")
         if result is None:
             pytest.skip("SMALL PDF not available")
         hw_sets = result[0]
         for hw_set in hw_sets:
             for item in hw_set.items:
-                if "hinge" in item.name.lower() and item.qty_source == "divided":
-                    assert item.qty <= 6, (
-                        f"{hw_set.set_id} '{item.name}' has qty={item.qty}, "
-                        f"expected ≤6 per opening/leaf"
+                if "hinge" in item.name.lower() and item.qty_source == "needs_division":
+                    assert item.qty_door_count is not None and item.qty_door_count > 0, (
+                        f"{hw_set.set_id} '{item.name}' marked needs_division "
+                        f"but qty_door_count={item.qty_door_count}"
+                    )
+                    assert item.qty_total == item.qty, (
+                        f"{hw_set.set_id} '{item.name}' qty_total should equal raw qty"
                     )
 
     def test_medium_pdf_quantities_normalized(self, extract_tables, pipeline_results):
-        """MEDIUM PDF: all divided items should have reasonable per-unit qty."""
+        """MEDIUM PDF: all needs_division items should have valid annotations."""
         result = pipeline_results.get("MEDIUM")
         if result is None:
             pytest.skip("MEDIUM PDF not available")
         hw_sets = result[0]
         for hw_set in hw_sets:
             for item in hw_set.items:
-                if item.qty_source == "divided":
-                    assert item.qty <= 20, (
-                        f"{hw_set.set_id} '{item.name}' qty={item.qty} "
-                        f"seems too high for per-unit"
+                if item.qty_source == "needs_division":
+                    assert item.qty_door_count is not None and item.qty_door_count > 0, (
+                        f"{hw_set.set_id} '{item.name}' marked needs_division "
+                        f"but qty_door_count={item.qty_door_count}"
+                    )
+                    assert item.qty_total == item.qty, (
+                        f"{hw_set.set_id} '{item.name}' qty_total should equal raw qty"
                     )
 
     def test_large_mca_quantities_normalized(self, extract_tables, pipeline_results):
-        """LARGE MCA PDF: all divided items should have reasonable per-unit qty."""
+        """LARGE MCA PDF: all needs_division items should have valid annotations."""
         result = pipeline_results.get("LARGE")
         if result is None:
             pytest.skip("LARGE MCA PDF not available")
         hw_sets = result[0]
         for hw_set in hw_sets:
             for item in hw_set.items:
-                if item.qty_source == "divided":
-                    assert item.qty <= 20, (
-                        f"{hw_set.set_id} '{item.name}' qty={item.qty} "
-                        f"seems too high for per-unit"
+                if item.qty_source == "needs_division":
+                    assert item.qty_door_count is not None and item.qty_door_count > 0, (
+                        f"{hw_set.set_id} '{item.name}' marked needs_division "
+                        f"but qty_door_count={item.qty_door_count}"
+                    )
+                    assert item.qty_total == item.qty, (
+                        f"{hw_set.set_id} '{item.name}' qty_total should equal raw qty"
                     )
