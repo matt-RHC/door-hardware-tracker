@@ -10,6 +10,7 @@ import type {
   PunchyQuantityCheck,
   PunchyObservation,
 } from '@/lib/types'
+import { toPunchyConfidence } from '@/lib/types'
 import {
   callPdfplumber,
   callPunchyColumnReview,
@@ -116,6 +117,7 @@ async function extractFromPDF(base64: string, filteredPdfBase64?: string, userCo
     openings: [],
     hardware_sets: [],
     reference_codes: [],
+    flagged_doors: [],
     expected_door_count: 0,
     tables_found: 0,
     hw_sets_found: 0,
@@ -127,7 +129,7 @@ async function extractFromPDF(base64: string, filteredPdfBase64?: string, userCo
     punchyObservations.push({
       checkpoint: 'post_extraction',
       message: corrections.notes,
-      confidence: (corrections.overall_confidence as PunchyObservation['confidence']) ?? 'medium',
+      confidence: toPunchyConfidence(corrections.overall_confidence),
     })
   }
 

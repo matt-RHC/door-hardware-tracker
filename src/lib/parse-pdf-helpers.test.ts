@@ -9,8 +9,10 @@ import {
   detectIsPair,
   buildPerOpeningItems,
   computeLeafSide,
+  applyCorrections,
+  findItemFuzzy,
 } from './parse-pdf-helpers'
-import type { HardwareSet, DoorEntry } from '@/lib/types'
+import type { HardwareSet, DoorEntry, PunchyCorrections } from '@/lib/types'
 
 /**
  * Helper: build a minimal HardwareSet with items for testing.
@@ -1065,5 +1067,236 @@ describe('computeLeafSide — per-item leaf attribution', () => {
 
   it('returns null for unknown / unclassified items', () => {
     expect(computeLeafSide('Widget XYZ-123', 2)).toBeNull()
+  })
+})
+
+// ─── findItemFuzzy — correction name matcher ───
+
+describe('findItemFuzzy', () => {
+  const items = [
+    { name: 'Hinge', qty: 3, model: '', finish: '', manufacturer: '' },
+    { name: 'Spring Hinge', qty: 1, model: '', finish: '', manufacturer: '' },
+    { name: 'Closer', qty: 1, model: '', finish: '', manufacturer: '' },
+  ]
+
+  it('returns exact-name hits', () => {
+    expect(findItemFuzzy(items, 'Hinge', 't')?.name).toBe('Hinge')
+    expect(findItemFuzzy(items, 'Spring Hinge', 't')?.name).toBe('Spring Hinge')
+  })
+
+  it('returns case-insensitive hits', () => {
+    expect(findItemFuzzy(items, 'HINGE', 't')?.name).toBe('Hinge')
+    expect(findItemFuzzy(items, 'spring hinge', 't')?.name).toBe('Spring Hinge')
+  })
+
+  it('does NOT substring-match "Hinge" onto "Spring Hinge"', () => {
+    // Historical bug: bidirectional substring match flipped the wrong item
+    // when a set had multiple hinge variants. Only exact + CI should win.
+    const onlySpring = [
+      { name: 'Spring Hinge', qty: 1, model: '', finish: '', manufacturer: '' },
+    ]
+    expect(findItemFuzzy(onlySpring, 'Hinge', 't')).toBeUndefined()
+  })
+
+  it('does NOT match a verbose name to a terse item ("Heavy-Duty Hinge" → "Hinge")', () => {
+    expect(findItemFuzzy(items, 'Heavy-Duty Hinge', 't')).toBeUndefined()
+  })
+
+  it('returns undefined when no exact or CI match exists', () => {
+    expect(findItemFuzzy(items, 'Pivot', 't')).toBeUndefined()
+  })
+})
+
+// ─── applyCorrections — Punchy correction ingestion ───
+
+describe('applyCorrections', () => {
+  function makeHardwareItem(name: string, qty: number) {
+    return { name, qty, model: '', finish: '', manufacturer: '' }
+  }
+
+  function makeDoorEntry(door_number: string, hw_set: string): DoorEntry {
+    return {
+      door_number,
+      hw_set,
+      door_type: null,
+      frame_type: null,
+      fire_rating: null,
+      hand: null,
+      location: null,
+    } as unknown as DoorEntry
+  }
+
+  it('applies items_to_fix via exact-name match', () => {
+    const sets: HardwareSet[] = [
+      { set_id: 'DH1', heading: 'Set DH1', items: [makeHardwareItem('Hinges', 6)] },
+    ]
+    const doors: DoorEntry[] = []
+    const corrections: PunchyCorrections = {
+      hardware_sets_corrections: [
+        {
+          set_id: 'DH1',
+          items_to_fix: [
+            { name: 'Hinges', field: 'qty', old_value: '6', new_value: '3' },
+          ],
+        },
+      ],
+    }
+    applyCorrections(sets, doors, corrections)
+    expect(sets[0].items?.[0].qty).toBe(3)
+    expect(sets[0].items?.[0].qty_source).toBe('llm_override')
+  })
+
+  it('resolves set_id via generic_set_id fallback, applying to every sub-variant', () => {
+    const sets: HardwareSet[] = [
+      {
+        set_id: 'DH4A.0',
+        generic_set_id: 'DH4A',
+        heading: 'Set DH4A.0',
+        items: [makeHardwareItem('Closer', 2)],
+      },
+      {
+        set_id: 'DH4A.1',
+        generic_set_id: 'DH4A',
+        heading: 'Set DH4A.1',
+        items: [makeHardwareItem('Closer', 2)],
+      },
+      {
+        set_id: 'DH5',
+        generic_set_id: 'DH5',
+        heading: 'Set DH5',
+        items: [makeHardwareItem('Closer', 2)],
+      },
+    ]
+    const corrections: PunchyCorrections = {
+      hardware_sets_corrections: [
+        {
+          set_id: 'DH4A', // generic — should land on both DH4A.0 and DH4A.1
+          items_to_fix: [
+            { name: 'Closer', field: 'qty', old_value: '2', new_value: '1' },
+          ],
+        },
+      ],
+    }
+    applyCorrections(sets, [], corrections)
+    expect(sets[0].items?.[0].qty).toBe(1) // DH4A.0 fixed
+    expect(sets[1].items?.[0].qty).toBe(1) // DH4A.1 fixed
+    expect(sets[2].items?.[0].qty).toBe(2) // DH5 untouched
+  })
+
+  it('drops a set correction when nothing matches by id or generic_set_id', () => {
+    const sets: HardwareSet[] = [
+      { set_id: 'DH1', generic_set_id: 'DH1', heading: 'Set DH1', items: [makeHardwareItem('Hinges', 3)] },
+    ]
+    const corrections: PunchyCorrections = {
+      hardware_sets_corrections: [
+        {
+          set_id: 'DH99',
+          items_to_fix: [
+            { name: 'Hinges', field: 'qty', old_value: '3', new_value: '4' },
+          ],
+        },
+      ],
+    }
+    applyCorrections(sets, [], corrections)
+    expect(sets[0].items?.[0].qty).toBe(3) // unchanged
+  })
+
+  it('normalizes door_number when applying doors_corrections (Punchy raw-PDF vs extracted)', () => {
+    const doors: DoorEntry[] = [makeDoorEntry('11002A', 'DH1')]
+    const corrections: PunchyCorrections = {
+      doors_corrections: [
+        {
+          door_number: '110 02A', // Punchy's form, with internal space
+          field: 'hw_set',
+          old_value: 'DH1',
+          new_value: 'DH2',
+        },
+      ],
+    }
+    applyCorrections([], doors, corrections)
+    expect(doors[0].hw_set).toBe('DH2')
+  })
+
+  it('de-duplicates missing_doors using normalized door_number', () => {
+    const doors: DoorEntry[] = [makeDoorEntry('11002A', 'DH1')]
+    const corrections: PunchyCorrections = {
+      missing_doors: [
+        // Same door with spaces + lowercase — should NOT be appended
+        makeDoorEntry('  110 02a  ', 'DH1'),
+        makeDoorEntry('11003B', 'DH2'),
+      ],
+    }
+    applyCorrections([], doors, corrections)
+    expect(doors.length).toBe(2) // original + the genuinely new one
+    expect(doors[1].door_number).toBe('11003B')
+  })
+
+  it('forwards heading metadata when pushing missing_sets', () => {
+    const sets: HardwareSet[] = []
+    const corrections: PunchyCorrections = {
+      missing_sets: [
+        {
+          set_id: 'DH9.0',
+          generic_set_id: 'DH9',
+          heading: 'Set DH9.0',
+          heading_door_count: 3,
+          heading_leaf_count: 6,
+          items: [{ name: 'Hinges', qty: 18, model: '', finish: '', manufacturer: '' }],
+        },
+      ],
+    }
+    applyCorrections(sets, [], corrections)
+    expect(sets.length).toBe(1)
+    expect(sets[0].generic_set_id).toBe('DH9')
+    expect(sets[0].heading_door_count).toBe(3)
+    expect(sets[0].heading_leaf_count).toBe(6)
+    // With metadata forwarded, normalizeQuantities can now divide 18 ÷ 6 = 3/leaf
+    normalizeQuantities(sets, [])
+    expect(sets[0].items?.[0].qty).toBe(3)
+  })
+
+  it('skips inserting a missing_set already present under generic_set_id', () => {
+    const sets: HardwareSet[] = [
+      {
+        set_id: 'DH4A.0',
+        generic_set_id: 'DH4A',
+        heading: 'Set DH4A.0',
+        items: [makeHardwareItem('Closer', 1)],
+      },
+    ]
+    const corrections: PunchyCorrections = {
+      missing_sets: [
+        {
+          set_id: 'DH4A', // generic already represented by DH4A.0 above
+          heading: 'Set DH4A',
+          items: [{ name: 'Closer', qty: 1, model: '', finish: '', manufacturer: '' }],
+        },
+      ],
+    }
+    applyCorrections(sets, [], corrections)
+    expect(sets.length).toBe(1)
+  })
+
+  it('items_to_remove tightened to exact + case-insensitive (preserves variants)', () => {
+    const sets: HardwareSet[] = [
+      {
+        set_id: 'DH1',
+        heading: 'Set DH1',
+        items: [
+          makeHardwareItem('Hinge', 3),
+          makeHardwareItem('Spring Hinge', 1),
+        ],
+      },
+    ]
+    const corrections: PunchyCorrections = {
+      hardware_sets_corrections: [
+        {
+          set_id: 'DH1',
+          items_to_remove: ['Hinge'],
+        },
+      ],
+    }
+    applyCorrections(sets, [], corrections)
+    expect(sets[0].items?.map(i => i.name)).toEqual(['Spring Hinge'])
   })
 })

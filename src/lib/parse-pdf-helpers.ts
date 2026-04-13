@@ -692,10 +692,20 @@ export async function callDeepExtraction(
 }
 
 /**
- * Fuzzy item matcher: exact name first, then case-insensitive, then substring.
- * Logs warnings when fuzzy or no match occurs for observability.
+ * Name matcher used when applying Punchy corrections to extracted items.
+ *
+ * Matching tiers (first hit wins):
+ *   1. Exact string match
+ *   2. Case-insensitive match
+ *
+ * Substring matching used to be a third tier, but it silently cross-matched
+ * variants like "Hinge" → "Spring Hinge" / "Heavy-Duty Hinge", flipping the
+ * wrong item. Case-insensitive parity with pdfplumber's extracted name is the
+ * right contract: Punchy's CP2 prompt echoes the extraction back, so it has
+ * no reason to diverge beyond casing. When Punchy returns a novel name we now
+ * warn loudly instead of guessing.
  */
-function findItemFuzzy(
+export function findItemFuzzy(
   items: ExtractedHardwareItem[],
   name: string,
   context: string,
@@ -712,17 +722,41 @@ function findItemFuzzy(
     return ci
   }
 
-  // 3. Substring containment (either direction)
-  const sub = items.find(
-    i => i.name.toLowerCase().includes(lower) || lower.includes(i.name.toLowerCase()),
-  )
-  if (sub) {
-    console.debug(`Punchy correction fuzzy match (substring): "${name}" → "${sub.name}" [${context}]`)
-    return sub
-  }
-
   console.warn(`Punchy correction could not match item "${name}" [${context}]`)
   return undefined
+}
+
+/**
+ * Resolve a Punchy-supplied set_id to the concrete `HardwareSet` objects it
+ * should apply to.
+ *
+ *   - Prefer an exact `set_id` hit (one target).
+ *   - Otherwise treat the id as a `generic_set_id` and apply to every
+ *     sub-variant (e.g., Punchy says "DH4A" when the extraction has
+ *     "DH4A.0" and "DH4A.1").
+ *   - Empty result → correction is dropped and we log a warning so the
+ *     miss is observable.
+ */
+function resolveSetsForCorrection(
+  hardwareSets: HardwareSet[],
+  correctionSetId: string,
+  context: string,
+): HardwareSet[] {
+  const exact = hardwareSets.find(s => s.set_id === correctionSetId)
+  if (exact) return [exact]
+
+  const byGeneric = hardwareSets.filter(s => s.generic_set_id === correctionSetId)
+  if (byGeneric.length > 0) {
+    console.debug(
+      `Punchy correction resolved via generic_set_id: "${correctionSetId}" → ${byGeneric
+        .map(s => s.set_id)
+        .join(', ')} [${context}]`,
+    )
+    return byGeneric
+  }
+
+  console.warn(`Punchy correction could not match set_id "${correctionSetId}" [${context}]`)
+  return []
 }
 
 export function applyCorrections(
@@ -733,45 +767,55 @@ export function applyCorrections(
   // Apply hardware set corrections
   if (corrections.hardware_sets_corrections) {
     for (const corr of corrections.hardware_sets_corrections) {
-      const set = hardwareSets.find(s => s.set_id === corr.set_id)
-      if (!set) continue
+      const targets = resolveSetsForCorrection(hardwareSets, corr.set_id, 'hw_sets_corrections')
+      if (targets.length === 0) continue
 
-      if (corr.heading) set.heading = corr.heading
+      for (const set of targets) {
+        if (corr.heading) set.heading = corr.heading
 
-      // Remove items (fuzzy match)
-      if (corr.items_to_remove) {
-        const removeLower = new Set(corr.items_to_remove.map(n => n.toLowerCase()))
-        set.items = (set.items ?? []).filter(
-          item => !removeLower.has(item.name.toLowerCase()),
-        )
-      }
+        // Remove items (exact + case-insensitive only, never substring)
+        if (corr.items_to_remove) {
+          const removeLower = new Set(corr.items_to_remove.map(n => n.toLowerCase()))
+          set.items = (set.items ?? []).filter(
+            item => !removeLower.has(item.name.toLowerCase()),
+          )
+        }
 
-      // Fix items (fuzzy match)
-      if (corr.items_to_fix) {
-        for (const fix of corr.items_to_fix) {
-          const item = findItemFuzzy(set.items ?? [], fix.name, `set ${corr.set_id} fix ${fix.field}`)
-          if (item && fix.field in item) {
-            const val = fix.new_value
-            if (fix.field === 'qty') {
-              (item as any)[fix.field] = parseInt(val, 10) || 1
-              // Mark as llm_override so downstream normalization (NEVER_RENORMALIZE)
-              // preserves Punchy's correction — Punchy sees per-opening values and
-              // returns per-opening values; re-dividing would clobber the fix.
-              ;(item as any).qty_source = 'llm_override'
-            } else {
-              (item as any)[fix.field] = val
+        // Fix items (exact + case-insensitive)
+        if (corr.items_to_fix) {
+          for (const fix of corr.items_to_fix) {
+            const item = findItemFuzzy(
+              set.items ?? [],
+              fix.name,
+              `set ${set.set_id} fix ${fix.field}`,
+            )
+            if (item && fix.field in item) {
+              const val = fix.new_value
+              if (fix.field === 'qty') {
+                (item as any)[fix.field] = parseInt(val, 10) || 1
+                // Mark as llm_override so downstream normalization (NEVER_RENORMALIZE)
+                // preserves Punchy's correction — Punchy sees per-opening values and
+                // returns per-opening values; re-dividing would clobber the fix.
+                ;(item as any).qty_source = 'llm_override'
+              } else {
+                (item as any)[fix.field] = val
+              }
             }
           }
         }
-      }
 
-      // Add missing items (fuzzy duplicate check)
-      if (corr.items_to_add) {
-        for (const newItem of corr.items_to_add) {
-          const existing = findItemFuzzy(set.items ?? [], newItem.name, `set ${corr.set_id} add`)
-          if (!existing) {
-            if (!set.items) set.items = []
-            set.items.push(newItem)
+        // Add missing items (exact + case-insensitive duplicate check)
+        if (corr.items_to_add) {
+          for (const newItem of corr.items_to_add) {
+            const existing = findItemFuzzy(
+              set.items ?? [],
+              newItem.name,
+              `set ${set.set_id} add`,
+            )
+            if (!existing) {
+              if (!set.items) set.items = []
+              set.items.push(newItem)
+            }
           }
         }
       }
@@ -784,12 +828,23 @@ export function applyCorrections(
   if (corrections.missing_sets) {
     for (const newSet of corrections.missing_sets) {
       const alreadyPresent = hardwareSets.some(
-        s => s.set_id === newSet.set_id || s.generic_set_id === newSet.set_id,
+        s => s.set_id === newSet.set_id
+          || s.generic_set_id === newSet.set_id
+          || (newSet.generic_set_id !== undefined
+            && (s.set_id === newSet.generic_set_id
+              || s.generic_set_id === newSet.generic_set_id)),
       )
       if (!alreadyPresent) {
+        // Forward heading metadata so downstream normalization can divide
+        // quantities correctly. Previously all three fields were dropped,
+        // which put normalizeQuantities in the "leafCount<=1 && doorCount<=1"
+        // skip path — silently bypassing the per-leaf division safety net.
         hardwareSets.push({
           set_id: newSet.set_id,
+          generic_set_id: newSet.generic_set_id,
           heading: newSet.heading,
+          heading_door_count: newSet.heading_door_count ?? 0,
+          heading_leaf_count: newSet.heading_leaf_count ?? 0,
           heading_doors: [],
           items: newSet.items ?? [],
         })
@@ -797,20 +852,34 @@ export function applyCorrections(
     }
   }
 
-  // Apply door corrections
+  // Apply door corrections.
+  //
+  // Match by normalized door_number (uppercase + whitespace-collapsed) so
+  // Punchy's raw-PDF door numbers (e.g. "110 02A") match our canonical
+  // storage form ("11002A"). Exact-string matching used to silently drop
+  // every correction where formatting drifted between pdfplumber's extraction
+  // and the PDF text Punchy reads.
   if (corrections.doors_corrections) {
     for (const corr of corrections.doors_corrections) {
-      const door = doors.find(d => d.door_number === corr.door_number)
-      if (door && corr.field in door) {
+      const target = normalizeDoorNumber(corr.door_number)
+      const door = doors.find(d => normalizeDoorNumber(d.door_number) === target)
+      if (!door) {
+        console.warn(
+          `Punchy doors_corrections could not match door_number "${corr.door_number}"`,
+        )
+        continue
+      }
+      if (corr.field in door) {
         (door as any)[corr.field] = corr.new_value
       }
     }
   }
 
-  // Add missing doors
+  // Add missing doors (also normalized — same rationale as above).
   if (corrections.missing_doors) {
     for (const newDoor of corrections.missing_doors) {
-      if (!doors.some(d => d.door_number === newDoor.door_number)) {
+      const target = normalizeDoorNumber(newDoor.door_number)
+      if (!doors.some(d => normalizeDoorNumber(d.door_number) === target)) {
         doors.push(newDoor)
       }
     }

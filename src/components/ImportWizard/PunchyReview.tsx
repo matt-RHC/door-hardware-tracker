@@ -159,7 +159,14 @@ export default function PunchyReview({
 
     setHardwareSets(prev =>
       prev.map(set => {
-        const setCorrs = corrections.filter(c => c.set_id === set.set_id);
+        // Match by exact set_id, falling back to generic_set_id so that
+        // Punchy corrections targeting a generic group (e.g. "DH4A") still
+        // land on their sub-variants ("DH4A.0", "DH4A.1"). Without this,
+        // every auto-correction on a multi-heading set was silently ignored.
+        const setCorrs = corrections.filter(
+          c => c.set_id === set.set_id
+            || (set.generic_set_id !== undefined && c.set_id === set.generic_set_id),
+        );
         if (setCorrs.length === 0) return set;
         const updatedItems = (set.items ?? []).map(item => {
           const corr = setCorrs.find(

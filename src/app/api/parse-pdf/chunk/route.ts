@@ -9,6 +9,7 @@ import type {
   PunchyQuantityCheck,
   PunchyObservation,
 } from '@/lib/types'
+import { toPunchyConfidence } from '@/lib/types'
 import {
   callPdfplumber,
   callPunchyColumnReview,
@@ -144,7 +145,7 @@ export async function POST(request: NextRequest) {
       punchyObservations.push({
         checkpoint: 'post_extraction',
         message: corrections.notes,
-        confidence: (corrections.overall_confidence as PunchyObservation['confidence']) ?? 'medium',
+        confidence: toPunchyConfidence(corrections.overall_confidence),
       })
     }
 
