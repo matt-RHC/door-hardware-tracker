@@ -24,6 +24,8 @@ import {
   type VisionExtractionResult,
 } from '@/lib/parse-pdf-helpers'
 import type { ExtractionConfidence } from '@/lib/types/confidence'
+import { reconcileExtractions } from '@/lib/reconciliation'
+import type { ReconciliationResult } from '@/lib/types/reconciliation'
 import {
   splitPDFByPages,
   splitPDFFixed,
@@ -623,10 +625,52 @@ export async function POST(
       }
     }
 
+    // ══════════════════════════════════════════════════════════════
+    // Phase 4c: Reconciliation (merge Strategy A + Strategy B)
+    // ══════════════════════════════════════════════════════════════
+    let reconciliationResult: ReconciliationResult | null = null
+
+    if (visionResult && visionResult.hardware_sets.length > 0) {
+      console.log(`[job-orchestrator] Job ${jobId}: reconciling Strategy A (${extractedSets.length} sets) with Strategy B (${visionResult.hardware_sets.length} sets)`)
+
+      try {
+        reconciliationResult = reconcileExtractions(extractedSets, visionResult)
+
+        console.log(
+          `[job-orchestrator] Job ${jobId}: reconciliation complete — ` +
+          `${reconciliationResult.summary.total_sets} sets, ` +
+          `${reconciliationResult.summary.total_items} items, ` +
+          `score=${reconciliationResult.summary.score}, ` +
+          `full_agreement=${reconciliationResult.summary.full_agreement_pct}%, ` +
+          `conflicts=${reconciliationResult.summary.conflicts}`,
+        )
+
+        // Replace extractedSets with reconciled output for downstream processing
+        extractedSets = reconciliationResult.hardware_sets.map(rs => ({
+          set_id: rs.set_id,
+          heading: String(rs.heading.value),
+          heading_doors: String(rs.door_numbers.value).split(', ').filter(Boolean),
+          qty_convention: (['per_opening', 'aggregate', 'unknown'].includes(String(rs.qty_convention.value))
+            ? String(rs.qty_convention.value) as 'per_opening' | 'aggregate' | 'unknown'
+            : 'unknown'),
+          items: rs.items.map(ri => ({
+            name: String(ri.name.value),
+            qty: typeof ri.qty.value === 'number' ? ri.qty.value : Number(ri.qty.value) || 0,
+            manufacturer: String(ri.manufacturer.value),
+            model: String(ri.model.value),
+            finish: String(ri.finish.value),
+          })),
+        }))
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        console.error(`[job-orchestrator] Job ${jobId}: reconciliation failed (non-fatal): ${msg}`)
+      }
+    }
+
     await updateJob(adminSupabase, jobId, {
       status: 'triaging',
       progress: 70,
-      status_message: `Extraction complete: ${extractedDoors.length} doors, ${extractedSets.length} sets${extractionIsPartial ? ` (${failedChunks.length} chunk(s) failed)` : ''}${visionResult ? ` + ${visionResult.hardware_sets.length} vision sets` : ''}. Running triage...`,
+      status_message: `Extraction complete: ${extractedDoors.length} doors, ${extractedSets.length} sets${extractionIsPartial ? ` (${failedChunks.length} chunk(s) failed)` : ''}${visionResult ? ` + ${visionResult.hardware_sets.length} vision sets` : ''}${reconciliationResult ? ` (reconciled, score=${reconciliationResult.summary.score})` : ''}. Running triage...`,
       extraction_summary: {
         doors_extracted: extractedDoors.length,
         sets_extracted: extractedSets.length,
@@ -645,6 +689,15 @@ export async function POST(
           pages_skipped: visionResult.pages_skipped,
           processing_time_ms: visionResult.total_processing_time_ms,
           model_used: visionResult.model_used,
+        } : undefined,
+        reconciliation: reconciliationResult ? {
+          total_sets: reconciliationResult.summary.total_sets,
+          total_items: reconciliationResult.summary.total_items,
+          full_agreement_pct: reconciliationResult.summary.full_agreement_pct,
+          conflicts: reconciliationResult.summary.conflicts,
+          single_source_fields: reconciliationResult.summary.single_source_fields,
+          score: reconciliationResult.summary.score,
+          overall_confidence: reconciliationResult.summary.overall_confidence,
         } : undefined,
       },
     })
