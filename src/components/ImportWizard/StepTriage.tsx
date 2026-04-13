@@ -256,6 +256,9 @@ export default function StepTriage({
       setPhase("punchy_review");
       setStatus("Punchy is reviewing your extraction.");
     } catch (err) {
+      // Reset phase so the spinner stops — without this, the UI hangs
+      // forever on "extracting" when 0 doors are returned.
+      setPhase("done");
       onError(err instanceof Error ? err.message : "Extraction failed");
     }
   }, [file, pdfStoragePath, projectId, columnMappings, classifyResult, onError]);

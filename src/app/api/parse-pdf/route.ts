@@ -108,6 +108,9 @@ async function extractFromPDF(base64: string, filteredPdfBase64?: string, userCo
   // ==========================================
   // Punchy Checkpoint 2: Post-Extraction Review
   // ==========================================
+  // Pass extracted set IDs so Punchy knows the full set context (mirrors chunk route)
+  const knownSetIds = (pdfplumberResult?.hardware_sets ?? []).map(s => s.set_id)
+
   const corrections = await callPunchyPostExtraction(client, reviewPdf, pdfplumberResult ?? {
     success: false,
     openings: [],
@@ -118,7 +121,7 @@ async function extractFromPDF(base64: string, filteredPdfBase64?: string, userCo
     hw_sets_found: 0,
     method: 'none',
     error: 'pdfplumber failed',
-  }, undefined, { projectId })
+  }, knownSetIds, { projectId })
 
   if (corrections.notes) {
     punchyObservations.push({

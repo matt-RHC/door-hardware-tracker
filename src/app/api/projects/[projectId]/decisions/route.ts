@@ -20,6 +20,17 @@ export async function GET(
 
     const { projectId } = await params
 
+    // Verify project membership
+    const { data: membership } = await supabase
+      .from('project_members')
+      .select('id')
+      .eq('project_id', projectId)
+      .eq('user_id', user.id)
+      .maybeSingle()
+    if (!membership) {
+      return NextResponse.json({ error: 'Not a project member' }, { status: 403 })
+    }
+
     const { data, error } = await supabase
       .from('extraction_decisions')
       .select('*')
