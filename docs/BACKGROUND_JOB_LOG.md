@@ -72,3 +72,15 @@ Tracks decisions, issues, and deviations for the background extraction job featu
 
 - `src/components/ImportWizard/types.ts` — Added `JobWizardStep` enum, `JobStatus`, `JobStatusResponse`, `JobResultsResponse` types
 - `src/components/ImportWizard/ImportWizard.tsx` — Added job wizard flow with feature flag gate, `JobStepIndicator`, job flow callbacks
+
+---
+
+## Security Hardening — P0 Fixes (2026-04-13)
+
+### Decisions
+
+1. **Storage RLS project scoping (§7.1)**: Storage bucket policies for `attachments` and `submittals` previously only checked `auth.role() = 'authenticated'`, allowing any authenticated user to read/modify/delete files from any project. Migration 020 drops all old policies and replaces them with project-scoped policies that extract the `project_id` from the first path segment (`storage.foldername(name)[1]`) and verify membership via `project_members`. Uses `(select auth.uid())` for single-evaluation per query.
+
+2. **Internal auth header swap (§7.2)**: Fire-and-forget calls from `/api/jobs` and `/api/cron/process-jobs` to `/api/jobs/[id]/run` previously sent `SUPABASE_SERVICE_ROLE_KEY` as an `x-service-role` header — if the URL were misconfigured, the key would leak to an unintended recipient. Replaced with `x-internal-secret` header carrying `CRON_SECRET` (a lower-privilege secret that already existed for cron auth). The run route still creates its own admin Supabase client internally via `createAdminSupabaseClient()`, so DB access is unaffected.
+
+3. **Python default-deny (§7.3)**: The `require_internal_token()` functions in `classify-pages.py`, `detect-mapping.py`, and `extract-tables.py` previously returned `True` (allow) when `PYTHON_INTERNAL_SECRET` was unset, meaning a misconfigured deployment would serve endpoints without authentication. Changed to return 401 with `{"error": "Internal secret not configured"}` when the env var is missing — fail-closed instead of fail-open.

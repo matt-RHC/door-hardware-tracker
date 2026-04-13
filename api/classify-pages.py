@@ -39,17 +39,22 @@ def require_internal_token(request_handler) -> bool:
     Returns True if authorized. If not authorized, sends a 401 response
     and returns False — caller should return immediately.
 
-    If PYTHON_INTERNAL_SECRET is not set, the request is allowed but a
-    warning is logged, supporting a zero-downtime rollout.
+    If PYTHON_INTERNAL_SECRET is not set, the request is rejected with 401
+    to prevent unauthenticated access in misconfigured environments.
     """
     expected = os.environ.get("PYTHON_INTERNAL_SECRET", "") or ""
     if not expected:
-        logger.warning(
-            "PYTHON_INTERNAL_SECRET is not set — endpoint is accepting "
-            "unauthenticated requests. Configure the env var in Vercel "
-            "to enable auth."
+        logger.error(
+            "PYTHON_INTERNAL_SECRET is not set — rejecting request. "
+            "Configure the env var in Vercel to enable this endpoint."
         )
-        return True
+        body = json.dumps({"error": "Internal secret not configured"}).encode()
+        request_handler.send_response(401)
+        request_handler.send_header("Content-Type", "application/json")
+        request_handler.send_header("Content-Length", str(len(body)))
+        request_handler.end_headers()
+        request_handler.wfile.write(body)
+        return False
 
     provided = request_handler.headers.get("X-Internal-Token", "") or ""
     if not hmac.compare_digest(expected, provided):
