@@ -454,6 +454,92 @@ describe('normalizeQuantities — category-aware division', () => {
     expect(sets[0].items[0].qty).toBe(2)
     expect(sets[0].items[0].qty_source).toBeUndefined()
   })
+
+  // === PATH 1: Python-annotated needs_division ===
+
+  it('PATH 1: trusts Python qty_door_count for needs_division items (clean division)', () => {
+    // This is the primary path introduced in the 2026-04-13 overhaul.
+    // Python sets qty_source='needs_division' and qty_door_count=12 (leaf count
+    // for 6 pair doors). TS trusts that divisor and performs the division.
+    //
+    // Real-world case: 5BB1 HW 4 1/2 x 4 1/2 NRP catalog-number names that
+    // neither Python nor TS taxonomy can classify — Python falls back to the
+    // heading count and marks needs_division so TS does the actual math.
+    const sets = [makeSet('DH_PATH1_CLEAN', [
+      { name: '5BB1 HW 4 1/2 x 4 1/2 NRP', qty: 36, qty_source: 'needs_division' },
+    ], { heading_leaf_count: 12, heading_door_count: 6 })]
+    // Manually set qty_door_count on the item (Python would set this)
+    sets[0].items[0].qty_door_count = 12
+    const doors = Array.from({ length: 6 }, (_, i) => makeDoor(`P1-${i + 1}`, 'DH_PATH1_CLEAN'))
+
+    normalizeQuantities(sets, doors)
+
+    // 36 ÷ 12 = 3 exactly → 'divided'
+    expect(sets[0].items[0].qty).toBe(3)
+    expect(sets[0].items[0].qty_total).toBe(36)
+    expect(sets[0].items[0].qty_door_count).toBe(12)
+    expect(sets[0].items[0].qty_source).toBe('divided')
+  })
+
+  it('PATH 1: rounds and flags needs_division items when result is non-integer', () => {
+    // 42 hinges, Python says divisor=12 (6 pair doors × 2 leaves).
+    // 42/12 = 3.5 → rounds to 4, flagged.
+    const sets = [makeSet('DH_PATH1_FLAG', [
+      { name: '5BB1 HW 4 1/2 x 4 1/2 NRP', qty: 42, qty_source: 'needs_division' },
+    ], { heading_leaf_count: 12, heading_door_count: 6 })]
+    sets[0].items[0].qty_door_count = 12
+    const doors = Array.from({ length: 6 }, (_, i) => makeDoor(`P1F-${i + 1}`, 'DH_PATH1_FLAG'))
+
+    normalizeQuantities(sets, doors)
+
+    expect(sets[0].items[0].qty).toBe(4)  // Math.round(3.5) = 4
+    expect(sets[0].items[0].qty_total).toBe(42)
+    expect(sets[0].items[0].qty_source).toBe('flagged')
+  })
+
+  it('PATH 3: sets qty=1 for rhr_lhr_pair items (RH/LH variant)', () => {
+    // Python detected both RH and LH variants of the same item in one set.
+    // Each door gets exactly ONE hand — qty should be 1 per variant.
+    const sets = [makeSet('DH_RHR', [
+      { name: 'Lockset RHR', qty: 3, qty_source: 'rhr_lhr_pair' },
+    ], { heading_door_count: 3 })]
+    const doors = [makeDoor('R1', 'DH_RHR'), makeDoor('R2', 'DH_RHR'), makeDoor('R3', 'DH_RHR')]
+
+    normalizeQuantities(sets, doors)
+
+    expect(sets[0].items[0].qty).toBe(1)
+    expect(sets[0].items[0].qty_source).toBe('divided')
+  })
+
+  it('PATH 4: needs_review items become flagged without qty change', () => {
+    // Python flagged a closer alongside an auto-operator — possibly redundant.
+    // TS promotes it to 'flagged' for Punchy CP3 and the user.
+    const sets = [makeSet('DH_REVIEW', [
+      { name: 'Closer', qty: 6, qty_source: 'needs_review' },
+    ], { heading_door_count: 3 })]
+    const doors = [makeDoor('NR1', 'DH_REVIEW'), makeDoor('NR2', 'DH_REVIEW'), makeDoor('NR3', 'DH_REVIEW')]
+
+    normalizeQuantities(sets, doors)
+
+    // qty stays at 6 — we don't divide needs_review items. Flag, don't mutate.
+    expect(sets[0].items[0].qty).toBe(6)
+    expect(sets[0].items[0].qty_source).toBe('flagged')
+  })
+
+  it('PATH 2: caps needs_cap items at category max (no door count available)', () => {
+    // Single-door set with implausibly high qty on a closer (pdf total without count).
+    // Category max for per_opening is 2. Capped to 2.
+    const sets = [makeSet('DH_CAP', [
+      { name: 'Closer LCN 4040XP', qty: 12, qty_source: 'needs_cap' },
+    ], { heading_door_count: 1 })]
+    const doors = [makeDoor('C1', 'DH_CAP')]
+
+    normalizeQuantities(sets, doors)
+
+    expect(sets[0].items[0].qty).toBe(2)  // MIN(12, MAX_QTY.per_opening=2) = 2
+    expect(sets[0].items[0].qty_total).toBe(12)
+    expect(sets[0].items[0].qty_source).toBe('capped')
+  })
 })
 
 // ─── normalizeDoorNumber ───

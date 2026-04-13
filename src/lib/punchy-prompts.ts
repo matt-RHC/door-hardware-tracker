@@ -157,6 +157,29 @@ If everything looks correctly mapped, return: {"unmapped_fields": [], "mapping_i
 
 // ── Checkpoint 2: Post-Extraction Review ────────────────────────
 
+/**
+ * IMPORTANT: This prompt runs BEFORE normalizeQuantities() divides anything.
+ *
+ * The quantities Punchy sees in CP2 are RAW PDF totals (the exact numbers
+ * that appeared in the PDF, e.g. "42" for hinges across 6 pair doors, "6"
+ * for closers across 6 doors). Python annotated each item with:
+ *   qty_total       = the raw PDF number
+ *   qty_door_count  = Python's recommended divisor (how many doors/leaves this total covers)
+ *   qty_source      = 'needs_division' | 'needs_cap' | 'needs_review' | 'rhr_lhr_pair' | 'parsed'
+ *
+ * Punchy's role here is to validate the EXTRACTION (were the numbers read
+ * correctly from the PDF?) using domain expertise:
+ *   - Is 42 hinges plausible for 6 pair doors? (Yes: 3-4 per leaf × 12 leaves)
+ *   - Is the door count in heading_door_count correct for this set?
+ *   - Are any items missing that should be there?
+ *
+ * If Punchy changes a qty, it should set qty_source='llm_override', which
+ * prevents normalizeQuantities() from re-dividing it. Punchy's corrected
+ * value is treated as a PER-OPENING value (already final).
+ *
+ * normalizeQuantities() runs AFTER CP2 and will divide items per Python's
+ * qty_door_count annotation. Do not pre-divide values in CP2 corrections.
+ */
 export function getPostExtractionReviewPrompt(goldenSample?: {
   set_id: string
   items: Array<{ qty: number; name: string; manufacturer?: string; model?: string; finish?: string }>
@@ -206,8 +229,12 @@ Return valid JSON with corrections. Every correction MUST include a confidence l
 
 CRITICAL RULES:
 - Only report REAL errors you can see in the PDF. Do not hallucinate corrections.
-- DO NOT "fix" item quantities. They have ALREADY been normalized from PDF totals to per-opening values by dividing by the number of doors in each set. If the PDF shows "8" for closers across 8 doors, the correct per-opening qty is 1. Do NOT change it back to 8.
-- Focus on: missing items/doors, wrong set assignments, misread text.
+- QUANTITIES ARE RAW PDF TOTALS. They have NOT been divided yet. Use your domain expertise to validate them:
+    * Each item now includes qty_total (the raw PDF number), qty_door_count (Python's recommended divisor — how many doors/leaves this total spans), and qty_source (Python's confidence).
+    * Example: "42 hinges" for a set with heading_door_count=6, heading_leaf_count=12 → Python will divide by 12 leaves → 3.5 per leaf. If you see this, confirm or correct: are there 6 pair doors with 3 standard + 1 electric transfer hinge per leaf? That would be 4 × 12 = 48, not 42. Flag the discrepancy if so.
+    * If qty_door_count looks wrong compared to the PDF heading, report it as items_to_fix with field='qty_door_count'.
+    * If a qty was clearly misread (e.g., PDF shows "6" but qty=9), fix it. Set qty_source='llm_override' in your correction so normalizeQuantities() does not re-divide your corrected value.
+- Focus on: missing items/doors, wrong set assignments, misread text, wrong door counts.
 - Do NOT correct formatting differences (e.g. "HM" vs "Hollow Metal" are both fine).
 - FIELD SPLITTING: The name field should contain ONLY the hardware category name (e.g., "Closer", "Hinges", "Exit Device"). If an item's name contains model numbers, finish codes, or manufacturer abbreviations, report it as items_to_fix.
 - If pdfplumber found VERY FEW doors but the PDF clearly has more, extract the missing doors from the PDF. This is common with schedule-format PDFs where doors are listed inline in heading blocks rather than in a separate table.

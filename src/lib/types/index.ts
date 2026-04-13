@@ -22,6 +22,34 @@ export interface DoorEntry {
   leaf_count?: number
 }
 
+/**
+ * qty_source values form the contract between Python, TS, Punchy, and the DB.
+ *
+ * Values set by Python (extract-tables.py normalize_quantities):
+ *   'parsed'         — raw PDF value, plausibly already per-opening, no action needed
+ *   'needs_division' — Python recommends dividing by qty_door_count; TS must act
+ *   'needs_cap'      — single-door set, qty exceeds category max; TS applies cap
+ *   'needs_review'   — auto-operator + closer conflict; ambiguous, show user
+ *   'rhr_lhr_pair'   — both RH and LH variants present; TS should set qty=1 each
+ *
+ * Values set by TS normalizeQuantities() (the single authoritative division pass):
+ *   'divided'        — TS divided the raw PDF total; qty is now per-opening/per-leaf
+ *   'flagged'        — TS divided but result was non-integer (rounded); needs user review
+ *   'capped'         — TS applied category max cap on a single-door set
+ *
+ * Values set by Punchy / user interactions (NEVER re-normalized after this point):
+ *   'llm_override'   — Punchy CP2 or CP3 explicitly corrected this qty
+ *   'auto_corrected' — PunchyReview UI auto-applied a high-confidence correction
+ *   'deep_extract'   — Claude vision pulled this qty from a targeted PDF region
+ *   'region_extract' — same as deep_extract (older label)
+ *   'propagated'     — apply-to-all copy of an already-normalized qty
+ *   'reverted'       — user manually reverted an auto-correction
+ *   'manual_placeholder' — triage-time placeholder, user will edit
+ *
+ * NEVER_RENORMALIZE (in parse-pdf-helpers.ts) contains all terminal values.
+ * normalizeQuantities() must skip any item whose qty_source is terminal.
+ */
+
 /** A single hardware item within a hardware set. */
 export interface ExtractedHardwareItem {
   qty: number
