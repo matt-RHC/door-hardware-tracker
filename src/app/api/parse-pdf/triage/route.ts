@@ -37,6 +37,7 @@ interface TriageResponse {
   }
   triage_error?: boolean
   triage_error_message?: string
+  retryable?: boolean
 }
 
 // --- System prompt ---
@@ -64,6 +65,53 @@ YOUR TASK: Given a list of candidate door entries extracted from a PDF, classify
 - "reject" — a product code, model number, finish code, or extraction artifact
 
 Return JSON only. No explanation outside the JSON.`
+
+// --- Retry helpers ---
+
+/** Check if an error is retryable (overloaded or rate-limited). */
+function isRetryableError(err: unknown): boolean {
+  if (err && typeof err === 'object') {
+    // Anthropic SDK errors have a status property
+    const status = (err as Record<string, unknown>).status
+    if (status === 429 || status === 529) return true
+    // Check error type/message for overloaded_error
+    const message = (err as Record<string, unknown>).message
+    if (typeof message === 'string' && (
+      message.includes('overloaded') || message.includes('rate_limit') || message.includes('529')
+    )) return true
+    // Check nested error object (Anthropic SDK wraps errors)
+    const errorObj = (err as Record<string, unknown>).error
+    if (errorObj && typeof errorObj === 'object') {
+      const errorType = (errorObj as Record<string, unknown>).type
+      if (errorType === 'overloaded_error') return true
+    }
+  }
+  return false
+}
+
+/** Extract a clean, user-facing error message from an Anthropic SDK error. */
+function cleanTriageErrorMessage(err: unknown): string {
+  if (err && typeof err === 'object') {
+    const status = (err as Record<string, unknown>).status
+    const errorObj = (err as Record<string, unknown>).error
+    const errorType = errorObj && typeof errorObj === 'object'
+      ? (errorObj as Record<string, unknown>).type
+      : undefined
+
+    if (status === 529 || errorType === 'overloaded_error') {
+      return 'The AI classification service is temporarily busy. All doors have been accepted for manual review.'
+    }
+    if (status === 429) {
+      return 'Rate limit reached. All doors have been accepted for manual review.'
+    }
+  }
+  return 'Classification encountered an error. All doors have been accepted for manual review.'
+}
+
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
+
+// Application-level retry delays (seconds) AFTER the SDK's internal retries (4x) exhaust.
+const APP_RETRY_DELAYS_MS = [30_000, 60_000] // 30s, then 60s
 
 // --- POST handler ---
 
@@ -141,42 +189,70 @@ ${candidateSummary}`
       text: userPrompt,
     })
 
-    // Call Claude with streaming
+    // Call Claude with streaming + application-level retry for transient errors.
+    // The SDK already retries 4x internally with backoff. If that's not enough
+    // (overloaded_error / 529), we wait 30s then 60s between additional attempts.
     const client = createAnthropicClient()
     let classifications: TriageClassification[] = []
 
-    try {
-      const stream = client.messages.stream({
-        model: 'claude-sonnet-4-20250514',
-        max_tokens: 8192,
-        system: [{ type: 'text', text: TRIAGE_SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
-        messages: [{ role: 'user', content: contentBlocks }],
-      })
+    let lastError: unknown = null
+    const maxAttempts = 1 + APP_RETRY_DELAYS_MS.length // 1 initial + 2 retries
 
-      const finalMessage = await stream.finalMessage()
-      const textBlock = finalMessage.content.find((b) => b.type === 'text')
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      try {
+        const stream = client.messages.stream({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 8192,
+          system: [{ type: 'text', text: TRIAGE_SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
+          messages: [{ role: 'user', content: contentBlocks }],
+        })
 
-      if (textBlock?.type === 'text') {
-        let text = textBlock.text.trim()
-        // Strip markdown code fences if present
-        if (text.startsWith('```')) {
-          text = text.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '')
+        const finalMessage = await stream.finalMessage()
+        const textBlock = finalMessage.content.find((b) => b.type === 'text')
+
+        if (textBlock?.type === 'text') {
+          let text = textBlock.text.trim()
+          // Strip markdown code fences if present
+          if (text.startsWith('```')) {
+            text = text.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '')
+          }
+
+          const parsed = JSON.parse(text)
+          // Handle both array and { classifications: [...] } response formats
+          classifications = Array.isArray(parsed) ? parsed : (parsed?.classifications ?? [])
         }
 
-        const parsed = JSON.parse(text)
-        // Handle both array and { classifications: [...] } response formats
-        classifications = Array.isArray(parsed) ? parsed : (parsed?.classifications ?? [])
-      }
+        // Log cache usage if available
+        const usage = finalMessage.usage as unknown as Record<string, unknown>
+        if (usage?.cache_creation_input_tokens || usage?.cache_read_input_tokens) {
+          console.debug(`Triage cache: created=${usage.cache_creation_input_tokens ?? 0}, read=${usage.cache_read_input_tokens ?? 0}`)
+        }
 
-      // Log cache usage if available
-      const usage = finalMessage.usage as unknown as Record<string, unknown>
-      if (usage?.cache_creation_input_tokens || usage?.cache_read_input_tokens) {
-        console.debug(`Triage cache: created=${usage.cache_creation_input_tokens ?? 0}, read=${usage.cache_read_input_tokens ?? 0}`)
+        // Success — break out of retry loop
+        lastError = null
+        break
+      } catch (llmError) {
+        lastError = llmError
+
+        // Only retry on transient errors (overloaded / rate limit)
+        if (!isRetryableError(llmError) || attempt >= maxAttempts - 1) {
+          break
+        }
+
+        const delayMs = APP_RETRY_DELAYS_MS[attempt]
+        console.warn(
+          `Triage LLM attempt ${attempt + 1}/${maxAttempts} failed (retryable), ` +
+          `waiting ${delayMs / 1000}s before retry:`,
+          llmError instanceof Error ? llmError.message : String(llmError)
+        )
+        await sleep(delayMs)
       }
-    } catch (llmError) {
-      // Fail-open: if Claude call fails, return all candidates as 'door'
+    }
+
+    if (lastError) {
+      // All attempts exhausted — fail-open: return all candidates as 'door'
       // but signal the error so the frontend can warn the user
-      console.error('Triage LLM call failed, returning all as door:', llmError)
+      console.error('Triage LLM call failed after all retries, returning all as door:', lastError)
       classifications = candidates.map((c) => ({
         door_number: c.door_number,
         class: 'door' as const,
@@ -184,18 +260,18 @@ ${candidateSummary}`
         reason: 'triage_failed',
       }))
 
-      // Build response early with error fields and return
       const errorStats = {
         total: candidates.length,
         doors: candidates.length,
         by_others: 0,
         rejected: 0,
       }
-      const errorResponse: TriageResponse = {
+      const errorResponse: TriageResponse & { retryable: boolean } = {
         classifications,
         stats: errorStats,
         triage_error: true,
-        triage_error_message: `AI triage failed: ${llmError instanceof Error ? llmError.message : 'Unknown error'}. All candidates auto-accepted as doors — review carefully.`,
+        triage_error_message: cleanTriageErrorMessage(lastError),
+        retryable: isRetryableError(lastError),
       }
       return NextResponse.json(errorResponse)
     }

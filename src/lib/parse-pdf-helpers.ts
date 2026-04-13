@@ -42,7 +42,7 @@ import type {
   PunchyQuantityCheck,
 } from '@/lib/types'
 import { extractJSON } from '@/lib/extractJSON'
-import { HARDWARE_TAXONOMY, type InstallScope } from '@/lib/hardware-taxonomy'
+import { HARDWARE_TAXONOMY, classifyItem, type InstallScope } from '@/lib/hardware-taxonomy'
 import { createAdminSupabaseClient } from '@/lib/supabase/admin'
 
 // --- Punchy observation logging (fire-and-forget) ---
@@ -1364,6 +1364,42 @@ export function normalizeQuantities(
               item.qty_door_count = altDivisor
               item.qty_source = 'flagged'
             }
+          }
+        }
+      }
+    }
+
+    // ── Hinge consolidation: subtract electric hinge qty from standard hinges ──
+    //
+    // PDFs often list "4 Hinges" (total) and separately "1 Electric Hinge" for
+    // the same door. After normalization both become per-opening/per-leaf values.
+    // Without consolidation the UI shows "4 Hinges + 1 Electric Hinge = 5 total"
+    // which is wrong — the electric hinge REPLACES one standard hinge position.
+    // Correct: 3 standard + 1 electric = 4 total per leaf.
+    //
+    // This step detects sets that have both standard hinges (category 'hinges')
+    // and electric hinges (category 'electric_hinge') and adjusts the standard
+    // hinge qty by subtracting the electric count. We only do this when the
+    // standard hinge qty is > the electric hinge qty (to avoid going to zero
+    // or negative) and when the subtraction produces a DHI-plausible result.
+    const electricItems = (set.items ?? []).filter(
+      item => classifyItem(item.name) === 'electric_hinge'
+    )
+    if (electricItems.length > 0) {
+      const totalElectricQty = electricItems.reduce((sum, e) => sum + (e.qty || 0), 0)
+      const standardHinges = (set.items ?? []).filter(
+        item => classifyItem(item.name) === 'hinges'
+      )
+      for (const hinge of standardHinges) {
+        if (hinge.qty > totalElectricQty && totalElectricQty > 0) {
+          const adjusted = hinge.qty - totalElectricQty
+          // Only adjust if the result is DHI-plausible (>= 1 per leaf)
+          if (adjusted >= 1) {
+            console.debug(
+              `[qty-norm] ${set.set_id}: hinge consolidation — ` +
+              `"${hinge.name}" qty ${hinge.qty} − ${totalElectricQty} electric = ${adjusted} standard`
+            )
+            hinge.qty = adjusted
           }
         }
       }
