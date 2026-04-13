@@ -148,7 +148,7 @@ export default function PDFPageBrowser({
             { label: "Hardware Heading", color: "var(--green)" },
             { label: "Hardware Subheading", color: "var(--purple)" },
             { label: "Location", color: "var(--orange)" },
-            { label: "Door Type", color: "var(--cyan)" },
+            { label: "Door Type", color: "var(--blue)" },
             { label: "Frame Type", color: "var(--red)" },
             { label: "Fire Rating", color: "var(--red)" },
             { label: "Hand / Swing", color: "var(--yellow)" },
@@ -222,9 +222,9 @@ export default function PDFPageBrowser({
               className="relative cursor-pointer rounded-lg overflow-hidden transition-all"
               style={{
                 border: isSelected
-                  ? "2px solid var(--cyan)"
+                  ? "2px solid var(--blue)"
                   : "2px solid var(--tint-strong)",
-                boxShadow: isSelected ? "0 0 16px var(--cyan-dim)" : "none",
+                boxShadow: isSelected ? "0 0 16px var(--blue-dim)" : "none",
                 opacity: loading ? 0.6 : 1,
                 aspectRatio: "8.5/11",
                 backgroundColor: "var(--background)",

@@ -121,7 +121,7 @@ classify-pages.py → detect-mapping.py → ColumnMapperWizard (user)
 
 ## UI / UX Notes
 
-- **Theme:** Borderlands industrial — cel-shaded, glow-cards, corner-brackets, Orbitron font, cyan accent (#5ac8fa)
+- **Theme:** Borderlands industrial — cel-shaded, glow-cards, corner-brackets, Orbitron font. Primary accent is Steel Blue (`var(--blue)` = `#4BA3E3` dark / `#1B6EB5` light). **Light theme is the product default** (optimized for outdoor/field sunlight); dark theme is opt-in via the Navbar toggle. The legacy `--cyan` token has been retired — use `var(--blue)` or Tailwind `text-accent`/`bg-accent` in new code. OSHA semantic tokens (`--red` danger, `--orange` warning, `--yellow` caution, `--green` success) must NOT be borrowed for routing or category identity — use `--purple`, `--bench`, or `--field` for non-alarm accents. See `src/app/globals.css` for the complete token list and the `color-mix()` glow token recipe (`--glow-blue`, `--glow-green`, etc.).
 - **Progress loader:** Status messages must be short and ambient (under ~40 chars). Never dump raw data (set IDs, door numbers) into the visual. Detailed info goes in console or collapsible details.
 - **Apply-to-all pattern:** When user edits a hardware item, check if matching items exist across other openings. Offer "Apply to all N" / "Just this one" modal.
 

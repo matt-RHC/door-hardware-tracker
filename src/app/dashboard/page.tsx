@@ -267,7 +267,7 @@ export default function DashboardPage() {
                   router.push(`/project/${project.id}`);
                 }}
                 onMouseEnter={() => playHover()}
-                className="glow-card glow-card--cyan cursor-pointer p-5 relative group"
+                className="glow-card glow-card--blue cursor-pointer p-5 relative group"
               >
                 {/* Actions menu */}
                 <div

@@ -146,11 +146,6 @@ export default function PunchyReview({
     setCurrentIdx(i => Math.max(i - 1, 0));
   }, []);
 
-  const skipToEnd = useCallback(() => {
-    // Jump to the "ready" card (last one)
-    setCurrentIdx(cards.length - 1);
-  }, [cards.length]);
-
   // Count remaining required cards the user hasn't addressed yet
   const remainingRequired = useMemo(() => {
     return cards.filter((c, i) => i > currentIdx && c.required && c.kind !== 'ready').length;
@@ -455,8 +450,6 @@ export default function PunchyReview({
     cards,
     currentIdx,
     pdfPreview,
-    health,
-    hardwareSets,
     correctionsApplied,
     answers,
     sampleConfirmed,
@@ -465,14 +458,11 @@ export default function PunchyReview({
     goNext,
     goBack,
     onBack,
-    skipToEnd,
-    remainingRequired,
     setSetsExpanded,
     handleApplyCorrections,
     handleAnswerQuestion,
     handleConfirmSample,
     handleFinish,
-    onDeepExtract,
     hintVisible,
     hintInputs,
     emptySetsAttempted,
@@ -500,13 +490,15 @@ export default function PunchyReview({
 }
 
 // ── Card renderer (separate function to keep component clean) ──
+// Only props actually consumed by a switch case below are declared here.
+// Context that stays inside the parent component's closure (health,
+// hardwareSets, skipToEnd, remainingRequired, onDeepExtract) is passed
+// directly, not via ctx — trimming them keeps the prop surface honest.
 
 interface RenderContext {
   cards: PunchCardData[];
   currentIdx: number;
   pdfPreview: React.ReactNode;
-  health: ReturnType<typeof computeExtractionHealth>;
-  hardwareSets: HardwareSet[];
   correctionsApplied: boolean;
   answers: Record<string, string>;
   sampleConfirmed: boolean;
@@ -515,14 +507,11 @@ interface RenderContext {
   goNext: () => void;
   goBack: () => void;
   onBack: () => void;
-  skipToEnd: () => void;
-  remainingRequired: number;
   setSetsExpanded: (v: boolean) => void;
   handleApplyCorrections: () => void;
   handleAnswerQuestion: (id: string, answer: string, setId?: string, itemName?: string) => void;
   handleConfirmSample: () => void;
   handleFinish: () => void;
-  onDeepExtract: (opts?: { userHint?: string; targetSetIds?: string[] }) => void;
   // Empty-set per-row resolution
   hintVisible: Set<string>;
   hintInputs: Record<string, string>;
@@ -541,7 +530,6 @@ function renderCard(card: PunchCardData, ctx: RenderContext) {
   const total = ctx.cards.length;
   const current = ctx.currentIdx + 1;
   const isFirst = ctx.currentIdx === 0;
-  const isLast = ctx.currentIdx >= ctx.cards.length - 1;
 
   switch (card.kind) {
     // ── Summary Card ──

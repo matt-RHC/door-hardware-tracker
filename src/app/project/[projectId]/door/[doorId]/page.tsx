@@ -426,9 +426,9 @@ export default function DoorDetailPage() {
                       className="text-[11px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-md border"
                       style={{
                         fontFamily: "var(--font-display)",
-                        color: "var(--cyan)",
-                        background: "var(--cyan-dim)",
-                        borderColor: "var(--cyan)",
+                        color: "var(--blue)",
+                        background: "var(--blue-dim)",
+                        borderColor: "var(--blue)",
                         letterSpacing: "0.06em",
                       }}
                     >
@@ -459,9 +459,9 @@ export default function DoorDetailPage() {
                   style={{
                     fontFamily: "var(--font-display)",
                     letterSpacing: "0.06em",
-                    background: item.install_type === 'bench' ? "var(--purple-dim)" : "transparent",
-                    color: item.install_type === 'bench' ? "var(--purple)" : "var(--text-tertiary)",
-                    boxShadow: item.install_type === 'bench' ? "inset 0 0 0 1px var(--purple)" : "none",
+                    background: item.install_type === 'bench' ? "var(--bench-dim)" : "transparent",
+                    color: item.install_type === 'bench' ? "var(--bench)" : "var(--text-tertiary)",
+                    boxShadow: item.install_type === 'bench' ? "inset 0 0 0 1px var(--bench)" : "none",
                   }}
                 >
                   Bench
@@ -475,9 +475,9 @@ export default function DoorDetailPage() {
                   style={{
                     fontFamily: "var(--font-display)",
                     letterSpacing: "0.06em",
-                    background: item.install_type === 'field' ? "var(--orange-dim)" : "transparent",
-                    color: item.install_type === 'field' ? "var(--orange)" : "var(--text-tertiary)",
-                    boxShadow: item.install_type === 'field' ? "inset 0 0 0 1px var(--orange)" : "none",
+                    background: item.install_type === 'field' ? "var(--field-dim)" : "transparent",
+                    color: item.install_type === 'field' ? "var(--field)" : "var(--text-tertiary)",
+                    boxShadow: item.install_type === 'field' ? "inset 0 0 0 1px var(--field)" : "none",
                     borderLeft: "1px solid var(--border)",
                   }}
                 >
@@ -794,8 +794,8 @@ export default function DoorDetailPage() {
                 <div className="flex gap-0.5 mb-5 bg-surface rounded-lg p-1">
                   {([
                     { key: 'shared' as const, label: 'Shared', count: shared.length, color: 'var(--text-tertiary)' },
-                    { key: 'leaf1' as const, label: 'Leaf 1', count: leaf1.length, color: 'var(--cyan)' },
-                    { key: 'leaf2' as const, label: 'Leaf 2', count: leaf2.length, color: 'var(--orange)' },
+                    { key: 'leaf1' as const, label: 'Leaf 1', count: leaf1.length, color: 'var(--blue)' },
+                    { key: 'leaf2' as const, label: 'Leaf 2', count: leaf2.length, color: 'var(--purple)' },
                   ]).map((tab) => (
                     <button
                       key={tab.key}
