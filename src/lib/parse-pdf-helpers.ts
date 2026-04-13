@@ -36,6 +36,7 @@ import type {
   DoorEntry,
   ExtractedHardwareItem,
   HardwareSet,
+  PageClassification,
   PdfplumberFlaggedDoor,
   PunchyColumnReview,
   PunchyCorrections,
@@ -782,6 +783,39 @@ export type DeepExtractOutcome =
   | { ok: true; results: DeepExtractResult[] }
   | { ok: false; error: string }
 
+// ── Vision extraction types (Strategy B) ──────────────────────────
+
+export interface VisionHardwareSet {
+  set_id: string
+  heading: string
+  items: Array<{
+    name: string
+    qty: number
+    manufacturer: string
+    model: string
+    finish: string
+    category: string
+  }>
+  door_numbers: string[]
+  qty_convention: 'per_opening' | 'aggregate' | 'unknown'
+  is_pair: boolean
+  source_pages: number[]
+}
+
+export interface VisionExtractionResult {
+  hardware_sets: VisionHardwareSet[]
+  page_results: Array<{
+    pageNumber: number
+    page_type: string
+    sets_found: number
+    processing_time_ms: number
+  }>
+  total_processing_time_ms: number
+  model_used: string
+  pages_processed: number
+  pages_skipped: number
+}
+
 export async function callDeepExtraction(
   client: Anthropic,
   base64: string,
@@ -880,6 +914,270 @@ export async function callDeepExtraction(
     console.error('Deep extraction failed:', message)
     return { ok: false, error: message }
   }
+}
+
+// ── Vision extraction (Strategy B) ──────────────────────────────
+
+/** System prompt for page-by-page vision extraction. */
+export const VISION_EXTRACTION_PROMPT = `You are analyzing a door hardware submittal PDF page. Extract ALL hardware information visible on this page.
+
+For each hardware set visible:
+- Set identifier (heading number, set number, or both)
+- Hardware items with: name, quantity, manufacturer, model/catalog number, finish
+- Door assignments: which door numbers are assigned to this set
+- Whether quantities appear to be per-opening or aggregate totals
+
+Hardware categories to recognize: hinges, locksets/cylindrical locks, exit devices, closers, door stops, kick plates, protection plates, thresholds, weatherstripping, smoke seals, flush bolts, coordinators, overhead stops, magnetic holders, electric strikes, electric hinges, electric latch retraction, card readers, keypads
+
+Common manufacturer abbreviations: IVE/Ives, VD/Von Duprin, SCH/Schlage, LCN, SA/Sargent, MK/McKinney, RO/Rockwood, PE/Pemko, NGP, HAG/Hager
+
+Return valid JSON matching this schema:
+{
+  "hardware_sets": [{
+    "set_id": "string",
+    "heading": "string",
+    "items": [{
+      "name": "string",
+      "qty": number,
+      "manufacturer": "string",
+      "model": "string",
+      "finish": "string",
+      "category": "string"
+    }],
+    "door_numbers": ["string"],
+    "qty_convention": "per_opening" | "aggregate" | "unknown",
+    "is_pair": boolean
+  }],
+  "page_type": "schedule" | "opening_list" | "cut_sheet" | "cover" | "spec" | "other",
+  "continuation": boolean
+}
+
+Rules:
+- If a set continues from a previous page, set "continuation": true.
+- If no hardware sets are visible (cut sheet, cover page, etc.), return an empty "hardware_sets" array.
+- Expand manufacturer abbreviations to full names when you are confident (e.g., "IVE" → "Ives", "VD" → "Von Duprin").
+- For quantity, report exactly what you see on the page. Do not divide or normalize.
+- "category" should be one of: hinge, lockset, exit_device, closer, door_stop, kick_plate, protection_plate, threshold, weatherstripping, smoke_seal, flush_bolt, coordinator, overhead_stop, magnetic_holder, electric_strike, electric_hinge, elr, card_reader, keypad, other
+- Return ONLY valid JSON — no prose, no markdown fences.`
+
+/** Page types that should be sent to vision extraction. */
+const VISION_SCHEDULE_PAGE_TYPES = new Set([
+  'door_schedule',
+  'hardware_set',
+  'hardware_sets',
+])
+
+/**
+ * Send PDF pages to Claude's vision model for structured hardware extraction.
+ *
+ * Pages are processed in batches of `batchSize` (default 5) to stay within
+ * token limits while providing enough cross-page context for multi-page sets.
+ * Uses the Anthropic SDK's native PDF document support — no image conversion needed.
+ */
+export async function callVisionExtraction(
+  client: Anthropic,
+  pdfBase64: string,
+  pageNumbers: number[],
+  context: {
+    projectId?: string
+    knownSetIds?: string[]
+    expectedFormat?: string
+  },
+  batchSize = 5,
+): Promise<VisionExtractionResult> {
+  const MODEL = 'claude-sonnet-4-20250514'
+  const allSets: VisionHardwareSet[] = []
+  const pageResults: VisionExtractionResult['page_results'] = []
+  const totalStart = Date.now()
+  let pagesProcessed = 0
+
+  // Split page numbers into batches
+  const batches: number[][] = []
+  for (let i = 0; i < pageNumbers.length; i += batchSize) {
+    batches.push(pageNumbers.slice(i, i + batchSize))
+  }
+
+  for (const batch of batches) {
+    const batchStart = Date.now()
+
+    let contextHint = ''
+    if (context.knownSetIds && context.knownSetIds.length > 0) {
+      contextHint += `\n\nKnown set IDs from prior extraction: ${context.knownSetIds.join(', ')}. Validate your findings against these.`
+    }
+    if (context.expectedFormat) {
+      contextHint += `\nExpected document format: ${context.expectedFormat}.`
+    }
+
+    const userText = `Extract all hardware information from pages ${batch.join(', ')} of this document.${contextHint}\n\nReturn a single JSON object with the combined results from all pages in this batch.`
+
+    try {
+      const response = await client.messages.create({
+        model: MODEL,
+        max_tokens: 8192,
+        system: [
+          { type: 'text', text: VISION_EXTRACTION_PROMPT, cache_control: { type: 'ephemeral' } },
+        ],
+        messages: [
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'document',
+                source: { type: 'base64', media_type: 'application/pdf', data: pdfBase64 },
+                cache_control: { type: 'ephemeral' },
+              },
+              { type: 'text', text: userText },
+            ],
+          },
+        ],
+      })
+
+      const textBlock = response.content.find((b: { type: string }) => b.type === 'text')
+      if (!textBlock || textBlock.type !== 'text') {
+        console.warn(`[vision-extract] Batch pages ${batch.join(',')}: no text response`)
+        for (const p of batch) {
+          pageResults.push({ pageNumber: p, page_type: 'other', sets_found: 0, processing_time_ms: 0 })
+        }
+        continue
+      }
+
+      const parsed = extractJSON(textBlock.text.trim())
+      if (!parsed || typeof parsed !== 'object') {
+        console.warn(`[vision-extract] Batch pages ${batch.join(',')}: JSON parse failed`)
+        for (const p of batch) {
+          pageResults.push({ pageNumber: p, page_type: 'other', sets_found: 0, processing_time_ms: 0 })
+        }
+        continue
+      }
+
+      const batchResult = parsed as {
+        hardware_sets?: Array<{
+          set_id?: string
+          heading?: string
+          items?: Array<{
+            name?: string
+            qty?: number
+            manufacturer?: string
+            model?: string
+            finish?: string
+            category?: string
+          }>
+          door_numbers?: string[]
+          qty_convention?: string
+          is_pair?: boolean
+        }>
+        page_type?: string
+        continuation?: boolean
+      }
+
+      const batchMs = Date.now() - batchStart
+      const batchSets = batchResult.hardware_sets ?? []
+
+      for (const rawSet of batchSets) {
+        if (!rawSet.set_id) continue
+
+        const items = (rawSet.items ?? []).map(item => ({
+          name: item.name ?? '',
+          qty: typeof item.qty === 'number' && item.qty >= 1 ? item.qty : 1,
+          manufacturer: item.manufacturer ?? '',
+          model: item.model ?? '',
+          finish: item.finish ?? '',
+          category: item.category ?? 'other',
+        }))
+
+        const qtyConvention = rawSet.qty_convention === 'per_opening' || rawSet.qty_convention === 'aggregate'
+          ? rawSet.qty_convention
+          : 'unknown' as const
+
+        // Check if this set already exists (continuation from prior batch)
+        const existing = allSets.find(s => s.set_id === rawSet.set_id)
+        if (existing && batchResult.continuation) {
+          // Merge items — deduplicate by name+model
+          for (const newItem of items) {
+            const dup = existing.items.find(
+              e => e.name === newItem.name && e.model === newItem.model,
+            )
+            if (!dup) existing.items.push(newItem)
+          }
+          // Merge door numbers
+          for (const dn of rawSet.door_numbers ?? []) {
+            if (!existing.door_numbers.includes(dn)) existing.door_numbers.push(dn)
+          }
+          // Merge source pages
+          for (const p of batch) {
+            if (!existing.source_pages.includes(p)) existing.source_pages.push(p)
+          }
+        } else {
+          allSets.push({
+            set_id: rawSet.set_id,
+            heading: rawSet.heading ?? '',
+            items,
+            door_numbers: rawSet.door_numbers ?? [],
+            qty_convention: qtyConvention,
+            is_pair: rawSet.is_pair ?? false,
+            source_pages: [...batch],
+          })
+        }
+      }
+
+      // Record per-page results
+      for (const p of batch) {
+        pageResults.push({
+          pageNumber: p,
+          page_type: batchResult.page_type ?? 'schedule',
+          sets_found: batchSets.length,
+          processing_time_ms: Math.round(batchMs / batch.length),
+        })
+      }
+
+      pagesProcessed += batch.length
+
+      // Log cache usage
+      const usage = response.usage as unknown as Record<string, unknown>
+      if (usage?.cache_creation_input_tokens || usage?.cache_read_input_tokens) {
+        console.debug(
+          `[vision-extract] Batch pages ${batch.join(',')}: cache created=${usage.cache_creation_input_tokens ?? 0}, ` +
+          `read=${usage.cache_read_input_tokens ?? 0}`,
+        )
+      }
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err)
+      console.error(`[vision-extract] Batch pages ${batch.join(',')}: LLM error: ${msg}`)
+      for (const p of batch) {
+        pageResults.push({ pageNumber: p, page_type: 'other', sets_found: 0, processing_time_ms: 0 })
+      }
+    }
+  }
+
+  return {
+    hardware_sets: allSets,
+    page_results: pageResults,
+    total_processing_time_ms: Date.now() - totalStart,
+    model_used: MODEL,
+    pages_processed: pagesProcessed,
+    pages_skipped: 0,
+  }
+}
+
+/**
+ * Filter page classifications to only include schedule/hardware set pages
+ * suitable for vision extraction. Skips cut sheets, covers, specs, etc.
+ */
+export function filterSchedulePages(
+  pages: PageClassification[],
+): { schedulePages: number[]; skippedPages: number[] } {
+  const schedulePages: number[] = []
+  const skippedPages: number[] = []
+
+  for (const page of pages) {
+    if (VISION_SCHEDULE_PAGE_TYPES.has(page.page_type)) {
+      schedulePages.push(page.page_number)
+    } else {
+      skippedPages.push(page.page_number)
+    }
+  }
+
+  return { schedulePages, skippedPages }
 }
 
 /** Hardware category keywords used to prevent cross-category fuzzy matches. */

@@ -17,8 +17,11 @@ import {
   applyCorrections,
   normalizeQuantities,
   calculateExtractionConfidence,
+  callVisionExtraction,
+  filterSchedulePages,
   createAnthropicClient,
   type PdfplumberResult,
+  type VisionExtractionResult,
 } from '@/lib/parse-pdf-helpers'
 import type { ExtractionConfidence } from '@/lib/types/confidence'
 import {
@@ -570,10 +573,60 @@ export async function POST(
 
     const extractionIsPartial = failedChunks.length > 0
 
+    // ══════════════════════════════════════════════════════════════
+    // Phase 4b: Vision extraction (Strategy B) — optional
+    // Runs when the job has deep_extraction flag OR confidence
+    // scoring suggests it. Results stored alongside Strategy A for
+    // later reconciliation (Phase C).
+    // ══════════════════════════════════════════════════════════════
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const jobDeepFlag = (claimed as any).extraction_summary?.deep_extraction === true
+    const shouldRunVision = jobDeepFlag ||
+      (extractionConfidence?.suggest_deep_extraction ?? false)
+
+    let visionResult: VisionExtractionResult | null = null
+
+    if (shouldRunVision) {
+      console.log(`[job-orchestrator] Job ${jobId}: running vision extraction (Strategy B)`)
+      await updateJob(adminSupabase, jobId, {
+        progress: 65,
+        status_message: 'Running vision extraction (deep analysis)...',
+      })
+
+      try {
+        const classifyPages: PageClassification[] = classifyResult?.pages ?? []
+        const { schedulePages: visionPages } = filterSchedulePages(classifyPages)
+
+        if (visionPages.length > 0) {
+          visionResult = await callVisionExtraction(
+            anthropicClient,
+            pdfBase64,
+            visionPages,
+            {
+              projectId,
+              knownSetIds: extractedSets.map(s => s.set_id),
+              expectedFormat: 'mixed',
+            },
+          )
+
+          console.log(
+            `[job-orchestrator] Job ${jobId}: vision extraction found ` +
+            `${visionResult.hardware_sets.length} sets from ${visionResult.pages_processed} pages ` +
+            `in ${visionResult.total_processing_time_ms}ms`,
+          )
+        } else {
+          console.warn(`[job-orchestrator] Job ${jobId}: no schedule pages for vision extraction`)
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err)
+        console.error(`[job-orchestrator] Job ${jobId}: vision extraction failed (non-fatal): ${msg}`)
+      }
+    }
+
     await updateJob(adminSupabase, jobId, {
       status: 'triaging',
       progress: 70,
-      status_message: `Extraction complete: ${extractedDoors.length} doors, ${extractedSets.length} sets${extractionIsPartial ? ` (${failedChunks.length} chunk(s) failed)` : ''}. Running triage...`,
+      status_message: `Extraction complete: ${extractedDoors.length} doors, ${extractedSets.length} sets${extractionIsPartial ? ` (${failedChunks.length} chunk(s) failed)` : ''}${visionResult ? ` + ${visionResult.hardware_sets.length} vision sets` : ''}. Running triage...`,
       extraction_summary: {
         doors_extracted: extractedDoors.length,
         sets_extracted: extractedSets.length,
@@ -585,6 +638,13 @@ export async function POST(
           overall: extractionConfidence.overall,
           score: extractionConfidence.score,
           suggest_deep_extraction: extractionConfidence.suggest_deep_extraction,
+        } : undefined,
+        vision_extraction: visionResult ? {
+          sets_found: visionResult.hardware_sets.length,
+          pages_processed: visionResult.pages_processed,
+          pages_skipped: visionResult.pages_skipped,
+          processing_time_ms: visionResult.total_processing_time_ms,
+          model_used: visionResult.model_used,
         } : undefined,
       },
     })
@@ -754,6 +814,11 @@ export async function POST(
       openingsCount,
       itemsCount,
       durationMs,
+      visionExtraction: visionResult ? {
+        sets_found: visionResult.hardware_sets.length,
+        pages_processed: visionResult.pages_processed,
+        processing_time_ms: visionResult.total_processing_time_ms,
+      } : undefined,
     })
   } catch (error) {
     const durationMs = Date.now() - startTime
