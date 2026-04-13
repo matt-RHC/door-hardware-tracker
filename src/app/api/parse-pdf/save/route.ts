@@ -4,6 +4,7 @@ import { createExtractionRun, updateExtractionRun, writeStagingData, promoteExtr
 import type { StagingOpening } from '@/lib/extraction-staging'
 import type { DoorEntry, HardwareSet } from '@/lib/types'
 import { buildPerOpeningItems, buildDoorToSetMap, detectIsPair, normalizeDoorNumber } from '@/lib/parse-pdf-helpers'
+import { logActivity } from '@/lib/activity-log'
 
 // --- Shared: check for unmatched sets ---
 //
@@ -221,6 +222,21 @@ export async function POST(request: NextRequest) {
     }
 
     console.log(`Auto-promote complete: ${promoteResult.openingsPromoted} openings, ${promoteResult.itemsPromoted} items`)
+
+    // Audit trail
+    await logActivity({
+      projectId,
+      userId: user.id,
+      action: 'extraction_promoted',
+      entityType: 'project',
+      entityId: projectId,
+      details: {
+        extractionRunId: runId,
+        openingsPromoted: promoteResult.openingsPromoted,
+        itemsPromoted: promoteResult.itemsPromoted,
+        hardwareSets: hardwareSets.length,
+      },
+    })
 
     return NextResponse.json({
       success: true,
