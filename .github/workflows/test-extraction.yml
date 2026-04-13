@@ -6,11 +6,19 @@ on:
       - 'api/**'
       - 'tests/**'
       - 'requirements.txt'
+      - 'src/**'
+      - 'package.json'
+      - 'tsconfig.json'
+      - 'eslint.config.mjs'
   pull_request:
     paths:
       - 'api/**'
       - 'tests/**'
       - 'requirements.txt'
+      - 'src/**'
+      - 'package.json'
+      - 'tsconfig.json'
+      - 'eslint.config.mjs'
 
 jobs:
   test:

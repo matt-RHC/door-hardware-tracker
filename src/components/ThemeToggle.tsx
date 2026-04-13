@@ -8,6 +8,7 @@ export default function ThemeToggle() {
   useEffect(() => {
     const saved = localStorage.getItem("rh-theme") as "dark" | "light" | null;
     const initial = saved || "light";
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- sync initial theme from localStorage on mount
     setTheme(initial);
     document.documentElement.setAttribute("data-theme", initial);
   }, []);

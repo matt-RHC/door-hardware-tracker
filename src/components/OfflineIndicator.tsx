@@ -7,6 +7,7 @@ export default function OfflineIndicator() {
 
   useEffect(() => {
     // Set initial state
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- sync initial state from browser API on mount
     setIsOnline(navigator.onLine);
 
     // Listen for online/offline events
@@ -26,7 +27,7 @@ export default function OfflineIndicator() {
 
   return (
     <div className="fixed top-0 left-0 right-0 bg-warning-dim border border-warning text-warning px-4 py-3 text-center text-sm font-medium z-50">
-      You're offline. Changes will sync when connected.
+      You&apos;re offline. Changes will sync when connected.
     </div>
   );
 }

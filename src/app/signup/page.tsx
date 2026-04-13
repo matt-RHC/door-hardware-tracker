@@ -2,6 +2,7 @@
 
 import { useState, FormEvent, ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { playClick, playSuccess } from "@/lib/sounds";
 
@@ -56,15 +57,15 @@ export default function SignupPage() {
               Check your email
             </h2>
             <p className="text-secondary mb-6">
-              We've sent a confirmation link to {email}. Please check your email
+              We&apos;ve sent a confirmation link to {email}. Please check your email
               to verify your account.
             </p>
-            <a
+            <Link
               href="/"
               className="text-accent hover:text-accent/80 font-medium"
             >
               Back to login
-            </a>
+            </Link>
           </div>
         </div>
       </div>
@@ -165,12 +166,12 @@ export default function SignupPage() {
         <div className="mt-6 text-center">
           <p className="text-secondary text-sm">
             Already have an account?{" "}
-            <a
+            <Link
               href="/"
               className="text-accent hover:text-accent/80 font-medium"
             >
               Sign in
-            </a>
+            </Link>
           </p>
         </div>
       </div>

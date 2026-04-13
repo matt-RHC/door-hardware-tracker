@@ -144,7 +144,8 @@ describe('transformClassifyResponse', () => {
     expect(result.summary.door_schedule_pages).toEqual([0, 1])
     expect(result.summary.hardware_set_pages).toEqual([2])
     expect(result.summary.submittal_pages).toEqual([3])
-    expect(result.summary.other_pages).toEqual([4]) // cover goes to other
+    expect(result.summary.cover_pages).toEqual([4])
+    expect(result.summary.other_pages).toEqual([])
   })
 
   it('handles empty classification', () => {
