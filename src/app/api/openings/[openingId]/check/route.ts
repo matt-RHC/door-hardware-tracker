@@ -70,8 +70,8 @@ export async function POST(
     const now = new Date().toISOString()
 
     // Determine what to update
-    let step: WorkflowStep = body.step || 'checked'
-    let value: boolean = body.value !== undefined ? body.value : (body.checked !== undefined ? body.checked : true)
+    const step: WorkflowStep = body.step || 'checked'
+    const value: boolean = body.value !== undefined ? body.value : (body.checked !== undefined ? body.checked : true)
 
     // Build update payload based on step
     const updatePayload: Record<string, any> = {
