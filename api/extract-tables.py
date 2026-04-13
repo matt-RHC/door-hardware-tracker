@@ -2886,6 +2886,12 @@ def extract_all_hardware_sets(pdf: pdfplumber.PDF) -> list[HardwareSetDef]:
             )
             s.heading_door_count = max(s.heading_door_count, actual_doors)
 
+    # Split concatenated fields (BUG-12): MCA-format PDFs merge name,
+    # manufacturer, model, and finish into a single name field.  Run field
+    # splitting here so every caller gets properly-separated fields.
+    reference_codes = extract_reference_tables(pdf)
+    apply_field_splitting(all_sets, reference_codes)
+
     return all_sets
 
 
