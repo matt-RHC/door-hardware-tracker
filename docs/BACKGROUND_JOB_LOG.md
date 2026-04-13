@@ -114,6 +114,33 @@ Tracks decisions, issues, and deviations for the background extraction job featu
 
 ---
 
+## Data Integrity — P0 Fixes (2026-04-13)
+
+### Decisions
+
+1. **Merge-based promote replaces destructive delete (§4.1)**: `promote_extraction()` did `DELETE FROM openings WHERE project_id = ?` before inserting, cascading to destroy all `hardware_items`, `checklist_progress`, and `attachments`. New `merge_extraction()` function matches staging doors to production by `door_number` and applies a 4-way merge: unchanged doors are left untouched (preserving all checklist progress and attachments), changed doors get metadata + hardware updated (checklist progress resets due to CASCADE on hardware_items FK — acceptable since hardware changed), new doors are inserted, and removed doors are soft-deleted via `is_active = false` rather than hard-deleted. Hardware change detection uses sorted `name:qty` signature comparison.
+
+2. **Soft-delete over hard-delete for removed doors**: Added `is_active BOOLEAN DEFAULT true` to `openings`. Doors present in production but absent from a new extraction are set `is_active = false` instead of deleted. This preserves their checklist history and attachments for audit purposes. An index on `(project_id) WHERE is_active = true` supports efficient queries.
+
+3. **Old promote_extraction() retained but unused**: The original `promote_extraction()` function is not dropped — it remains in the database for rollback safety. The TypeScript client now calls `merge_extraction` instead. Can be dropped in a future migration once merge is validated in production.
+
+4. **Transactional staging writes (§2.1)**: `writeStagingData()` previously inserted staging_openings and staging_hardware_items in separate HTTP-level chunks. If openings succeeded but items failed, orphaned staging rows resulted (migration 018 was the cleanup). New `write_staging_data()` RPC accepts the full payload as JSONB and writes everything in a single database transaction — any failure rolls back all inserts.
+
+5. **Client-side set mapping preserved**: The hardware-set-to-opening matching logic (setMap, doorToSetMap, normalizeDoor) stays in the TypeScript client. The RPC receives pre-matched openings with their items array, keeping the PL/pgSQL focused on transactional writes rather than duplicating complex matching logic.
+
+6. **Save route item insertion not migrated**: The `/api/parse-pdf/save` route uses a different pattern — it calls `writeStagingData()` with empty hardwareSets then does its own item insertion via `buildPerOpeningItems()`. That route's item chunks are still non-transactional. This is a known limitation tracked separately — the save route is the legacy wizard path and will be migrated to the transactional RPC in a follow-up.
+
+### Files Added
+
+- `supabase/migrations/021_merge_extraction_and_staging_tx.sql` — `merge_extraction()`, `write_staging_data()` RPCs, `is_active` column on openings
+
+### Files Modified
+
+- `src/lib/extraction-staging.ts` — `promoteExtraction()` calls `merge_extraction`, `writeStagingData()` calls `write_staging_data` RPC
+- `src/lib/types/database.ts` — Added `merge_extraction` and `write_staging_data` function types
+
+---
+
 ## Hinge Duplication Regression + Triage Retry + Error Cleanup (2026-04-13)
 
 ### Decisions
