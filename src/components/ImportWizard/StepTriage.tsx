@@ -256,6 +256,7 @@ export default function StepTriage({
       setPhase("punchy_review");
       setStatus("Punchy is reviewing your extraction.");
     } catch (err) {
+      setPhase("done");
       onError(err instanceof Error ? err.message : "Extraction failed");
     }
   }, [file, pdfStoragePath, projectId, columnMappings, classifyResult, onError]);

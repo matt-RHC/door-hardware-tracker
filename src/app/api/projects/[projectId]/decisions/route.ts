@@ -59,6 +59,18 @@ export async function POST(
     const { data: { user }, error: authError } = await supabase.auth.getUser()
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+  // Verify project membership
+  const { data: membership } = await supabase
+    .from('project_members')
+    .select('id')
+    .eq('project_id', projectId)
+    .eq('user_id', user.id)
+    .maybeSingle()
+
+  if (!membership) {
+    return NextResponse.json({ error: 'Not a project member' }, { status: 403 })
+  }
     }
 
     const { projectId } = await params
