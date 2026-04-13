@@ -54,6 +54,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Missing projectId' }, { status: 400 })
     }
 
+    // Project membership check (finding #9): verify the authenticated user is
+    // a member of projectId before modifying any production data. Auth alone
+    // is not sufficient — an authenticated user could supply any projectId.
+    const { data: membership, error: memberError } = await supabase
+      .from('project_members')
+      .select('role')
+      .eq('project_id', projectId)
+      .eq('user_id', user.id)
+      .single()
+    if (memberError || !membership) {
+      return NextResponse.json({ error: 'Access denied' }, { status: 403 })
+    }
+
     const setMap = new Map<string, HardwareSet>()
     for (const set of hardwareSets) {
       setMap.set(set.set_id, set)
