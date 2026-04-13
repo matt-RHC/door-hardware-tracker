@@ -84,7 +84,9 @@ export default function StepMapColumns({
       const arrayBuffer = await file.arrayBuffer();
       const pdfBase64 = arrayBufferToBase64(arrayBuffer);
 
-      const resp = await fetch("/api/detect-mapping", {
+      // Proxy route: enforces Supabase auth before forwarding to the
+      // public Python endpoint with the internal shared secret.
+      const resp = await fetch("/api/parse-pdf/detect-mapping", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ pdf_base64: pdfBase64, page_index: bestPage }),

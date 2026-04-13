@@ -82,7 +82,9 @@ export default function StepUpload({
       setProgress(30);
       setStatus("Classifying pages...");
 
-      const resp = await fetch("/api/classify-pages", {
+      // Proxy route: enforces Supabase auth before forwarding to the
+      // public Python endpoint with the internal shared secret.
+      const resp = await fetch("/api/parse-pdf/classify-pages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ pdfBase64 }),
