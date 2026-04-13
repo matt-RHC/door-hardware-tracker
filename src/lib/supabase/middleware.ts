@@ -3,7 +3,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { Database } from "@/lib/types/database";
 
 export async function updateSession(request: NextRequest) {
-  let supabaseResponse = NextResponse.next({
+  const supabaseResponse = NextResponse.next({
     request,
   });
 
