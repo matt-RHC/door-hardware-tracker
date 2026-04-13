@@ -30,6 +30,9 @@ Complete and test one feature end-to-end before starting the next. No placeholde
 ### 4. Accuracy Over Automation
 Auto-detect where possible, but if uncertain, **ask the user** rather than guessing. Being interactive is fine. A few extra clicks is acceptable if it prevents bad data. We are NOT pushing AI slop.
 
+### 5. Plain-Language Summaries
+When explaining technical decisions, trade-offs, or options to the user, **always include a layman's terms summary.** The user is a construction professional, not a software engineer. Frame explanations in terms of real-world DFH workflow — "each leaf gets its own closer" beats "per_leaf install_scope vs per_opening division preference." Technical detail is fine for context, but lead with the simple version.
+
 ## Turbopack TypeScript Rules
 
 Turbopack's type checker in Next.js 16.2 is significantly stricter than `tsc --noEmit`. These patterns caused 6 consecutive failed Vercel deploys before we learned them:
