@@ -25,7 +25,7 @@ export const maxDuration = 800
 
 // --- Core extraction logic (non-chunked flow orchestrator) ---
 
-async function extractFromPDF(base64: string, filteredPdfBase64?: string, userColumnMapping?: Record<string, number> | null): Promise<{
+async function extractFromPDF(base64: string, filteredPdfBase64?: string, userColumnMapping?: Record<string, number> | null, projectId?: string): Promise<{
   hardwareSets: HardwareSet[]
   doors: DoorEntry[]
   corrections: PunchyCorrections
@@ -86,7 +86,7 @@ async function extractFromPDF(base64: string, filteredPdfBase64?: string, userCo
   // ==========================================
   if (userColumnMapping) {
     try {
-      const columnReview = await callPunchyColumnReview(client, reviewPdf, userColumnMapping)
+      const columnReview = await callPunchyColumnReview(client, reviewPdf, userColumnMapping, { projectId })
       if ((columnReview.unmapped_fields?.length ?? 0) > 0 || (columnReview.mapping_issues?.length ?? 0) > 0) {
         punchyObservations.push({
           checkpoint: 'column_mapping',
@@ -118,7 +118,7 @@ async function extractFromPDF(base64: string, filteredPdfBase64?: string, userCo
     hw_sets_found: 0,
     method: 'none',
     error: 'pdfplumber failed',
-  })
+  }, undefined, { projectId })
 
   if (corrections.notes) {
     punchyObservations.push({
@@ -143,7 +143,7 @@ async function extractFromPDF(base64: string, filteredPdfBase64?: string, userCo
   // ==========================================
   let punchyQuantityCheck: PunchyQuantityCheck | null = null
   try {
-    punchyQuantityCheck = await callPunchyQuantityCheck(client, reviewPdf, hardwareSets, allDoors)
+    punchyQuantityCheck = await callPunchyQuantityCheck(client, reviewPdf, hardwareSets, allDoors, undefined, { projectId })
     if ((punchyQuantityCheck.flags?.length ?? 0) > 0 || (punchyQuantityCheck.compliance_issues?.length ?? 0) > 0) {
       punchyObservations.push({
         checkpoint: 'quantity_check',
@@ -204,7 +204,8 @@ export async function POST(request: NextRequest) {
     const filteredPdfBase64: string | undefined = body.filteredPdfBase64 ?? undefined
 
     const userColumnMapping = body.userColumnMapping ?? null
-    const { hardwareSets, doors, corrections, punchyObservations, punchyQuantityCheck, stats } = await extractFromPDF(base64, filteredPdfBase64, userColumnMapping)
+    const projectId: string | undefined = body.projectId ?? undefined
+    const { hardwareSets, doors, corrections, punchyObservations, punchyQuantityCheck, stats } = await extractFromPDF(base64, filteredPdfBase64, userColumnMapping, projectId)
 
     return NextResponse.json({
       success: true,

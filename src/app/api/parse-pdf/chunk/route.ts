@@ -38,12 +38,13 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json()
-    const { chunkBase64, chunkIndex, totalChunks, knownSetIds, userColumnMapping } = body as {
+    const { chunkBase64, chunkIndex, totalChunks, knownSetIds, userColumnMapping, projectId } = body as {
       chunkBase64: string
       chunkIndex: number
       totalChunks: number
       knownSetIds?: string[]
       userColumnMapping?: Record<string, number> | null
+      projectId?: string
     }
 
     if (!chunkBase64) {
@@ -103,7 +104,7 @@ export async function POST(request: NextRequest) {
 
     if (chunkIndex === 0 && userColumnMapping) {
       try {
-        const columnReview = await callPunchyColumnReview(client, chunkBase64, userColumnMapping)
+        const columnReview = await callPunchyColumnReview(client, chunkBase64, userColumnMapping, { projectId })
         if ((columnReview.unmapped_fields?.length ?? 0) > 0 || (columnReview.mapping_issues?.length ?? 0) > 0) {
           punchyObservations.push({
             checkpoint: 'column_mapping',
@@ -136,7 +137,7 @@ export async function POST(request: NextRequest) {
       hw_sets_found: 0,
       method: 'none',
       error: 'pdfplumber failed',
-    }, knownSetIds)
+    }, knownSetIds, { projectId })
 
     // Track Punchy's post-extraction observations
     if (corrections.notes) {
@@ -163,7 +164,7 @@ export async function POST(request: NextRequest) {
     // ==========================================
     let quantityCheck: PunchyQuantityCheck | null = null
     try {
-      quantityCheck = await callPunchyQuantityCheck(client, chunkBase64, hardwareSets, doors)
+      quantityCheck = await callPunchyQuantityCheck(client, chunkBase64, hardwareSets, doors, undefined, { projectId })
       if ((quantityCheck.flags?.length ?? 0) > 0 || (quantityCheck.compliance_issues?.length ?? 0) > 0) {
         punchyObservations.push({
           checkpoint: 'quantity_check',
