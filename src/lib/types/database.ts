@@ -458,6 +458,47 @@ export type Database = {
           last_synced?: string | null
         }
       }
+      punchy_logs: {
+        Row: {
+          id: string
+          project_id: string | null
+          checkpoint: number
+          extraction_run_id: string | null
+          input_snapshot: Record<string, unknown> | null
+          response: Record<string, unknown> | null
+          parse_ok: boolean
+          input_tokens: number | null
+          output_tokens: number | null
+          latency_ms: number | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          project_id?: string | null
+          checkpoint: number
+          extraction_run_id?: string | null
+          input_snapshot?: Record<string, unknown> | null
+          response?: Record<string, unknown> | null
+          parse_ok?: boolean
+          input_tokens?: number | null
+          output_tokens?: number | null
+          latency_ms?: number | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          project_id?: string | null
+          checkpoint?: number
+          extraction_run_id?: string | null
+          input_snapshot?: Record<string, unknown> | null
+          response?: Record<string, unknown> | null
+          parse_ok?: boolean
+          input_tokens?: number | null
+          output_tokens?: number | null
+          latency_ms?: number | null
+          created_at?: string
+        }
+      }
       tracking_items: {
         Row: {
           id: string

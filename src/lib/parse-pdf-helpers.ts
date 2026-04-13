@@ -20,6 +20,51 @@ import type {
 } from '@/lib/types'
 import { extractJSON } from '@/lib/extractJSON'
 import { HARDWARE_TAXONOMY, type InstallScope } from '@/lib/hardware-taxonomy'
+import { createAdminSupabaseClient } from '@/lib/supabase/server'
+
+// --- Punchy observation logging (fire-and-forget) ---
+
+/**
+ * Log a Punchy checkpoint call to the `punchy_logs` table for observability.
+ * Fire-and-forget — never awaited, never throws, never blocks the parse flow.
+ */
+function logPunchyCall(opts: {
+  projectId?: string
+  extractionRunId?: string
+  checkpoint: 1 | 2 | 3
+  inputSnapshot: Record<string, unknown>
+  response: unknown
+  parseOk: boolean
+  inputTokens?: number
+  outputTokens?: number
+  latencyMs: number
+}): void {
+  try {
+    const supabase = createAdminSupabaseClient()
+    supabase
+      .from('punchy_logs')
+      .insert({
+        project_id: opts.projectId ?? null,
+        extraction_run_id: opts.extractionRunId ?? null,
+        checkpoint: opts.checkpoint,
+        input_snapshot: opts.inputSnapshot,
+        response: opts.response as Record<string, unknown>,
+        parse_ok: opts.parseOk,
+        input_tokens: opts.inputTokens ?? null,
+        output_tokens: opts.outputTokens ?? null,
+        latency_ms: opts.latencyMs,
+      })
+      .then(({ error }) => {
+        if (error) console.warn('Punchy log insert failed:', error.message)
+      })
+      .catch((err: unknown) => {
+        console.warn('Punchy log insert error:', err instanceof Error ? err.message : String(err))
+      })
+  } catch (err) {
+    // createAdminSupabaseClient can fail if env vars are missing (e.g. in tests)
+    console.warn('Punchy log skipped (no admin client):', err instanceof Error ? err.message : String(err))
+  }
+}
 
 // --- Category classification for quantity normalization ---
 
@@ -220,6 +265,7 @@ export async function callPunchyColumnReview(
   client: Anthropic,
   base64: string,
   columnMapping: Record<string, number> | null | undefined,
+  opts?: { projectId?: string; extractionRunId?: string },
 ): Promise<PunchyColumnReview> {
   const systemPrompt = getColumnMappingReviewPrompt()
 
@@ -227,6 +273,7 @@ export async function callPunchyColumnReview(
     ? JSON.stringify(columnMapping, null, 2)
     : 'No column mapping provided (auto-detection will be used)'
 
+  const startMs = Date.now()
   try {
     const response = await client.messages.create({
       model: 'claude-haiku-4-5-20251001',
@@ -249,14 +296,30 @@ export async function callPunchyColumnReview(
         },
       ],
     })
+    const latencyMs = Date.now() - startMs
 
     const textBlock = response.content.find((b: { type: string }) => b.type === 'text')
     if (!textBlock || textBlock.type !== 'text') {
+      logPunchyCall({
+        projectId: opts?.projectId, extractionRunId: opts?.extractionRunId,
+        checkpoint: 1, inputSnapshot: { columnMapping }, response: null,
+        parseOk: false, inputTokens: response.usage?.input_tokens,
+        outputTokens: response.usage?.output_tokens, latencyMs,
+      })
       return { unmapped_fields: [], mapping_issues: [], notes: 'Punchy returned no text' }
     }
 
     const text = textBlock.text.trim()
     const parsed = extractJSON(text)
+
+    logPunchyCall({
+      projectId: opts?.projectId, extractionRunId: opts?.extractionRunId,
+      checkpoint: 1, inputSnapshot: { columnMapping },
+      response: parsed ?? { raw_text: text.substring(0, 2000) },
+      parseOk: !!parsed, inputTokens: response.usage?.input_tokens,
+      outputTokens: response.usage?.output_tokens, latencyMs,
+    })
+
     if (!parsed) {
       console.warn('Punchy column review returned unparseable response:', text.substring(0, 300))
       return { unmapped_fields: [], mapping_issues: [], notes: 'Punchy returned unparseable response' }
@@ -264,6 +327,11 @@ export async function callPunchyColumnReview(
 
     return parsed as PunchyColumnReview
   } catch (err) {
+    logPunchyCall({
+      projectId: opts?.projectId, extractionRunId: opts?.extractionRunId,
+      checkpoint: 1, inputSnapshot: { columnMapping }, response: { error: err instanceof Error ? err.message : String(err) },
+      parseOk: false, latencyMs: Date.now() - startMs,
+    })
     console.error('Punchy column review failed:', err instanceof Error ? err.message : String(err))
     return { unmapped_fields: [], mapping_issues: [], notes: `Punchy column review failed: ${err instanceof Error ? err.message : String(err)}` }
   }
@@ -273,7 +341,8 @@ export async function callPunchyPostExtraction(
   client: Anthropic,
   base64: string,
   pdfplumberResult: PdfplumberResult,
-  knownSetIds?: string[]
+  knownSetIds?: string[],
+  opts?: { projectId?: string; extractionRunId?: string },
 ): Promise<PunchyCorrections> {
   const systemPrompt = getPostExtractionReviewPrompt()
 
@@ -290,6 +359,14 @@ export async function callPunchyPostExtraction(
     known_set_ids: knownSetIds ?? [],
   }, null, 2)
 
+  // Snapshot for logging (exclude full items to keep log rows reasonable)
+  const inputSnapshot = {
+    hw_sets_count: pdfplumberResult?.hardware_sets?.length ?? 0,
+    doors_count: pdfplumberResult?.openings?.length ?? 0,
+    known_set_ids: knownSetIds ?? [],
+  }
+
+  const startMs = Date.now()
   try {
     const response = await client.messages.create({
       model: 'claude-haiku-4-5-20251001',
@@ -312,14 +389,30 @@ export async function callPunchyPostExtraction(
         },
       ],
     })
+    const latencyMs = Date.now() - startMs
 
     const textBlock = response.content.find((b: { type: string }) => b.type === 'text')
     if (!textBlock || textBlock.type !== 'text') {
+      logPunchyCall({
+        projectId: opts?.projectId, extractionRunId: opts?.extractionRunId,
+        checkpoint: 2, inputSnapshot, response: null,
+        parseOk: false, inputTokens: response.usage?.input_tokens,
+        outputTokens: response.usage?.output_tokens, latencyMs,
+      })
       return { notes: 'Punchy returned no text' }
     }
 
     const text = textBlock.text.trim()
     const parsed = extractJSON(text)
+
+    logPunchyCall({
+      projectId: opts?.projectId, extractionRunId: opts?.extractionRunId,
+      checkpoint: 2, inputSnapshot,
+      response: parsed ?? { raw_text: text.substring(0, 2000) },
+      parseOk: !!parsed, inputTokens: response.usage?.input_tokens,
+      outputTokens: response.usage?.output_tokens, latencyMs,
+    })
+
     if (!parsed) {
       console.warn('Punchy post-extraction review returned unparseable response:', text.substring(0, 300))
       return { notes: 'Punchy returned unparseable response' }
@@ -327,6 +420,11 @@ export async function callPunchyPostExtraction(
 
     return parsed as PunchyCorrections
   } catch (err) {
+    logPunchyCall({
+      projectId: opts?.projectId, extractionRunId: opts?.extractionRunId,
+      checkpoint: 2, inputSnapshot, response: { error: err instanceof Error ? err.message : String(err) },
+      parseOk: false, latencyMs: Date.now() - startMs,
+    })
     console.error('Punchy post-extraction review failed:', err instanceof Error ? err.message : String(err))
     return { notes: `Punchy review failed: ${err instanceof Error ? err.message : String(err)}` }
   }
@@ -341,6 +439,7 @@ export async function callPunchyQuantityCheck(
     set_id: string
     items: Array<{ qty: number; name: string; manufacturer?: string; model?: string; finish?: string }>
   } | null,
+  opts?: { projectId?: string; extractionRunId?: string },
 ): Promise<PunchyQuantityCheck> {
   const systemPrompt = getQuantityCheckPrompt(goldenSample ?? undefined)
 
@@ -370,6 +469,14 @@ export async function callPunchyQuantityCheck(
     total_doors: doors.length,
   }, null, 2)
 
+  // Snapshot for logging (summary, not full data)
+  const inputSnapshot = {
+    hw_sets_count: hardwareSets.length,
+    total_doors: doors.length,
+    has_golden_sample: !!goldenSample,
+  }
+
+  const startMs = Date.now()
   try {
     const response = await client.messages.create({
       model: 'claude-haiku-4-5-20251001',
@@ -392,14 +499,30 @@ export async function callPunchyQuantityCheck(
         },
       ],
     })
+    const latencyMs = Date.now() - startMs
 
     const textBlock = response.content.find((b: { type: string }) => b.type === 'text')
     if (!textBlock || textBlock.type !== 'text') {
+      logPunchyCall({
+        projectId: opts?.projectId, extractionRunId: opts?.extractionRunId,
+        checkpoint: 3, inputSnapshot, response: null,
+        parseOk: false, inputTokens: response.usage?.input_tokens,
+        outputTokens: response.usage?.output_tokens, latencyMs,
+      })
       return { flags: [], compliance_issues: [], notes: 'Punchy returned no text' }
     }
 
     const text = textBlock.text.trim()
     const parsed = extractJSON(text)
+
+    logPunchyCall({
+      projectId: opts?.projectId, extractionRunId: opts?.extractionRunId,
+      checkpoint: 3, inputSnapshot,
+      response: parsed ?? { raw_text: text.substring(0, 2000) },
+      parseOk: !!parsed, inputTokens: response.usage?.input_tokens,
+      outputTokens: response.usage?.output_tokens, latencyMs,
+    })
+
     if (!parsed) {
       console.warn('Punchy quantity check returned unparseable response:', text.substring(0, 300))
       return { flags: [], compliance_issues: [], notes: 'Punchy returned unparseable response' }
@@ -415,6 +538,11 @@ export async function callPunchyQuantityCheck(
       notes: typed.notes,
     }
   } catch (err) {
+    logPunchyCall({
+      projectId: opts?.projectId, extractionRunId: opts?.extractionRunId,
+      checkpoint: 3, inputSnapshot, response: { error: err instanceof Error ? err.message : String(err) },
+      parseOk: false, latencyMs: Date.now() - startMs,
+    })
     console.error('Punchy quantity check failed:', err instanceof Error ? err.message : String(err))
     return { flags: [], compliance_issues: [], notes: `Punchy quantity check failed: ${err instanceof Error ? err.message : String(err)}` }
   }
