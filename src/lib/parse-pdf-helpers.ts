@@ -20,7 +20,7 @@ import type {
 } from '@/lib/types'
 import { extractJSON } from '@/lib/extractJSON'
 import { HARDWARE_TAXONOMY, type InstallScope } from '@/lib/hardware-taxonomy'
-import { createAdminSupabaseClient } from '@/lib/supabase/server'
+import { createAdminSupabaseClient } from '@/lib/supabase/admin'
 
 // --- Punchy observation logging (fire-and-forget) ---
 
@@ -41,8 +41,12 @@ function logPunchyCall(opts: {
 }): void {
   try {
     const supabase = createAdminSupabaseClient()
-    supabase
-      .from('punchy_logs')
+    // `punchy_logs` was added by migration 014 (PR #135) but the generated
+    // Database type in `src/lib/types/database.ts` has not been regenerated,
+    // so the typed client rejects the insert. Cast through `any` until the
+    // types can be regenerated against the live Supabase schema.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const insertPromise = (supabase.from('punchy_logs') as any)
       .insert({
         project_id: opts.projectId ?? null,
         extraction_run_id: opts.extractionRunId ?? null,
@@ -53,7 +57,8 @@ function logPunchyCall(opts: {
         input_tokens: opts.inputTokens ?? null,
         output_tokens: opts.outputTokens ?? null,
         latency_ms: opts.latencyMs,
-      })
+      }) as Promise<{ error: { message: string } | null }>
+    insertPromise
       .then(({ error }) => {
         if (error) console.warn('Punchy log insert failed:', error.message)
       })

@@ -14,7 +14,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
-import { createServerSupabaseClient, createAdminSupabaseClient } from '@/lib/supabase/server'
+import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { createAdminSupabaseClient } from '@/lib/supabase/admin'
 import { requireTrackingAdmin } from '@/lib/tracking/constants'
 import type { TrackingItem } from '@/lib/types/database'
 

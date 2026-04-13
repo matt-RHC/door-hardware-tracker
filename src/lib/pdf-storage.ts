@@ -6,7 +6,7 @@
  * Runtime fallback creates the bucket if migration 008 hasn't been applied.
  */
 
-import { createAdminSupabaseClient } from '@/lib/supabase/server'
+import { createAdminSupabaseClient } from '@/lib/supabase/admin'
 
 const BUCKET = 'submittals'
 
