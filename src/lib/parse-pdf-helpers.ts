@@ -847,7 +847,10 @@ export function applyCorrections(
             )
             if (!existing) {
               if (!set.items) set.items = []
-              set.items.push(newItem)
+              // Mark Punchy-injected items as llm_override so the save route's
+              // normalizeQuantities safety net doesn't re-divide a qty that
+              // Punchy deliberately set. Mirrors items_to_fix handling above.
+              set.items.push({ ...newItem, qty_source: 'llm_override' })
             }
           }
         }
@@ -879,7 +882,10 @@ export function applyCorrections(
           heading_door_count: newSet.heading_door_count ?? 0,
           heading_leaf_count: newSet.heading_leaf_count ?? 0,
           heading_doors: [],
-          items: newSet.items ?? [],
+          // Mark all items in Punchy-injected sets as llm_override so the
+          // save route's normalizeQuantities safety net skips re-dividing
+          // quantities that Punchy deliberately set (NEVER_RENORMALIZE).
+          items: (newSet.items ?? []).map(item => ({ ...item, qty_source: 'llm_override' })),
         })
       }
     }
