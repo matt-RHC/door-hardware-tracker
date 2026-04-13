@@ -763,19 +763,68 @@ export async function callDeepExtraction(
   }
 }
 
+/** Hardware category keywords used to prevent cross-category fuzzy matches. */
+const HARDWARE_CATEGORY_KEYWORDS = [
+  'hinge', 'closer', 'lockset', 'exit', 'stop', 'seal',
+  'threshold', 'kick', 'flush', 'coordinator', 'bolt',
+] as const
+
+/**
+ * Extract the hardware category keyword from a name, if any.
+ * Returns the first matching category keyword found, or undefined.
+ */
+function extractCategory(name: string): string | undefined {
+  const lower = name.toLowerCase()
+  return HARDWARE_CATEGORY_KEYWORDS.find(kw => lower.includes(kw))
+}
+
+/**
+ * Normalize a hardware item name for comparison: lowercase, strip trailing
+ * dimension/spec patterns, collapse whitespace, remove trailing punctuation.
+ */
+export function normalizeName(name: string): string {
+  let s = name.toLowerCase()
+  // Strip parenthesized finish codes like (US26D), (689), (SP28)
+  s = s.replace(/\s*\([^)]*\)\s*/g, ' ')
+  // Strip trailing dimension patterns: digits with quotes/fractions e.g. 83", 4-1/2" x 4-1/2"
+  s = s.replace(/[,\s]+[\d][\d\-/]*"?(\s*x\s*[\d][\d\-/]*"?)*\s*$/i, '')
+  // Strip trailing model numbers: sequences of uppercase+digits at end (after lowering)
+  // e.g. "exit device 99eo us26d" → strip "99eo us26d"
+  s = s.replace(/(\s+[a-z]*\d[a-z0-9]*)+\s*$/i, '')
+  // Strip trailing commas, periods, quotes, whitespace
+  s = s.replace(/[,."'\s]+$/, '')
+  // Collapse multiple spaces
+  s = s.replace(/\s+/g, ' ').trim()
+  return s
+}
+
+/**
+ * Compute Jaccard similarity on word tokens between two strings.
+ * Returns a value in [0, 1].
+ */
+function tokenJaccard(a: string, b: string): number {
+  const setA = new Set(a.toLowerCase().split(/\s+/).filter(Boolean))
+  const setB = new Set(b.toLowerCase().split(/\s+/).filter(Boolean))
+  if (setA.size === 0 && setB.size === 0) return 1
+  if (setA.size === 0 || setB.size === 0) return 0
+  let intersection = 0
+  for (const w of setA) if (setB.has(w)) intersection++
+  const union = new Set([...setA, ...setB]).size
+  return intersection / union
+}
+
 /**
  * Name matcher used when applying Punchy corrections to extracted items.
  *
  * Matching tiers (first hit wins):
  *   1. Exact string match
  *   2. Case-insensitive match
+ *   3. Normalized match (strip punctuation, trailing specs/dimensions)
+ *   4. Substring/contains match (min 8 chars, with category guard)
+ *   5. Best-match Jaccard scoring across all items
  *
- * Substring matching used to be a third tier, but it silently cross-matched
- * variants like "Hinge" → "Spring Hinge" / "Heavy-Duty Hinge", flipping the
- * wrong item. Case-insensitive parity with pdfplumber's extracted name is the
- * right contract: Punchy's CP2 prompt echoes the extraction back, so it has
- * no reason to diverge beyond casing. When Punchy returns a novel name we now
- * warn loudly instead of guessing.
+ * Cross-category matches are blocked: if both names contain a hardware
+ * category keyword (hinge, closer, lockset, etc.), they must be the same.
  */
 export function findItemFuzzy(
   items: ExtractedHardwareItem[],
@@ -784,7 +833,10 @@ export function findItemFuzzy(
 ): ExtractedHardwareItem | undefined {
   // 1. Exact match
   const exact = items.find(i => i.name === name)
-  if (exact) return exact
+  if (exact) {
+    console.debug(`Punchy correction match (exact): "${name}" [${context}]`)
+    return exact
+  }
 
   // 2. Case-insensitive match
   const lower = name.toLowerCase()
@@ -792,6 +844,83 @@ export function findItemFuzzy(
   if (ci) {
     console.debug(`Punchy correction fuzzy match (case): "${name}" → "${ci.name}" [${context}]`)
     return ci
+  }
+
+  // Category guard: prevents matching across different hardware types
+  const nameCategory = extractCategory(name)
+  function categoryCompatible(itemName: string): boolean {
+    const itemCategory = extractCategory(itemName)
+    // If both have a category keyword, they must match
+    if (nameCategory && itemCategory) return nameCategory === itemCategory
+    return true
+  }
+
+  // 3. Normalized match
+  const normName = normalizeName(name)
+  const normMatches = items.filter(i =>
+    categoryCompatible(i.name) && normalizeName(i.name) === normName,
+  )
+  if (normMatches.length === 1) {
+    console.debug(`Punchy correction fuzzy match (normalized): "${name}" → "${normMatches[0].name}" [${context}]`)
+    return normMatches[0]
+  }
+  if (normMatches.length > 1) {
+    // Multiple normalized matches — pick best Jaccard score
+    const scored = normMatches.map(i => ({ item: i, score: tokenJaccard(name, i.name) }))
+    scored.sort((a, b) => b.score - a.score)
+    if (scored[0].score > scored[1].score) {
+      console.debug(`Punchy correction fuzzy match (normalized+scored): "${name}" → "${scored[0].item.name}" [${context}]`)
+      return scored[0].item
+    }
+    console.warn(`Punchy correction ambiguous normalized match for "${name}" (${scored.length} tied candidates) [${context}]`)
+    return undefined
+  }
+
+  // 4. Substring/contains match (min 8 chars, and shorter string must be
+  //    ≥50% of the longer to avoid "Hinge" matching "Heavy-Duty Hinge")
+  const MIN_SUBSTRING_LEN = 8
+  if (name.length >= MIN_SUBSTRING_LEN) {
+    const substringMatches = items.filter(i => {
+      if (!categoryCompatible(i.name)) return false
+      const iLower = i.name.toLowerCase()
+      const isSubstring = iLower.includes(lower) || lower.includes(iLower)
+      if (!isSubstring) return false
+      // Length ratio guard: the shorter string must be at least 50% of the longer
+      const shorter = Math.min(lower.length, iLower.length)
+      const longer = Math.max(lower.length, iLower.length)
+      return shorter / longer >= 0.5
+    })
+    if (substringMatches.length === 1) {
+      console.debug(`Punchy correction fuzzy match (substring): "${name}" → "${substringMatches[0].name}" [${context}]`)
+      return substringMatches[0]
+    }
+    if (substringMatches.length > 1) {
+      // Pick best Jaccard score among substring matches
+      const scored = substringMatches.map(i => ({ item: i, score: tokenJaccard(name, i.name) }))
+      scored.sort((a, b) => b.score - a.score)
+      if (scored[0].score > scored[1].score) {
+        console.debug(`Punchy correction fuzzy match (substring+scored): "${name}" → "${scored[0].item.name}" [${context}]`)
+        return scored[0].item
+      }
+      console.warn(`Punchy correction ambiguous substring match for "${name}" (${scored.length} tied candidates) [${context}]`)
+      return undefined
+    }
+  }
+
+  // 5. Best-match Jaccard scoring — last resort
+  const JACCARD_THRESHOLD = 0.5
+  const allScored = items
+    .filter(i => categoryCompatible(i.name))
+    .map(i => ({ item: i, score: tokenJaccard(name, i.name) }))
+    .filter(s => s.score > JACCARD_THRESHOLD)
+  allScored.sort((a, b) => b.score - a.score)
+  if (allScored.length >= 2 && allScored[0].score === allScored[1].score) {
+    console.warn(`Punchy correction ambiguous Jaccard match for "${name}" (${allScored.length} tied candidates) [${context}]`)
+    return undefined
+  }
+  if (allScored.length >= 1) {
+    console.debug(`Punchy correction fuzzy match (jaccard=${allScored[0].score.toFixed(2)}): "${name}" → "${allScored[0].item.name}" [${context}]`)
+    return allScored[0].item
   }
 
   console.warn(`Punchy correction could not match item "${name}" [${context}]`)
