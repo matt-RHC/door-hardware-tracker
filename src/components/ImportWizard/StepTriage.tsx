@@ -667,6 +667,7 @@ export default function StepTriage({
         const raw: any = await triageResp.json();
         const triageError: boolean = raw.triage_error === true;
         const triageErrorMessage: string = raw.triage_error_message ?? '';
+        const retryable: boolean = raw.retryable === true;
         const classifications: Array<{
           door_number: string;
           class: string;
@@ -701,6 +702,7 @@ export default function StepTriage({
           flagged,
           triage_error: triageError,
           triage_error_message: triageErrorMessage || undefined,
+          retryable,
         };
         setTriageResult(result);
       }
@@ -838,17 +840,33 @@ export default function StepTriage({
               {triageResult.triage_error_message}
             </p>
           )}
-          <label className="flex items-center gap-2 ml-6 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={triageErrorAcknowledged}
-              onChange={(e) => setTriageErrorAcknowledged(e.target.checked)}
-              className="w-4 h-4 rounded border-white/20 bg-tint accent-danger"
-            />
-            <span className="text-primary text-sm">
-              I understand triage failed and will review all entries manually
-            </span>
-          </label>
+          <div className="flex items-center gap-3 ml-6">
+            {triageResult.retryable && (
+              <button
+                type="button"
+                onClick={() => {
+                  setTriageResult(null);
+                  setTriageErrorAcknowledged(false);
+                  setPhase("triaging");
+                }}
+                disabled={phase === "triaging"}
+                className="px-3 py-1.5 text-xs font-medium text-white bg-accent hover:bg-accent/80 disabled:opacity-50 rounded-lg transition-colors"
+              >
+                Retry Classification
+              </button>
+            )}
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={triageErrorAcknowledged}
+                onChange={(e) => setTriageErrorAcknowledged(e.target.checked)}
+                className="w-4 h-4 rounded border-white/20 bg-tint accent-danger"
+              />
+              <span className="text-primary text-sm">
+                I understand triage failed and will review all entries manually
+              </span>
+            </label>
+          </div>
         </div>
       )}
 

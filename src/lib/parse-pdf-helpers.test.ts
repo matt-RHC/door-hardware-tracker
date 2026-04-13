@@ -540,6 +540,70 @@ describe('normalizeQuantities — category-aware division', () => {
     expect(sets[0].items[0].qty_total).toBe(12)
     expect(sets[0].items[0].qty_source).toBe('capped')
   })
+
+  // === Hinge consolidation: electric hinge qty subtracted from standard hinges ===
+
+  it('consolidates standard + electric hinge: 4 total − 1 electric = 3 standard', () => {
+    // PDF lists "4 Hinges" and "1 Electric Hinge" as separate items.
+    // After normalization, the 4 includes the 1 electric, so standard = 4 - 1 = 3.
+    const sets = [makeSet('DH_HINGE_CONSOL', [
+      { name: 'Hinges 5BB1 4.5x4.5 NRP', qty: 4, qty_source: 'divided' },
+      { name: 'Hinges 5BB1 4.5x4.5 CON TW8', qty: 1, qty_source: 'divided' },
+    ], { heading_door_count: 6, heading_leaf_count: 12 })]
+    const doors = Array.from({ length: 6 }, (_, i) => makeDoor(`HC-${i + 1}`, 'DH_HINGE_CONSOL'))
+
+    normalizeQuantities(sets, doors)
+
+    // Standard hinge: 4 - 1 = 3
+    expect(sets[0].items[0].qty).toBe(3)
+    // Electric hinge: unchanged
+    expect(sets[0].items[1].qty).toBe(1)
+  })
+
+  it('does NOT consolidate when standard hinge qty equals electric qty (would go to zero)', () => {
+    // Edge case: 1 standard + 1 electric → don't subtract (would be 0 standard)
+    const sets = [makeSet('DH_HINGE_EQUAL', [
+      { name: 'Hinge NRP', qty: 1, qty_source: 'divided' },
+      { name: 'Electric Hinge CON TW8', qty: 1, qty_source: 'divided' },
+    ], { heading_door_count: 2 })]
+    const doors = [makeDoor('HE1', 'DH_HINGE_EQUAL'), makeDoor('HE2', 'DH_HINGE_EQUAL')]
+
+    normalizeQuantities(sets, doors)
+
+    // Both unchanged — standard qty is not > electric qty
+    expect(sets[0].items[0].qty).toBe(1)
+    expect(sets[0].items[1].qty).toBe(1)
+  })
+
+  it('consolidates with multiple electric hinges in the same set', () => {
+    // Rare but possible: 2 different electric hinge products in one set
+    const sets = [makeSet('DH_MULTI_ELEC', [
+      { name: 'Hinges 5BB1 NRP', qty: 5, qty_source: 'divided' },
+      { name: 'Hinge CON TW8', qty: 1, qty_source: 'divided' },
+      { name: 'Power Transfer Hinge EPT', qty: 1, qty_source: 'divided' },
+    ], { heading_door_count: 4, heading_leaf_count: 8 })]
+    const doors = Array.from({ length: 4 }, (_, i) => makeDoor(`ME-${i + 1}`, 'DH_MULTI_ELEC'))
+
+    normalizeQuantities(sets, doors)
+
+    // Standard: 5 - 2 = 3
+    expect(sets[0].items[0].qty).toBe(3)
+    // Electric items unchanged
+    expect(sets[0].items[1].qty).toBe(1)
+    expect(sets[0].items[2].qty).toBe(1)
+  })
+
+  it('skips consolidation when no electric hinge exists in the set', () => {
+    // Normal set with only standard hinges — no change
+    const sets = [makeSet('DH_NO_ELEC', [
+      { name: 'Hinges 5BB1 NRP', qty: 3, qty_source: 'divided' },
+    ], { heading_door_count: 4 })]
+    const doors = Array.from({ length: 4 }, (_, i) => makeDoor(`NE-${i + 1}`, 'DH_NO_ELEC'))
+
+    normalizeQuantities(sets, doors)
+
+    expect(sets[0].items[0].qty).toBe(3)
+  })
 })
 
 // ─── normalizeDoorNumber ───

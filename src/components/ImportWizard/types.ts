@@ -130,6 +130,7 @@ export interface TriageResult {
   flagged: FlaggedDoor[];
   triage_error?: boolean;
   triage_error_message?: string;
+  retryable?: boolean;
 }
 
 // ─── Staging / extraction run types ───

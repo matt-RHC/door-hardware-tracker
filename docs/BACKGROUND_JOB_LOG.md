@@ -111,3 +111,28 @@ Tracks decisions, issues, and deviations for the background extraction job featu
 2. **Internal auth header swap (§7.2)**: Fire-and-forget calls from `/api/jobs` and `/api/cron/process-jobs` to `/api/jobs/[id]/run` previously sent `SUPABASE_SERVICE_ROLE_KEY` as an `x-service-role` header — if the URL were misconfigured, the key would leak to an unintended recipient. Replaced with `x-internal-secret` header carrying `CRON_SECRET` (a lower-privilege secret that already existed for cron auth). The run route still creates its own admin Supabase client internally via `createAdminSupabaseClient()`, so DB access is unaffected.
 
 3. **Python default-deny (§7.3)**: The `require_internal_token()` functions in `classify-pages.py`, `detect-mapping.py`, and `extract-tables.py` previously returned `True` (allow) when `PYTHON_INTERNAL_SECRET` was unset, meaning a misconfigured deployment would serve endpoints without authentication. Changed to return 401 with `{"error": "Internal secret not configured"}` when the env var is missing — fail-closed instead of fail-open.
+
+---
+
+## Hinge Duplication Regression + Triage Retry + Error Cleanup (2026-04-13)
+
+### Decisions
+
+1. **Hinge consolidation in normalizeQuantities**: PDFs often list "4 Hinges" (total) and "1 Electric Hinge" separately for the same door. After per-leaf/per-opening normalization, both appear as independent line items, totaling 5 (incorrect). Per DHI/BHMA standards, the electric hinge replaces one standard hinge position: 3 standard + 1 electric = 4 total. A post-normalization consolidation step now subtracts electric hinge qty from standard hinge qty within the same hardware set. Guards ensure the result stays >= 1 and the standard qty is greater than the electric qty.
+
+2. **Triage application-level retry**: The Anthropic SDK retries 4x internally with exponential backoff on 429/5xx. For persistent `overloaded_error` (529) conditions, the triage route and job orchestrator now wrap the SDK call in an additional retry loop: SDK retries (4x fast) → 30s wait → SDK retries (4x) → 60s wait → SDK retries (4x). Only retryable errors (529 overloaded, 429 rate limit) trigger the application-level retry; permanent failures break immediately.
+
+3. **Clean error messages**: The triage route error handler was returning raw `llmError.message` which often contained the full Anthropic SDK JSON body (`{"type":"error","error":{"details":null,...}}`). A `cleanTriageErrorMessage()` helper now maps error types to user-facing messages. The `retryable` flag is included in the response so the frontend can offer a "Retry Classification" button.
+
+4. **Retry pattern duplicated (not shared)**: The retry helpers (`isRetryableError`, `cleanTriageErrorMessage`, `sleep`, `APP_RETRY_DELAYS_MS`) are defined separately in both the triage route and the job orchestrator. This matches the existing pattern (decision #3 from Phase 1) where triage logic is intentionally duplicated to keep each file self-contained. Both files use identical retry delays and error classification logic.
+
+5. **Job status update during triage retry**: The job orchestrator's `runTriage` accepts an optional `onStatusUpdate` callback. During retry waits, the job status is updated to "Triaging (retrying after Ns wait...)" so the user sees progress in the job monitoring UI rather than a stalled status.
+
+### Files Modified
+
+- `src/lib/parse-pdf-helpers.ts` — Added hinge consolidation step in `normalizeQuantities`; imported `classifyItem` from hardware-taxonomy
+- `src/lib/parse-pdf-helpers.test.ts` — Added 4 hinge consolidation tests
+- `src/app/api/parse-pdf/triage/route.ts` — Added retry loop, `isRetryableError`, `cleanTriageErrorMessage`, `retryable` flag in error response
+- `src/app/api/jobs/[id]/run/route.ts` — Added retry loop in `runTriage`, status update callback during retry waits
+- `src/components/ImportWizard/types.ts` — Added `retryable` to `TriageResult`
+- `src/components/ImportWizard/StepTriage.tsx` — Added "Retry Classification" button when `retryable` is true, displays clean error message

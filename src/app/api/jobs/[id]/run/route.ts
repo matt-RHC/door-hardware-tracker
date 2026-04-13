@@ -136,11 +136,52 @@ async function callDetectMapping(pdfBase64: string): Promise<Record<string, unkn
   }
 }
 
+// --- Retry helpers ---
+
+const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
+
+function isRetryableError(err: unknown): boolean {
+  if (err && typeof err === 'object') {
+    const status = (err as Record<string, unknown>).status
+    if (status === 429 || status === 529) return true
+    const message = (err as Record<string, unknown>).message
+    if (typeof message === 'string' && (
+      message.includes('overloaded') || message.includes('rate_limit') || message.includes('529')
+    )) return true
+    const errorObj = (err as Record<string, unknown>).error
+    if (errorObj && typeof errorObj === 'object') {
+      const errorType = (errorObj as Record<string, unknown>).type
+      if (errorType === 'overloaded_error') return true
+    }
+  }
+  return false
+}
+
+function cleanTriageErrorMessage(err: unknown): string {
+  if (err && typeof err === 'object') {
+    const status = (err as Record<string, unknown>).status
+    const errorObj = (err as Record<string, unknown>).error
+    const errorType = errorObj && typeof errorObj === 'object'
+      ? (errorObj as Record<string, unknown>).type
+      : undefined
+    if (status === 529 || errorType === 'overloaded_error') {
+      return 'The AI classification service is temporarily busy. All doors have been accepted for manual review.'
+    }
+    if (status === 429) {
+      return 'Rate limit reached. All doors have been accepted for manual review.'
+    }
+  }
+  return 'Classification encountered an error. All doors have been accepted for manual review.'
+}
+
+const APP_RETRY_DELAYS_MS = [30_000, 60_000]
+
 async function runTriage(
   client: Anthropic,
   doors: DoorEntry[],
   filteredPdfBase64: string | undefined,
   userHints: Array<{ question_id: string; question_text: string; answer: string }>,
+  onStatusUpdate?: (message: string) => Promise<void>,
 ): Promise<{ classifications: TriageClassification[]; stats: Record<string, number>; triage_error?: boolean; triage_error_message?: string }> {
   const candidates = doors.map(d => ({
     door_number: d.door_number,
@@ -178,28 +219,56 @@ ${candidateSummary}`
   contentBlocks.push({ type: 'text', text: userPrompt })
 
   let classifications: TriageClassification[] = []
+  let lastError: unknown = null
+  const maxAttempts = 1 + APP_RETRY_DELAYS_MS.length
 
-  try {
-    const stream = client.messages.stream({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 8192,
-      system: [{ type: 'text', text: TRIAGE_SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
-      messages: [{ role: 'user', content: contentBlocks }],
-    })
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    try {
+      const stream = client.messages.stream({
+        model: 'claude-sonnet-4-20250514',
+        max_tokens: 8192,
+        system: [{ type: 'text', text: TRIAGE_SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } }],
+        messages: [{ role: 'user', content: contentBlocks }],
+      })
 
-    const finalMessage = await stream.finalMessage()
-    const textBlock = finalMessage.content.find(b => b.type === 'text')
+      const finalMessage = await stream.finalMessage()
+      const textBlock = finalMessage.content.find(b => b.type === 'text')
 
-    if (textBlock?.type === 'text') {
-      let text = textBlock.text.trim()
-      if (text.startsWith('```')) {
-        text = text.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '')
+      if (textBlock?.type === 'text') {
+        let text = textBlock.text.trim()
+        if (text.startsWith('```')) {
+          text = text.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '')
+        }
+        const parsed = JSON.parse(text)
+        classifications = Array.isArray(parsed) ? parsed : (parsed?.classifications ?? [])
       }
-      const parsed = JSON.parse(text)
-      classifications = Array.isArray(parsed) ? parsed : (parsed?.classifications ?? [])
+
+      lastError = null
+      break
+    } catch (llmError) {
+      lastError = llmError
+
+      if (!isRetryableError(llmError) || attempt >= maxAttempts - 1) {
+        break
+      }
+
+      const delayMs = APP_RETRY_DELAYS_MS[attempt]
+      console.warn(
+        `[job-orchestrator] Triage attempt ${attempt + 1}/${maxAttempts} failed (retryable), ` +
+        `waiting ${delayMs / 1000}s before retry:`,
+        llmError instanceof Error ? llmError.message : String(llmError)
+      )
+
+      if (onStatusUpdate) {
+        await onStatusUpdate(`Triaging (retrying after ${delayMs / 1000}s wait...)`)
+      }
+
+      await sleep(delayMs)
     }
-  } catch (llmError) {
-    console.error('[job-orchestrator] Triage LLM failed, returning all as door:', llmError)
+  }
+
+  if (lastError) {
+    console.error('[job-orchestrator] Triage LLM failed after all retries, returning all as door:', lastError)
     classifications = candidates.map(c => ({
       door_number: c.door_number,
       class: 'door' as const,
@@ -212,7 +281,7 @@ ${candidateSummary}`
       classifications,
       stats,
       triage_error: true,
-      triage_error_message: `AI triage failed: ${llmError instanceof Error ? llmError.message : 'Unknown error'}. All candidates auto-accepted.`,
+      triage_error_message: cleanTriageErrorMessage(lastError),
     }
   }
 
@@ -537,7 +606,15 @@ export async function POST(
       answer: typeof c.answer_value === 'string' ? c.answer_value : JSON.stringify(c.answer_value),
     }))
 
-    const triageResult = await runTriage(anthropicClient, extractedDoors, filteredPdfBase64, userHints)
+    const triageResult = await runTriage(
+      anthropicClient, extractedDoors, filteredPdfBase64, userHints,
+      async (message) => {
+        await updateJob(adminSupabase, jobId, {
+          status: 'triaging',
+          status_message: message,
+        })
+      },
+    )
 
     // Filter accepted doors (same logic as StepTriage.tsx)
     const acceptedDoors = extractedDoors.filter(d => {
