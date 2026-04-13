@@ -24,7 +24,9 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json()
 
+    const requestOrigin = new URL(request.url).origin
     const baseUrl = process.env.PYTHON_API_URL
+      ?? (requestOrigin !== 'null' ? requestOrigin : null)
       ?? process.env.NEXT_PUBLIC_APP_URL
       ?? (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000')
 

@@ -24,7 +24,12 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json()
 
+    // Derive origin from the incoming request so this proxy always targets
+    // the same deployment as the caller — works on preview, production, and
+    // localhost without any env var configuration.
+    const requestOrigin = new URL(request.url).origin
     const baseUrl = process.env.PYTHON_API_URL
+      ?? (requestOrigin !== 'null' ? requestOrigin : null)
       ?? process.env.NEXT_PUBLIC_APP_URL
       ?? (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000')
 

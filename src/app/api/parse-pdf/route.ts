@@ -49,6 +49,7 @@ async function extractFromPDF(
   userColumnMapping?: Record<string, number> | null,
   projectId?: string,
   goldenSample?: GoldenSampleInput,
+  requestOrigin?: string,
 ): Promise<{
   hardwareSets: HardwareSet[]
   doors: DoorEntry[]
@@ -59,7 +60,7 @@ async function extractFromPDF(
 }> {
   let pdfplumberResult: PdfplumberResult | null = null
   try {
-    pdfplumberResult = await callPdfplumber(base64, userColumnMapping)
+    pdfplumberResult = await callPdfplumber(base64, userColumnMapping, requestOrigin)
     console.debug(
       `Pdfplumber: ${pdfplumberResult.hw_sets_found} hardware sets, ` +
       `${pdfplumberResult.openings.length} doors, ` +
@@ -237,7 +238,8 @@ export async function POST(request: NextRequest) {
     // so naming + quantity conventions are treated as the baseline for
     // the submittal. Matches the shape already accepted by deep-extract.
     const goldenSample: GoldenSampleInput = body.goldenSample ?? undefined
-    const { hardwareSets, doors, corrections, punchyObservations, punchyQuantityCheck, stats } = await extractFromPDF(base64, filteredPdfBase64, userColumnMapping, projectId, goldenSample)
+    const requestOrigin = new URL(request.url).origin
+    const { hardwareSets, doors, corrections, punchyObservations, punchyQuantityCheck, stats } = await extractFromPDF(base64, filteredPdfBase64, userColumnMapping, projectId, goldenSample, requestOrigin)
 
     return NextResponse.json({
       success: true,
