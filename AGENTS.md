@@ -32,6 +32,7 @@ When modifying extraction pipeline code:
 ## User Interaction
 
 - **Ask, don't guess.** If you're uncertain about a field mapping, consultant convention, or user intent — ask. Interactive confirmation is always better than silent wrong answers.
+- **Plain-language first.** When explaining technical decisions or options, lead with a simple real-world summary before diving into code details. The user thinks in terms of doors, leaves, and hardware — not TypeScript types and Python dictionaries. Example: say "each leaf gets its own exit device" before explaining install_scope taxonomy mismatches.
 - **Keep UI status clean.** Progress/loader messages should be short and ambient (under ~40 chars). Never dump raw extraction data (set IDs, door number lists, page ranges) into visual components. Debug info goes in console logs.
 - **Propagate-edit pattern.** When a user corrects one item, check for matching items across openings and offer to propagate the fix.
 

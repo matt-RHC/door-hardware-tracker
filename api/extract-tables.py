@@ -145,16 +145,16 @@ DIVISION_PREFERENCE: dict[str, str] = {
     "auto_operator":    "opening",     # 1 per opening, replaces closer
     "closer":           "opening",
     "lockset":          "opening",
-    "exit_device":      "opening",
-    "stop":             "opening",
+    "exit_device":      "leaf",        # Each leaf gets its own exit device
+    "stop":             "leaf",        # Each leaf gets its own stop/holder
     "holder":           "opening",
-    "kick_plate":       "opening",
+    "kick_plate":       "leaf",        # Each leaf gets its own protection plate
     "cylinder":         "opening",
     "strike":           "opening",
     "pull":             "opening",
     "silencer":         "opening",
     "threshold":        "opening_only",
-    "sweep":            "opening_only",
+    "sweep":            "leaf",        # Each leaf gets its own door bottom/sweep
     "astragal":         "opening_only",
     "seal":             "opening_only",
     "coordinator":      "opening_only",

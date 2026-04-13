@@ -599,7 +599,7 @@ export default function StepReview({
                       <span className="text-[11px] font-semibold uppercase text-secondary" style={{ fontFamily: "var(--font-display)", letterSpacing: "0.06em" }}>
                         Hardware Items
                       </span>
-                      <span className="text-[10px] text-tertiary">({(hwSet.items?.length ?? 0)} items)</span>
+                      <span className="text-[10px] text-tertiary">({grouped.shared.length + grouped.leaf1.length + grouped.leaf2.length} items)</span>
                       {(() => {
                         const correctedCount = items.filter(i => i.qty_source === 'auto_corrected' && i.qty_before_correction != null).length;
                         return correctedCount > 0 ? (
