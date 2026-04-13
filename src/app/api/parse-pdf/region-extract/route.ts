@@ -67,10 +67,15 @@ export async function POST(request: NextRequest) {
     const controller = new AbortController()
     const timeout = setTimeout(() => controller.abort(), 120_000)
 
+    const internalToken = process.env.PYTHON_INTERNAL_SECRET ?? ''
+
     try {
       const response = await fetch(`${baseUrl}/api/extract-tables`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...(internalToken ? { 'X-Internal-Token': internalToken } : {}),
+        },
         body: JSON.stringify({
           pdf_base64: pdfBase64,
           target_page: page,

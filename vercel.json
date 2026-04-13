@@ -2,10 +2,6 @@
   "framework": "nextjs",
   "crons": [
     {
-      "path": "/api/cron/sync-smartsheet",
-      "schedule": "0 6 * * *"
-    },
-    {
       "path": "/api/cron/cleanup-staging",
       "schedule": "0 3 * * *"
     }
@@ -32,11 +28,11 @@
     "src/app/api/parse-pdf/region-extract/route.ts": {
       "maxDuration": 120
     },
-    "src/app/api/projects/[projectId]/sync-smartsheet/route.ts": {
+    "src/app/api/parse-pdf/classify-pages/route.ts": {
       "maxDuration": 120
     },
-    "src/app/api/cron/sync-smartsheet/route.ts": {
-      "maxDuration": 300
+    "src/app/api/parse-pdf/detect-mapping/route.ts": {
+      "maxDuration": 120
     },
     "api/extract-tables.py": {
       "maxDuration": 800,

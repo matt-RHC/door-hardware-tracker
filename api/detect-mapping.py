@@ -8,14 +8,56 @@ Location: /api/detect-mapping.py (Vercel Python runtime)
 """
 
 import base64
+import hmac
 import io
 import json
+import logging
+import os
 import re
 import traceback
 import unicodedata
 from http.server import BaseHTTPRequestHandler
 
 import pdfplumber
+
+logger = logging.getLogger("detect-mapping")
+logging.basicConfig(level=logging.INFO)
+
+
+# --- Internal Token Auth ---
+# Keep in sync with the matching helper in api/extract-tables.py and
+# api/classify-pages.py. Vercel bundles each Python file independently,
+# so duplication is the existing convention in this repo.
+
+def require_internal_token(request_handler) -> bool:
+    """Verify X-Internal-Token matches PYTHON_INTERNAL_SECRET.
+
+    Returns True if authorized. If not authorized, sends a 401 response
+    and returns False — caller should return immediately.
+
+    If PYTHON_INTERNAL_SECRET is not set, the request is allowed but a
+    warning is logged, supporting a zero-downtime rollout.
+    """
+    expected = os.environ.get("PYTHON_INTERNAL_SECRET", "") or ""
+    if not expected:
+        logger.warning(
+            "PYTHON_INTERNAL_SECRET is not set — endpoint is accepting "
+            "unauthenticated requests. Configure the env var in Vercel "
+            "to enable auth."
+        )
+        return True
+
+    provided = request_handler.headers.get("X-Internal-Token", "") or ""
+    if not hmac.compare_digest(expected, provided):
+        body = json.dumps({"error": "Unauthorized"}).encode()
+        request_handler.send_response(401)
+        request_handler.send_header("Content-Type", "application/json")
+        request_handler.send_header("Content-Length", str(len(body)))
+        request_handler.end_headers()
+        request_handler.wfile.write(body)
+        return False
+
+    return True
 
 # Import column detection logic from extract-tables
 # (Vercel bundles all /api/*.py files, so we duplicate the essentials)
@@ -579,6 +621,9 @@ def find_door_schedule_table(page) -> tuple[list[str], list[list[str]], str]:
 class handler(BaseHTTPRequestHandler):
     def do_POST(self):
         try:
+            if not require_internal_token(self):
+                return
+
             content_length = int(self.headers.get("Content-Length", 0))
             raw_body = self.rfile.read(content_length)
             try:

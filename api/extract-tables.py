@@ -17,9 +17,11 @@ Location: /api/extract-tables.py (project root, Vercel Python runtime)
 """
 
 import base64
+import hmac
 import io
 import json
 import logging
+import os
 import re
 import traceback
 import unicodedata
@@ -30,6 +32,53 @@ logging.basicConfig(level=logging.INFO)
 
 import pdfplumber
 from pydantic import BaseModel
+
+
+# --- Internal Token Auth ---
+#
+# All three Python endpoints (/api/extract-tables, /api/classify-pages,
+# /api/detect-mapping) are publicly reachable on the Vercel deployment URL.
+# To prevent anonymous PDF uploads, the Next.js layer forwards a shared
+# secret in the X-Internal-Token header. This helper validates that header.
+#
+# Backward-compat window: if PYTHON_INTERNAL_SECRET is unset, auth is
+# skipped and a warning is logged. Once the env var is configured in
+# Vercel, enforcement takes effect on the next cold start. Keep this
+# helper in sync across all api/*.py files (Vercel bundles them
+# separately, so duplication is intentional).
+
+def require_internal_token(request_handler) -> bool:
+    """Verify X-Internal-Token matches PYTHON_INTERNAL_SECRET.
+
+    Returns True if authorized. If not authorized, sends a 401 response
+    and returns False — caller should return immediately without further
+    processing.
+
+    If PYTHON_INTERNAL_SECRET is not set in the environment, the request
+    is allowed but a warning is logged. This supports a zero-downtime
+    rollout where the code ships first and the secret is configured
+    afterwards.
+    """
+    expected = os.environ.get("PYTHON_INTERNAL_SECRET", "") or ""
+    if not expected:
+        logger.warning(
+            "PYTHON_INTERNAL_SECRET is not set — endpoint is accepting "
+            "unauthenticated requests. Configure the env var in Vercel "
+            "to enable auth."
+        )
+        return True
+
+    provided = request_handler.headers.get("X-Internal-Token", "") or ""
+    if not hmac.compare_digest(expected, provided):
+        body = json.dumps({"error": "Unauthorized"}).encode()
+        request_handler.send_response(401)
+        request_handler.send_header("Content-Type", "application/json")
+        request_handler.send_header("Content-Length", str(len(body)))
+        request_handler.end_headers()
+        request_handler.wfile.write(body)
+        return False
+
+    return True
 
 
 # --- Pydantic Models ---
@@ -3828,6 +3877,9 @@ def normalize_quantities(
 class handler(BaseHTTPRequestHandler):
     def do_POST(self):
         try:
+            if not require_internal_token(self):
+                return
+
             content_length = int(self.headers.get("Content-Length", 0))
             raw_body = self.rfile.read(content_length)
             try:
