@@ -7,6 +7,7 @@ Covers:
   - Fuzzy ID matching (suffix stripping, prefix match, column-swap)
   - Category-aware division order (hinges by leaves, closers by openings)
   - Expanded heading door line regex
+  - Quantity convention detection (preamble-based, dual-quantity, mixed)
   - Golden PDF regression tests
 """
 import pdfplumber
@@ -497,3 +498,252 @@ class TestGoldenPDFQuantities:
                     assert item.qty_total == item.qty, (
                         f"{hw_set.set_id} '{item.name}' qty_total should equal raw qty"
                     )
+
+
+# ── Quantity convention detection tests ──
+
+class TestPreamblePerOpeningDetection:
+    """Verify detect_quantity_convention identifies per-opening preamble phrases."""
+
+    def test_each_opening_to_have(self, extract_tables):
+        """'Each opening to have:' → per_opening."""
+        text = """Heading #01 (Set #01)
+1 SGL Door:101  Corridor  LHR
+Each opening to have:
+3  Hinge 5BB1 4-1/2 x 4-1/2 NRP US32D
+1  Closer 4040XP EDA 689"""
+        assert extract_tables.detect_quantity_convention(text, 1) == "per_opening"
+
+    def test_each_to_receive(self, extract_tables):
+        """'Each to receive:' → per_opening."""
+        text = """Set #5
+Door Numbers: 201, 202, 203
+Each to receive:
+3  Hinge BB1191 4 x 4
+1  Lockset L9080 03A 626"""
+        assert extract_tables.detect_quantity_convention(text, 3) == "per_opening"
+
+    def test_each_to_have(self, extract_tables):
+        """'EACH TO HAVE:' (uppercase) → per_opening."""
+        text = """HARDWARE SET: 12
+DOOR NUMBER: 300 301 302
+EACH TO HAVE:
+3  Hinge BB1191
+1  Lockset L9453"""
+        assert extract_tables.detect_quantity_convention(text, 3) == "per_opening"
+
+    def test_each_door_leaf_shall_have(self, extract_tables):
+        """'Each door leaf shall have:' → per_opening (Kdot style)."""
+        text = """SET NO. 3
+Each door leaf shall have:
+3  Continuous Hinge 780-112
+1  Exit Device 9875"""
+        assert extract_tables.detect_quantity_convention(text, 2) == "per_opening"
+
+    def test_each_door_to_have(self, extract_tables):
+        """'Each door to have:' → per_opening."""
+        text = """HW Set 4
+Each door to have:
+3  Hinge
+1  Closer"""
+        assert extract_tables.detect_quantity_convention(text, 5) == "per_opening"
+
+    def test_per_opening_colon(self, extract_tables):
+        """'Per opening:' → per_opening."""
+        text = """Set: 2.0
+Per opening:
+3  Hinge
+1  Lockset"""
+        assert extract_tables.detect_quantity_convention(text, 4) == "per_opening"
+
+
+class TestPreambleAggregateDetection:
+    """Verify detect_quantity_convention detects aggregate quantities."""
+
+    def test_no_preamble_large_quantities(self, extract_tables):
+        """No preamble + large qty values + multi-door → aggregate."""
+        text = """Heading #04 (Set #04)
+1 SGL Door:101  Corridor  LHR
+1 SGL Door:102  Corridor  RHR
+1 SGL Door:103  Corridor  LHR
+30  Hinge 5BB1 4-1/2 x 4-1/2 NRP US32D
+10  Closer 4040XP EDA 689
+30  Silencer SR64 GRY"""
+        assert extract_tables.detect_quantity_convention(text, 10) == "aggregate"
+
+    def test_no_preamble_small_quantities_unknown(self, extract_tables):
+        """No preamble + small qty values → unknown (could be either)."""
+        text = """Heading #01 (Set #01)
+3  Hinge 5BB1
+1  Closer 4040XP
+1  Lockset L9080"""
+        assert extract_tables.detect_quantity_convention(text, 5) == "unknown"
+
+    def test_no_door_count_unknown(self, extract_tables):
+        """No door count and no preamble → unknown."""
+        text = """Heading #01 (Set #01)
+30  Hinge 5BB1
+10  Closer 4040XP"""
+        assert extract_tables.detect_quantity_convention(text, 0) == "unknown"
+
+
+class TestMixedConventionPerHeading:
+    """Verify per-heading normalization with mixed conventions."""
+
+    def _make_set(self, et, qty, door_count, leaf_count, item_name, convention):
+        """Create a HardwareSetDef with one item and a specified convention."""
+        return et.HardwareSetDef(
+            set_id="TEST",
+            generic_set_id="TEST",
+            heading="Test Set",
+            heading_door_count=door_count,
+            heading_leaf_count=leaf_count,
+            qty_convention=convention,
+            items=[
+                et.HardwareItem(qty=qty, name=item_name),
+            ],
+        )
+
+    def test_single_door_heading_always_per_opening(self, extract_tables):
+        """1-door heading: qty is already per-opening regardless of convention."""
+        hw = self._make_set(extract_tables, 3, 1, 1, "Hinge 5BB1", "aggregate")
+        extract_tables.normalize_quantities([hw], [])
+        item = hw.items[0]
+        # Single door → goes through the single-door path, not division
+        assert item.qty == 3
+        assert item.qty_source == "parsed"
+
+    def test_multi_door_per_opening_skips_division(self, extract_tables):
+        """Multi-door heading with per_opening convention → no division."""
+        hw = self._make_set(extract_tables, 3, 5, 5, "Hinge 5BB1", "per_opening")
+        extract_tables.normalize_quantities([hw], [])
+        item = hw.items[0]
+        assert item.qty == 3
+        assert item.qty_source == "parsed"
+        assert item.qty_total == 3
+        assert item.qty_door_count == 5
+
+    def test_multi_door_aggregate_divides(self, extract_tables):
+        """Multi-door heading with aggregate convention → needs_division."""
+        hw = self._make_set(extract_tables, 15, 5, 5, "Hinge 5BB1", "aggregate")
+        extract_tables.normalize_quantities([hw], [])
+        item = hw.items[0]
+        assert item.qty == 15
+        assert item.qty_source == "needs_division"
+        assert item.qty_door_count == 5  # leaf_count for hinges
+        assert item.qty_total == 15
+
+    def test_multi_door_unknown_convention_divides(self, extract_tables):
+        """Multi-door heading with unknown convention → falls through to division."""
+        hw = self._make_set(extract_tables, 15, 5, 5, "Hinge 5BB1", "unknown")
+        extract_tables.normalize_quantities([hw], [])
+        item = hw.items[0]
+        assert item.qty == 15
+        assert item.qty_source == "needs_division"
+        assert item.qty_door_count == 5
+        assert item.qty_total == 15
+
+    def test_mixed_convention_in_same_file(self, extract_tables):
+        """Two sets in the same file with different conventions normalize differently."""
+        per_opening_set = extract_tables.HardwareSetDef(
+            set_id="SET1",
+            generic_set_id="SET1",
+            heading="Set 1",
+            heading_door_count=3,
+            heading_leaf_count=3,
+            qty_convention="per_opening",
+            items=[extract_tables.HardwareItem(qty=3, name="Hinge 5BB1")],
+        )
+        aggregate_set = extract_tables.HardwareSetDef(
+            set_id="SET2",
+            generic_set_id="SET2",
+            heading="Set 2",
+            heading_door_count=3,
+            heading_leaf_count=3,
+            qty_convention="aggregate",
+            items=[extract_tables.HardwareItem(qty=9, name="Hinge 5BB1")],
+        )
+        extract_tables.normalize_quantities([per_opening_set, aggregate_set], [])
+
+        # per_opening set: qty stays at 3, source is 'parsed'
+        assert per_opening_set.items[0].qty == 3
+        assert per_opening_set.items[0].qty_source == "parsed"
+
+        # aggregate set: qty stays at 9 (raw), but annotated needs_division
+        assert aggregate_set.items[0].qty == 9
+        assert aggregate_set.items[0].qty_source == "needs_division"
+        assert aggregate_set.items[0].qty_door_count == 3
+
+
+class TestDualQuantityFormat:
+    """Verify dual-quantity format detection: '(total) per_door EA'."""
+
+    def test_dual_qty_extraction(self, extract_tables):
+        """'(42) 3 EA' correctly extracts total=42, per_door=3."""
+        pairs = extract_tables.extract_dual_qty("(42) 3 EA")
+        assert pairs == [(42, 3)]
+
+    def test_dual_qty_multiple(self, extract_tables):
+        """Multiple dual-quantity patterns in text."""
+        text = "(42) 3 EA\n(10) 1 EA\n(20) 2 EA"
+        pairs = extract_tables.extract_dual_qty(text)
+        assert pairs == [(42, 3), (10, 1), (20, 2)]
+
+    def test_dual_qty_convention_detected(self, extract_tables):
+        """Text with dual-quantity format detected as per_opening."""
+        text = """Heading 101 (HwSet 101)
+SGL DOOR(S)101.01 Corridor
+(42) 3 EA  Hinge 5BB1 4-1/2 x 4-1/2 NRP
+(14) 1 EA  Closer 4040XP"""
+        assert extract_tables.detect_quantity_convention(text, 14) == "per_opening"
+
+    def test_dual_qty_validates_door_count(self, extract_tables):
+        """total / per_door should approximate door count."""
+        pairs = extract_tables.extract_dual_qty("(42) 3 EA")
+        total, per_door = pairs[0]
+        assert total // per_door == 14  # implies 14 doors
+
+    def test_dual_qty_no_match(self, extract_tables):
+        """Regular quantity lines don't match dual format."""
+        pairs = extract_tables.extract_dual_qty("3  Hinge 5BB1 4-1/2 EA")
+        assert pairs == []
+
+
+class TestPreambleOverridesStatistical:
+    """Verify preamble detection takes priority over statistical heuristic."""
+
+    def test_preamble_overrides_large_quantities(self, extract_tables):
+        """Even with large quantities, 'Each opening to have:' wins."""
+        text = """Set #10
+Door Numbers: 101, 102, 103, 104, 105, 106, 107, 108, 109, 110
+Each opening to have:
+30  Hinge 5BB1 4-1/2 x 4-1/2
+10  Closer 4040XP
+10  Lockset L9080"""
+        # The statistical heuristic would say "aggregate" (all values > 6),
+        # but the preamble definitively says "per_opening"
+        assert extract_tables.detect_quantity_convention(text, 10) == "per_opening"
+
+    def test_preamble_overrides_in_normalize_quantities(self, extract_tables):
+        """normalize_quantities respects per_opening convention even for high qtys."""
+        hw = extract_tables.HardwareSetDef(
+            set_id="TEST",
+            generic_set_id="TEST",
+            heading="Test Set",
+            heading_door_count=10,
+            heading_leaf_count=10,
+            qty_convention="per_opening",
+            items=[
+                extract_tables.HardwareItem(qty=30, name="Hinge 5BB1"),
+                extract_tables.HardwareItem(qty=10, name="Closer 4040XP"),
+            ],
+        )
+        extract_tables.normalize_quantities([hw], [])
+
+        # Both items should be marked as 'parsed' (per-opening), NOT divided
+        for item in hw.items:
+            assert item.qty_source == "parsed", (
+                f"'{item.name}' should be 'parsed' with per_opening convention, "
+                f"got '{item.qty_source}'"
+            )
+            assert item.qty_total == item.qty

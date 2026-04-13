@@ -219,6 +219,8 @@ export interface PdfplumberResult {
      *  the TS layer to route doors to specific sub-sets (DH4A.0 vs
      *  DH4A.1) instead of collapsing them by generic_set_id. */
     heading_doors?: string[]
+    /** Quantity convention detected from preamble text by Python. */
+    qty_convention?: 'per_opening' | 'aggregate' | 'unknown'
     items: Array<{
       qty: number
       qty_total?: number
@@ -402,6 +404,7 @@ export async function callPunchyPostExtraction(
       heading: s.heading,
       heading_door_count: s.heading_door_count ?? null,
       heading_leaf_count: s.heading_leaf_count ?? null,
+      qty_convention: s.qty_convention ?? 'unknown',
       item_count: s.items?.length ?? 0,
       // Pass full annotation context to Punchy CP2 so it sees RAW PDF quantities.
       //
@@ -532,6 +535,7 @@ export async function callPunchyQuantityCheck(
       heading: s.heading,
       heading_door_count: s.heading_door_count,
       heading_leaf_count: s.heading_leaf_count,
+      qty_convention: s.qty_convention ?? 'unknown',
       items: (s.items ?? []).map(i => ({
         name: i.name,
         qty: i.qty,
@@ -916,6 +920,7 @@ export function applyCorrections(
           heading: newSet.heading,
           heading_door_count: newSet.heading_door_count ?? 0,
           heading_leaf_count: newSet.heading_leaf_count ?? 0,
+          qty_convention: newSet.qty_convention,
           heading_doors: [],
           // Use the item's explicit qty_source if Punchy set one (e.g. 'llm_override'
           // when Punchy has already verified the qty as per-opening), otherwise
