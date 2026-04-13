@@ -268,9 +268,9 @@ export default function PDFRegionSelector({
                     top: selectionRect.top,
                     width: selectionRect.width,
                     height: selectionRect.height,
-                    border: "2px solid var(--cyan, #5ac8fa)",
-                    backgroundColor: "rgba(90, 200, 250, 0.12)",
-                    boxShadow: "0 0 8px rgba(90, 200, 250, 0.3)",
+                    border: "2px solid var(--blue)",
+                    backgroundColor: "var(--blue-dim)",
+                    boxShadow: "0 0 8px var(--glow-blue)",
                   }}
                 />
                 {/* Corner handles */}
@@ -333,7 +333,7 @@ function Handle({ x, y, cursor }: { x: number; y: number; cursor: string }) {
         top: y - 5,
         width: 10,
         height: 10,
-        backgroundColor: "var(--cyan, #5ac8fa)",
+        backgroundColor: "var(--blue)",
         border: "1px solid rgba(255,255,255,0.8)",
         cursor,
       }}

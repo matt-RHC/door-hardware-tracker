@@ -33,7 +33,11 @@ export default function RootLayout({
       className="h-full antialiased"
     >
       <head>
-        <meta name="theme-color" content="#000000" />
+        {/* Mirror globals.css: dark --background is #0F1117, light --background is #F7F8FA.
+            Safari only reads one value, so prefer the light default per ThemeToggle; dark users
+            just see a dim chrome. Kept in sync manually with globals.css :root and [data-theme]. */}
+        <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0F1117" />
+        <meta name="theme-color" media="(prefers-color-scheme: light)" content="#F7F8FA" />
       </head>
       <body className="min-h-full flex flex-col bg-background text-foreground">
         <PerformanceProvider>

@@ -44,7 +44,7 @@ export default function SoundToggle() {
           className="absolute inset-0 rounded-md blur-sm opacity-50 pointer-events-none"
           style={{
             background:
-              "radial-gradient(circle, var(--cyan-dim) 0%, transparent 70%)",
+              "radial-gradient(circle, var(--blue-dim) 0%, transparent 70%)",
           }}
         />
       )}

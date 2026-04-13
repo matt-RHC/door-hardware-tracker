@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useEffect, useMemo } from "react";
 import { usePunchHighlight } from "./usePunchHighlight";
 import type { DoorEntry, HardwareSet, ClassifyPagesResponse } from "./types";
 import PDFPagePreview from "./PDFPagePreview";
@@ -135,7 +135,10 @@ export default function StepReview({
   }, []);
   const [sortField, setSortField] = useState<DoorStringField>("door_number");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
-  // Lookup maps for resolving door → hardware set
+
+  // Lookup maps for resolving door → hardware set.
+  // Registered under BOTH set_id and generic_set_id — doors may be
+  // assigned to either depending on heading format (e.g., "DH1.01" vs "DH1-10").
   const setMap = useMemo(() => {
     const m = new Map<string, HardwareSet>();
     for (const set of hardwareSets) {
@@ -146,6 +149,8 @@ export default function StepReview({
     }
     return m;
   }, [hardwareSets]);
+  // Door-number → specific sub-set lookup. Handles multi-heading cases
+  // like DH4A.0 vs DH4A.1 that share a generic_set_id but have different items.
   const doorToSetMap = useMemo(() => buildDoorToSetMap(hardwareSets), [hardwareSets]);
 
   // ─── Inline editing ───
@@ -219,20 +224,9 @@ export default function StepReview({
   }, [filteredDoors, sortField, sortDir]);
 
   // ─── Group by hardware set ───
+  // Reuses the outer `setMap` and `doorToSetMap` memos rather than
+  // rebuilding them on every render (previously shadowed here).
   const groups: DoorGroup[] = useMemo(() => {
-    // Register sets under BOTH set_id and generic_set_id — doors may be
-    // assigned to either depending on heading format (e.g., "DH1.01" vs "DH1-10")
-    const setMap = new Map<string, HardwareSet>();
-    for (const set of hardwareSets) {
-      setMap.set(set.set_id, set);
-      if (set.generic_set_id && set.generic_set_id !== set.set_id) {
-        setMap.set(set.generic_set_id, set);
-      }
-    }
-    // Door-number → specific sub-set lookup (handles multi-heading cases
-    // like DH4A.0 vs DH4A.1 that share a generic_set_id but have different items)
-    const doorToSetMap = buildDoorToSetMap(hardwareSets);
-
     const groupMap = new Map<string, DoorGroup>();
     for (const item of sortedDoors) {
       // Resolve the specific sub-set via door_number lookup first.
@@ -261,10 +255,13 @@ export default function StepReview({
     }
 
     return Array.from(groupMap.values());
-  }, [sortedDoors, hardwareSets]);
+  }, [sortedDoors, setMap, doorToSetMap]);
 
-  // Auto-collapse all-green groups on first render
-  useMemo(() => {
+  // Auto-collapse all-green groups on first render. Runs as an effect so
+  // the setState happens after commit, not inside the memo's body — which
+  // React Strict Mode / React Compiler may drop if the memo is bailed out.
+  useEffect(() => {
+    if (collapsedGroups.size > 0) return;
     const autoCollapsed = new Set<string>();
     for (const group of groups) {
       if (
@@ -275,7 +272,7 @@ export default function StepReview({
         autoCollapsed.add(group.setId);
       }
     }
-    if (autoCollapsed.size > 0 && collapsedGroups.size === 0) {
+    if (autoCollapsed.size > 0) {
       setCollapsedGroups(autoCollapsed);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -634,7 +631,7 @@ export default function StepReview({
                             <button
                               onClick={() => toggleLeafSection(group.setId, 'leaf1')}
                               className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider mb-0.5 hover:text-secondary transition-colors"
-                              style={{ fontFamily: "var(--font-display)", color: "var(--cyan)" }}
+                              style={{ fontFamily: "var(--font-display)", color: "var(--blue)" }}
                             >
                               <span className="text-[8px]">{collapsedLeafSections.has(`${group.setId}:leaf1`) ? '\u25B8' : '\u25BE'}</span>
                               Leaf 1 - Active ({grouped.leaf1.length})
@@ -647,7 +644,7 @@ export default function StepReview({
                             <button
                               onClick={() => toggleLeafSection(group.setId, 'leaf2')}
                               className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider mb-0.5 hover:text-secondary transition-colors"
-                              style={{ fontFamily: "var(--font-display)", color: "var(--orange)" }}
+                              style={{ fontFamily: "var(--font-display)", color: "var(--purple)" }}
                             >
                               <span className="text-[8px]">{collapsedLeafSections.has(`${group.setId}:leaf2`) ? '\u25B8' : '\u25BE'}</span>
                               Leaf 2 - Inactive ({grouped.leaf2.length})

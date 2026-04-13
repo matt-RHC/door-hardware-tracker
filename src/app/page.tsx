@@ -29,7 +29,7 @@ function Particles() {
             top: `${p.y}%`,
             width: p.size,
             height: p.size,
-            background: "var(--cyan)",
+            background: "var(--blue)",
             opacity: p.opacity,
             animation: `float-particle ${p.duration}s ease-in-out ${p.delay}s infinite`,
           }}
@@ -47,7 +47,9 @@ function Particles() {
   );
 }
 
-/* ─── Door illustration (SVG) ─── */
+/* ─── Door illustration (SVG) ───
+   Uses `currentColor` on strokes/fills so every accent derives from the
+   wrapping element's `color: var(--blue)` — theme swaps cascade for free. */
 function DoorIllustration() {
   return (
     <svg
@@ -55,28 +57,34 @@ function DoorIllustration() {
       className="w-16 h-20 sm:w-20 sm:h-24"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
+      style={{ color: "var(--blue)" }}
     >
       {/* Door frame */}
       <rect
         x="10" y="5" width="100" height="150"
         rx="2"
-        stroke="rgba(90,200,250,0.2)"
+        stroke="currentColor"
+        strokeOpacity="0.2"
         strokeWidth="2"
-        fill="rgba(90,200,250,0.02)"
+        fill="currentColor"
+        fillOpacity="0.02"
       />
       {/* Door panel */}
       <rect
         x="18" y="12" width="84" height="136"
         rx="1"
-        stroke="rgba(90,200,250,0.12)"
+        stroke="currentColor"
+        strokeOpacity="0.12"
         strokeWidth="1.5"
-        fill="rgba(90,200,250,0.04)"
+        fill="currentColor"
+        fillOpacity="0.04"
       />
       {/* Top panel detail */}
       <rect
         x="26" y="20" width="68" height="40"
         rx="1"
-        stroke="rgba(90,200,250,0.08)"
+        stroke="currentColor"
+        strokeOpacity="0.08"
         strokeWidth="1"
         fill="none"
       />
@@ -84,7 +92,8 @@ function DoorIllustration() {
       <rect
         x="26" y="72" width="68" height="68"
         rx="1"
-        stroke="rgba(90,200,250,0.08)"
+        stroke="currentColor"
+        strokeOpacity="0.08"
         strokeWidth="1"
         fill="none"
       />
@@ -92,8 +101,10 @@ function DoorIllustration() {
       <circle
         cx="88" cy="82"
         r="4"
-        fill="rgba(90,200,250,0.25)"
-        stroke="rgba(90,200,250,0.4)"
+        fill="currentColor"
+        fillOpacity="0.25"
+        stroke="currentColor"
+        strokeOpacity="0.4"
         strokeWidth="1.5"
       />
       {/* Handle plate */}
@@ -101,19 +112,20 @@ function DoorIllustration() {
         x="84" y="70" width="8" height="24"
         rx="4"
         fill="none"
-        stroke="rgba(90,200,250,0.15)"
+        stroke="currentColor"
+        strokeOpacity="0.15"
         strokeWidth="1"
       />
       {/* Hinges */}
-      <rect x="18" y="30" width="4" height="10" rx="1" fill="rgba(90,200,250,0.15)" />
-      <rect x="18" y="110" width="4" height="10" rx="1" fill="rgba(90,200,250,0.15)" />
+      <rect x="18" y="30" width="4" height="10" rx="1" fill="currentColor" fillOpacity="0.15" />
+      <rect x="18" y="110" width="4" height="10" rx="1" fill="currentColor" fillOpacity="0.15" />
       {/* QR code suggestion */}
       <g opacity="0.2">
-        <rect x="40" y="110" width="16" height="16" fill="rgba(90,200,250,0.3)" rx="1" />
-        <rect x="42" y="112" width="4" height="4" fill="rgba(90,200,250,0.5)" />
-        <rect x="48" y="112" width="4" height="4" fill="rgba(90,200,250,0.5)" />
-        <rect x="42" y="118" width="4" height="4" fill="rgba(90,200,250,0.5)" />
-        <rect x="48" y="118" width="4" height="4" fill="rgba(90,200,250,0.3)" />
+        <rect x="40" y="110" width="16" height="16" fill="currentColor" fillOpacity="0.3" rx="1" />
+        <rect x="42" y="112" width="4" height="4" fill="currentColor" fillOpacity="0.5" />
+        <rect x="48" y="112" width="4" height="4" fill="currentColor" fillOpacity="0.5" />
+        <rect x="42" y="118" width="4" height="4" fill="currentColor" fillOpacity="0.5" />
+        <rect x="48" y="118" width="4" height="4" fill="currentColor" fillOpacity="0.3" />
       </g>
     </svg>
   );
@@ -164,13 +176,13 @@ export default function LoginPage() {
       {/* Layered background */}
       <Particles />
 
-      {/* Grid overlay */}
+      {/* Grid overlay — pulls its color from the current theme's accent token */}
       <div
         className="absolute inset-0 opacity-[0.025]"
         style={{
           backgroundImage: `
-            linear-gradient(rgba(90,200,250,0.4) 1px, transparent 1px),
-            linear-gradient(90deg, rgba(90,200,250,0.4) 1px, transparent 1px)
+            linear-gradient(color-mix(in srgb, var(--blue) 40%, transparent) 1px, transparent 1px),
+            linear-gradient(90deg, color-mix(in srgb, var(--blue) 40%, transparent) 1px, transparent 1px)
           `,
           backgroundSize: "80px 80px",
         }}
@@ -180,7 +192,8 @@ export default function LoginPage() {
       <div
         className="absolute -top-40 -left-40 w-[600px] h-[600px] rounded-full"
         style={{
-          background: "radial-gradient(circle, rgba(90,200,250,0.06) 0%, transparent 65%)",
+          background:
+            "radial-gradient(circle, color-mix(in srgb, var(--blue) 6%, transparent) 0%, transparent 65%)",
         }}
       />
 
@@ -188,7 +201,8 @@ export default function LoginPage() {
       <div
         className="absolute -bottom-32 -right-32 w-[400px] h-[400px] rounded-full"
         style={{
-          background: "radial-gradient(circle, rgba(48,209,88,0.04) 0%, transparent 70%)",
+          background:
+            "radial-gradient(circle, color-mix(in srgb, var(--green) 4%, transparent) 0%, transparent 70%)",
         }}
       />
 
@@ -341,10 +355,6 @@ export default function LoginPage() {
           ))}
         </div>
 
-        {/* Version tag */}
-        <p className="text-center mt-8 text-[10px] text-tertiary/40 tracking-[0.2em] uppercase">
-          v0.31 // Rabbit Hole Systems
-        </p>
       </div>
     </div>
   );

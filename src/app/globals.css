@@ -7,11 +7,14 @@
   /* ═══════════════════════════════════════════════════
      RABBIT HOLE SYSTEMS — CONSTRUCTION COLOR SYSTEM
      ═══════════════════════════════════════════════════
-     Dark theme (default for indoor/evening work).
+     Dark theme — optional indoor/evening mode (user toggles in Navbar).
+     Light theme is the product default; see [data-theme="light"] below.
      All accent colors WCAG 2.x AA verified.
      Semantic colors aligned with OSHA safety standards:
        Red = Danger/Stop, Orange = Warning,
-       Yellow/Amber = Caution, Green = Safe/Go
+       Yellow/Amber = Caution, Green = Safe/Go.
+     Non-semantic accents (Bench purple, Field amber) live in their own
+     tokens so install-type UI never collides with OSHA alarms.
   */
 
   --font-inter: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
@@ -33,52 +36,63 @@
 
   /* ── Primary Brand: Steel Blue ──
      Professional trust color. Distinct from Procore (orange) and
-     Fieldwire (lighter blue). 5.3:1 on white, 6.9:1 on dark bg. */
+     Fieldwire (lighter blue). 5.3:1 on white, 6.9:1 on dark bg.
+     `--accent` is the semantic alias used by Tailwind utilities. */
   --blue: #4BA3E3;
-  --blue-dim: rgba(75,163,227,0.12);
+  --blue-dim: color-mix(in srgb, var(--blue) 12%, transparent);
 
   /* ── OSHA Semantic: Success / Safe / Go (Green) ──
      Shipments received, tasks complete, inspections passed.
      4.5:1 on white. */
   --green: #2ECC71;
-  --green-dim: rgba(46,204,113,0.12);
+  --green-dim: color-mix(in srgb, var(--green) 12%, transparent);
 
   /* ── OSHA Semantic: Warning (Orange) ──
      Delivery delays, approaching deadlines, permit holds.
      5.2:1 on dark bg. */
   --orange: #E8811A;
-  --orange-dim: rgba(232,129,26,0.12);
+  --orange-dim: color-mix(in srgb, var(--orange) 12%, transparent);
 
-  /* ── Install Type: Bench (Purple) ──
-     Distinct from all OSHA colors. Clear differentiation from field.
+  /* ── Non-semantic Accent: Purple ──
+     Used for routing/categorization where OSHA tokens would mislead.
      5.8:1 on white. */
   --purple: #9B6DD7;
-  --purple-dim: rgba(155,109,215,0.12);
+  --purple-dim: color-mix(in srgb, var(--purple) 12%, transparent);
 
   /* ── OSHA Semantic: Danger / Stop (Red) ──
      Critical blocking issues, missing hardware, safety violations.
      5.3:1 on white. */
   --red: #E04850;
-  --red-dim: rgba(224,72,80,0.12);
-
-  /* ── Primary Brand Accent (Steel Blue lighter variant for dark theme) ── */
-  --cyan: #4BA3E3;
-  --cyan-dim: rgba(75,163,227,0.12);
+  --red-dim: color-mix(in srgb, var(--red) 12%, transparent);
 
   /* ── OSHA Semantic: Caution / Advisory (Amber) ──
      Stock notices, upcoming milestones, routine reminders.
      DeWalt-influenced gold. 5.2:1 on dark bg. */
   --yellow: #E8A817;
-  --yellow-dim: rgba(232,168,23,0.12);
+  --yellow-dim: color-mix(in srgb, var(--yellow) 12%, transparent);
 
-  /* ── Install Type: Field (Amber/Orange) ── */
+  /* ── Install Type tokens (NOT OSHA) ──
+     `--field` and `--bench` are dedicated so the install-type badges
+     never pull from `--orange` (warning) or `--purple` (routing). */
   --field: #D97706;
+  --field-dim: color-mix(in srgb, var(--field) 12%, transparent);
   --bench: #7C4DBC;
+  --bench-dim: color-mix(in srgb, var(--bench) 12%, transparent);
 
-  /* Glow intensities (dark theme only — disabled in light mode) */
+  /* Glow geometry (shared across themes; light mode hides the shadow) */
   --glow-sm: 0 0 4px;
   --glow-md: 0 0 8px;
   --glow-lg: 0 0 14px;
+
+  /* Pre-mixed glow colors — use alongside --glow-sm/md/lg.
+     Keep intensities in one place so swapping --blue cascades everywhere. */
+  --glow-blue: color-mix(in srgb, var(--blue) 25%, transparent);
+  --glow-blue-soft: color-mix(in srgb, var(--blue) 12%, transparent);
+  --glow-green: color-mix(in srgb, var(--green) 25%, transparent);
+  --glow-green-soft: color-mix(in srgb, var(--green) 12%, transparent);
+  --glow-orange: color-mix(in srgb, var(--orange) 25%, transparent);
+  --glow-red: color-mix(in srgb, var(--red) 25%, transparent);
+  --glow-purple: color-mix(in srgb, var(--purple) 25%, transparent);
 
   /* Surface tints — semi-transparent overlays for subtle bg variations */
   --tint: rgba(255,255,255,0.04);
@@ -93,11 +107,13 @@
 }
 
 /* ═══════════════════════════════════════════════════
-   LIGHT THEME — Default for field work (outdoor sunlight)
+   LIGHT THEME — Default (see ThemeToggle.tsx)
    ═══════════════════════════════════════════════════
+   Optimized for field work under outdoor sunlight.
    Clean professional appearance for enterprise buyers.
-   High contrast for outdoor readability.
-   Blue-gray neutrals keep it warm but professional. */
+   High contrast for readability. Blue-gray neutrals keep
+   it warm but professional. Glow decorations are suppressed
+   near the bottom of this file. */
 [data-theme="light"] {
   --background: #F7F8FA;
   --foreground: #1A1D23;
@@ -112,23 +128,25 @@
   --text-secondary: #5C6370;
   --text-tertiary: #8B919E;
 
-  /* Accent colors shift slightly darker for contrast on light backgrounds */
+  /* Accent colors shift slightly darker for contrast on light backgrounds.
+     `-dim` tokens reuse the same color-mix formula so the token contract
+     (12% base color on transparent) stays consistent across themes. */
   --blue: #1B6EB5;
-  --blue-dim: rgba(27,110,181,0.08);
+  --blue-dim: color-mix(in srgb, var(--blue) 8%, transparent);
   --green: #1A8754;
-  --green-dim: rgba(26,135,84,0.08);
+  --green-dim: color-mix(in srgb, var(--green) 8%, transparent);
   --orange: #AD5B00;
-  --orange-dim: rgba(173,91,0,0.08);
+  --orange-dim: color-mix(in srgb, var(--orange) 8%, transparent);
   --purple: #7C4DBC;
-  --purple-dim: rgba(124,77,188,0.08);
+  --purple-dim: color-mix(in srgb, var(--purple) 8%, transparent);
   --red: #CC2D37;
-  --red-dim: rgba(204,45,55,0.08);
-  --cyan: #1B6EB5;
-  --cyan-dim: rgba(27,110,181,0.08);
+  --red-dim: color-mix(in srgb, var(--red) 8%, transparent);
   --yellow: #926C00;
-  --yellow-dim: rgba(146,108,0,0.08);
+  --yellow-dim: color-mix(in srgb, var(--yellow) 8%, transparent);
   --field: #AD5B00;
+  --field-dim: color-mix(in srgb, var(--field) 8%, transparent);
   --bench: #7C4DBC;
+  --bench-dim: color-mix(in srgb, var(--bench) 8%, transparent);
 
   /* Surface tints — light mode uses dark overlays instead of white */
   --tint: rgba(0,0,0,0.03);
@@ -169,8 +187,11 @@
   --color-warning-dim: var(--orange-dim);
   --color-danger: var(--red);
   --color-danger-dim: var(--red-dim);
-  --color-info: var(--cyan);
-  --color-info-dim: var(--cyan-dim);
+  /* `info` is an alias of the primary accent — kept so existing
+     `text-info` / `bg-info-dim` utilities keep working while we retire
+     the stale `--cyan` token. Prefer `text-accent` in new code. */
+  --color-info: var(--blue);
+  --color-info-dim: var(--blue-dim);
   --color-caution: var(--yellow);
   --color-caution-dim: var(--yellow-dim);
   --color-purple: var(--purple);
@@ -178,7 +199,9 @@
 
   /* Install type indicators → text-field, bg-field, text-bench, bg-bench */
   --color-field: var(--field);
+  --color-field-dim: var(--field-dim);
   --color-bench: var(--bench);
+  --color-bench-dim: var(--bench-dim);
 }
 
 * {
@@ -214,11 +237,8 @@ body {
   mix-blend-mode: multiply;
 }
 
-#__next {
-  display: flex;
-  flex-direction: column;
-  min-height: 100vh;
-}
+/* NOTE: #__next was the Pages Router mount point; App Router has no such element.
+   Layout spacing now lives on <body> in src/app/layout.tsx (min-h-full flex flex-col). */
 
 /* ═══════════════════════════════════════════════
    COMPONENT CLASSES
@@ -250,7 +270,7 @@ body {
   position: absolute;
   inset: -1px;
   border-radius: inherit;
-  box-shadow: var(--glow-sm) rgba(90,200,250,0.12);
+  box-shadow: var(--glow-sm) var(--glow-blue-soft);
   opacity: 0;
   transition: opacity 0.25s ease;
   pointer-events: none;
@@ -264,13 +284,16 @@ body {
   display: none;
 }
 
-/* Color variants — left-border accent changes, hover stays consistent */
+/* Color variants — left-border accent changes, hover stays consistent.
+   `--info` is an alias of the primary accent; both render steel-blue. */
 .glow-card--green  { border-left-color: var(--green); }
 .glow-card--orange { border-left-color: var(--orange); }
 .glow-card--blue   { border-left-color: var(--blue); }
-.glow-card--cyan   { border-left-color: var(--blue); }
+.glow-card--info   { border-left-color: var(--blue); }
 .glow-card--purple { border-left-color: var(--purple); }
 .glow-card--red    { border-left-color: var(--red); }
+.glow-card--field  { border-left-color: var(--field); }
+.glow-card--bench  { border-left-color: var(--bench); }
 
 /* ── Corner Brackets ── */
 /* Decorative corners à la HoloLoader, for panels and modals */
@@ -289,15 +312,15 @@ body {
 .corner-brackets::before {
   top: -1px;
   left: -1px;
-  border-top: 2px solid var(--cyan);
-  border-left: 2px solid var(--cyan);
+  border-top: 2px solid var(--blue);
+  border-left: 2px solid var(--blue);
   border-radius: 3px 0 0 0;
 }
 .corner-brackets::after {
   bottom: -1px;
   right: -1px;
-  border-bottom: 2px solid var(--cyan);
-  border-right: 2px solid var(--cyan);
+  border-bottom: 2px solid var(--blue);
+  border-right: 2px solid var(--blue);
   border-radius: 0 0 3px 0;
 }
 
@@ -319,10 +342,10 @@ body {
 .glow-btn--primary {
   background: var(--blue);
   color: white;
-  border-color: rgba(10,132,255,0.5);
+  border-color: color-mix(in srgb, var(--blue) 50%, transparent);
 }
 .glow-btn--primary:hover {
-  box-shadow: var(--glow-md) rgba(10,132,255,0.25);
+  box-shadow: var(--glow-md) var(--glow-blue);
   filter: brightness(1.06);
 }
 .glow-btn--primary:active {
@@ -342,21 +365,21 @@ body {
 
 
 .glow-btn--success {
-  background: rgba(48,209,88,0.12);
+  background: var(--green-dim);
   color: var(--green);
-  border-color: rgba(48,209,88,0.25);
+  border-color: color-mix(in srgb, var(--green) 25%, transparent);
 }
 .glow-btn--success:hover {
-  box-shadow: var(--glow-sm) rgba(48,209,88,0.2);
-  background: rgba(48,209,88,0.18);
+  box-shadow: var(--glow-sm) var(--glow-green);
+  background: color-mix(in srgb, var(--green) 18%, transparent);
 }
 .glow-btn--danger {
   background: var(--red);
   color: white;
-  border-color: rgba(255,69,58,0.5);
+  border-color: color-mix(in srgb, var(--red) 50%, transparent);
 }
 .glow-btn--danger:hover {
-  box-shadow: var(--glow-sm) rgba(255,69,58,0.25);
+  box-shadow: var(--glow-sm) var(--glow-red);
   filter: brightness(1.06);
 }
 
@@ -366,28 +389,51 @@ body {
   letter-spacing: 0.04em;
 }
 
-/* ── Glow Text ── */
-.text-glow-cyan {
-  color: var(--cyan);
-  text-shadow: 0 0 8px rgba(90,200,250,0.4), 0 0 20px rgba(90,200,250,0.15);
+/* ── Glow Text ──
+   `.text-glow-cyan` is retained as an alias of `.text-glow-blue`
+   for backwards compat with existing markup; both render steel-blue. */
+.text-glow-cyan,
+.text-glow-blue {
+  color: var(--blue);
+  text-shadow:
+    0 0 8px color-mix(in srgb, var(--blue) 40%, transparent),
+    0 0 20px color-mix(in srgb, var(--blue) 15%, transparent);
 }
 .text-glow-green {
   color: var(--green);
-  text-shadow: 0 0 8px rgba(48,209,88,0.4), 0 0 20px rgba(48,209,88,0.15);
-}
-.text-glow-blue {
-  color: var(--blue);
-  text-shadow: 0 0 8px rgba(10,132,255,0.4), 0 0 20px rgba(10,132,255,0.15);
+  text-shadow:
+    0 0 8px color-mix(in srgb, var(--green) 40%, transparent),
+    0 0 20px color-mix(in srgb, var(--green) 15%, transparent);
 }
 
-/* Light theme: disable glow effects */
+/* Light theme: disable every decorative glow so text and buttons stay
+   crisp under daylight. `.glow-card::after` is already suppressed
+   higher up. Keep legitimate drop-shadows (drawer, modals) alone. */
 [data-theme="light"] .text-glow-cyan,
 [data-theme="light"] .text-glow-green,
 [data-theme="light"] .text-glow-blue {
   text-shadow: none;
 }
+[data-theme="light"] .comic-heading {
+  text-shadow: none;
+}
+[data-theme="light"] .comic-heading::after,
+[data-theme="light"] .comic-heading--green::after,
+[data-theme="light"] .comic-heading--orange::after,
+[data-theme="light"] .comic-heading--blue::after,
+[data-theme="light"] .comic-heading--purple::after,
+[data-theme="light"] .comic-heading--red::after {
+  box-shadow: none;
+}
+[data-theme="light"] .glow-btn--primary:hover,
+[data-theme="light"] .glow-btn--success:hover,
+[data-theme="light"] .glow-btn--danger:hover {
+  box-shadow: none;
+}
 
-/* ── Status Badge ── */
+/* ── Status Badge ──
+   Background + border derive from the same `--*-dim` tokens so the
+   badge hue always matches the text color it sits under. */
 .status-badge {
   display: inline-flex;
   align-items: center;
@@ -401,24 +447,24 @@ body {
   border: 1px solid transparent;
 }
 .status-badge--active {
-  background: rgba(48,209,88,0.1);
+  background: var(--green-dim);
   color: var(--green);
-  border-color: rgba(48,209,88,0.2);
+  border-color: color-mix(in srgb, var(--green) 20%, transparent);
 }
 .status-badge--warning {
-  background: rgba(255,159,10,0.1);
+  background: var(--orange-dim);
   color: var(--orange);
-  border-color: rgba(255,159,10,0.2);
+  border-color: color-mix(in srgb, var(--orange) 20%, transparent);
 }
 .status-badge--error {
-  background: rgba(255,69,58,0.1);
+  background: var(--red-dim);
   color: var(--red);
-  border-color: rgba(255,69,58,0.2);
+  border-color: color-mix(in srgb, var(--red) 20%, transparent);
 }
 .status-badge--info {
-  background: rgba(90,200,250,0.1);
-  color: var(--cyan);
-  border-color: rgba(90,200,250,0.2);
+  background: var(--blue-dim);
+  color: var(--blue);
+  border-color: color-mix(in srgb, var(--blue) 20%, transparent);
 }
 
 /* ── Input Fields ── */
@@ -438,7 +484,7 @@ body {
 }
 .input-field:focus {
   border-color: var(--blue);
-  box-shadow: 0 0 0 2px rgba(27,110,181,0.15);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--blue) 15%, transparent);
 }
 
 /* ── Panel (Modals, Overlays) ── */
@@ -485,7 +531,7 @@ body {
   font-family: var(--font-display);
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  text-shadow: 2px 2px 0 rgba(0,0,0,0.8), 0 0 10px rgba(90,200,250,0.3);
+  text-shadow: 2px 2px 0 rgba(0,0,0,0.8), 0 0 10px var(--glow-blue);
   position: relative;
   padding-bottom: 8px;
 }
@@ -497,34 +543,34 @@ body {
   left: 0;
   width: 100%;
   height: 3px;
-  background: linear-gradient(90deg, var(--cyan), transparent);
-  box-shadow: 0 0 8px rgba(90,200,250,0.3);
+  background: linear-gradient(90deg, var(--blue), transparent);
+  box-shadow: 0 0 8px var(--glow-blue);
 }
 
-/* Color variants for comic headings */
+/* Color variants for comic headings — glow always matches the gradient base */
 .comic-heading--green::after {
   background: linear-gradient(90deg, var(--green), transparent);
-  box-shadow: 0 0 8px rgba(48,209,88,0.3);
+  box-shadow: 0 0 8px var(--glow-green);
 }
 
 .comic-heading--orange::after {
   background: linear-gradient(90deg, var(--orange), transparent);
-  box-shadow: 0 0 8px rgba(255,159,10,0.3);
+  box-shadow: 0 0 8px var(--glow-orange);
 }
 
 .comic-heading--blue::after {
   background: linear-gradient(90deg, var(--blue), transparent);
-  box-shadow: 0 0 8px rgba(10,132,255,0.3);
+  box-shadow: 0 0 8px var(--glow-blue);
 }
 
 .comic-heading--purple::after {
   background: linear-gradient(90deg, var(--purple), transparent);
-  box-shadow: 0 0 8px rgba(191,90,242,0.3);
+  box-shadow: 0 0 8px var(--glow-purple);
 }
 
 .comic-heading--red::after {
   background: linear-gradient(90deg, var(--red), transparent);
-  box-shadow: 0 0 8px rgba(255,69,58,0.3);
+  box-shadow: 0 0 8px var(--glow-red);
 }
 
 

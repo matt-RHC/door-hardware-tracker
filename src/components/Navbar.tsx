@@ -43,12 +43,12 @@ export default function Navbar() {
 
   return (
     <nav className="relative bg-background/95 backdrop-blur-xl border-b border-th-border">
-      {/* Subtle bottom glow line */}
+      {/* Subtle bottom glow line — plateau from 30%→70%, fades to transparent at both ends */}
       <div
         className="absolute bottom-0 left-0 right-0 h-[1px]"
         style={{
           background:
-            "linear-gradient(90deg, transparent, var(--blue-dim) 30%, var(--blue-dim) 50%, var(--blue-dim) 70%, transparent)",
+            "linear-gradient(90deg, transparent, var(--blue-dim) 30% 70%, transparent)",
         }}
       />
 

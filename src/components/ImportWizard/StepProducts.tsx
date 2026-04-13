@@ -12,24 +12,31 @@ import {
 import WizardNav from "./WizardNav";
 
 // ── Category accent color mapping ──
+// Deliberately avoids OSHA semantic tokens (red=danger, orange=warning,
+// green=success, yellow=caution) for routine product categories. Using
+// those would make an Exit Device or Magnetic Lock card look like an
+// error — they are neither. Electrified hardware shares `purple` to
+// distinguish it from mechanical hardware at a glance. All values must
+// be valid `--*` CSS token names (see globals.css) and must exist as
+// `.glow-card--*` variants (also in globals.css).
 const CATEGORY_ACCENT: Record<string, string> = {
   hinges: "blue",
-  electric_conductor_hinge: "blue",
+  electric_conductor_hinge: "purple",
   lockset: "purple",
   latchset: "purple",
-  exit_device: "red",
-  closer: "cyan",
-  holder: "cyan",
-  coordinator: "cyan",
-  push_pull: "green",
-  electronic_modification: "orange",
-  electric_strike: "orange",
-  magnetic_lock: "orange",
-  threshold: "green",
-  seal: "green",
-  weatherstripping: "green",
+  exit_device: "blue",
+  closer: "blue",
+  holder: "blue",
+  coordinator: "blue",
+  push_pull: "blue",
+  electronic_modification: "purple",
+  electric_strike: "purple",
+  magnetic_lock: "purple",
+  threshold: "blue",
+  seal: "blue",
+  weatherstripping: "blue",
   stop: "blue",
-  hardware_by_others: "red",
+  hardware_by_others: "blue",
 };
 
 function accentForCategory(categoryId: string): string {

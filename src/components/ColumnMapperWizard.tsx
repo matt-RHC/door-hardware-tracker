@@ -70,7 +70,7 @@ const FIELD_COLORS: Record<string, string> = {
   hw_set: "var(--green)",
   hw_heading: "var(--purple)",
   location: "var(--orange)",
-  door_type: "var(--cyan)",
+  door_type: "var(--blue)",
   frame_type: "var(--red)",
   fire_rating: "var(--red)",
   hand: "var(--yellow)",
@@ -106,8 +106,8 @@ function PunchySuggestions({
           key={`ps-${idx}`}
           className="p-3 rounded-lg flex items-start gap-3"
           style={{
-            backgroundColor: 'var(--cyan-dim)',
-            border: '1px solid var(--cyan-dim)',
+            backgroundColor: 'var(--blue-dim)',
+            border: '1px solid var(--blue-dim)',
           }}
         >
           <span className="text-lg shrink-0">🤖</span>
@@ -165,11 +165,11 @@ function StepIndicator({ currentStep, totalSteps }: { currentStep: number; total
           <div
             className="flex items-center justify-center w-10 h-10 rounded-full font-display font-bold text-sm transition-all"
             style={{
-              backgroundColor: i === currentStep ? "var(--cyan-dim)" : "var(--tint)",
-              borderColor: i === currentStep ? "var(--cyan)" : "var(--tint-strong)",
+              backgroundColor: i === currentStep ? "var(--blue-dim)" : "var(--tint)",
+              borderColor: i === currentStep ? "var(--blue)" : "var(--tint-strong)",
               borderWidth: "1px",
-              color: i === currentStep ? "var(--cyan)" : "var(--text-tertiary)",
-              boxShadow: i === currentStep ? "0 0 12px var(--cyan-dim)" : "none",
+              color: i === currentStep ? "var(--blue)" : "var(--text-tertiary)",
+              boxShadow: i === currentStep ? "0 0 12px var(--blue-dim)" : "none",
             }}
           >
             {i + 1}
@@ -177,7 +177,7 @@ function StepIndicator({ currentStep, totalSteps }: { currentStep: number; total
           {i < totalSteps - 1 && (
             <div className="w-8 h-px" style={{
               background: i < currentStep
-                ? "linear-gradient(90deg, var(--cyan), var(--cyan-dim))"
+                ? "linear-gradient(90deg, var(--blue), var(--blue-dim))"
                 : "var(--tint-strong)"
             }} />
           )}
@@ -252,9 +252,9 @@ function Step1IdentifyTable({
                     key={idx}
                     className="px-3 py-3 text-left font-semibold whitespace-nowrap border-b"
                     style={{
-                      color: "var(--cyan)",
+                      color: "var(--blue)",
                       backgroundColor: "var(--background)",
-                      borderBottomColor: "var(--cyan-dim)",
+                      borderBottomColor: "var(--blue-dim)",
                     }}
                   >
                     <div className="flex flex-col gap-0.5">
@@ -477,10 +477,10 @@ function Step2MapColumns({
                       className="flex-shrink-0 w-8 rounded-lg flex items-center justify-center text-xs transition-all"
                       style={{
                         backgroundColor: isSkipped
-                          ? "var(--cyan-dim)"
+                          ? "var(--blue-dim)"
                           : "var(--tint)",
                         border: "1px solid var(--tint-strong)",
-                        color: isSkipped ? "var(--cyan)" : "var(--text-tertiary)",
+                        color: isSkipped ? "var(--blue)" : "var(--text-tertiary)",
                       }}
                       title={isSkipped ? "Re-enable this field" : "Not in this table"}
                     >
@@ -522,7 +522,7 @@ function Step2MapColumns({
                       ? `${color}12`
                       : "var(--tint)",
                     boxShadow: isSelectable && activeField
-                      ? "inset 0 0 8px var(--cyan-dim)"
+                      ? "inset 0 0 8px var(--blue-dim)"
                       : "none",
                   }}
                 >

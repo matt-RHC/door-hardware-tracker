@@ -69,7 +69,7 @@ function StepIndicator({ currentStep, hasExistingData }: { currentStep: WizardSt
               {step < currentStep ? `\u2713 ${label}` : label}
             </span>
             {i < visibleSteps.length - 1 && (
-              <span className="text-tertiary/30 text-xs">\u2192</span>
+              <span className="text-tertiary/30 text-xs">→</span>
             )}
           </div>
         ))}
