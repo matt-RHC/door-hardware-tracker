@@ -171,6 +171,7 @@ export async function POST(request: NextRequest) {
 
     // 6. Chunk-insert staging hardware items
     let itemsInserted = 0
+    const failedItemChunks: Array<{ offset: number; count: number; error: string }> = []
     for (let i = 0; i < allItems.length; i += CHUNK_SIZE) {
       const chunk = allItems.slice(i, i + CHUNK_SIZE)
       const { data, error } = await (supabase as any)
@@ -180,6 +181,7 @@ export async function POST(request: NextRequest) {
 
       if (error) {
         console.error(`Error inserting staging hw items chunk at ${i}:`, error)
+        failedItemChunks.push({ offset: i, count: chunk.length, error: error.message })
       } else if (data) {
         itemsInserted += data.length
       }
@@ -195,7 +197,8 @@ export async function POST(request: NextRequest) {
 
     const unmatchedSets = findUnmatchedSets(doors, setMap)
 
-    console.log(`Staging save complete: ${stagingResult.openingsCount} openings, ${itemsInserted} items, run=${runId}`)
+    const isPartialSave = failedItemChunks.length > 0
+    console.log(`Staging save complete: ${stagingResult.openingsCount} openings, ${itemsInserted} items, run=${runId}${isPartialSave ? ` (${failedItemChunks.length} chunk(s) failed)` : ''}`)
 
     // 8. Auto-promote: staging → production in the same request
     const promoteResult = await promoteExtraction(supabase, runId, user.id)
@@ -204,12 +207,15 @@ export async function POST(request: NextRequest) {
       console.error('Auto-promote failed:', promoteResult.error)
       return NextResponse.json({
         success: false,
+        partial: isPartialSave,
         error: promoteResult.error ?? 'Promotion to production failed',
         stagingSuccess: true,
         openingsCount: stagingResult.openingsCount,
         itemsCount: itemsInserted,
+        expectedItemsCount: allItems.length,
         hardwareSets: hardwareSets.length,
         unmatchedSets: unmatchedSets.length > 0 ? unmatchedSets : undefined,
+        failedChunks: isPartialSave ? failedItemChunks : undefined,
         extraction_run_id: runId,
       })
     }
@@ -218,10 +224,13 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
+      partial: isPartialSave,
       openingsCount: promoteResult.openingsPromoted ?? stagingResult.openingsCount,
       itemsCount: promoteResult.itemsPromoted ?? itemsInserted,
+      expectedItemsCount: allItems.length,
       hardwareSets: hardwareSets.length,
       unmatchedSets: unmatchedSets.length > 0 ? unmatchedSets : undefined,
+      failedChunks: isPartialSave ? failedItemChunks : undefined,
       extraction_run_id: runId,
       promoted: true,
     })

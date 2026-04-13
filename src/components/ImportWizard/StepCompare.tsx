@@ -88,6 +88,7 @@ export default function StepCompare({
   const [changedTransfer, setChangedTransfer] = useState<Record<string, boolean>>({});
   const [newExcluded, setNewExcluded] = useState<Record<string, boolean>>({});
   const [applyResult, setApplyResult] = useState<Record<string, number> | null>(null);
+  const [showApplyConfirm, setShowApplyConfirm] = useState(false);
 
   // Auto-run compare on mount
   const runCompare = useCallback(async () => {
@@ -430,11 +431,69 @@ export default function StepCompare({
       ) : (
         <WizardNav
           onBack={subStep <= 1 ? onBack : handleSubBack}
-          onNext={subStep === 4 ? applyRevision : handleSubNext}
+          onNext={subStep === 4 ? () => setShowApplyConfirm(true) : handleSubNext}
           nextLabel={loading ? "Processing..." : subStep === 4 ? "Apply Changes" : "Next"}
           nextDisabled={loading || subStep === 0}
           nextVariant={subStep === 4 ? "success" : "accent"}
         />
+      )}
+
+      {/* Apply Changes confirmation modal */}
+      {showApplyConfirm && compareResult && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="panel w-full max-w-md p-6 animate-fade-in-up">
+            <h2 className="text-primary font-semibold text-lg mb-3">Confirm Apply Changes</h2>
+            <p className="text-secondary text-sm mb-4">
+              This action is <strong className="text-danger">irreversible</strong>. The following changes will be applied to your project:
+            </p>
+            <div className="space-y-2 mb-6 text-sm">
+              {compareResult.added.filter(a => !newExcluded[a.door_number]).length > 0 && (
+                <div className="flex items-center gap-2">
+                  <span className="text-accent">+</span>
+                  <span className="text-secondary">
+                    <strong className="text-accent">{compareResult.added.filter(a => !newExcluded[a.door_number]).length}</strong> door{compareResult.added.filter(a => !newExcluded[a.door_number]).length !== 1 ? "s" : ""} will be added
+                  </span>
+                </div>
+              )}
+              {Object.values(removedActions).filter(v => v === "delete").length > 0 && (
+                <div className="flex items-center gap-2">
+                  <span className="text-danger">&minus;</span>
+                  <span className="text-secondary">
+                    <strong className="text-danger">{Object.values(removedActions).filter(v => v === "delete").length}</strong> door{Object.values(removedActions).filter(v => v === "delete").length !== 1 ? "s" : ""} will be permanently deleted
+                  </span>
+                </div>
+              )}
+              {compareResult.changed.length > 0 && (
+                <div className="flex items-center gap-2">
+                  <span className="text-warning">~</span>
+                  <span className="text-secondary">
+                    <strong className="text-warning">{compareResult.changed.length}</strong> door{compareResult.changed.length !== 1 ? "s" : ""} will be modified
+                    {Object.values(changedTransfer).filter(v => !v).length > 0 && (
+                      <span className="text-danger"> ({Object.values(changedTransfer).filter(v => !v).length} with progress reset)</span>
+                    )}
+                  </span>
+                </div>
+              )}
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowApplyConfirm(false)}
+                className="glow-btn--ghost flex-1 min-h-11 rounded-lg text-sm font-medium"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => {
+                  setShowApplyConfirm(false);
+                  applyRevision();
+                }}
+                className="glow-btn--danger flex-1 min-h-11 rounded-lg text-sm font-semibold"
+              >
+                Apply Changes
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

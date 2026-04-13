@@ -72,3 +72,30 @@ Tracks decisions, issues, and deviations for the background extraction job featu
 
 - `src/components/ImportWizard/types.ts` — Added `JobWizardStep` enum, `JobStatus`, `JobStatusResponse`, `JobResultsResponse` types
 - `src/components/ImportWizard/ImportWizard.tsx` — Added job wizard flow with feature flag gate, `JobStepIndicator`, job flow callbacks
+
+---
+
+## P0 UX Fixes — Confirmation Dialogs & Chunk Failure Visibility
+
+### Decisions
+
+1. **Custom modals over native confirm()**: All confirmation dialogs use the project's existing inline modal pattern (`useState` + conditional render + `fixed inset-0` overlay) rather than `window.confirm()`. This keeps the UX consistent with the dark theme, allows richer content (itemized change summaries), and enables destructive-action styling (red confirm buttons via `glow-btn--danger`).
+
+2. **Apply Revision confirmation (StepCompare)**: The modal itemizes adds, deletes, and modifications with counts derived from the existing `compareResult` state — no additional API calls needed. The confirm button is styled as destructive (red) to visually distinguish it from the regular "Next" button.
+
+3. **Close confirmation (ImportWizard)**: Both the job wizard and legacy wizard close buttons now check `hasUnsavedProgress` (whether the user is past the Upload step). On step 1 with no data loaded, close fires immediately. A `beforeunload` handler is registered when `hasUnsavedProgress` is true, providing a browser-native backup for tab closes and navigation.
+
+4. **Chunk failure tracking (StepTriage)**: Failed chunk indices and error messages are stored in component state (`failedChunks`). A warning banner is displayed after extraction completes with failures, and a retry button re-runs only the failed chunks using stored chunk data (`chunksRef`). Successfully retried chunks are merged into the existing door/set state via `mergeDoors`/`mergeHardwareSets`.
+
+5. **Partial-success response (save/route.ts)**: The save endpoint now returns `{ partial: true, failedChunks, savedCount, expectedCount }` when staging item inserts partially fail. The response shape is backwards-compatible — `partial` defaults to `false`/`undefined` on full success. StepConfirm surfaces a "Partial Save" warning banner when present.
+
+6. **Job orchestrator chunk tracking (jobs/[id]/run/route.ts)**: The `failedChunks` array is hoisted to the outer scope (accessible for both chunked and single-shot paths). Failed chunks are included in `extraction_summary.failedChunks` and `extraction_summary.partial = true` so downstream consumers (StepQuestions progress, future monitoring) can surface warnings.
+
+### Files Modified
+
+- `src/components/ImportWizard/StepCompare.tsx` — Added `showApplyConfirm` state + confirmation modal with itemized change summary
+- `src/components/ImportWizard/ImportWizard.tsx` — Added `showCloseConfirm` state, `handleCloseAttempt`, `beforeunload` handler, close confirmation modals (both wizard paths)
+- `src/components/ImportWizard/StepTriage.tsx` — Added `failedChunks`/`totalChunks`/`retryingChunks` state, chunk failure tracking in extraction loop, warning banner with retry button, `retryFailedChunks` callback
+- `src/components/ImportWizard/StepConfirm.tsx` — Extended `saveResult` type with `partial`/`failedChunks`/`expectedItemsCount`, added partial-save warning banner
+- `src/app/api/parse-pdf/save/route.ts` — Track `failedItemChunks` during staged item inserts, return `partial`/`failedChunks`/`expectedItemsCount` in response
+- `src/app/api/jobs/[id]/run/route.ts` — Hoisted `failedChunks` to outer scope, track chunk failures, include in `extraction_summary`

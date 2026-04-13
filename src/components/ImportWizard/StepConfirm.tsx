@@ -35,7 +35,10 @@ export default function StepConfirm({
   const [saveResult, setSaveResult] = useState<{
     openingsCount: number;
     itemsCount: number;
+    expectedItemsCount?: number;
     unmatchedSets?: string[];
+    partial?: boolean;
+    failedChunks?: Array<{ offset: number; count: number; error: string }>;
   } | null>(null);
 
   const totalItems = hardwareSets.reduce(
@@ -116,7 +119,10 @@ export default function StepConfirm({
         setSaveResult({
           openingsCount: result.openingsCount,
           itemsCount: result.itemsCount,
+          expectedItemsCount: result.expectedItemsCount,
           unmatchedSets: result.unmatchedSets,
+          partial: result.partial,
+          failedChunks: result.failedChunks,
         });
         setPromoteFailed(true);
         setStatus("Promotion failed");
@@ -131,7 +137,10 @@ export default function StepConfirm({
       setSaveResult({
         openingsCount: result.openingsCount,
         itemsCount: result.itemsCount,
+        expectedItemsCount: result.expectedItemsCount,
         unmatchedSets: result.unmatchedSets,
+        partial: result.partial,
+        failedChunks: result.failedChunks,
       });
 
       setStatus("Save complete!");
@@ -212,6 +221,17 @@ export default function StepConfirm({
             </div>
           </div>
         </div>
+
+        {saveResult.partial && (
+          <div className="mb-4 p-3 bg-warning-dim border border-warning rounded-xl text-sm">
+            <p className="text-warning font-semibold mb-1">Partial Save</p>
+            <p className="text-secondary text-xs">
+              {saveResult.itemsCount} of {saveResult.expectedItemsCount ?? "?"} hardware items were saved successfully.
+              {saveResult.failedChunks && ` ${saveResult.failedChunks.length} batch(es) failed to insert.`}
+              {" "}Some hardware items may be missing — review the project data.
+            </p>
+          </div>
+        )}
 
         {saveResult.unmatchedSets && saveResult.unmatchedSets.length > 0 && (
           <div className="mb-4 p-3 bg-warning-dim border border-warning rounded-xl text-warning text-xs">
