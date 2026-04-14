@@ -18,6 +18,21 @@ import { useToast } from "@/components/ToastProvider";
 import { openProjectPdfAtPage } from "@/lib/pdf-page-link";
 import { groupItemsByLeaf, getLeafDisplayQty, getLeafProgress } from "@/lib/classify-leaf-items";
 import { classifyItemScope } from "@/lib/parse-pdf-helpers";
+import PDFRegionSelector from "@/components/ImportWizard/PDFRegionSelector";
+
+interface RescanResult {
+  itemId: string;
+  itemName: string;
+  fields: Record<string, string | number>;
+  applied?: boolean;
+}
+
+const RESCAN_HINTS: Record<string, string> = {
+  per_frame: "Frame items (seals, weatherstripping, silencers) are often in a separate frame schedule section",
+  per_leaf: "Per-leaf items like hinges and closers are usually in the main hardware group table",
+  per_opening: "Per-opening items like locksets and exit devices are in the main hardware group",
+  per_pair: "Pair-only items (coordinators, flush bolts) may be in a separate pairs section",
+};
 
 interface OpeningDetail extends Opening {
   hardware_items: HardwareItemWithProgress[];
@@ -44,6 +59,12 @@ export default function DoorDetailPage() {
   const [activeLeafTab, setActiveLeafTab] = useState<'shared' | 'leaf1' | 'leaf2'>('leaf1');
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
   const [batchActionLoading, setBatchActionLoading] = useState(false);
+
+  // Rescan state
+  const [rescanItem, setRescanItem] = useState<HardwareItemWithProgress | null>(null);
+  const [pdfBuffer, setPdfBuffer] = useState<ArrayBuffer | null>(null);
+  const [rescanLoading, setRescanLoading] = useState(false);
+  const [rescanResults, setRescanResults] = useState<RescanResult[] | null>(null);
 
   const supabase = createClient();
   const fetchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -266,6 +287,162 @@ export default function DoorDetailPage() {
     }
   }, [opening, projectId, showToast]);
 
+  const handleRescanClick = useCallback(async (item: HardwareItemWithProgress) => {
+    if (opening?.pdf_page == null) {
+      showToast("error", "No PDF page linked to this door");
+      return;
+    }
+    setRescanItem(item);
+    setRescanResults(null);
+
+    if (!pdfBuffer) {
+      try {
+        const resp = await fetch(`/api/projects/${projectId}/pdf-url`);
+        const { url } = await resp.json();
+        const pdfResp = await fetch(url);
+        const buffer = await pdfResp.arrayBuffer();
+        setPdfBuffer(buffer);
+      } catch {
+        showToast("error", "Failed to load PDF");
+        setRescanItem(null);
+      }
+    }
+  }, [opening, pdfBuffer, projectId, showToast]);
+
+  const handleRescanSelect = useCallback(async (bbox: { x0: number; y0: number; x1: number; y1: number }) => {
+    if (!rescanItem || !opening) return;
+    setRescanLoading(true);
+
+    try {
+      const resp = await fetch('/api/parse-pdf/region-extract', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          projectId,
+          page: opening.pdf_page,
+          bbox,
+          setId: rescanItem.id,
+        }),
+      });
+      const { items: extractedItems } = await resp.json();
+
+      if (!extractedItems || extractedItems.length === 0) {
+        showToast("error", "No items found in selected region");
+        setRescanLoading(false);
+        return;
+      }
+
+      const area = (bbox.x1 - bbox.x0) * (bbox.y1 - bbox.y0);
+      const isPointScan = area < 0.15;
+      const confidence = getItemConfidence(rescanItem);
+      const missingFields = confidence.missingFields;
+
+      if (isPointScan) {
+        // Point mode: find best match for the triggering item
+        const targetName = rescanItem.name.toLowerCase();
+        let bestMatch = extractedItems[0];
+        let bestScore = 0;
+        for (const ext of extractedItems) {
+          const extName = (ext.name || '').toLowerCase();
+          if (extName === targetName) { bestMatch = ext; bestScore = 3; break; }
+          if (extName.includes(targetName) || targetName.includes(extName)) {
+            const score = 2;
+            if (score > bestScore) { bestMatch = ext; bestScore = score; }
+          }
+        }
+
+        const fields: Record<string, string | number> = {};
+        for (const f of missingFields) {
+          if (f in bestMatch && bestMatch[f] != null && bestMatch[f] !== '') {
+            fields[f] = bestMatch[f];
+          }
+        }
+        if (Object.keys(fields).length > 0) {
+          setRescanResults([{ itemId: rescanItem.id, itemName: rescanItem.name, fields }]);
+        } else {
+          showToast("error", "Extracted data didn\u2019t contain the missing fields");
+        }
+      } else {
+        // Table mode: match all extracted items to existing hardware items
+        const allItems = opening.hardware_items;
+        const results: RescanResult[] = [];
+
+        for (const ext of extractedItems) {
+          const extName = (ext.name || '').toLowerCase();
+          let matchedItem: HardwareItemWithProgress | null = null;
+          let bestScore = 0;
+
+          for (const hw of allItems) {
+            const hwName = hw.name.toLowerCase();
+            if (hwName === extName) { matchedItem = hw; bestScore = 3; break; }
+            if (hwName.includes(extName) || extName.includes(hwName)) {
+              const score = 2;
+              if (score > bestScore) { matchedItem = hw; bestScore = score; }
+            }
+          }
+
+          if (matchedItem && bestScore > 0) {
+            const itemConf = getItemConfidence(matchedItem);
+            const fields: Record<string, string | number> = {};
+            for (const f of itemConf.missingFields) {
+              if (f in ext && ext[f] != null && ext[f] !== '') {
+                fields[f] = ext[f];
+              }
+            }
+            if (Object.keys(fields).length > 0) {
+              // Avoid duplicates
+              if (!results.find(r => r.itemId === matchedItem!.id)) {
+                results.push({ itemId: matchedItem.id, itemName: matchedItem.name, fields });
+              }
+            }
+          }
+        }
+
+        if (results.length > 0) {
+          setRescanResults(results);
+        } else {
+          showToast("error", "Could not match any extracted items to existing hardware");
+        }
+      }
+    } catch {
+      showToast("error", "Failed to extract data from region");
+    } finally {
+      setRescanLoading(false);
+    }
+  }, [rescanItem, opening, projectId, showToast]);
+
+  const handleRescanApply = useCallback(async (result: RescanResult) => {
+    if (!opening) return;
+    try {
+      const resp = await fetch(`/api/openings/${doorId}/items/${result.itemId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(result.fields),
+      });
+      if (!resp.ok) throw new Error("Failed to update item");
+      setRescanResults(prev => prev ? prev.map(r => r.itemId === result.itemId ? { ...r, applied: true } : r) : prev);
+      showToast("success", `Updated ${result.itemName}`);
+    } catch {
+      showToast("error", `Failed to update ${result.itemName}`);
+    }
+  }, [opening, doorId, showToast]);
+
+  const handleRescanApplyAll = useCallback(async () => {
+    if (!rescanResults) return;
+    const unapplied = rescanResults.filter(r => !r.applied);
+    for (const result of unapplied) {
+      await handleRescanApply(result);
+    }
+  }, [rescanResults, handleRescanApply]);
+
+  const handleRescanClose = useCallback(() => {
+    const anyApplied = rescanResults?.some(r => r.applied);
+    setRescanItem(null);
+    setRescanResults(null);
+    setRescanLoading(false);
+    if (anyApplied) fetchOpeningData();
+  }, [rescanResults, fetchOpeningData]);
+
   const handleFileUpload = async (file: File) => {
     setAttachmentLoading(true);
     try {
@@ -456,13 +633,18 @@ export default function DoorDetailPage() {
   );
 
   // --- Confidence score based on data completeness ---
-  const getItemConfidence = (item: HardwareItemWithProgress): { level: 'high' | 'medium' | 'low'; score: number } => {
-    const fields = [item.manufacturer, item.model, item.finish, item.install_type, item.qty];
-    const filled = fields.filter(f => f != null && f !== '').length;
-    const score = Math.round((filled / fields.length) * 100);
-    if (score > 80) return { level: 'high', score };
-    if (score >= 50) return { level: 'medium', score };
-    return { level: 'low', score };
+  const getItemConfidence = (item: HardwareItemWithProgress): { level: 'high' | 'medium' | 'low'; score: number; missingFields: string[] } => {
+    const fieldMap: Record<string, unknown> = { manufacturer: item.manufacturer, model: item.model, finish: item.finish, install_type: item.install_type, qty: item.qty };
+    const missingFields: string[] = [];
+    let filled = 0;
+    for (const [key, val] of Object.entries(fieldMap)) {
+      if (val != null && val !== '') filled++;
+      else missingFields.push(key);
+    }
+    const score = Math.round((filled / Object.keys(fieldMap).length) * 100);
+    if (score > 80) return { level: 'high', score, missingFields };
+    if (score >= 50) return { level: 'medium', score, missingFields };
+    return { level: 'low', score, missingFields };
   };
 
   // --- Table renderer for hardware items ---
@@ -607,16 +789,33 @@ export default function DoorDetailPage() {
                       {item.finish || <span className="text-tertiary">—</span>}
                     </td>
                     <td className="px-3 py-2 hidden md:table-cell text-center">
-                      <span
-                        className="inline-flex items-center justify-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-semibold tabular-nums"
-                        style={{
-                          background: confidence.level === 'high' ? 'var(--green-dim)' : confidence.level === 'medium' ? 'var(--yellow-dim)' : 'var(--red-dim)',
-                          color: confidence.level === 'high' ? 'var(--green)' : confidence.level === 'medium' ? 'var(--yellow)' : 'var(--red)',
-                        }}
-                        title={`${confidence.score}% of fields filled in`}
-                      >
-                        {confidence.score}%
-                      </span>
+                      {confidence.score <= 80 ? (
+                        <button
+                          onClick={() => handleRescanClick(item)}
+                          className="inline-flex items-center justify-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-semibold tabular-nums transition-all hover:scale-110 hover:shadow-sm cursor-pointer"
+                          style={{
+                            background: confidence.level === 'medium' ? 'var(--yellow-dim)' : 'var(--red-dim)',
+                            color: confidence.level === 'medium' ? 'var(--yellow)' : 'var(--red)',
+                            border: '1px solid transparent',
+                          }}
+                          onMouseEnter={e => { (e.currentTarget as HTMLElement).style.borderColor = confidence.level === 'medium' ? 'var(--yellow)' : 'var(--red)'; }}
+                          onMouseLeave={e => { (e.currentTarget as HTMLElement).style.borderColor = 'transparent'; }}
+                          title={`Click to re-scan from PDF — missing: ${confidence.missingFields.join(', ')}${scope ? `\n${RESCAN_HINTS[scope] || ''}` : ''}`}
+                        >
+                          {confidence.score}%
+                        </button>
+                      ) : (
+                        <span
+                          className="inline-flex items-center justify-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-semibold tabular-nums"
+                          style={{
+                            background: 'var(--green-dim)',
+                            color: 'var(--green)',
+                          }}
+                          title={`${confidence.score}% of fields filled in`}
+                        >
+                          {confidence.score}%
+                        </span>
+                      )}
                     </td>
                     <td className="px-3 py-2">
                       <div className="flex items-center justify-center gap-1.5">
@@ -1258,6 +1457,139 @@ export default function DoorDetailPage() {
               />
               <span className="text-[11px] text-tertiary">Don&apos;t ask again (apply to all automatically)</span>
             </label>
+          </div>
+        </div>
+      )}
+
+      {/* Rescan Modal */}
+      {rescanItem && pdfBuffer && opening && (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto">
+          <div className="panel corner-brackets w-full max-w-2xl p-5 animate-fade-in-up max-h-[90vh] overflow-y-auto" style={{ background: 'var(--surface)' }}>
+            {!rescanResults ? (
+              <>
+                {/* Header */}
+                <div className="mb-3">
+                  <h3
+                    className="text-[15px] font-bold text-primary mb-1"
+                    style={{ fontFamily: "var(--font-display)", letterSpacing: "0.03em" }}
+                  >
+                    RE-SCAN: {rescanItem.name}
+                  </h3>
+                  <p className="text-[12px] text-secondary">
+                    Missing: <span style={{ color: 'var(--yellow)' }}>{getItemConfidence(rescanItem).missingFields.join(', ')}</span>
+                  </p>
+                  {(() => {
+                    const itemScope = classifyItemScope(rescanItem.name);
+                    return itemScope && RESCAN_HINTS[itemScope] ? (
+                      <p className="text-[11px] mt-1" style={{ color: 'var(--blue)' }}>
+                        {RESCAN_HINTS[itemScope]}
+                      </p>
+                    ) : null;
+                  })()}
+                </div>
+
+                {/* PDF Region Selector */}
+                <PDFRegionSelector
+                  pdfBuffer={pdfBuffer}
+                  pageIndex={opening.pdf_page!}
+                  onSelect={handleRescanSelect}
+                  onCancel={handleRescanClose}
+                  loading={rescanLoading}
+                />
+              </>
+            ) : (
+              <>
+                {/* Review Panel */}
+                <div className="mb-4">
+                  <h3
+                    className="text-[15px] font-bold text-primary mb-1"
+                    style={{ fontFamily: "var(--font-display)", letterSpacing: "0.03em" }}
+                  >
+                    REVIEW RESULTS
+                  </h3>
+                  <p className="text-[12px] text-secondary mb-3">
+                    {rescanResults.length} match{rescanResults.length !== 1 ? 'es' : ''} found — review before applying
+                  </p>
+                </div>
+
+                <div className="space-y-2 mb-4">
+                  {rescanResults.map((result) => (
+                    <div
+                      key={result.itemId}
+                      className="flex items-start justify-between gap-3 p-3 rounded-md border animate-fade-in-up"
+                      style={{
+                        background: result.applied ? 'var(--green-dim)' : 'var(--tint)',
+                        borderColor: result.applied ? 'var(--green)' : 'var(--border)',
+                      }}
+                    >
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[13px] font-semibold text-primary">{result.itemName}</p>
+                        <div className="mt-1 space-y-0.5">
+                          {Object.entries(result.fields).map(([field, value]) => (
+                            <p key={field} className="text-[11px]" style={{ color: 'var(--secondary)' }}>
+                              <span className="text-tertiary">{field}:</span>{' '}
+                              <span className="font-medium" style={{ color: 'var(--blue)' }}>{String(value)}</span>
+                            </p>
+                          ))}
+                        </div>
+                      </div>
+                      {result.applied ? (
+                        <span className="text-[11px] font-semibold flex-shrink-0 px-2 py-1 rounded" style={{ color: 'var(--green)' }}>
+                          Applied
+                        </span>
+                      ) : (
+                        <button
+                          onClick={() => handleRescanApply(result)}
+                          className="flex-shrink-0 px-3 py-1.5 rounded text-[11px] font-semibold transition-colors"
+                          style={{
+                            background: 'var(--blue-dim)',
+                            color: 'var(--blue)',
+                            border: '1px solid var(--blue)',
+                          }}
+                        >
+                          Apply
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {rescanResults.some(r => !r.applied) && (
+                    <button
+                      onClick={handleRescanApplyAll}
+                      className="px-4 py-2 rounded-lg text-[13px] font-medium transition-colors"
+                      style={{
+                        background: 'var(--blue)',
+                        color: 'white',
+                      }}
+                    >
+                      Apply All
+                    </button>
+                  )}
+                  <button
+                    onClick={() => { setRescanResults(null); }}
+                    className="px-3 py-2 rounded-lg text-[13px] font-medium transition-colors"
+                    style={{
+                      background: 'var(--tint)',
+                      color: 'var(--secondary)',
+                      border: '1px solid var(--border)',
+                    }}
+                  >
+                    Re-scan
+                  </button>
+                  <button
+                    onClick={handleRescanClose}
+                    className="px-3 py-2 rounded-lg text-[13px] text-tertiary hover:text-secondary transition-colors ml-auto"
+                    style={{
+                      border: '1px solid var(--border)',
+                    }}
+                  >
+                    {rescanResults.every(r => r.applied) ? 'Done' : 'Cancel'}
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
