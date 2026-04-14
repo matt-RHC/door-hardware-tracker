@@ -2,6 +2,9 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 
+/** Minimum normalized dimension (0-1) for a valid selection. */
+const MIN_NORMALIZED_DIM = 0.01;
+
 interface PDFRegionSelectorProps {
   pdfBuffer: ArrayBuffer;
   pageIndex: number;
@@ -10,6 +13,8 @@ interface PDFRegionSelectorProps {
   loading?: boolean;
   /** Callback when the user navigates to a different page. */
   onPageChange?: (newPageIndex: number) => void;
+  /** Callback for error/warning messages (e.g. selection too small). */
+  onError?: (message: string) => void;
 }
 
 interface Selection {
@@ -31,6 +36,7 @@ export default function PDFRegionSelector({
   onCancel,
   loading = false,
   onPageChange,
+  onError,
 }: PDFRegionSelectorProps) {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [pageLoading, setPageLoading] = useState(true);
@@ -192,8 +198,9 @@ export default function PDFRegionSelector({
       y1: Math.max(selection.startY, selection.endY) / h,
     };
 
-    // Reject tiny selections (< 3% of page in either dimension)
-    if (bbox.x1 - bbox.x0 < 0.03 || bbox.y1 - bbox.y0 < 0.03) {
+    // Reject tiny selections (< 1% of page in either dimension)
+    if (bbox.x1 - bbox.x0 < MIN_NORMALIZED_DIM || bbox.y1 - bbox.y0 < MIN_NORMALIZED_DIM) {
+      onError?.("Selection too small — draw a larger rectangle");
       return;
     }
 
@@ -208,9 +215,16 @@ export default function PDFRegionSelector({
     height: Math.abs(selection.endY - selection.startY),
   } : null;
 
-  const hasValidSelection = selectionRect
-    ? selectionRect.width > 10 && selectionRect.height > 10
-    : false;
+  const hasValidSelection = (() => {
+    if (!selectionRect || !imageRef.current) return false;
+    if (selectionRect.width <= 10 || selectionRect.height <= 10) return false;
+    // Also check normalized dimensions to stay in sync with handleExtract
+    const rect = imageRef.current.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return false;
+    const normW = selectionRect.width / rect.width;
+    const normH = selectionRect.height / rect.height;
+    return normW >= MIN_NORMALIZED_DIM && normH >= MIN_NORMALIZED_DIM;
+  })();
 
   const canGoPrev = pageIndex > 0;
   const canGoNext = pageIndex < totalPages - 1;

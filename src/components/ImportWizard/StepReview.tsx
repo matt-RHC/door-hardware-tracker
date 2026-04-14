@@ -934,6 +934,7 @@ export default function StepReview({
                 setRegionExtractPageIdx(null);
               }}
               onPageChange={setRegionExtractPageIdx}
+              onError={(msg) => showToast("error", msg)}
             />
           </div>
         </div>

@@ -20,10 +20,21 @@ import { groupItemsByLeaf, getLeafDisplayQty, getLeafProgress } from "@/lib/clas
 import { classifyItemScope } from "@/lib/parse-pdf-helpers";
 import PDFRegionSelector from "@/components/ImportWizard/PDFRegionSelector";
 
+interface RescanFieldDiff {
+  field: string;
+  currentValue: string | number | null;
+  extractedValue: string | number;
+  /** "new" = was empty, now has data. "changed" = had value, new differs. */
+  kind: "new" | "changed";
+  enabled: boolean;
+}
+
 interface RescanResult {
   itemId: string;
   itemName: string;
   fields: Record<string, string | number>;
+  /** Field-by-field diff for the preview UI */
+  diffs: RescanFieldDiff[];
   applied?: boolean;
 }
 
@@ -336,6 +347,15 @@ export default function DoorDetailPage() {
           setId: rescanItem.id,
         }),
       });
+
+      if (!resp.ok) {
+        const errBody = await resp.text().catch(() => "");
+        console.error("[region-extract] API error:", resp.status, errBody.slice(0, 300));
+        showToast("error", "Region scan failed — try selecting a larger area");
+        setRescanLoading(false);
+        return;
+      }
+
       const { items: extractedItems } = await resp.json();
 
       if (!extractedItems || extractedItems.length === 0) {
@@ -344,82 +364,65 @@ export default function DoorDetailPage() {
         return;
       }
 
-      const area = (bbox.x1 - bbox.x0) * (bbox.y1 - bbox.y0);
-      const isPointScan = area < 0.15;
-      const confidence = getItemConfidence(rescanItem);
-      const missingFields = confidence.missingFields;
-
-      if (isPointScan) {
-        // Point mode: find best match for the triggering item using token matching
-        let bestMatch: (typeof extractedItems)[0] | null = null;
+      // Item-first: we know the target item. Pick the best match from extracted items.
+      // If only 1 item returned, use it directly (user boxed exactly one row).
+      let match: (typeof extractedItems)[0] | null = null;
+      if (extractedItems.length === 1) {
+        match = extractedItems[0];
+      } else {
         let bestScore = 0;
         for (const ext of extractedItems) {
           const extName = ext?.name || '';
           const score = tokenMatchScore(rescanItem.name, extName);
-          if (score > bestScore || (score === bestScore && bestMatch && extName.length < (bestMatch?.name || '').length)) {
-            bestMatch = ext;
+          if (score > bestScore || (score === bestScore && match && extName.length < (match?.name || '').length)) {
+            match = ext;
             bestScore = score;
           }
         }
+        // Require minimum match score
+        if (bestScore === 0) match = null;
+      }
 
-        // Require minimum match score — don't fall back to extractedItems[0]
-        if (bestScore === 0 || !bestMatch) {
-          showToast("error", "No matching item found in selected region");
-          setRescanLoading(false);
-          return;
-        }
+      if (!match) {
+        showToast("error", "No matching item found in selected region");
+        setRescanLoading(false);
+        return;
+      }
 
-        const fields: Record<string, string | number> = {};
-        for (const f of missingFields) {
-          if (f in bestMatch && bestMatch[f] != null && bestMatch[f] !== '') {
-            fields[f] = bestMatch[f];
-          }
+      // Build field-by-field diff for ALL non-empty extracted fields (not just missing)
+      const diffableFields = ['manufacturer', 'model', 'finish', 'qty', 'options', 'install_type'] as const;
+      const fields: Record<string, string | number> = {};
+      const diffs: RescanFieldDiff[] = [];
+
+      for (const f of diffableFields) {
+        const extractedVal = match?.[f];
+        if (extractedVal == null || extractedVal === '') continue;
+
+        const currentVal = (rescanItem as unknown as Record<string, unknown>)[f] as string | number | null | undefined;
+        const currentEmpty = currentVal == null || currentVal === '';
+        const isDifferent = currentEmpty || String(currentVal) !== String(extractedVal);
+
+        if (isDifferent) {
+          fields[f] = extractedVal;
+          diffs.push({
+            field: f,
+            currentValue: currentEmpty ? null : currentVal!,
+            extractedValue: extractedVal,
+            kind: currentEmpty ? "new" : "changed",
+            enabled: true,
+          });
         }
-        if (Object.keys(fields).length > 0) {
-          setRescanResults([{ itemId: rescanItem.id, itemName: rescanItem.name, fields }]);
-        } else {
-          showToast("error", "Extracted data didn\u2019t contain the missing fields");
-        }
+      }
+
+      if (diffs.length > 0) {
+        setRescanResults([{
+          itemId: rescanItem.id,
+          itemName: rescanItem.name,
+          fields,
+          diffs,
+        }]);
       } else {
-        // Table mode: match all extracted items to existing hardware items using token matching
-        const allItems = opening.hardware_items;
-        const results: RescanResult[] = [];
-
-        for (const ext of extractedItems) {
-          const extName = ext?.name || '';
-          let matchedItem: HardwareItemWithProgress | null = null;
-          let bestScore = 0;
-
-          for (const hw of allItems) {
-            const score = tokenMatchScore(extName, hw.name);
-            if (score > bestScore || (score === bestScore && matchedItem && hw.name.length < matchedItem.name.length)) {
-              matchedItem = hw;
-              bestScore = score;
-            }
-          }
-
-          if (matchedItem && bestScore > 0) {
-            const itemConf = getItemConfidence(matchedItem);
-            const fields: Record<string, string | number> = {};
-            for (const f of itemConf.missingFields) {
-              if (f in ext && ext[f] != null && ext[f] !== '') {
-                fields[f] = ext[f];
-              }
-            }
-            if (Object.keys(fields).length > 0) {
-              // Avoid duplicates
-              if (!results.find(r => r.itemId === matchedItem!.id)) {
-                results.push({ itemId: matchedItem.id, itemName: matchedItem.name, fields });
-              }
-            }
-          }
-        }
-
-        if (results.length > 0) {
-          setRescanResults(results);
-        } else {
-          showToast("error", "Could not match any extracted items to existing hardware");
-        }
+        showToast("error", "Extracted data matches current values — nothing to update");
       }
     } catch {
       showToast("error", "Failed to extract data from region");
@@ -428,29 +431,41 @@ export default function DoorDetailPage() {
     }
   }, [rescanItem, opening, projectId, rescanPage, showToast]);
 
-  const handleRescanApply = useCallback(async (result: RescanResult) => {
-    if (!opening) return;
-    try {
-      const resp = await fetch(`/api/openings/${doorId}/items/${result.itemId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(result.fields),
-      });
-      if (!resp.ok) throw new Error("Failed to update item");
-      setRescanResults(prev => prev ? prev.map(r => r.itemId === result.itemId ? { ...r, applied: true } : r) : prev);
-      showToast("success", `Updated ${result.itemName}`);
-    } catch {
-      showToast("error", `Failed to update ${result.itemName}`);
-    }
-  }, [opening, doorId, showToast]);
+  /** Toggle a single field on/off in the rescan preview. */
+  const handleRescanToggleField = useCallback((resultItemId: string, fieldName: string) => {
+    setRescanResults(prev => prev?.map(r => {
+      if (r.itemId !== resultItemId) return r;
+      return {
+        ...r,
+        diffs: r.diffs.map(d => d.field === fieldName ? { ...d, enabled: !d.enabled } : d),
+      };
+    }) ?? null);
+  }, []);
 
-  const handleRescanApplyAll = useCallback(async () => {
-    if (!rescanResults) return;
-    const unapplied = rescanResults.filter(r => !r.applied);
-    for (const result of unapplied) {
-      await handleRescanApply(result);
+  const handleRescanApplySelected = useCallback(async () => {
+    if (!opening || !rescanResults) return;
+    for (const result of rescanResults) {
+      if (result.applied) continue;
+      const enabledFields: Record<string, string | number> = {};
+      for (const d of result.diffs) {
+        if (d.enabled) enabledFields[d.field] = d.extractedValue;
+      }
+      if (Object.keys(enabledFields).length === 0) continue;
+      try {
+        const resp = await fetch(`/api/openings/${doorId}/items/${result.itemId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(enabledFields),
+        });
+        if (!resp.ok) throw new Error("Failed to update item");
+        setRescanResults(prev => prev?.map(r => r.itemId === result.itemId ? { ...r, applied: true } : r) ?? null);
+        const count = Object.keys(enabledFields).length;
+        showToast("success", `Updated ${count} field${count !== 1 ? 's' : ''} on ${result.itemName}`);
+      } catch {
+        showToast("error", `Failed to update ${result.itemName}`);
+      }
     }
-  }, [rescanResults, handleRescanApply]);
+  }, [opening, rescanResults, doorId, showToast]);
 
   const handleRescanClose = useCallback(() => {
     const anyApplied = rescanResults?.some(r => r.applied);
@@ -1514,20 +1529,21 @@ export default function DoorDetailPage() {
                   onCancel={handleRescanClose}
                   loading={rescanLoading}
                   onPageChange={setRescanPage}
+                  onError={(msg) => showToast("error", msg)}
                 />
               </>
             ) : (
               <>
-                {/* Review Panel */}
+                {/* Review Panel — field-by-field comparison */}
                 <div className="mb-4">
                   <h3
                     className="text-[15px] font-bold text-primary mb-1"
                     style={{ fontFamily: "var(--font-display)", letterSpacing: "0.03em" }}
                   >
-                    REVIEW RESULTS
+                    REVIEW: {rescanResults[0]?.itemName}
                   </h3>
                   <p className="text-[12px] text-secondary mb-3">
-                    {rescanResults.length} match{rescanResults.length !== 1 ? 'es' : ''} found — review before applying
+                    Toggle fields on/off, then apply selected changes.
                   </p>
                 </div>
 
@@ -1535,39 +1551,62 @@ export default function DoorDetailPage() {
                   {rescanResults.map((result) => (
                     <div
                       key={result.itemId}
-                      className="flex items-start justify-between gap-3 p-3 rounded-md border animate-fade-in-up"
+                      className="rounded-md border animate-fade-in-up overflow-hidden"
                       style={{
                         background: result.applied ? 'var(--green-dim)' : 'var(--tint)',
                         borderColor: result.applied ? 'var(--green)' : 'var(--border)',
                       }}
                     >
-                      <div className="flex-1 min-w-0">
-                        <p className="text-[13px] font-semibold text-primary">{result.itemName}</p>
-                        <div className="mt-1 space-y-0.5">
-                          {Object.entries(result.fields).map(([field, value]) => (
-                            <p key={field} className="text-[11px]" style={{ color: 'var(--secondary)' }}>
-                              <span className="text-tertiary">{field}:</span>{' '}
-                              <span className="font-medium" style={{ color: 'var(--blue)' }}>{String(value)}</span>
-                            </p>
+                      {result.applied ? (
+                        <div className="px-3 py-3 flex items-center gap-2">
+                          <svg className="w-4 h-4 flex-shrink-0" style={{ color: 'var(--green)' }} fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                          </svg>
+                          <span className="text-[13px] font-semibold" style={{ color: 'var(--green)' }}>Changes applied</span>
+                        </div>
+                      ) : (
+                        <div className="divide-y" style={{ borderColor: 'var(--border-dim)' }}>
+                          {result.diffs.map((diff) => (
+                            <label
+                              key={diff.field}
+                              className="flex items-center gap-3 px-3 py-2.5 cursor-pointer transition-colors hover:bg-surface-hover"
+                            >
+                              <input
+                                type="checkbox"
+                                checked={diff.enabled}
+                                onChange={() => handleRescanToggleField(result.itemId, diff.field)}
+                                className="w-4 h-4 rounded border-th-border bg-transparent accent-accent cursor-pointer flex-shrink-0"
+                              />
+                              <div className="flex-1 min-w-0">
+                                <span className="text-[11px] uppercase tracking-wider text-tertiary font-medium">{diff.field}</span>
+                                <div className="flex items-center gap-1.5 mt-0.5 text-[13px]">
+                                  {diff.kind === "changed" ? (
+                                    <>
+                                      <span className="text-secondary line-through">{String(diff.currentValue)}</span>
+                                      <span className="text-tertiary">&rarr;</span>
+                                      <span className="font-medium" style={{ color: 'var(--yellow)' }}>{String(diff.extractedValue)}</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <span className="text-tertiary italic">empty</span>
+                                      <span className="text-tertiary">&rarr;</span>
+                                      <span className="font-medium" style={{ color: 'var(--green)' }}>{String(diff.extractedValue)}</span>
+                                    </>
+                                  )}
+                                </div>
+                              </div>
+                              <span
+                                className="text-[9px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded flex-shrink-0"
+                                style={{
+                                  background: diff.kind === "new" ? 'var(--green-dim)' : 'var(--yellow-dim)',
+                                  color: diff.kind === "new" ? 'var(--green)' : 'var(--yellow)',
+                                }}
+                              >
+                                {diff.kind === "new" ? "new" : "update"}
+                              </span>
+                            </label>
                           ))}
                         </div>
-                      </div>
-                      {result.applied ? (
-                        <span className="text-[11px] font-semibold flex-shrink-0 px-2 py-1 rounded" style={{ color: 'var(--green)' }}>
-                          Applied
-                        </span>
-                      ) : (
-                        <button
-                          onClick={() => handleRescanApply(result)}
-                          className="flex-shrink-0 px-3 py-1.5 rounded text-[11px] font-semibold transition-colors"
-                          style={{
-                            background: 'var(--blue-dim)',
-                            color: 'var(--blue)',
-                            border: '1px solid var(--blue)',
-                          }}
-                        >
-                          Apply
-                        </button>
                       )}
                     </div>
                   ))}
@@ -1576,14 +1615,15 @@ export default function DoorDetailPage() {
                 <div className="flex items-center gap-2">
                   {rescanResults.some(r => !r.applied) && (
                     <button
-                      onClick={handleRescanApplyAll}
-                      className="px-4 py-2 rounded-lg text-[13px] font-medium transition-colors"
+                      onClick={handleRescanApplySelected}
+                      disabled={!rescanResults.some(r => !r.applied && r.diffs.some(d => d.enabled))}
+                      className="px-4 py-2 rounded-lg text-[13px] font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                       style={{
                         background: 'var(--blue)',
                         color: 'white',
                       }}
                     >
-                      Apply All
+                      Apply Selected
                     </button>
                   )}
                   <button
