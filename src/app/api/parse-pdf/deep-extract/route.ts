@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { fetchProjectPdfBase64 } from '@/lib/pdf-storage'
 import { callDeepExtraction, createAnthropicClient } from '@/lib/parse-pdf-helpers'
+import { assertProjectMember } from '@/lib/auth-helpers'
 
 // Haiku is fast — 300s is generous
 export const maxDuration = 300
@@ -30,6 +31,15 @@ export async function POST(request: NextRequest) {
       typeof rawHint === 'string' && rawHint.trim().length > 0
         ? rawHint.trim()
         : undefined
+
+    // Enforce project membership when projectId is provided (IDOR prevention)
+    if (body.projectId) {
+      try {
+        await assertProjectMember(supabase, user.id, body.projectId)
+      } catch {
+        return NextResponse.json({ error: 'Access denied to this project' }, { status: 403 })
+      }
+    }
 
     // Resolve PDF: prefer server-side storage fetch via projectId, fallback to base64 in body
     let pdfBase64: string = body.pdfBase64 ?? ''

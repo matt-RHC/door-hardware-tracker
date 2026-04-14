@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { fetchProjectPdfBase64 } from '@/lib/pdf-storage'
+import { assertProjectMember } from '@/lib/auth-helpers'
 import {
   callVisionExtraction,
   filterSchedulePages,
@@ -58,6 +59,15 @@ export async function POST(request: NextRequest) {
       projectId?: string
       pageNumbers?: number[]
       pdfBase64?: string
+    }
+
+    // Enforce project membership when projectId is provided (IDOR prevention)
+    if (projectId) {
+      try {
+        await assertProjectMember(supabase, user.id, projectId)
+      } catch {
+        return NextResponse.json({ error: 'Access denied to this project' }, { status: 403 })
+      }
     }
 
     // Resolve PDF
