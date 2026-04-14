@@ -711,6 +711,57 @@ export const MANUFACTURER_CATEGORY_MAP: Record<string, string> = {
   'zero': 'weatherstripping',
 }
 
+// ── Shared compiled regex cache ──────────────────────────────────────────────
+// Single source of truth for pre-compiled taxonomy regexes. Imported by
+// parse-pdf-helpers.ts (classifyItemScope) and quantity-propagation.ts
+// (classifyItemCategory) instead of each building its own cache.
+
+export const TAXONOMY_REGEX_CACHE: Array<{
+  id: string
+  install_scope: InstallScope
+  patterns: RegExp[]
+}> = HARDWARE_TAXONOMY.map(cat => ({
+  id: cat.id,
+  install_scope: cat.install_scope,
+  patterns: cat.name_patterns.map(p => new RegExp(p, 'i')),
+}))
+
+// ── Shared hinge helpers ─────────────────────────────────────────────────────
+
+/**
+ * Pre-scan a set of items for electric hinge quantity on pair doors.
+ *
+ * Replaces 3 identical pre-scans in normalizeQuantities(),
+ * buildPerOpeningItems(), and groupItemsByLeaf().
+ */
+export function scanElectricHinges(
+  items: Array<{ name: string; qty?: number | null; leaf_side?: string | null }>,
+  isPair: boolean,
+): { totalElectricQty: number; hasElectricHinge: boolean } {
+  if (!isPair) return { totalElectricQty: 0, hasElectricHinge: false }
+  let total = 0
+  for (const item of items) {
+    if (!item.leaf_side && classifyItem(item.name) === 'electric_hinge') {
+      total += (item.qty || 0)
+    }
+  }
+  return { totalElectricQty: total, hasElectricHinge: total > 0 }
+}
+
+/**
+ * Detect whether a non-integer standard hinge division is explained by an
+ * asymmetric electric hinge split on a pair door.
+ *
+ * Deduplicates identical checks in PATH 1 and PATH 5 of normalizeQuantities().
+ */
+export function isAsymmetricHingeSplit(
+  standardQty: number,
+  electricQty: number,
+  divisor: number,
+): boolean {
+  return electricQty > 0 && Number.isInteger((standardQty + electricQty) / divisor)
+}
+
 /**
  * Classify an item name into a category. Returns the category ID or 'unknown'.
  * Optionally accepts a manufacturer for fallback classification when the

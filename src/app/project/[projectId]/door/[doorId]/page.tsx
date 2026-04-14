@@ -724,7 +724,7 @@ export default function DoorDetailPage() {
           <tbody>
             {items.map((item, idx) => {
               const scope = classifyItemScope(item.name);
-              const displayQty = getLeafDisplayQty(item, leafCount, scope);
+              const displayQty = getLeafDisplayQty(item);
               const steps = getWorkflowSteps(item);
               const completedSteps = steps.filter(s => getStepValue(item, s, leafIndex)).length;
               const isEditing = editingItemId === item.id && editingItem;

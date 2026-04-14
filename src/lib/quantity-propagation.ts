@@ -10,21 +10,14 @@
  * the standard (3 per leaf) and applies 4 per leaf to matching sets.
  */
 
-import { HARDWARE_TAXONOMY, type InstallScope } from '@/lib/hardware-taxonomy'
+import { TAXONOMY_REGEX_CACHE } from '@/lib/hardware-taxonomy'
 import type { HardwareSet, ExtractedHardwareItem } from '@/lib/types'
 
-// ── Category classification (mirrors parse-pdf-helpers classifyItemScope) ──
-
-const _taxonomyRegexCache: Array<{ id: string; install_scope: InstallScope; patterns: RegExp[] }> =
-  HARDWARE_TAXONOMY.map(cat => ({
-    id: cat.id,
-    install_scope: cat.install_scope,
-    patterns: cat.name_patterns.map(p => new RegExp(p, 'i')),
-  }))
+// ── Category classification (uses shared TAXONOMY_REGEX_CACHE) ──
 
 /** Classify a hardware item name into a taxonomy category ID. */
 export function classifyItemCategory(name: string): string | null {
-  for (const cat of _taxonomyRegexCache) {
+  for (const cat of TAXONOMY_REGEX_CACHE) {
     for (const rx of cat.patterns) {
       if (rx.test(name)) return cat.id
     }

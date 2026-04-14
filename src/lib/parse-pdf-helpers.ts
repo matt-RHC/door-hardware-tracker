@@ -49,7 +49,7 @@ import type {
   ExtractionConfidence,
 } from '@/lib/types/confidence'
 import { extractJSON } from '@/lib/extractJSON'
-import { HARDWARE_TAXONOMY, classifyItem, type InstallScope } from '@/lib/hardware-taxonomy'
+import { TAXONOMY_REGEX_CACHE, classifyItem, scanElectricHinges, isAsymmetricHingeSplit, type InstallScope } from '@/lib/hardware-taxonomy'
 import { createAdminSupabaseClient } from '@/lib/supabase/admin'
 
 // --- Punchy observation logging (fire-and-forget) ---
@@ -103,21 +103,14 @@ function logPunchyCall(opts: {
 
 // --- Category classification for quantity normalization ---
 
-/** Compiled regex cache for hardware taxonomy name patterns. */
-const _taxonomyRegexCache: Array<{ id: string; install_scope: InstallScope; patterns: RegExp[] }> =
-  HARDWARE_TAXONOMY.map(cat => ({
-    id: cat.id,
-    install_scope: cat.install_scope,
-    patterns: cat.name_patterns.map(p => new RegExp(p, 'i')),
-  }))
-
 /**
  * Classify a hardware item name into a taxonomy category.
  * Returns the install_scope for the matched category, or null if unrecognized.
  * Mirrors Python's _classify_hardware_item() at extract-tables.py:173.
+ * Uses the shared TAXONOMY_REGEX_CACHE from hardware-taxonomy.ts.
  */
 export function classifyItemScope(name: string): InstallScope | null {
-  for (const cat of _taxonomyRegexCache) {
+  for (const cat of TAXONOMY_REGEX_CACHE) {
     for (const rx of cat.patterns) {
       if (rx.test(name)) return cat.install_scope
     }
@@ -210,14 +203,12 @@ export function computeLeafSide(
   const scope = classifyItemScope(itemName)
   if (scope === 'per_pair' || scope === 'per_frame') return 'shared'
 
-  // Electric / conductor hinges on pair doors: always active leaf only.
-  // These carry wiring and replace one standard hinge position on the
-  // active leaf. They are never installed on the inactive leaf.
-  if (leafCount >= 2 && classifyItem(itemName) === 'electric_hinge') {
-    return 'active'
-  }
-
   // per_leaf / per_opening / unknown on pair doors: ambiguous, defer.
+  // NOTE: Electric hinges on pair doors are handled by buildPerOpeningItems()
+  // (save path, stamps leaf_side='active') and groupItemsByLeaf() (preview
+  // path, routes to active leaf). This function returns null to let those
+  // callers decide — the electric hinge check that was here was dead code
+  // because buildPerOpeningItems() always overwrites the result immediately.
   return null
 }
 
@@ -1627,8 +1618,7 @@ export function applyCorrections(
  *   On pair doors, buildPerOpeningItems() (Phase 4) routes electric hinges
  *   to the active leaf only (leaf_side='active') and splits standard hinges
  *   into per-leaf rows: active gets consolidated qty, inactive gets the
- *   original (unconsolidated) qty. computeLeafSide() also returns 'active'
- *   for electric hinges on pairs. This produces the correct DHI layout:
+ *   original (unconsolidated) qty. This produces the correct DHI layout:
  *     Active:   3 standard + 1 electric = 4 hinge positions
  *     Inactive: 4 standard + 0 electric = 4 hinge positions
  */
@@ -1698,13 +1688,12 @@ export function normalizeQuantities(
       (isSubHeading ? ` sub-heading(generic=${genericTotal.doors}d/${genericTotal.leaves}l)` : '')
     )
 
-    // Pre-compute electric hinge presence in this set. Used in PATH 5 to
-    // detect asymmetric hinge splits on pair doors: when standard hinges
-    // don't divide evenly by leafCount, the remainder is often explained
-    // by electric hinges replacing one standard position on the active leaf.
-    const setElectricHingeQty = (set.items ?? [])
-      .filter(i => classifyItem(i.name) === 'electric_hinge')
-      .reduce((sum, i) => sum + (i.qty || 0), 0)
+    // Pre-compute electric hinge presence in this set. Used in PATH 1 and
+    // PATH 5 to detect asymmetric hinge splits on pair doors: when standard
+    // hinges don't divide evenly by leafCount, the remainder is often
+    // explained by electric hinges replacing one standard position on the
+    // active leaf.
+    const { totalElectricQty: setElectricHingeQty } = scanElectricHinges(set.items ?? [], leafCount >= 2)
 
     for (const item of set.items ?? []) {
       // ── GUARD: terminal states are never re-normalized ──────────────────────
@@ -1756,9 +1745,8 @@ export function normalizeQuantities(
             `[qty-norm] ${set.set_id}: "${item.name}" ${raw} ÷ ${divisor} = ${result} (python-annotated)`
           )
         } else if (
-          setElectricHingeQty > 0
-          && classifyItem(item.name) === 'hinges'
-          && Number.isInteger((raw + setElectricHingeQty) / divisor)
+          classifyItem(item.name) === 'hinges'
+          && isAsymmetricHingeSplit(raw, setElectricHingeQty, divisor)
         ) {
           // Asymmetric hinge split (python-annotated path): the standard hinge
           // total doesn't divide cleanly because electric hinges create an
@@ -1898,9 +1886,8 @@ export function normalizeQuantities(
             item.qty = perLeaf
             item.qty_source = 'divided'
           } else if (
-            setElectricHingeQty > 0
-            && classifyItem(item.name) === 'hinges'
-            && Number.isInteger((item.qty + setElectricHingeQty) / leafCount)
+            classifyItem(item.name) === 'hinges'
+            && isAsymmetricHingeSplit(item.qty, setElectricHingeQty, leafCount)
           ) {
             // Asymmetric hinge split: the non-integer division is explained by
             // electric hinges. Use ceil to get the larger-leaf (inactive) count.
@@ -2705,14 +2692,7 @@ export function buildPerOpeningItems(
       // Pre-scan for electric hinges on pair doors so we can adjust
       // standard hinge quantities per-leaf.
       const setItems = hwSet?.items ?? []
-      let totalElectricHingeQty = 0
-      if (isPair) {
-        for (const item of setItems) {
-          if (classifyItem(item.name) === 'electric_hinge') {
-            totalElectricHingeQty += (item.qty || 0)
-          }
-        }
-      }
+      const { totalElectricQty: totalElectricHingeQty } = scanElectricHinges(setItems, isPair)
 
       for (const item of setItems) {
         const category = isPair ? classifyItem(item.name) : null

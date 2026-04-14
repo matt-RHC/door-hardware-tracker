@@ -28,7 +28,7 @@
  */
 
 import { classifyItemScope } from '@/lib/parse-pdf-helpers'
-import { classifyItem } from '@/lib/hardware-taxonomy'
+import { classifyItem, scanElectricHinges } from '@/lib/hardware-taxonomy'
 import type { InstallScope } from '@/lib/hardware-taxonomy'
 
 /** Minimal item shape — works with both API response items and wizard preview items. */
@@ -80,9 +80,7 @@ export interface LeafGroupedItems<T extends LeafGroupableItem = LeafGroupableIte
  *      stored qty is already 1 per opening after normalizeQuantities().
  *      As of Phase 4, buildPerOpeningItems() stamps leaf_side='active'
  *      on electric hinges for pair doors, so groupItemsByLeaf() routes
- *      them to the active leaf only. computeLeafSide() also returns
- *      'active' for electric hinges on pairs as a belt-and-suspenders
- *      guarantee.
+ *      them to the active leaf only.
  *
  * The routing of PER_OPENING items to the correct leaf (active vs both) is
  * handled by groupItemsByLeaf() + persisted leaf_side values (migration 013),
@@ -94,20 +92,12 @@ export interface LeafGroupedItems<T extends LeafGroupableItem = LeafGroupableIte
  */
 export function getLeafDisplayQty(
   item: LeafGroupableItem,
-  leafCount: number,
-  scope: InstallScope | null,
 ): number {
-  const qty = item.qty ?? 0
-  // per_opening: display the stored qty as-is. normalizeQuantities() already
-  // divided the PDF total by doorCount. Further division by leafCount here
+  // All scopes (per_opening / per_leaf / per_pair / per_frame / null) return
+  // the stored qty as-is. normalizeQuantities() already divided per_opening
+  // items by doorCount and per_leaf items by leafCount. Further division here
   // would double-divide (see JSDoc above).
-  //
-  // per_leaf / per_pair / per_frame / null: all show stored qty as-is.
-  // The leafCount parameter is retained in the signature for callers that may
-  // need it for other purposes (e.g., rendering a "per leaf" label).
-  void leafCount  // intentionally unused after removing the per_opening division
-  void scope      // reserved for future scope-aware display logic
-  return qty
+  return item.qty ?? 0
 }
 
 /**
@@ -141,11 +131,7 @@ export function groupItemsByLeaf<T extends LeafGroupableItem>(
   // hinge occupies one hinge position on the active leaf, so the standard hinge
   // qty on the active leaf must be reduced by this amount during wizard preview
   // (when leaf_side is still null and items haven't been split by the save path).
-  const electricHingeQty = isPair
-    ? items
-        .filter(i => !i.leaf_side && classifyItem(i.name) === 'electric_hinge')
-        .reduce((sum, i) => sum + (i.qty || 0), 0)
-    : 0
+  const { totalElectricQty: electricHingeQty } = scanElectricHinges(items, isPair)
 
   for (const item of items) {
     // Phase 3: prefer persisted leaf_side when the DB carries a value.
