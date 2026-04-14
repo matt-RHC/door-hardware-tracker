@@ -65,6 +65,7 @@ export default function DoorDetailPage() {
   const [pdfBuffer, setPdfBuffer] = useState<ArrayBuffer | null>(null);
   const [rescanLoading, setRescanLoading] = useState(false);
   const [rescanResults, setRescanResults] = useState<RescanResult[] | null>(null);
+  const [rescanPage, setRescanPage] = useState<number>(0);
 
   const supabase = createClient();
   const fetchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -294,6 +295,7 @@ export default function DoorDetailPage() {
     }
     setRescanItem(item);
     setRescanResults(null);
+    setRescanPage(opening.pdf_page);
 
     if (!pdfBuffer) {
       try {
@@ -313,13 +315,23 @@ export default function DoorDetailPage() {
     if (!rescanItem || !opening) return;
     setRescanLoading(true);
 
+    /** Token-based name matching: split into words, count shared tokens, divide by max token count. */
+    function tokenMatchScore(a: string, b: string): number {
+      const tokensA = a.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim().split(/\s+/).filter(Boolean);
+      const tokensB = b.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim().split(/\s+/).filter(Boolean);
+      if (tokensA.length === 0 || tokensB.length === 0) return 0;
+      const setB = new Set(tokensB);
+      const shared = tokensA.filter(t => setB.has(t)).length;
+      return shared / Math.max(tokensA.length, tokensB.length);
+    }
+
     try {
       const resp = await fetch('/api/parse-pdf/region-extract', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           projectId,
-          page: opening.pdf_page,
+          page: rescanPage,
           bbox,
           setId: rescanItem.id,
         }),
@@ -327,7 +339,7 @@ export default function DoorDetailPage() {
       const { items: extractedItems } = await resp.json();
 
       if (!extractedItems || extractedItems.length === 0) {
-        showToast("error", "No items found in selected region");
+        showToast("error", "No items found in selected region — try a different area");
         setRescanLoading(false);
         return;
       }
@@ -338,17 +350,23 @@ export default function DoorDetailPage() {
       const missingFields = confidence.missingFields;
 
       if (isPointScan) {
-        // Point mode: find best match for the triggering item
-        const targetName = rescanItem.name.toLowerCase();
-        let bestMatch = extractedItems[0];
+        // Point mode: find best match for the triggering item using token matching
+        let bestMatch: (typeof extractedItems)[0] | null = null;
         let bestScore = 0;
         for (const ext of extractedItems) {
-          const extName = (ext.name || '').toLowerCase();
-          if (extName === targetName) { bestMatch = ext; bestScore = 3; break; }
-          if (extName.includes(targetName) || targetName.includes(extName)) {
-            const score = 2;
-            if (score > bestScore) { bestMatch = ext; bestScore = score; }
+          const extName = ext?.name || '';
+          const score = tokenMatchScore(rescanItem.name, extName);
+          if (score > bestScore || (score === bestScore && bestMatch && extName.length < (bestMatch?.name || '').length)) {
+            bestMatch = ext;
+            bestScore = score;
           }
+        }
+
+        // Require minimum match score — don't fall back to extractedItems[0]
+        if (bestScore === 0 || !bestMatch) {
+          showToast("error", "No matching item found in selected region");
+          setRescanLoading(false);
+          return;
         }
 
         const fields: Record<string, string | number> = {};
@@ -363,21 +381,20 @@ export default function DoorDetailPage() {
           showToast("error", "Extracted data didn\u2019t contain the missing fields");
         }
       } else {
-        // Table mode: match all extracted items to existing hardware items
+        // Table mode: match all extracted items to existing hardware items using token matching
         const allItems = opening.hardware_items;
         const results: RescanResult[] = [];
 
         for (const ext of extractedItems) {
-          const extName = (ext.name || '').toLowerCase();
+          const extName = ext?.name || '';
           let matchedItem: HardwareItemWithProgress | null = null;
           let bestScore = 0;
 
           for (const hw of allItems) {
-            const hwName = hw.name.toLowerCase();
-            if (hwName === extName) { matchedItem = hw; bestScore = 3; break; }
-            if (hwName.includes(extName) || extName.includes(hwName)) {
-              const score = 2;
-              if (score > bestScore) { matchedItem = hw; bestScore = score; }
+            const score = tokenMatchScore(extName, hw.name);
+            if (score > bestScore || (score === bestScore && matchedItem && hw.name.length < matchedItem.name.length)) {
+              matchedItem = hw;
+              bestScore = score;
             }
           }
 
@@ -409,7 +426,7 @@ export default function DoorDetailPage() {
     } finally {
       setRescanLoading(false);
     }
-  }, [rescanItem, opening, projectId, showToast]);
+  }, [rescanItem, opening, projectId, rescanPage, showToast]);
 
   const handleRescanApply = useCallback(async (result: RescanResult) => {
     if (!opening) return;
@@ -440,6 +457,7 @@ export default function DoorDetailPage() {
     setRescanItem(null);
     setRescanResults(null);
     setRescanLoading(false);
+    setRescanPage(0);
     if (anyApplied) fetchOpeningData();
   }, [rescanResults, fetchOpeningData]);
 
@@ -1491,10 +1509,11 @@ export default function DoorDetailPage() {
                 {/* PDF Region Selector */}
                 <PDFRegionSelector
                   pdfBuffer={pdfBuffer}
-                  pageIndex={opening.pdf_page!}
+                  pageIndex={rescanPage}
                   onSelect={handleRescanSelect}
                   onCancel={handleRescanClose}
                   loading={rescanLoading}
+                  onPageChange={setRescanPage}
                 />
               </>
             ) : (
