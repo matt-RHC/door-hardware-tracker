@@ -26,10 +26,23 @@ function makeSet(id: string, items: Array<{ name: string; qty: number; qty_sourc
 // ── classifyItemCategory ──
 
 describe('classifyItemCategory', () => {
-  it('classifies hinges', () => {
+  it('classifies butt hinges', () => {
     expect(classifyItemCategory('Butt Hinge 4.5x4.5')).toBe('hinges')
-    expect(classifyItemCategory('Continuous Hinge')).toBe('hinges')
-    expect(classifyItemCategory('Spring Hinge')).toBe('hinges')
+    expect(classifyItemCategory('Hinge 4.5x4.5 BB1')).toBe('hinges')
+  })
+
+  it('classifies continuous hinges', () => {
+    expect(classifyItemCategory('Continuous Hinge')).toBe('continuous_hinge')
+    expect(classifyItemCategory('Geared Hinge')).toBe('continuous_hinge')
+  })
+
+  it('classifies spring hinges', () => {
+    expect(classifyItemCategory('Spring Hinge')).toBe('spring_hinge')
+  })
+
+  it('classifies pivot hinges', () => {
+    expect(classifyItemCategory('Pivot Set')).toBe('pivot_hinge')
+    expect(classifyItemCategory('Offset Pivot')).toBe('pivot_hinge')
   })
 
   it('classifies closers', () => {
