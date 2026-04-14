@@ -2,68 +2,115 @@
 
 > **Guiding principle:** Hardware counts coming out of PDFs must be accurate before we build features on top of them. Export is gated on extraction accuracy.
 
-Last updated: 2026-04-13
+Last updated: 2026-04-13 (evening)
 
 ---
 
-## Phase 0 — Infrastructure & Stability (DONE)
+## Phase 0 — Infrastructure & Stability (COMPLETE)
 
-Everything merged today (PRs #155–#166). Included:
+PRs #155–#166. Foundation work:
 
 - Quantity normalization overhaul — single TS division pass, Python annotates only
-- CI noise reduction — xfail, ESLint rules, tsc check in CI
+- CI noise reduction — xfail, ESLint rules, tsc + vitest in CI
 - Background extraction job infrastructure (Phase 1 + Phase 2 wizard)
 - Storage RLS project scoping, internal auth hardening
 - Merge-based promote replacing destructive delete/reinsert
 - Hinge duplication regression fix (electric hinge consolidation)
 - Triage retry with exponential backoff + clean error messages
 - Confirmation dialogs, chunk failure visibility
+- TypeScript unit tests (vitest) added to CI pipeline
+- Blind spots audit: activity trail, rate limiting, legal pages, backup docs
 
 ---
 
-## Phase 1 — Extraction Accuracy (CURRENT PRIORITY)
+## Phase 1 — Extraction Accuracy (COMPLETE)
 
-Nothing else matters until hardware counts are reliably correct. Three known issues, ordered by impact:
+All items merged. Hardware counts are now significantly more reliable.
 
-### 1A. BUG-12: MCA Field Concatenation
+### 1A. Quantity Convention Detection (PR #168)
+- Preamble-based detection ("Each opening to have:", "Each to receive:") replaces brittle statistical heuristic
+- Per-heading door count normalization — single-door headings always per-opening
+- Dual-quantity format support for SpecWorks `(total) per_door EA`
 
-**Status:** 4 xfail tests waiting in `test_mca_extraction.py`
-**Problem:** pdfplumber reads all hardware item details (name, manufacturer, model, finish) into a single `name` field for MCA-format PDFs. The extractor doesn't split them back out.
-**Impact:** Any MCA-format submittal produces unusable hardware data — items appear as one giant concatenated string.
-**Tests exist:** Yes — 4 tests define exactly what "fixed" looks like.
-**Scope:** Python extraction layer (`api/extract_tables.py` or column-mapping logic).
+### 1B. BUG-12: MCA Field Concatenation (PR #169)
+- `apply_field_splitting()` now called in `extract_all_hardware_sets()` — fixes all code paths
+- 4 previously-xfail tests now passing, markers removed
 
-### 1B. applyCorrections Fuzzy Matching
+### 1C. applyCorrections Fuzzy Matching (PR #170)
+- `findItemFuzzy()` upgraded from 2 tiers to 5: exact → case-insensitive → normalized → substring → Jaccard
+- Cross-category guard prevents "Hinge" matching "Closer"
+- Ambiguous tied scores skip correction (safe default)
 
-**Status:** Known gap, no tests yet
-**Problem:** `findItemFuzzy()` in `parse-pdf-helpers.ts` only does exact + case-insensitive matching. If Punchy says "Continuous Hinge" but the PDF extracted "CONTINUOUS HINGE, 83"" the correction silently drops.
-**Impact:** Punchy's CP2 corrections fail to apply on items with trailing specs, abbreviations, or format differences. This makes Punchy's review less effective — it finds issues but can't fix them.
-**Next step:** Add normalized/substring matching to `findItemFuzzy()`. Add test cases.
+### 1D. CP2 Door Sample Cap (PR #171)
+- `selectRepresentativeSample()` replaces `slice(0, 10)`
+- One door per unique hardware set guaranteed, pair doors prioritized
+- CP2 bumped to 15 doors, CP3 to 20
 
-### 1C. CP2 Door Sample Cap
+### 1E. BUG-10: AKN Format Support (PR #173)
+- ESC/Comsense (SpecWorks) format now extracts properly
+- `Heading #:` pattern, PRA/PRI pair notation, multi-line item joining
 
-**Status:** Known gap, partially addressed
-**Problem:** `callPunchyPostExtraction()` sends `doors_sample: allOpenings.slice(0, 10)` — Punchy's detailed review only sees the first 10 doors. It also sends `all_doors` as a compact summary (door number + set ID only), so Punchy can see the full project but can't deeply review doors 11+.
-**Impact:** On large projects (50+ doors), patterns that only appear later in the schedule are invisible to CP2.
-**Next step:** Evaluate whether the compact `all_doors` list is sufficient, or if the detailed sample needs to be larger/smarter (e.g., one door per unique hardware set instead of first-10).
+### Bug Index (updated)
 
-### 1D. BUG-10: AKN Non-Standard Format
-
-**Status:** Excluded from cross-PDF tests, no fix attempted
-**Problem:** AKN (ESC/Comsense) PDFs use a non-standard format that the extractor can't parse reliably.
-**Impact:** One known vendor format produces bad data. Unknown how many real submittals use this format.
-**Next step:** Assess frequency in real submittals before investing in a fix.
+| Bug | Description | Status |
+|---|---|---|
+| BUG-1 | Full PDF extraction finds doors | Passing |
+| BUG-2 | No duplicate hardware items after dedup | Passing |
+| BUG-3 | Quantity capping per category | Passing |
+| BUG-4 | Mojibake cleaning | Passing |
+| BUG-5 | Door number validation rejects HW set codes | Passing |
+| BUG-7 | Quantity normalization (float division, pair doors) | Passing (39 tests) |
+| BUG-8 | Page classification for 306169 format | Passing (4 tests) |
+| BUG-9 | Float division fix (modulo-based) | Passing |
+| BUG-10 | AKN non-standard format | **Fixed** (PR #173) |
+| BUG-11 | Test infrastructure expansion | Passing |
+| BUG-12 | MCA field concatenation | **Fixed** (PR #169) |
+| BUG-24 | BHMA finish code rejection | Passing |
 
 ---
 
-## Phase 2 — Wizard UX Polish
+## Nuclear Option — Deep Extraction Mode (COMPLETE — backend + UI)
 
-After extraction is solid. The wizard flow (Phase 1/2 background jobs) just shipped — these are refinements:
+Multi-strategy extraction with cross-validation for near-guaranteed accuracy.
+
+### Phase A: Confidence Scoring (PR #172)
+- Field-level confidence on every extracted item (name, qty, mfr, model, finish)
+- `suggest_deep_extraction` flag when confidence is low
+- Signals: empty fields, Punchy corrections, fuzzy match usage, statistical qty convention
+
+### Phase B: Vision Extraction — Strategy B (PR #174)
+- Claude Sonnet reads each schedule page as an image
+- DHI-domain-aware prompt with hardware categories + manufacturer abbreviations
+- Batched page processing (groups of 5), cut sheet filtering, continuation merging
+
+### Phase C: Reconciliation Engine (PR #175)
+- Cross-validates Strategy A (pdfplumber) vs Strategy B (vision)
+- Per-field voting: agree → high confidence, conflict → prefer A for qty, B for names
+- Audit trail: every field records what each strategy extracted and why the final value was chosen
+- Weighted scoring: 0-100 overall confidence
+
+### Phase D: Auto-Fallback Trigger (PR #178)
+- Low confidence auto-queues deep extraction background job
+- In-place job upgrade: normal job detects low confidence mid-run → becomes deep extraction
+- Threshold constants in `DEEP_EXTRACTION_AUTO_TRIGGER_THRESHOLD`
+
+### Phase E: Confidence UI (PR #179)
+- Confidence badges (colored dots) on hardware item fields — hidden for high, yellow/red/gray for medium/low/unverified
+- "Deep Extract" button with confirmation dialog and progress animation
+- Auto-trigger banner: "Running deep extraction for higher accuracy"
+- Collapsible audit trail showing reconciliation decisions per set
+
+---
+
+## Phase 2 — Wizard UX Polish (NEXT)
+
+The wizard flow shipped in Phase 0 (PRs #161–#162). These are refinements based on real usage:
 
 - ImportWizard.tsx ArrayBuffer caching race condition (flagged, medium severity)
-- Wizard question flow refinements based on real usage
+- Wizard question flow refinements
 - Chunk failure UX — retry individual failed chunks
 - Progress indicators / status messaging improvements
+- Deep extraction progress UX polish (page-by-page progress)
 
 ---
 
@@ -71,13 +118,14 @@ After extraction is solid. The wizard flow (Phase 1/2 background jobs) just ship
 
 - Review page redesign
 - Product Families rethinking (open question — needs design discussion)
-- Per-door hardware display accuracy (depends on Phase 1 being solid)
+- Per-door hardware display with confidence indicators
+- Reconciliation audit trail in review page (beyond wizard)
 
 ---
 
 ## Phase 4 — Export
 
-Gated on Phase 1 + Phase 3. Can't export until extraction is accurate and the review page correctly presents the data.
+Gated on Phase 1 (done) + Phase 3. Can export once the review page correctly presents the data.
 
 ---
 
@@ -89,27 +137,21 @@ Gated on Phase 1 + Phase 3. Can't export until extraction is accurate and the re
 | Storage policy naming oddity | Pre-existing, cosmetic |
 | 164 skipped Python tests | By design — require golden PDF fixtures not in repo |
 | `test_zero_doors` xfail | Spec-doc edge case — extractor finds 1 opening in a 0-door doc |
-| BUG-12 tests in `test_extract_tables.py` | Additional BUG-12 coverage beyond MCA-specific tests |
 | Cut-sheet fetching prompt | Exists in `prompts/` but not wired up |
-| Inline PDF viewer | Was mentioned as Batch 5C in earlier discussions |
+| Inline PDF viewer | Mentioned as future feature |
+| Sentry error monitoring | PR #180 open |
 
 ---
 
-## Bug Index
+## PDF Corpus Reference
 
-For reference — all tracked bugs and their current status:
+21 test PDFs analyzed (report: pdf_analysis_report.md). Key stats:
 
-| Bug | Description | Status |
-|---|---|---|
-| BUG-1 | Full PDF extraction finds doors | Passing (regression tests) |
-| BUG-2 | No duplicate hardware items after dedup | Passing |
-| BUG-3 | Quantity capping per category | Passing |
-| BUG-4 | Mojibake cleaning | Passing |
-| BUG-5 | Door number validation rejects HW set codes | Passing |
-| BUG-7 | Quantity normalization (float division, pair doors) | Passing (39 tests) |
-| BUG-8 | Page classification for 306169 format | Passing (4 tests) |
-| BUG-9 | Float division fix (modulo-based) | Passing |
-| BUG-10 | AKN non-standard format | Excluded — not fixed |
-| BUG-11 | Test infrastructure expansion | Passing (cross-PDF + classify regression) |
-| BUG-12 | MCA field concatenation | **4 xfail — needs fix** |
-| BUG-24 | BHMA finish code rejection | Passing |
+| Metric | Value |
+|---|---|
+| Format types | Grid (5), Schedule (8), Kinship (3), Mixed (1), Reference (3) |
+| Aggregate qty PDFs | 9 |
+| Per-opening qty PDFs | 8 |
+| PDFs with real pdfplumber tables | 2 of 21 |
+| Distinct set heading formats | 10 |
+| Difficulty range | 1/10 (Barnstable) to 9/10 (kinship-GTN3) |
