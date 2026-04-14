@@ -125,9 +125,9 @@ export default function StepCompare({
 
       // Skip to first relevant sub-step
       let firstStep = 1;
-      if (result.removed.length === 0) firstStep = 2;
-      if (firstStep === 2 && result.changed.length === 0) firstStep = 3;
-      if (firstStep === 3 && result.added.length === 0) firstStep = 4;
+      if ((result.removed ?? []).length === 0) firstStep = 2;
+      if (firstStep === 2 && (result.changed ?? []).length === 0) firstStep = 3;
+      if (firstStep === 3 && (result.added ?? []).length === 0) firstStep = 4;
       setSubStep(firstStep);
     } catch (err) {
       onError(err instanceof Error ? err.message : "Compare failed");
@@ -154,20 +154,20 @@ export default function StepCompare({
           projectId,
           hardwareSets,
           allDoors: doors,
-          removed_decisions: compareResult.removed.map((r) => ({
+          removed_decisions: (compareResult.removed ?? []).map((r) => ({
             door_number: r.door_number,
             existing_id: r.existing_id,
             action: removedActions[r.door_number] || "keep",
           })),
-          changed_decisions: compareResult.changed.map((c) => ({
+          changed_decisions: (compareResult.changed ?? []).map((c) => ({
             door_number: c.door_number,
             existing_id: c.existing_id,
             transfer_progress: changedTransfer[c.door_number] ?? true,
           })),
-          new_door_numbers: compareResult.added
+          new_door_numbers: (compareResult.added ?? [])
             .filter((a) => !newExcluded[a.door_number])
             .map((a) => a.door_number),
-          matched_door_numbers: compareResult.matched.map((m) => m.door_number),
+          matched_door_numbers: (compareResult.matched ?? []).map((m) => m.door_number),
         }),
       });
 
@@ -190,18 +190,18 @@ export default function StepCompare({
   const handleSubNext = () => {
     if (!compareResult) return;
     let next = subStep + 1;
-    if (next === 1 && compareResult.removed.length === 0) next++;
-    if (next === 2 && compareResult.changed.length === 0) next++;
-    if (next === 3 && compareResult.added.length === 0) next++;
+    if (next === 1 && (compareResult.removed ?? []).length === 0) next++;
+    if (next === 2 && (compareResult.changed ?? []).length === 0) next++;
+    if (next === 3 && (compareResult.added ?? []).length === 0) next++;
     setSubStep(next);
   };
 
   const handleSubBack = () => {
     if (!compareResult) return;
     let prev = subStep - 1;
-    if (prev === 3 && compareResult.added.length === 0) prev--;
-    if (prev === 2 && compareResult.changed.length === 0) prev--;
-    if (prev === 1 && compareResult.removed.length === 0) prev--;
+    if (prev === 3 && (compareResult.added ?? []).length === 0) prev--;
+    if (prev === 2 && (compareResult.changed ?? []).length === 0) prev--;
+    if (prev === 1 && (compareResult.removed ?? []).length === 0) prev--;
     setSubStep(Math.max(0, prev));
   };
 
@@ -261,14 +261,14 @@ export default function StepCompare({
         {subStep === 1 && compareResult && (
           <div>
             <p className="text-secondary text-sm mb-3">
-              These <strong className="text-danger">{compareResult.removed.length} doors</strong> exist in your project but are <strong>not in the revised submittal</strong>.
+              These <strong className="text-danger">{(compareResult.removed ?? []).length} doors</strong> exist in your project but are <strong>not in the revised submittal</strong>.
             </p>
             <div className="flex gap-2 mb-3">
-              <button onClick={() => { const u: Record<string, "keep" | "delete"> = {}; compareResult.removed.forEach(r => u[r.door_number] = "keep"); setRemovedActions(u); }} className="text-xs px-3 py-1 rounded-lg bg-tint border border-border-dim-strong text-secondary hover:bg-tint-strong transition-colors">Keep All</button>
-              <button onClick={() => { const u: Record<string, "keep" | "delete"> = {}; compareResult.removed.forEach(r => u[r.door_number] = "delete"); setRemovedActions(u); }} className="text-xs px-3 py-1 rounded-lg bg-danger-dim border border-danger text-danger hover:bg-danger-dim transition-colors">Delete All</button>
+              <button onClick={() => { const u: Record<string, "keep" | "delete"> = {}; (compareResult.removed ?? []).forEach(r => u[r.door_number] = "keep"); setRemovedActions(u); }} className="text-xs px-3 py-1 rounded-lg bg-tint border border-border-dim-strong text-secondary hover:bg-tint-strong transition-colors">Keep All</button>
+              <button onClick={() => { const u: Record<string, "keep" | "delete"> = {}; (compareResult.removed ?? []).forEach(r => u[r.door_number] = "delete"); setRemovedActions(u); }} className="text-xs px-3 py-1 rounded-lg bg-danger-dim border border-danger text-danger hover:bg-danger-dim transition-colors">Delete All</button>
             </div>
             <div className="space-y-2">
-              {compareResult.removed.map(r => (
+              {(compareResult.removed ?? []).map(r => (
                 <div key={r.door_number} className="bg-tint border border-border-dim-strong rounded-md p-3 flex items-center justify-between">
                   <div>
                     <span className="text-primary font-mono text-sm">{r.door_number}</span>
@@ -289,14 +289,14 @@ export default function StepCompare({
         {subStep === 2 && compareResult && (
           <div>
             <p className="text-secondary text-sm mb-3">
-              These <strong className="text-warning">{compareResult.changed.length} doors</strong> have changed fields. Decide whether to <strong>transfer existing progress</strong> or <strong>reset it</strong>.
+              These <strong className="text-warning">{(compareResult.changed ?? []).length} doors</strong> have changed fields. Decide whether to <strong>transfer existing progress</strong> or <strong>reset it</strong>.
             </p>
             <div className="flex gap-2 mb-3">
-              <button onClick={() => { const u: Record<string, boolean> = {}; compareResult.changed.forEach(c => u[c.door_number] = true); setChangedTransfer(u); }} className="text-xs px-3 py-1 rounded-lg bg-tint border border-border-dim-strong text-secondary hover:bg-tint-strong transition-colors">Transfer All</button>
-              <button onClick={() => { const u: Record<string, boolean> = {}; compareResult.changed.forEach(c => u[c.door_number] = false); setChangedTransfer(u); }} className="text-xs px-3 py-1 rounded-lg bg-tint border border-border-dim-strong text-secondary hover:bg-tint-strong transition-colors">Reset All</button>
+              <button onClick={() => { const u: Record<string, boolean> = {}; (compareResult.changed ?? []).forEach(c => u[c.door_number] = true); setChangedTransfer(u); }} className="text-xs px-3 py-1 rounded-lg bg-tint border border-border-dim-strong text-secondary hover:bg-tint-strong transition-colors">Transfer All</button>
+              <button onClick={() => { const u: Record<string, boolean> = {}; (compareResult.changed ?? []).forEach(c => u[c.door_number] = false); setChangedTransfer(u); }} className="text-xs px-3 py-1 rounded-lg bg-tint border border-border-dim-strong text-secondary hover:bg-tint-strong transition-colors">Reset All</button>
             </div>
             <div className="space-y-3">
-              {compareResult.changed.map(c => (
+              {(compareResult.changed ?? []).map(c => (
                 <div key={c.door_number} className="bg-tint border border-border-dim-strong rounded-md p-3">
                   <div className="flex items-center justify-between mb-2">
                     <div>
@@ -313,7 +313,7 @@ export default function StepCompare({
                     <div className="text-tertiary font-semibold">Field</div>
                     <div className="text-danger font-semibold">Old</div>
                     <div className="text-success font-semibold">New</div>
-                    {c.changes.map(ch => (
+                    {(c.changes ?? []).map(ch => (
                       <div key={ch.field} className="contents">
                         <div className="text-tertiary">{FIELD_LABELS[ch.field] || ch.field}</div>
                         <div className="text-danger line-through font-mono">{ch.old_value || "—"}</div>
@@ -331,15 +331,15 @@ export default function StepCompare({
         {subStep === 3 && compareResult && (
           <div>
             <p className="text-secondary text-sm mb-3">
-              <strong className="text-accent">{compareResult.added.length - Object.values(newExcluded).filter(Boolean).length} new doors</strong> will be added.
+              <strong className="text-accent">{(compareResult.added ?? []).length - Object.values(newExcluded).filter(Boolean).length} new doors</strong> will be added.
               {Object.values(newExcluded).filter(Boolean).length > 0 && <span className="text-danger"> ({Object.values(newExcluded).filter(Boolean).length} excluded)</span>}
             </p>
             <div className="flex gap-2 mb-3">
-              <button onClick={() => { const a: Record<string, boolean> = {}; compareResult.added.forEach(d => a[d.door_number] = false); setNewExcluded(a); }} className="text-xs px-3 py-1 rounded-lg bg-tint border border-border-dim-strong text-secondary hover:bg-tint-strong transition-colors">Add All</button>
-              <button onClick={() => { const a: Record<string, boolean> = {}; compareResult.added.forEach(d => a[d.door_number] = true); setNewExcluded(a); }} className="text-xs px-3 py-1 rounded-lg bg-danger-dim border border-danger text-danger hover:bg-danger-dim transition-colors">Skip All</button>
+              <button onClick={() => { const a: Record<string, boolean> = {}; (compareResult.added ?? []).forEach(d => a[d.door_number] = false); setNewExcluded(a); }} className="text-xs px-3 py-1 rounded-lg bg-tint border border-border-dim-strong text-secondary hover:bg-tint-strong transition-colors">Add All</button>
+              <button onClick={() => { const a: Record<string, boolean> = {}; (compareResult.added ?? []).forEach(d => a[d.door_number] = true); setNewExcluded(a); }} className="text-xs px-3 py-1 rounded-lg bg-danger-dim border border-danger text-danger hover:bg-danger-dim transition-colors">Skip All</button>
             </div>
             <div className="space-y-2 max-h-[50vh] overflow-y-auto">
-              {compareResult.added.map(a => (
+              {(compareResult.added ?? []).map(a => (
                 <div key={a.door_number} className={`border rounded-md p-3 flex items-center justify-between transition-colors ${newExcluded[a.door_number] ? "bg-tint border-border-dim opacity-50" : "bg-tint border-border-dim-strong"}`}>
                   <div className="flex items-center gap-3 flex-wrap">
                     <span className="text-primary font-mono text-sm">{a.door_number}</span>
@@ -366,28 +366,28 @@ export default function StepCompare({
                 <span className="text-secondary">Unchanged doors</span>
                 <span className="text-success font-mono">{compareResult.summary.matched}</span>
               </div>
-              {compareResult.changed.length > 0 && (
+              {(compareResult.changed ?? []).length > 0 && (
                 <div className="bg-tint border border-border-dim rounded-md p-3">
                   <div className="flex justify-between mb-1">
                     <span className="text-secondary">Updated doors</span>
-                    <span className="text-warning font-mono">{compareResult.changed.length}</span>
+                    <span className="text-warning font-mono">{(compareResult.changed ?? []).length}</span>
                   </div>
                   <div className="text-xs text-tertiary">
                     {Object.values(changedTransfer).filter(Boolean).length} with progress transferred, {Object.values(changedTransfer).filter(v => !v).length} reset
                   </div>
                 </div>
               )}
-              {compareResult.added.length > 0 && (
+              {(compareResult.added ?? []).length > 0 && (
                 <div className="bg-tint border border-border-dim rounded-md p-3 flex justify-between">
                   <span className="text-secondary">New doors to add</span>
-                  <span className="text-accent font-mono">{compareResult.added.filter(a => !newExcluded[a.door_number]).length}</span>
+                  <span className="text-accent font-mono">{(compareResult.added ?? []).filter(a => !newExcluded[a.door_number]).length}</span>
                 </div>
               )}
-              {compareResult.removed.length > 0 && (
+              {(compareResult.removed ?? []).length > 0 && (
                 <div className="bg-tint border border-border-dim rounded-md p-3">
                   <div className="flex justify-between mb-1">
                     <span className="text-secondary">Removed doors</span>
-                    <span className="text-danger font-mono">{compareResult.removed.length}</span>
+                    <span className="text-danger font-mono">{(compareResult.removed ?? []).length}</span>
                   </div>
                   <div className="text-xs text-tertiary">
                     {Object.values(removedActions).filter(v => v === "keep").length} kept, {Object.values(removedActions).filter(v => v === "delete").length} deleted
@@ -447,11 +447,11 @@ export default function StepCompare({
               This action is <strong className="text-danger">irreversible</strong>. The following changes will be applied to your project:
             </p>
             <div className="space-y-2 mb-6 text-sm">
-              {compareResult.added.filter(a => !newExcluded[a.door_number]).length > 0 && (
+              {(compareResult.added ?? []).filter(a => !newExcluded[a.door_number]).length > 0 && (
                 <div className="flex items-center gap-2">
                   <span className="text-accent">+</span>
                   <span className="text-secondary">
-                    <strong className="text-accent">{compareResult.added.filter(a => !newExcluded[a.door_number]).length}</strong> door{compareResult.added.filter(a => !newExcluded[a.door_number]).length !== 1 ? "s" : ""} will be added
+                    <strong className="text-accent">{(compareResult.added ?? []).filter(a => !newExcluded[a.door_number]).length}</strong> door{(compareResult.added ?? []).filter(a => !newExcluded[a.door_number]).length !== 1 ? "s" : ""} will be added
                   </span>
                 </div>
               )}
@@ -463,11 +463,11 @@ export default function StepCompare({
                   </span>
                 </div>
               )}
-              {compareResult.changed.length > 0 && (
+              {(compareResult.changed ?? []).length > 0 && (
                 <div className="flex items-center gap-2">
                   <span className="text-warning">~</span>
                   <span className="text-secondary">
-                    <strong className="text-warning">{compareResult.changed.length}</strong> door{compareResult.changed.length !== 1 ? "s" : ""} will be modified
+                    <strong className="text-warning">{(compareResult.changed ?? []).length}</strong> door{(compareResult.changed ?? []).length !== 1 ? "s" : ""} will be modified
                     {Object.values(changedTransfer).filter(v => !v).length > 0 && (
                       <span className="text-danger"> ({Object.values(changedTransfer).filter(v => !v).length} with progress reset)</span>
                     )}

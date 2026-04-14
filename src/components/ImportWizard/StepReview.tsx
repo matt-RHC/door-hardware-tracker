@@ -710,9 +710,10 @@ export default function StepReview({
                       const reconciledSet = reconciledSetMap.get(hwSet.set_id);
                       if (!reconciledSet) return null;
                       const isOpen = auditTrailOpen.has(hwSet.set_id);
-                      const fullCount = reconciledSet.items.filter(i => i.overall_confidence === 'full').length;
-                      const conflictCount = reconciledSet.items.filter(i => i.overall_confidence === 'conflict').length;
-                      const singleCount = reconciledSet.items.filter(i => i.overall_confidence === 'single_source').length;
+                      const reconciledItems = reconciledSet.items ?? [];
+                      const fullCount = reconciledItems.filter(i => i.overall_confidence === 'full').length;
+                      const conflictCount = reconciledItems.filter(i => i.overall_confidence === 'conflict').length;
+                      const singleCount = reconciledItems.filter(i => i.overall_confidence === 'single_source').length;
                       return (
                         <div className="mt-2 pt-2 border-t border-border-dim">
                           <button
@@ -727,7 +728,7 @@ export default function StepReview({
                           </button>
                           {isOpen && (
                             <div className="mt-1.5 space-y-1 text-[10px]">
-                              {reconciledSet.items.map((ri, riIdx) => {
+                              {(reconciledSet.items ?? []).map((ri, riIdx) => {
                                 if (ri.overall_confidence === 'full') return null;
                                 const fields = (['name', 'qty', 'manufacturer', 'model', 'finish'] as const)
                                   .filter(f => ri[f].confidence !== 'full');

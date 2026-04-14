@@ -55,7 +55,7 @@ export default function StepScanResults({
 
   // Collect unique hardware set IDs across all pages
   const allSetIds: string[] = [];
-  for (const p of pages) {
+  for (const p of pages ?? []) {
     for (const sid of p.hw_set_ids ?? []) {
       if (!allSetIds.includes(sid)) allSetIds.push(sid);
     }
@@ -88,7 +88,7 @@ export default function StepScanResults({
         </div>
         <div className="bg-tint border border-border-dim rounded-md p-3 text-center">
           <div className="text-lg font-bold text-success">
-            {summary.door_schedule_pages.length}
+            {(summary.door_schedule_pages ?? []).length}
           </div>
           <div className="text-[9px] text-tertiary uppercase tracking-wide">
             Door Schedule
@@ -96,7 +96,7 @@ export default function StepScanResults({
         </div>
         <div className="bg-tint border border-border-dim rounded-md p-3 text-center">
           <div className="text-lg font-bold text-warning">
-            {allSetIds.length > 0 ? allSetIds.length : summary.hardware_set_pages.length}
+            {allSetIds.length > 0 ? allSetIds.length : (summary.hardware_set_pages ?? []).length}
           </div>
           <div className="text-[9px] text-tertiary uppercase tracking-wide">
             {allSetIds.length > 0 ? "Hardware Sets" : "HW Set Pages"}
