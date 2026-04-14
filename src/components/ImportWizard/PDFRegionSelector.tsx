@@ -54,6 +54,11 @@ export default function PDFRegionSelector({
   /** Full image natural dimensions (pixel size of the rendered data URL). */
   const [imageDims, setImageDims] = useState<{ w: number; h: number } | null>(null);
 
+  /** Canvas-cropped zoom image data URL. */
+  const [zoomImageUrl, setZoomImageUrl] = useState<string | null>(null);
+  /** Scale factor used for the current zoom crop. */
+  const [zoomScale, setZoomScale] = useState<number>(1);
+
   const imageRef = useRef<HTMLImageElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const zoomContainerRef = useRef<HTMLDivElement>(null);
@@ -129,6 +134,49 @@ export default function PDFRegionSelector({
       setImageDims({ w: img.naturalWidth, h: img.naturalHeight });
     }
   }, []);
+
+  /** Render the selected region of the full-page image onto a canvas and store as data URL. */
+  const renderZoomCrop = useCallback((sel: Selection) => {
+    const img = imageRef.current;
+    if (!img || !imageDims) return;
+
+    const selLeft = Math.min(sel.startX, sel.endX);
+    const selTop = Math.min(sel.startY, sel.endY);
+    const selW = Math.abs(sel.endX - sel.startX);
+    const selH = Math.abs(sel.endY - sel.startY);
+    if (selW === 0 || selH === 0) return;
+
+    // The image is displayed at CSS width (getBoundingClientRect) but has naturalWidth pixels.
+    // Selection coords are in display-pixel space, so convert to natural-pixel space.
+    const displayRect = img.getBoundingClientRect();
+    const scaleToNatural = imageDims.w / displayRect.width;
+
+    const srcX = selLeft * scaleToNatural;
+    const srcY = selTop * scaleToNatural;
+    const srcW = selW * scaleToNatural;
+    const srcH = selH * scaleToNatural;
+
+    // Container width for the zoom output — use parent width or fallback
+    const containerWidth = containerRef.current?.offsetWidth ?? 600;
+    const scale = Math.min(containerWidth / selW, MAX_ZOOM);
+
+    const destW = Math.round(selW * scale);
+    const destH = Math.round(selH * scale);
+
+    const canvas = document.createElement("canvas");
+    canvas.width = destW;
+    canvas.height = destH;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    ctx.drawImage(img, srcX, srcY, srcW, srcH, 0, 0, destW, destH);
+
+    setZoomImageUrl(canvas.toDataURL("image/jpeg", 0.92));
+    setZoomScale(scale);
+
+    canvas.width = 0;
+    canvas.height = 0;
+  }, [imageDims]);
 
   // Get mouse/touch position relative to the image element
   const getRelativePosition = useCallback((e: React.PointerEvent) => {
@@ -210,20 +258,23 @@ export default function PDFRegionSelector({
           const normW = selW / rect.width;
           const normH = selH / rect.height;
           if (normW >= MIN_NORMALIZED_DIM && normH >= MIN_NORMALIZED_DIM && selW > 10 && selH > 10) {
+            renderZoomCrop(selection);
             setPhase("zoom");
           }
         }
       }
     }
-  }, [isDragging, phase, selection]);
+  }, [isDragging, phase, selection, renderZoomCrop]);
 
   const handleExtract = useCallback(() => {
-    if (!selection || !imageRef.current) return;
+    if (!selection) return;
 
     const img = imageRef.current;
-    const rect = img.getBoundingClientRect();
-    const w = rect.width;
-    const h = rect.height;
+    const rect = img?.getBoundingClientRect();
+    // In zoom phase the full-page img may be hidden — use stored imageDims as fallback
+    const w = (rect?.width && rect.width > 0) ? rect.width : (imageDims?.w ?? 0);
+    const h = (rect?.height && rect.height > 0) ? rect.height : (imageDims?.h ?? 0);
+    if (w === 0 || h === 0) return;
 
     // Normalize to 0-1 percentages, ensuring x0 < x1 and y0 < y1
     const bbox = {
@@ -240,7 +291,7 @@ export default function PDFRegionSelector({
     }
 
     onSelect(bbox);
-  }, [selection, onSelect, onError]);
+  }, [selection, imageDims, onSelect, onError]);
 
   // Compute selection rect for rendering
   const selectionRect = selection ? {
@@ -251,13 +302,14 @@ export default function PDFRegionSelector({
   } : null;
 
   const hasValidSelection = (() => {
-    if (!selectionRect || !imageRef.current) return false;
+    if (!selectionRect) return false;
     if (selectionRect.width <= 10 || selectionRect.height <= 10) return false;
-    // Also check normalized dimensions to stay in sync with handleExtract
-    const rect = imageRef.current.getBoundingClientRect();
-    if (rect.width === 0 || rect.height === 0) return false;
-    const normW = selectionRect.width / rect.width;
-    const normH = selectionRect.height / rect.height;
+    const rect = imageRef.current?.getBoundingClientRect();
+    const w = (rect?.width && rect.width > 0) ? rect.width : (imageDims?.w ?? 0);
+    const h = (rect?.height && rect.height > 0) ? rect.height : (imageDims?.h ?? 0);
+    if (w === 0 || h === 0) return false;
+    const normW = selectionRect.width / w;
+    const normH = selectionRect.height / h;
     return normW >= MIN_NORMALIZED_DIM && normH >= MIN_NORMALIZED_DIM;
   })();
 
@@ -277,85 +329,78 @@ export default function PDFRegionSelector({
   }, []);
 
   // --- Zoom view: pointer handlers for dragging handles in zoom view ---
-  const getZoomRelativePosition = useCallback((e: React.PointerEvent) => {
-    // Convert pointer position in zoom view back to full-image coordinates
-    const zoomContainer = zoomContainerRef.current;
-    const img = imageRef.current;
-    if (!zoomContainer || !img || !selectionRect) return null;
-
-    const containerRect = zoomContainer.getBoundingClientRect();
-    const imgRect = img.getBoundingClientRect();
-    const imgDisplayW = imgRect.width;
-    const imgDisplayH = imgRect.height;
-
-    // Zoom scale: container width / selection width, capped at MAX_ZOOM
-    const zoomScale = Math.min(containerRect.width / selectionRect.width, MAX_ZOOM);
-
-    // Pointer offset within the zoom container
-    const px = e.clientX - containerRect.left;
-    const py = e.clientY - containerRect.top;
-
-    // Convert to full-image display coordinates
-    const fullX = selectionRect.left + px / zoomScale;
-    const fullY = selectionRect.top + py / zoomScale;
-
-    return {
-      x: Math.max(0, Math.min(fullX, imgDisplayW)),
-      y: Math.max(0, Math.min(fullY, imgDisplayH)),
-    };
-  }, [selectionRect]);
-
   const handleZoomPointerDown = useCallback((e: React.PointerEvent) => {
     if (loading || !selection) return;
     e.preventDefault();
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
 
-    const pos = getZoomRelativePosition(e);
-    if (!pos) return;
+    const zoomContainer = zoomContainerRef.current;
+    if (!zoomContainer) return;
 
-    const handle = getHandleAtPosition(pos.x, pos.y, selection);
+    const containerRect = zoomContainer.getBoundingClientRect();
+    const px = e.clientX - containerRect.left;
+    const py = e.clientY - containerRect.top;
+    const zW = containerRect.width;
+    const zH = containerRect.height;
+
+    const handle = getHandleAtPositionZoomed(px, py, zW, zH, 20);
     if (handle) {
       setResizeHandle(handle);
       setIsDragging(true);
     }
-  }, [loading, selection, getZoomRelativePosition]);
+  }, [loading, selection]);
 
   const handleZoomPointerMove = useCallback((e: React.PointerEvent) => {
-    if (!isDragging || !resizeHandle) return;
+    if (!isDragging || !resizeHandle || !selectionRect) return;
     e.preventDefault();
 
-    const pos = getZoomRelativePosition(e);
-    if (!pos) return;
+    const zoomContainer = zoomContainerRef.current;
+    if (!zoomContainer) return;
+
+    const containerRect = zoomContainer.getBoundingClientRect();
+    const px = e.clientX - containerRect.left;
+    const py = e.clientY - containerRect.top;
+
+    // Map zoom-view pixel delta back to full-image display coordinates
+    const invScale = 1 / zoomScale;
+    const fullX = selectionRect.left + px * invScale;
+    const fullY = selectionRect.top + py * invScale;
 
     setSelection(prev => {
       if (!prev) return prev;
       const updated = { ...prev };
       if (resizeHandle === "nw") {
-        updated.startX = pos.x;
-        updated.startY = pos.y;
+        updated.startX = fullX;
+        updated.startY = fullY;
       } else if (resizeHandle === "ne") {
-        updated.endX = pos.x;
-        updated.startY = pos.y;
+        updated.endX = fullX;
+        updated.startY = fullY;
       } else if (resizeHandle === "sw") {
-        updated.startX = pos.x;
-        updated.endY = pos.y;
+        updated.startX = fullX;
+        updated.endY = fullY;
       } else if (resizeHandle === "se") {
-        updated.endX = pos.x;
-        updated.endY = pos.y;
+        updated.endX = fullX;
+        updated.endY = fullY;
       }
       return updated;
     });
-  }, [isDragging, resizeHandle, getZoomRelativePosition]);
+  }, [isDragging, resizeHandle, selectionRect, zoomScale]);
 
   const handleZoomPointerUp = useCallback(() => {
     setIsDragging(false);
     setResizeHandle(null);
-  }, []);
+    // Re-render canvas crop with updated selection coords
+    if (selection) {
+      renderZoomCrop(selection);
+    }
+  }, [selection, renderZoomCrop]);
 
   // Reset phase when page changes or image reloads
   useEffect(() => {
     setPhase("select");
     setSelection(null);
+    setImageDims(null);
+    setZoomImageUrl(null);
   }, [pageIndex]);
 
   return (
@@ -497,10 +542,9 @@ export default function PDFRegionSelector({
       {phase === "zoom" && imageUrl && selectionRect && (
         <>
           <ZoomView
-            imageUrl={imageUrl}
+            zoomImageUrl={zoomImageUrl}
+            zoomScale={zoomScale}
             selectionRect={selectionRect}
-            imageDims={imageDims}
-            imageRef={imageRef}
             zoomContainerRef={zoomContainerRef}
             isDragging={isDragging}
             onPointerDown={handleZoomPointerDown}
@@ -545,47 +589,29 @@ export default function PDFRegionSelector({
   );
 }
 
-/** Zoomed-in view of the selected region with fine-tune handles. */
+/** Zoomed-in view of the selected region using canvas-cropped image. */
 function ZoomView({
-  imageUrl,
+  zoomImageUrl,
+  zoomScale,
   selectionRect,
-  imageDims,
-  imageRef,
   zoomContainerRef,
   isDragging,
   onPointerDown,
   onPointerMove,
   onPointerUp,
 }: {
-  imageUrl: string;
+  zoomImageUrl: string | null;
+  zoomScale: number;
   selectionRect: { left: number; top: number; width: number; height: number };
-  imageDims: { w: number; h: number } | null;
-  imageRef: React.RefObject<HTMLImageElement | null>;
   zoomContainerRef: React.RefObject<HTMLDivElement | null>;
   isDragging: boolean;
   onPointerDown: (e: React.PointerEvent) => void;
   onPointerMove: (e: React.PointerEvent) => void;
   onPointerUp: (e: React.PointerEvent) => void;
 }) {
-  // We need the display dimensions of the image in the select phase.
-  // Since the image element is hidden in zoom phase, use the stored display size.
-  const imgEl = imageRef.current;
-  const imgDisplayW = imgEl?.getBoundingClientRect().width ?? imageDims?.w ?? 800;
-  const imgDisplayH = imgEl?.getBoundingClientRect().height ?? imageDims?.h ?? 600;
-
-  // Compute zoom scale: fit the selection to ~full container width, capped at MAX_ZOOM
-  const zoomScale = Math.min(
-    // Approximate container width — the container will flex to fill, so use a reasonable estimate.
-    // The actual container width is determined by CSS; the image width is close enough.
-    imgDisplayW / selectionRect.width,
-    MAX_ZOOM,
-  );
-
-  // The zoomed container dimensions
   const zoomedW = selectionRect.width * zoomScale;
   const zoomedH = selectionRect.height * zoomScale;
 
-  // Handles in zoom-view space: offset from the selection origin, scaled by zoomScale
   const handlePositions = [
     { x: 0, y: 0, cursor: "nw-resize" },
     { x: zoomedW, y: 0, cursor: "ne-resize" },
@@ -600,36 +626,30 @@ function ZoomView({
       style={{
         touchAction: "none",
         width: "100%",
-        height: zoomedH,
         maxHeight: "60vh",
       }}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
     >
-      {/* Full-page image, CSS-transformed to show only the selected region */}
-      <img
-        src={imageUrl}
-        alt="Zoomed selection"
-        draggable={false}
-        className="absolute"
-        style={{
-          width: imgDisplayW * zoomScale,
-          height: imgDisplayH * zoomScale,
-          left: -selectionRect.left * zoomScale,
-          top: -selectionRect.top * zoomScale,
-          pointerEvents: "none",
-        }}
-      />
+      {zoomImageUrl ? (
+        <img
+          src={zoomImageUrl}
+          alt="Zoomed selection"
+          draggable={false}
+          className="w-full h-auto"
+          style={{ pointerEvents: "none" }}
+        />
+      ) : (
+        <div className="flex items-center justify-center py-16">
+          <span className="text-xs text-tertiary">Rendering zoom...</span>
+        </div>
+      )}
 
       {/* Selection border overlay in zoom view */}
       <div
-        className="absolute pointer-events-none"
+        className="absolute pointer-events-none inset-0"
         style={{
-          left: 0,
-          top: 0,
-          width: zoomedW,
-          height: zoomedH,
           border: "2px solid var(--blue)",
           boxShadow: "0 0 8px var(--glow-blue)",
         }}
@@ -682,5 +702,20 @@ function getHandleAtPosition(
   if (Math.abs(x - right) < threshold && Math.abs(y - top) < threshold) return "ne";
   if (Math.abs(x - left) < threshold && Math.abs(y - bottom) < threshold) return "sw";
   if (Math.abs(x - right) < threshold && Math.abs(y - bottom) < threshold) return "se";
+  return null;
+}
+
+/** Hit-test in zoom-view pixel space where corners are at the edges of the zoomed image. */
+function getHandleAtPositionZoomed(
+  px: number,
+  py: number,
+  zoomedW: number,
+  zoomedH: number,
+  threshold: number,
+): "nw" | "ne" | "sw" | "se" | null {
+  if (Math.abs(px) < threshold && Math.abs(py) < threshold) return "nw";
+  if (Math.abs(px - zoomedW) < threshold && Math.abs(py) < threshold) return "ne";
+  if (Math.abs(px) < threshold && Math.abs(py - zoomedH) < threshold) return "sw";
+  if (Math.abs(px - zoomedW) < threshold && Math.abs(py - zoomedH) < threshold) return "se";
   return null;
 }

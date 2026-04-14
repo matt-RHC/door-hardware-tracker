@@ -181,6 +181,14 @@ export default function DoorDetailPage() {
     };
   }, [opening, doorId, debouncedFetch, supabase]);
 
+  // Lock body scroll when rescan modal is open (prevents iPad bounce-scroll)
+  useEffect(() => {
+    if (!rescanItem) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = prev; };
+  }, [rescanItem]);
+
   type WorkflowStep = 'received' | 'pre_install' | 'installed' | 'qa_qc';
 
   const handleStepToggle = async (itemId: string, step: WorkflowStep, currentValue: boolean, leafIndex: number = 1) => {
@@ -1565,9 +1573,9 @@ export default function DoorDetailPage() {
       )}
 
       {/* Rescan Modal */}
-      {rescanItem && pdfBuffer && opening && (
+      {rescanItem && pdfBuffer && opening && opening.pdf_page != null && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto">
-          <div className="panel corner-brackets w-full max-w-2xl p-5 animate-fade-in-up max-h-[90vh] overflow-y-auto" style={{ background: 'var(--surface)' }}>
+          <div className="panel corner-brackets w-full max-w-2xl p-5 animate-fade-in-up max-h-[90vh] overflow-y-auto" style={{ background: 'var(--surface)', overscrollBehavior: 'contain' }}>
             {rescanRawText ? (
               <>
                 {/* Multi-Value Field Assignment UI */}
