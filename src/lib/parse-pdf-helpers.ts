@@ -108,11 +108,15 @@ function logPunchyCall(opts: {
  * Returns the install_scope for the matched category, or null if unrecognized.
  * Mirrors Python's _classify_hardware_item() at extract-tables.py:173.
  * Uses the shared TAXONOMY_REGEX_CACHE from hardware-taxonomy.ts.
+ *
+ * When `model` is provided, patterns are tested against `name + " " + model`
+ * so identifiers like "CON TW8" in the model field are matched.
  */
-export function classifyItemScope(name: string): InstallScope | null {
+export function classifyItemScope(name: string, model?: string): InstallScope | null {
+  const text = model ? `${name} ${model}` : name
   for (const cat of TAXONOMY_REGEX_CACHE) {
     for (const rx of cat.patterns) {
-      if (rx.test(name)) return cat.install_scope
+      if (rx.test(text)) return cat.install_scope
     }
   }
   return null
@@ -190,6 +194,7 @@ export type LeafSide = 'active' | 'inactive' | 'shared' | 'both'
 export function computeLeafSide(
   itemName: string,
   leafCount: number,
+  model?: string,
 ): LeafSide | null {
   // Structural items — fixed by name.
   if (itemName === 'Door (Active Leaf)') return 'active'
@@ -200,7 +205,7 @@ export function computeLeafSide(
   if (itemName === 'Door') return leafCount <= 1 ? 'active' : null
 
   // Hardware items — scope drives unambiguous attribution.
-  const scope = classifyItemScope(itemName)
+  const scope = classifyItemScope(itemName, model)
   if (scope === 'per_pair' || scope === 'per_frame') return 'shared'
 
   // per_leaf / per_opening / unknown on pair doors: ambiguous, defer.
@@ -1727,7 +1732,7 @@ export function normalizeQuantities(
         let divisor = item.qty_door_count
 
         // Electric hinges: per_opening scope — override leafCount divisor to doorCount.
-        if (classifyItem(item.name) === 'electric_hinge' && doorCount > 0 && divisor > doorCount) {
+        if (classifyItem(item.name, undefined, item.model) === 'electric_hinge' && doorCount > 0 && divisor > doorCount) {
           console.debug(
             `[qty-norm] ${set.set_id}: "${item.name}" electric hinge — ` +
             `overriding python divisor ${divisor} → doorCount ${doorCount} (per_opening)`
@@ -1745,7 +1750,7 @@ export function normalizeQuantities(
             `[qty-norm] ${set.set_id}: "${item.name}" ${raw} ÷ ${divisor} = ${result} (python-annotated)`
           )
         } else if (
-          classifyItem(item.name) === 'hinges'
+          classifyItem(item.name, undefined, item.model) === 'hinges'
           && isAsymmetricHingeSplit(raw, setElectricHingeQty, divisor)
         ) {
           // Asymmetric hinge split (python-annotated path): the standard hinge
@@ -1777,7 +1782,7 @@ export function normalizeQuantities(
       // suggesting this is an aggregate total from a PDF with no door count.
       // We cap it at the category max and mark it so the user sees it was capped.
       if (item.qty_source === 'needs_cap') {
-        const scope = classifyItemScope(item.name)
+        const scope = classifyItemScope(item.name, item.model)
         const maxQty = MAX_QTY[scope ?? 'per_leaf'] ?? 5
         item.qty_total = item.qty
         item.qty = Math.min(item.qty, maxQty)
@@ -1836,7 +1841,7 @@ export function normalizeQuantities(
         continue
       }
 
-      const scope = classifyItemScope(item.name)
+      const scope = classifyItemScope(item.name, item.model)
 
       // per_pair / per_frame: never divide regardless of count
       if (scope === 'per_pair' || scope === 'per_frame') {
@@ -1886,7 +1891,7 @@ export function normalizeQuantities(
             item.qty = perLeaf
             item.qty_source = 'divided'
           } else if (
-            classifyItem(item.name) === 'hinges'
+            classifyItem(item.name, undefined, item.model) === 'hinges'
             && isAsymmetricHingeSplit(item.qty, setElectricHingeQty, leafCount)
           ) {
             // Asymmetric hinge split: the non-integer division is explained by
@@ -1957,7 +1962,7 @@ export function normalizeQuantities(
     if (isSubHeading) {
       for (const item of set.items ?? []) {
         if (item.qty_source !== 'divided' && item.qty_source !== 'flagged') continue
-        const scope = classifyItemScope(item.name)
+        const scope = classifyItemScope(item.name, item.model)
         const maxQty = MAX_QTY[scope ?? 'per_opening'] ?? 4
         if (item.qty <= maxQty) continue
 
@@ -2695,8 +2700,8 @@ export function buildPerOpeningItems(
       const { totalElectricQty: totalElectricHingeQty } = scanElectricHinges(setItems, isPair)
 
       for (const item of setItems) {
-        const category = isPair ? classifyItem(item.name) : null
-        let leafSide = computeLeafSide(item.name, leafCount)
+        const category = isPair ? classifyItem(item.name, undefined, item.model) : null
+        let leafSide = computeLeafSide(item.name, leafCount, item.model)
 
         // ── Electric hinge: active leaf only on pairs ──
         if (isPair && category === 'electric_hinge') {

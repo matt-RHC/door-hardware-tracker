@@ -46,6 +46,21 @@ describe('classifyItem — hinge types', () => {
     expect(classifyItem('Power Transfer Hinge')).toBe('electric_hinge')
   })
 
+  it('classifies electric hinges when identifier is in model field (real PDF data)', () => {
+    // Real PDF extraction splits data: name="Hinges", model="5BB1 HW 4 1/2 x 4 1/2 CON TW8"
+    // The "CON TW8" identifier is ONLY in the model field.
+    expect(classifyItem('Hinges', undefined, '5BB1 HW 4 1/2 x 4 1/2 CON TW8')).toBe('electric_hinge')
+    expect(classifyItem('Hinges', undefined, '5BB1 HW 4.5x4.5 CON TW8')).toBe('electric_hinge')
+    expect(classifyItem('Hinges', undefined, 'BB1279 4.5x4.5 CON TW4')).toBe('electric_hinge')
+  })
+
+  it('classifies standard hinges correctly when model has no electric identifier', () => {
+    // Standard hinges should NOT be reclassified when model is a plain model number
+    expect(classifyItem('Hinges', undefined, '5BB1 HW 4 1/2 x 4 1/2 NRP')).toBe('hinges')
+    expect(classifyItem('Hinges', undefined, '5BB1 4.5x4.5')).toBe('hinges')
+    expect(classifyItem('Hinges')).toBe('hinges')
+  })
+
   it('does NOT classify continuous/pivot/spring as generic "hinges"', () => {
     expect(classifyItem('Continuous Hinge')).not.toBe('hinges')
     expect(classifyItem('Pivot Set')).not.toBe('hinges')

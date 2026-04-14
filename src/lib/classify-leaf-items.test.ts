@@ -234,3 +234,36 @@ describe('groupItemsByLeaf — standard hinge qty adjustment for electric hinges
     expect(leaf2[0].qty).toBe(4)
   })
 })
+
+describe('groupItemsByLeaf — real PDF data with split name/model fields', () => {
+  it('pair door: electric hinge detected from model field (name="Hinges", model="...CON TW8")', () => {
+    // Real PDF extraction: name is generic "Hinges", model has the "CON TW8" identifier.
+    // Without the name+model fix, this electric hinge would be misclassified as generic
+    // hinges and appear on both leaves instead of active only.
+    const items = [
+      makeItem('Hinges', { qty: 4, model: '5BB1 HW 4 1/2 x 4 1/2 NRP' }),           // standard
+      makeItem('Hinges', { qty: 1, model: '5BB1 HW 4 1/2 x 4 1/2 CON TW8' }),       // electric
+    ]
+    const { shared, leaf1, leaf2 } = groupItemsByLeaf(items, 2)
+    expect(shared).toHaveLength(0)
+    // Active leaf: 3 standard (4-1) + 1 electric = 2 items
+    expect(leaf1).toHaveLength(2)
+    expect(leaf1[0].qty).toBe(3)   // standard: 4 - 1 electric = 3
+    expect(leaf1[1].qty).toBe(1)   // electric hinge
+    // Inactive leaf: full standard qty, no electric
+    expect(leaf2).toHaveLength(1)
+    expect(leaf2[0].qty).toBe(4)
+  })
+
+  it('single door: electric hinge from model field routes to leaf1 (no adjustment)', () => {
+    const items = [
+      makeItem('Hinges', { qty: 3, model: '5BB1 HW 4 1/2 x 4 1/2 NRP' }),
+      makeItem('Hinges', { qty: 1, model: '5BB1 HW 4 1/2 x 4 1/2 CON TW8' }),
+    ]
+    const { leaf1, leaf2 } = groupItemsByLeaf(items, 1)
+    expect(leaf1).toHaveLength(2)
+    expect(leaf1[0].qty).toBe(3)   // unchanged on single doors
+    expect(leaf1[1].qty).toBe(1)
+    expect(leaf2).toHaveLength(0)
+  })
+})
