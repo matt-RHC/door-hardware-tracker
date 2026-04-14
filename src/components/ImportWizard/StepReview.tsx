@@ -9,7 +9,7 @@ import PDFPagePreview from "./PDFPagePreview";
 import PDFRegionSelector from "./PDFRegionSelector";
 import ConfidenceBadge from "./ConfidenceBadge";
 import { findPageForSet } from "@/lib/punch-cards";
-import { buildDoorToSetMap, normalizeDoorNumber, detectIsPair, classifyItemScope } from "@/lib/parse-pdf-helpers";
+import { buildDoorToSetMap, normalizeDoorNumber, detectIsPair } from "@/lib/parse-pdf-helpers";
 import { groupItemsByLeaf, getLeafDisplayQty } from "@/lib/classify-leaf-items";
 import WizardNav from "./WizardNav";
 
@@ -593,8 +593,7 @@ export default function StepReview({
                 };
                 const hasAnyLowConfidence = items.some(i => i.confidence?.overall === 'low');
                 const renderItems = (arr: typeof items, leafIdx: number) => arr.map(item => {
-                  const scope = classifyItemScope(item.name);
-                  const dq = getLeafDisplayQty(item, lc, scope);
+                  const dq = getLeafDisplayQty(item);
                   const isCorrected = item.qty_source === 'auto_corrected' && item.qty_before_correction != null;
                   const conf = item.confidence;
                   return (
