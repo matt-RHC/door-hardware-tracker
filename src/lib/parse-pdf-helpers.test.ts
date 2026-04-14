@@ -17,6 +17,7 @@ import {
   calculateExtractionConfidence,
 } from './parse-pdf-helpers'
 import type { HardwareSet, DoorEntry, PunchyCorrections } from '@/lib/types'
+import { groupItemsByLeaf } from './classify-leaf-items'
 
 /**
  * Helper: build a minimal HardwareSet with items for testing.
@@ -544,11 +545,12 @@ describe('normalizeQuantities — category-aware division', () => {
     expect(sets[0].items[0].qty_source).toBe('capped')
   })
 
-  // === Hinge consolidation: electric hinge qty subtracted from standard hinges ===
+  // === Hinge consolidation removed: normalizeQuantities no longer subtracts electric from standard ===
+  // The per-leaf adjustment now happens in groupItemsByLeaf (wizard) and buildPerOpeningItems (save).
 
-  it('consolidates standard + electric hinge: 4 total − 1 electric = 3 standard', () => {
+  it('does NOT consolidate standard + electric hinge (consolidation removed)', () => {
     // PDF lists "4 Hinges" and "1 Electric Hinge" as separate items.
-    // After normalization, the 4 includes the 1 electric, so standard = 4 - 1 = 3.
+    // normalizeQuantities no longer subtracts — standard stays at raw per-leaf value.
     const sets = [makeSet('DH_HINGE_CONSOL', [
       { name: 'Hinges 5BB1 4.5x4.5 NRP', qty: 4, qty_source: 'divided' },
       { name: 'Hinges 5BB1 4.5x4.5 CON TW8', qty: 1, qty_source: 'divided' },
@@ -557,14 +559,14 @@ describe('normalizeQuantities — category-aware division', () => {
 
     normalizeQuantities(sets, doors)
 
-    // Standard hinge: 4 - 1 = 3
-    expect(sets[0].items[0].qty).toBe(3)
+    // Standard hinge: stays at 4 (no consolidation)
+    expect(sets[0].items[0].qty).toBe(4)
     // Electric hinge: unchanged
     expect(sets[0].items[1].qty).toBe(1)
   })
 
-  it('does NOT consolidate when standard hinge qty equals electric qty (would go to zero)', () => {
-    // Edge case: 1 standard + 1 electric → don't subtract (would be 0 standard)
+  it('leaves standard hinge qty unchanged even when it equals electric qty', () => {
+    // No consolidation in normalizeQuantities — both stay at their raw values.
     const sets = [makeSet('DH_HINGE_EQUAL', [
       { name: 'Hinge NRP', qty: 1, qty_source: 'divided' },
       { name: 'Electric Hinge CON TW8', qty: 1, qty_source: 'divided' },
@@ -573,13 +575,14 @@ describe('normalizeQuantities — category-aware division', () => {
 
     normalizeQuantities(sets, doors)
 
-    // Both unchanged — standard qty is not > electric qty
+    // Both unchanged — no consolidation
     expect(sets[0].items[0].qty).toBe(1)
     expect(sets[0].items[1].qty).toBe(1)
   })
 
-  it('consolidates with multiple electric hinges in the same set', () => {
-    // Rare but possible: 2 different electric hinge products in one set
+  it('does NOT consolidate with multiple electric hinges in the same set', () => {
+    // Rare but possible: 2 different electric hinge products in one set.
+    // No consolidation — standard stays at raw per-leaf value.
     const sets = [makeSet('DH_MULTI_ELEC', [
       { name: 'Hinges 5BB1 NRP', qty: 5, qty_source: 'divided' },
       { name: 'Hinge CON TW8', qty: 1, qty_source: 'divided' },
@@ -589,8 +592,8 @@ describe('normalizeQuantities — category-aware division', () => {
 
     normalizeQuantities(sets, doors)
 
-    // Standard: 5 - 2 = 3
-    expect(sets[0].items[0].qty).toBe(3)
+    // Standard: stays at 5 (no consolidation)
+    expect(sets[0].items[0].qty).toBe(5)
     // Electric items unchanged
     expect(sets[0].items[1].qty).toBe(1)
     expect(sets[0].items[2].qty).toBe(1)
@@ -615,8 +618,8 @@ describe('normalizeQuantities — category-aware division', () => {
     //   "Hinge, Full Mortise — 7 EA" + "Electric Hinge — 1 EA"
     // Total hinge positions: 8 (4 per leaf). Electric replaces 1 standard on active.
     // Standard 7 / 2 leaves = 3.5 — non-integer BUT explained by electric.
-    // Expected: ceil(3.5) = 4 per leaf, marked 'divided' (not 'flagged'),
-    // then consolidation: 4 - 1 = 3 standard on active.
+    // Expected: ceil(3.5) = 4 per leaf, marked 'divided' (not 'flagged').
+    // No consolidation in normalizeQuantities — stays at 4.
     const sets = [makeSet('DH_ASYM', [
       { name: 'Hinges 5BB1 4.5x4.5 NRP', qty: 7 },
       { name: 'Hinges 5BB1 4.5x4.5 CON TW8', qty: 1 },
@@ -625,8 +628,8 @@ describe('normalizeQuantities — category-aware division', () => {
 
     normalizeQuantities(sets, doors)
 
-    // Standard hinge: 7 → 4 per leaf (ceil), then consolidated 4 - 1 = 3
-    expect(sets[0].items[0].qty).toBe(3)
+    // Standard hinge: 7 → 4 per leaf (ceil), no consolidation
+    expect(sets[0].items[0].qty).toBe(4)
     expect(sets[0].items[0].qty_source).toBe('divided')
     // Electric hinge: unchanged (per_opening, doorCount=1, no division)
     expect(sets[0].items[1].qty).toBe(1)
@@ -637,7 +640,7 @@ describe('normalizeQuantities — category-aware division', () => {
     //   "Hinges NRP — 21 EA" + "Electric Hinge CON TW8 — 3 EA"
     // Total positions: 24 (4 per leaf × 6 leaves). Electric = 3 (1 per opening).
     // Standard: 21/6 = 3.5 → asymmetric split explained by electric.
-    // ceil(3.5) = 4, then consolidation: 4 - 1 = 3.
+    // ceil(3.5) = 4. No consolidation — stays at 4.
     // Electric: per_opening, 3/3 = 1.
     const sets = [makeSet('DH_ASYM_MULTI', [
       { name: 'Hinges 5BB1 NRP', qty: 21 },
@@ -647,8 +650,8 @@ describe('normalizeQuantities — category-aware division', () => {
 
     normalizeQuantities(sets, doors)
 
-    // Standard: 21 → 4 per leaf (ceil), then 4 - 1 = 3
-    expect(sets[0].items[0].qty).toBe(3)
+    // Standard: 21 → 4 per leaf (ceil), no consolidation
+    expect(sets[0].items[0].qty).toBe(4)
     expect(sets[0].items[0].qty_source).toBe('divided')
     // Electric: 3 ÷ 3 (doorCount) = 1
     expect(sets[0].items[1].qty).toBe(1)
@@ -671,7 +674,7 @@ describe('normalizeQuantities — category-aware division', () => {
 
   it('standard hinges divide evenly on pair doors with electric (even total)', () => {
     // 8 standard + 1 electric on a pair door. 8/2 = 4 (clean division).
-    // Electric is separate, consolidation: 4 - 1 = 3.
+    // No consolidation — standard stays at 4.
     const sets = [makeSet('DH_EVEN', [
       { name: 'Hinges 5BB1 NRP', qty: 8 },
       { name: 'Electric Hinge ETH', qty: 1 },
@@ -680,8 +683,8 @@ describe('normalizeQuantities — category-aware division', () => {
 
     normalizeQuantities(sets, doors)
 
-    // Standard: 8/2 = 4, then 4 - 1 = 3 (clean division, no asymmetric logic needed)
-    expect(sets[0].items[0].qty).toBe(3)
+    // Standard: 8/2 = 4, no consolidation
+    expect(sets[0].items[0].qty).toBe(4)
     expect(sets[0].items[0].qty_source).toBe('divided')
     // Electric: unchanged (per_opening, doorCount=1)
     expect(sets[0].items[1].qty).toBe(1)
@@ -690,6 +693,7 @@ describe('normalizeQuantities — category-aware division', () => {
   it('single door with electric hinge: no leaf splitting needed', () => {
     // Single door (1 leaf). 3 standard + 1 electric.
     // No division needed (leafCount=1, doorCount=1).
+    // No consolidation — standard stays at raw value.
     const sets = [makeSet('DH_SINGLE', [
       { name: 'Hinges 5BB1 NRP', qty: 3 },
       { name: 'Hinges CON TW8', qty: 1 },
@@ -699,8 +703,8 @@ describe('normalizeQuantities — category-aware division', () => {
     normalizeQuantities(sets, doors)
 
     // No division — leafCount and doorCount are both 1
-    // Consolidation still applies: 3 - 1 = 2 standard
-    expect(sets[0].items[0].qty).toBe(2)
+    // No consolidation — standard stays at 3
+    expect(sets[0].items[0].qty).toBe(3)
     expect(sets[0].items[1].qty).toBe(1)
   })
 
@@ -721,8 +725,8 @@ describe('normalizeQuantities — category-aware division', () => {
 
     normalizeQuantities(sets, doors)
 
-    // Standard: 21/6 = 3.5 → asymmetric split → ceil = 4, then 4 - 1 = 3
-    expect(sets[0].items[0].qty).toBe(3)
+    // Standard: 21/6 = 3.5 → asymmetric split → ceil = 4, no consolidation
+    expect(sets[0].items[0].qty).toBe(4)
     expect(sets[0].items[0].qty_source).toBe('divided')
     // Electric: divisor overridden from 6 to 3, 3/3 = 1
     expect(sets[0].items[1].qty).toBe(1)
@@ -1206,14 +1210,14 @@ describe('buildPerOpeningItems — pair detection', () => {
     expect(frameRows[0].qty).toBe(1)
 
     // Phase 4 hinge fix: standard hinges split into per-leaf rows when
-    // electric hinges are present. NRP gets active (original qty) +
-    // inactive (original + electric = reconstituted total).
+    // electric hinges are present. item.qty is the raw per-leaf value (4).
+    // Active = raw − electric (4 − 1 = 3), Inactive = raw (4).
     const hingeNrpRows = rows.filter(r => (r.name as string).includes('5BB1 4.5x4.5 NRP'))
     expect(hingeNrpRows).toHaveLength(2)
     const hingeNrpActive = hingeNrpRows.find(r => r.leaf_side === 'active')
     const hingeNrpInactive = hingeNrpRows.find(r => r.leaf_side === 'inactive')
-    expect(hingeNrpActive?.qty).toBe(4)  // active: stored qty as-is
-    expect(hingeNrpInactive?.qty).toBe(5) // inactive: stored + electric (reconstituted)
+    expect(hingeNrpActive?.qty).toBe(3)  // active: raw 4 − 1 electric = 3
+    expect(hingeNrpInactive?.qty).toBe(4) // inactive: raw per-leaf qty
 
     // CON TW8 electric hinge: active leaf only
     const hingeCon = rows.find(r => (r.name as string).includes('CON TW8'))
@@ -1299,7 +1303,7 @@ describe('buildPerOpeningItems — pair detection', () => {
   it('routes electric hinges to active leaf only and splits standard hinges per-leaf on pair doors', () => {
     // Simulates post-normalizeQuantities data for a pair door:
     //   Original PDF: 4 standard hinges + 1 electric hinge per leaf
-    //   normalizeQuantities consolidated: 4 - 1 = 3 standard, 1 electric
+    //   normalizeQuantities produces raw per-leaf: 4 standard, 1 electric (no consolidation)
     const hwSet: HardwareSet = {
       set_id: 'DH1.01',
       generic_set_id: 'DH1',
@@ -1308,7 +1312,7 @@ describe('buildPerOpeningItems — pair detection', () => {
       heading_leaf_count: 4,
       heading_doors: ['101'],
       items: [
-        { qty: 3, qty_source: 'divided', name: 'Hinges 5BB1 4.5x4.5 NRP', model: 'FBB179', finish: '652', manufacturer: 'Hager' },
+        { qty: 4, qty_source: 'divided', name: 'Hinges 5BB1 4.5x4.5 NRP', model: 'FBB179', finish: '652', manufacturer: 'Hager' },
         { qty: 1, qty_source: 'divided', name: 'Hinges 5BB1 4.5x4.5 CON TW8', model: 'BB1279', finish: '652', manufacturer: 'Hager' },
         { qty: 1, qty_source: 'divided', name: 'Exit Device 9875L-F', model: '', finish: '', manufacturer: 'Von Duprin' },
         { qty: 1, qty_source: 'divided', name: 'Flush Bolt Kit FB32', model: '', finish: '', manufacturer: '' },
@@ -1332,10 +1336,10 @@ describe('buildPerOpeningItems — pair detection', () => {
     expect(nrpRows).toHaveLength(2)
 
     const nrpActive = nrpRows.find(r => r.leaf_side === 'active')
-    expect(nrpActive?.qty).toBe(3) // consolidated: 4 - 1 = 3
+    expect(nrpActive?.qty).toBe(3) // raw 4 - 1 electric = 3
 
     const nrpInactive = nrpRows.find(r => r.leaf_side === 'inactive')
-    expect(nrpInactive?.qty).toBe(4) // unconsolidated: 3 + 1 = 4 (original per-leaf qty)
+    expect(nrpInactive?.qty).toBe(4) // raw per-leaf (no subtraction on inactive)
 
     // Non-hinge items: unchanged behavior
     const exitDevice = rows.find(r => (r.name as string).includes('Exit Device'))
@@ -2220,5 +2224,77 @@ describe('calculateExtractionConfidence', () => {
     const conf = result.item_confidence['DH1:Butt Hinge']
     expect(conf.model.level).toBe('medium')
     expect(conf.model.reason).toContain('fuzzy')
+  })
+})
+
+// ── Full pipeline verification: normalizeQuantities → groupItemsByLeaf ──
+// Ensures no double subtraction of electric hinge qty from standard hinges.
+
+describe('full pipeline: normalizeQuantities → groupItemsByLeaf (no double subtraction)', () => {
+  it('6 pair doors, 48 standard + 6 electric → active=3 standard + 1 electric, inactive=4 standard', () => {
+    // Aggregate quantities from PDF: 48 standard hinges, 6 electric hinges
+    // across 6 pair doors (12 leaves).
+    const sets = [makeSet('DH_PIPELINE', [
+      { name: 'Hinges 5BB1 4.5x4.5 NRP', qty: 48 },
+      { name: 'Hinges 5BB1 4.5x4.5 CON TW8', qty: 6 },
+    ], { heading_door_count: 6, heading_leaf_count: 12 })]
+    const doors = Array.from({ length: 6 }, (_, i) => makeDoor(`PL-${i + 1}`, 'DH_PIPELINE'))
+
+    // Stage 1: normalizeQuantities divides to per-leaf/per-opening
+    normalizeQuantities(sets, doors)
+
+    // Standard: 48 / 12 leaves = 4 per leaf (raw, no consolidation)
+    expect(sets[0].items[0].qty).toBe(4)
+    // Electric: 6 / 6 doors = 1 per opening (divisor overridden to doorCount)
+    expect(sets[0].items[1].qty).toBe(1)
+
+    // Stage 2: groupItemsByLeaf splits into active/inactive for wizard preview
+    const items = sets[0].items.map(item => ({
+      name: item.name,
+      qty: item.qty,
+    }))
+    const { leaf1, leaf2 } = groupItemsByLeaf(items, 2)
+
+    // Active leaf (leaf1): 3 standard + 1 electric = 4 hinge positions
+    expect(leaf1).toHaveLength(2)
+    const activeStandard = leaf1.find(i => i.name.includes('NRP'))
+    const activeElectric = leaf1.find(i => i.name.includes('CON TW8'))
+    expect(activeStandard?.qty).toBe(3) // 4 raw − 1 electric = 3
+    expect(activeElectric?.qty).toBe(1)
+
+    // Inactive leaf (leaf2): 4 standard only = 4 hinge positions
+    expect(leaf2).toHaveLength(1)
+    expect(leaf2[0].name).toContain('NRP')
+    expect(leaf2[0].qty).toBe(4) // raw per-leaf, no subtraction
+  })
+
+  it('single pair door, 7 standard + 1 electric → active=3, inactive=4 (asymmetric split)', () => {
+    // 7 standard / 2 leaves = 3.5 → ceil = 4 (asymmetric split explained by electric)
+    const sets = [makeSet('DH_ASYM_PIPE', [
+      { name: 'Hinges 5BB1 4.5x4.5 NRP', qty: 7 },
+      { name: 'Hinges 5BB1 4.5x4.5 CON TW8', qty: 1 },
+    ], { heading_door_count: 1, heading_leaf_count: 2 })]
+    const doors = [makeDoor('AP-1', 'DH_ASYM_PIPE')]
+
+    normalizeQuantities(sets, doors)
+
+    // Standard: 7/2 = 3.5 → ceil = 4 (asymmetric split), no consolidation
+    expect(sets[0].items[0].qty).toBe(4)
+    expect(sets[0].items[1].qty).toBe(1)
+
+    const items = sets[0].items.map(item => ({
+      name: item.name,
+      qty: item.qty,
+    }))
+    const { leaf1, leaf2 } = groupItemsByLeaf(items, 2)
+
+    // Active: 3 standard + 1 electric = 4 positions
+    expect(leaf1).toHaveLength(2)
+    expect(leaf1.find(i => i.name.includes('NRP'))?.qty).toBe(3)
+    expect(leaf1.find(i => i.name.includes('CON TW8'))?.qty).toBe(1)
+
+    // Inactive: 4 standard = 4 positions
+    expect(leaf2).toHaveLength(1)
+    expect(leaf2[0].qty).toBe(4)
   })
 })

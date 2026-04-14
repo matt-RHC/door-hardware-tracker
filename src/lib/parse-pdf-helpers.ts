@@ -2005,41 +2005,13 @@ export function normalizeQuantities(
       }
     }
 
-    // ── Hinge consolidation: subtract electric hinge qty from standard hinges ──
-    //
-    // PDFs often list "4 Hinges" (total) and separately "1 Electric Hinge" for
-    // the same door. After normalization both become per-opening/per-leaf values.
-    // Without consolidation the UI shows "4 Hinges + 1 Electric Hinge = 5 total"
-    // which is wrong — the electric hinge REPLACES one standard hinge position.
-    // Correct: 3 standard + 1 electric = 4 total per leaf.
-    //
-    // This step detects sets that have both standard hinges (category 'hinges')
-    // and electric hinges (category 'electric_hinge') and adjusts the standard
-    // hinge qty by subtracting the electric count. We only do this when the
-    // standard hinge qty is > the electric hinge qty (to avoid going to zero
-    // or negative) and when the subtraction produces a DHI-plausible result.
-    const electricItems = (set.items ?? []).filter(
-      item => classifyItem(item.name) === 'electric_hinge'
-    )
-    if (electricItems.length > 0) {
-      const totalElectricQty = electricItems.reduce((sum, e) => sum + (e.qty || 0), 0)
-      const standardHinges = (set.items ?? []).filter(
-        item => classifyItem(item.name) === 'hinges'
-      )
-      for (const hinge of standardHinges) {
-        if (hinge.qty > totalElectricQty && totalElectricQty > 0) {
-          const adjusted = hinge.qty - totalElectricQty
-          // Only adjust if the result is DHI-plausible (>= 1 per leaf)
-          if (adjusted >= 1) {
-            console.debug(
-              `[qty-norm] ${set.set_id}: hinge consolidation — ` +
-              `"${hinge.name}" qty ${hinge.qty} − ${totalElectricQty} electric = ${adjusted} standard`
-            )
-            hinge.qty = adjusted
-          }
-        }
-      }
-    }
+    // NOTE: Hinge consolidation (subtracting electric hinge qty from standard
+    // hinges) was removed here. The per-leaf adjustment now happens exclusively
+    // in groupItemsByLeaf() (wizard preview) and buildPerOpeningItems() (save
+    // path), which have leaf-level context to correctly assign:
+    //   Active leaf:   standard_per_leaf − electric_qty
+    //   Inactive leaf: standard_per_leaf (unchanged)
+    // Doing it here caused a double subtraction because downstream also adjusts.
   }
 }
 
@@ -2763,13 +2735,13 @@ export function buildPerOpeningItems(
         }
 
         // ── Standard hinges on pairs with electric hinges: split per leaf ──
-        // normalizeQuantities() already subtracted the electric qty from the
-        // standard hinge qty at the set level (e.g. 4 → 3). That consolidated
-        // value is correct for the ACTIVE leaf. The inactive leaf needs the
-        // original un-consolidated qty (consolidated + electric = original).
+        // item.qty is the raw per-leaf value (e.g. 4). The electric hinge
+        // replaces one standard hinge position on the active leaf only.
+        //   Active leaf:   raw − electric (e.g. 4 − 1 = 3)
+        //   Inactive leaf: raw (e.g. 4)
         if (isPair && category === 'hinges' && totalElectricHingeQty > 0) {
-          const activeQty = item.qty || 1
-          const inactiveQty = activeQty + totalElectricHingeQty
+          const inactiveQty = item.qty || 1
+          const activeQty = inactiveQty - totalElectricHingeQty
           // Active leaf row
           rows.push({
             ...base,
