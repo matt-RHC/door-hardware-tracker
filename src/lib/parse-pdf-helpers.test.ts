@@ -1070,7 +1070,8 @@ describe('buildPerOpeningItems — pair detection', () => {
 
     const rows = buildPerOpeningItems(openings, doorInfoMap, setMap, doorToSetMap)
 
-    // Should have 2 Door rows (Active + Inactive), 1 Frame, and 6 hardware items
+    // Should have 2 Door rows (Active + Inactive), 1 Frame, and 7 hardware items
+    // (NRP hinge splits into active + inactive rows = +1 row)
     const doorRows = rows.filter(r => (r.name as string).startsWith('Door'))
     expect(doorRows).toHaveLength(2)
     expect(doorRows.map(r => r.name)).toEqual([
@@ -1082,13 +1083,20 @@ describe('buildPerOpeningItems — pair detection', () => {
     expect(frameRows).toHaveLength(1)
     expect(frameRows[0].qty).toBe(1)
 
-    // Per-leaf items stored as-is (no doubling). UI will show on each leaf section.
-    const hingeNrp = rows.find(r => (r.name as string).includes('5BB1 4.5x4.5 NRP'))
-    expect(hingeNrp?.qty).toBe(4) // stored per-leaf, NOT doubled
+    // Phase 4 hinge fix: standard hinges split into per-leaf rows when
+    // electric hinges are present. NRP gets active (original qty) +
+    // inactive (original + electric = reconstituted total).
+    const hingeNrpRows = rows.filter(r => (r.name as string).includes('5BB1 4.5x4.5 NRP'))
+    expect(hingeNrpRows).toHaveLength(2)
+    const hingeNrpActive = hingeNrpRows.find(r => r.leaf_side === 'active')
+    const hingeNrpInactive = hingeNrpRows.find(r => r.leaf_side === 'inactive')
+    expect(hingeNrpActive?.qty).toBe(4)  // active: stored qty as-is
+    expect(hingeNrpInactive?.qty).toBe(5) // inactive: stored + electric (reconstituted)
 
-    // CON TW8 hinge also stored per-leaf
+    // CON TW8 electric hinge: active leaf only
     const hingeCon = rows.find(r => (r.name as string).includes('CON TW8'))
     expect(hingeCon?.qty).toBe(1)
+    expect(hingeCon?.leaf_side).toBe('active')
 
     // Per-pair item NOT doubled
     const flushBolt = rows.find(r => (r.name as string).includes('Flush Bolt Kit'))
@@ -1163,6 +1171,113 @@ describe('buildPerOpeningItems — pair detection', () => {
     const hinge = rows.find(r => r.name === 'Hinges')
     expect(hinge?.qty).toBe(4) // stored per-leaf, UI handles the split
   })
+
+  // Phase 4: pair door hinge fix — electric hinge → active only,
+  // standard hinges split per-leaf with correct quantities.
+  it('routes electric hinges to active leaf only and splits standard hinges per-leaf on pair doors', () => {
+    // Simulates post-normalizeQuantities data for a pair door:
+    //   Original PDF: 4 standard hinges + 1 electric hinge per leaf
+    //   normalizeQuantities consolidated: 4 - 1 = 3 standard, 1 electric
+    const hwSet: HardwareSet = {
+      set_id: 'DH1.01',
+      generic_set_id: 'DH1',
+      heading: 'PAIR DOORS - DH1.01',
+      heading_door_count: 2,
+      heading_leaf_count: 4,
+      heading_doors: ['101'],
+      items: [
+        { qty: 3, qty_source: 'divided', name: 'Hinges 5BB1 4.5x4.5 NRP', model: 'FBB179', finish: '652', manufacturer: 'Hager' },
+        { qty: 1, qty_source: 'divided', name: 'Hinges 5BB1 4.5x4.5 CON TW8', model: 'BB1279', finish: '652', manufacturer: 'Hager' },
+        { qty: 1, qty_source: 'divided', name: 'Exit Device 9875L-F', model: '', finish: '', manufacturer: 'Von Duprin' },
+        { qty: 1, qty_source: 'divided', name: 'Flush Bolt Kit FB32', model: '', finish: '', manufacturer: '' },
+        { qty: 1, qty_source: 'divided', name: 'Coordinator COR-1', model: '', finish: '', manufacturer: '' },
+      ],
+    }
+    const openings = [{ id: 'opening-1', door_number: '101', hw_set: 'DH1' }]
+    const doorInfoMap = new Map([['101', { door_type: 'B', frame_type: 'HM' }]])
+    const setMap = new Map([['DH1', hwSet]])
+    const doorToSetMap = new Map([['101', hwSet]])
+
+    const rows = buildPerOpeningItems(openings, doorInfoMap, setMap, doorToSetMap)
+
+    // Electric hinge: active leaf only
+    const electricHinge = rows.find(r => (r.name as string).includes('CON TW8'))
+    expect(electricHinge?.leaf_side).toBe('active')
+    expect(electricHinge?.qty).toBe(1)
+
+    // Standard hinges: split into active + inactive rows
+    const nrpRows = rows.filter(r => (r.name as string).includes('NRP'))
+    expect(nrpRows).toHaveLength(2)
+
+    const nrpActive = nrpRows.find(r => r.leaf_side === 'active')
+    expect(nrpActive?.qty).toBe(3) // consolidated: 4 - 1 = 3
+
+    const nrpInactive = nrpRows.find(r => r.leaf_side === 'inactive')
+    expect(nrpInactive?.qty).toBe(4) // unconsolidated: 3 + 1 = 4 (original per-leaf qty)
+
+    // Non-hinge items: unchanged behavior
+    const exitDevice = rows.find(r => (r.name as string).includes('Exit Device'))
+    expect(exitDevice?.leaf_side).toBeNull() // per_opening, ambiguous
+
+    const flushBolt = rows.find(r => (r.name as string).includes('Flush Bolt'))
+    expect(flushBolt?.leaf_side).toBe('shared') // per_pair → shared
+
+    const coordinator = rows.find(r => (r.name as string).includes('Coordinator'))
+    expect(coordinator?.leaf_side).toBe('shared') // per_pair → shared
+  })
+
+  it('does NOT split standard hinges when no electric hinge is present on pair doors', () => {
+    const hwSet: HardwareSet = {
+      set_id: 'DH2.0',
+      heading: 'PAIR DOORS - DH2',
+      heading_door_count: 1,
+      heading_leaf_count: 2,
+      items: [
+        { qty: 4, name: 'Hinges 5BB1', model: '', finish: '', manufacturer: '' },
+        { qty: 1, name: 'Closer 4040XP', model: '', finish: '', manufacturer: '' },
+      ],
+    }
+    const openings = [{ id: 'op-1', door_number: '200', hw_set: 'DH2' }]
+    const doorInfoMap = new Map([['200', { door_type: 'A', frame_type: 'F1' }]])
+    const setMap = new Map([['DH2', hwSet]])
+    const doorToSetMap = new Map([['200', hwSet]])
+
+    const rows = buildPerOpeningItems(openings, doorInfoMap, setMap, doorToSetMap)
+
+    // Standard hinges: single row (no split), leaf_side=null (ambiguous per_leaf)
+    const hingeRows = rows.filter(r => (r.name as string).includes('Hinges'))
+    expect(hingeRows).toHaveLength(1)
+    expect(hingeRows[0].qty).toBe(4)
+    expect(hingeRows[0].leaf_side).toBeNull() // no electric → no special treatment
+  })
+
+  it('keeps electric hinge as-is on single doors (no pair leaf splitting)', () => {
+    const hwSet: HardwareSet = {
+      set_id: 'DH5.0',
+      heading: 'SINGLE DOOR - DH5',
+      heading_door_count: 1,
+      heading_leaf_count: 1,
+      items: [
+        { qty: 3, name: 'Hinges 5BB1 NRP', model: '', finish: '', manufacturer: '' },
+        { qty: 1, name: 'Hinges CON TW8', model: '', finish: '', manufacturer: '' },
+      ],
+    }
+    const openings = [{ id: 'op-1', door_number: '300', hw_set: 'DH5' }]
+    const doorInfoMap = new Map([['300', { door_type: 'A', frame_type: 'F1' }]])
+    const setMap = new Map([['DH5', hwSet]])
+    const doorToSetMap = new Map([['300', hwSet]])
+
+    const rows = buildPerOpeningItems(openings, doorInfoMap, setMap, doorToSetMap)
+
+    // Single door: no pair splitting, items stored as-is with null leaf_side
+    const hingeStd = rows.find(r => (r.name as string).includes('NRP'))
+    expect(hingeStd?.qty).toBe(3)
+    expect(hingeStd?.leaf_side).toBeNull()
+
+    const hingeCon = rows.find(r => (r.name as string).includes('CON TW8'))
+    expect(hingeCon?.qty).toBe(1)
+    expect(hingeCon?.leaf_side).toBeNull()
+  })
 })
 
 // ── Phase 3 (leaf_side) tests ─────────────────────────────────────────
@@ -1217,6 +1332,20 @@ describe('computeLeafSide — per-item leaf attribution', () => {
   it('returns null for per_opening items on pairs (ambiguous)', () => {
     expect(computeLeafSide('Closer 4040XP', 2)).toBeNull()
     expect(computeLeafSide('Mortise Lockset L9080', 2)).toBeNull()
+  })
+
+  it('returns active for electric/conductor hinges on pair doors', () => {
+    // Electric hinges carry wiring and are always installed on the active
+    // leaf only (DHI standard practice). Phase 4 fix.
+    expect(computeLeafSide('Hinges 5BB1 4.5x4.5 CON TW8', 2)).toBe('active')
+    expect(computeLeafSide('Electric Hinge ETH', 2)).toBe('active')
+    expect(computeLeafSide('Conductor Hinge', 2)).toBe('active')
+    expect(computeLeafSide('Power Transfer Hinge', 2)).toBe('active')
+  })
+
+  it('returns null for electric hinges on single doors (no leaf split needed)', () => {
+    // On single doors there's only one leaf, so no active/inactive distinction
+    expect(computeLeafSide('Hinges 5BB1 4.5x4.5 CON TW8', 1)).toBeNull()
   })
 
   it('returns null for unknown / unclassified items', () => {
