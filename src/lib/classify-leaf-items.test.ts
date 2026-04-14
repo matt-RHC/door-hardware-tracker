@@ -98,4 +98,23 @@ describe('groupItemsByLeaf — DB leaf_side preference (Phase 3)', () => {
     expect(leaf2.map(i => i.name)).toEqual(['Door (Inactive Leaf)'])
     expect(shared.map(i => i.name)).toEqual(['Frame'])
   })
+
+
+  it('routes electric hinge with leaf_side="active" to active leaf only on pairs', () => {
+    // Phase 4: buildPerOpeningItems stamps leaf_side='active' on electric
+    // hinges for pair doors. groupItemsByLeaf should route them correctly.
+    const items = [
+      makeItem('Hinges 5BB1 4.5x4.5 NRP', { qty: 3, leaf_side: 'active' }),
+      makeItem('Hinges 5BB1 4.5x4.5 NRP', { qty: 4, leaf_side: 'inactive' }),
+      makeItem('Hinges 5BB1 4.5x4.5 CON TW8', { qty: 1, leaf_side: 'active' }),
+    ]
+    const { shared, leaf1, leaf2 } = groupItemsByLeaf(items, 2)
+    expect(shared).toHaveLength(0)
+    // Active leaf: 3 standard + 1 electric = 2 items
+    expect(leaf1).toHaveLength(2)
+    expect(leaf1.map(i => i.qty)).toEqual([3, 1])
+    // Inactive leaf: 4 standard only = 1 item
+    expect(leaf2).toHaveLength(1)
+    expect(leaf2[0].qty).toBe(4)
+  })
 })

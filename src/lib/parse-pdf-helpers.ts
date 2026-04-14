@@ -186,6 +186,10 @@ export type LeafSide = 'active' | 'inactive' | 'shared' | 'both'
  * from the name alone, so we return `null` and let render-time logic
  * handle it — users will eventually override via the triage UI.
  *
+ * Exception: electric / conductor hinges on pair doors are always assigned
+ * to the active leaf. They carry wiring between the frame and active leaf
+ * and are never installed on the inactive leaf (DHI standard practice).
+ *
  * Note: caller should pass `leafCount` from the opening row so we can
  * correctly handle single-leaf openings (where there's no inactive leaf
  * and a bare "Door" is implicitly active).
@@ -205,6 +209,13 @@ export function computeLeafSide(
   // Hardware items — scope drives unambiguous attribution.
   const scope = classifyItemScope(itemName)
   if (scope === 'per_pair' || scope === 'per_frame') return 'shared'
+
+  // Electric / conductor hinges on pair doors: always active leaf only.
+  // These carry wiring and replace one standard hinge position on the
+  // active leaf. They are never installed on the inactive leaf.
+  if (leafCount >= 2 && classifyItem(itemName) === 'electric_hinge') {
+    return 'active'
+  }
 
   // per_leaf / per_opening / unknown on pair doors: ambiguous, defer.
   return null
@@ -1612,9 +1623,14 @@ export function applyCorrections(
  *   Electric/conductor hinges (CON TW8, ETH, EPT) are classified as
  *   'per_opening' in hardware-taxonomy.ts and DIVISION_PREFERENCE='opening'
  *   in Python. This means they are divided by door_count, not leaf_count.
- *   The UI (getLeafDisplayQty in classify-leaf-items.ts) shows them on the
- *   active leaf only — they are NOT further divided by leafCount there.
- *   See the separate fix in classify-leaf-items.ts for that display logic.
+ *
+ *   On pair doors, buildPerOpeningItems() (Phase 4) routes electric hinges
+ *   to the active leaf only (leaf_side='active') and splits standard hinges
+ *   into per-leaf rows: active gets consolidated qty, inactive gets the
+ *   original (unconsolidated) qty. computeLeafSide() also returns 'active'
+ *   for electric hinges on pairs. This produces the correct DHI layout:
+ *     Active:   3 standard + 1 electric = 4 hinge positions
+ *     Inactive: 4 standard + 0 electric = 4 hinge positions
  */
 export function normalizeQuantities(
   hardwareSets: HardwareSet[],
@@ -2636,9 +2652,81 @@ export function buildPerOpeningItems(
     // for per_pair / per_frame items (→ 'shared') and left NULL for
     // per_leaf / per_opening items on pairs, where render-time logic still
     // decides (triage UI in a follow-up will let users set these).
+    //
+    // Phase 4 (pair-door hinge fix): Electric hinges on pair doors are
+    // assigned to the active leaf only. Standard hinges are split into
+    // per-leaf rows so the active leaf gets the consolidated qty (total -
+    // electric) and the inactive leaf gets the original (un-consolidated)
+    // qty. This produces the correct DHI layout:
+    //   Active:   3 standard + 1 electric = 4 hinge positions
+    //   Inactive: 4 standard + 0 electric = 4 hinge positions
     if ((hwSet?.items?.length ?? 0) > 0) {
-      for (const item of hwSet?.items ?? []) {
-        const leafSide = computeLeafSide(item.name, leafCount)
+      // Pre-scan for electric hinges on pair doors so we can adjust
+      // standard hinge quantities per-leaf.
+      const setItems = hwSet?.items ?? []
+      let totalElectricHingeQty = 0
+      if (isPair) {
+        for (const item of setItems) {
+          if (classifyItem(item.name) === 'electric_hinge') {
+            totalElectricHingeQty += (item.qty || 0)
+          }
+        }
+      }
+
+      for (const item of setItems) {
+        const category = isPair ? classifyItem(item.name) : null
+        let leafSide = computeLeafSide(item.name, leafCount)
+
+        // ── Electric hinge: active leaf only on pairs ──
+        if (isPair && category === 'electric_hinge') {
+          leafSide = 'active'
+          rows.push({
+            ...base,
+            name: item.name,
+            qty: item.qty || 1,
+            manufacturer: item.manufacturer || null,
+            model: item.model || null,
+            finish: item.finish || null,
+            sort_order: sortOrder++,
+            leaf_side: leafSide,
+          })
+          continue
+        }
+
+        // ── Standard hinges on pairs with electric hinges: split per leaf ──
+        // normalizeQuantities() already subtracted the electric qty from the
+        // standard hinge qty at the set level (e.g. 4 → 3). That consolidated
+        // value is correct for the ACTIVE leaf. The inactive leaf needs the
+        // original un-consolidated qty (consolidated + electric = original).
+        if (isPair && category === 'hinges' && totalElectricHingeQty > 0) {
+          const activeQty = item.qty || 1
+          const inactiveQty = activeQty + totalElectricHingeQty
+          // Active leaf row
+          rows.push({
+            ...base,
+            name: item.name,
+            qty: activeQty,
+            manufacturer: item.manufacturer || null,
+            model: item.model || null,
+            finish: item.finish || null,
+            sort_order: sortOrder++,
+            leaf_side: 'active',
+          })
+          // Inactive leaf row
+          rows.push({
+            ...base,
+            name: item.name,
+            qty: inactiveQty,
+            manufacturer: item.manufacturer || null,
+            model: item.model || null,
+            finish: item.finish || null,
+            sort_order: sortOrder++,
+            leaf_side: 'inactive',
+          })
+          continue
+        }
+
+        // ── All other items: default behavior ──
         rows.push({
           ...base,
           name: item.name,

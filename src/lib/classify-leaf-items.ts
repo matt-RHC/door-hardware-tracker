@@ -75,12 +75,13 @@ export interface LeafGroupedItems<T extends LeafGroupableItem = LeafGroupableIte
  *
  *   2. Electric transfer hinges (CON TW8, ETH, EPT) are classified as
  *      per_opening in hardware-taxonomy.ts. They carry wiring and are
- *      installed ADDITIVELY alongside standard hinges on the active leaf
- *      only (see HINGE RULES in punchy-prompts.ts). Their stored qty is
- *      already 1 per opening (1 per pair) after normalizeQuantities(). In
- *      the UI, groupItemsByLeaf() puts them on BOTH leaves because
- *      leaf_side is null for items without a persisted attribution. The
- *      correct display qty is the stored value (typically 1), not 0.5.
+ *      installed on the ACTIVE LEAF ONLY (DHI standard practice). Their
+ *      stored qty is already 1 per opening after normalizeQuantities().
+ *      As of Phase 4, buildPerOpeningItems() stamps leaf_side='active'
+ *      on electric hinges for pair doors, so groupItemsByLeaf() routes
+ *      them to the active leaf only. computeLeafSide() also returns
+ *      'active' for electric hinges on pairs as a belt-and-suspenders
+ *      guarantee.
  *
  * The routing of PER_OPENING items to the correct leaf (active vs both) is
  * handled by groupItemsByLeaf() + persisted leaf_side values (migration 013),
