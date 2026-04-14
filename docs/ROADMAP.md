@@ -2,7 +2,7 @@
 
 > **Guiding principle:** Hardware counts coming out of PDFs must be accurate before we build features on top of them. Export is gated on extraction accuracy.
 
-Last updated: 2026-04-14
+Last updated: 2026-04-14 (afternoon session)
 
 ---
 
@@ -142,13 +142,26 @@ The wizard flow shipped in Phase 0 (PRs #161–#162). Phase 2 focused on UX poli
 - Chunk insert resilience: non-critical inserts no longer abort the whole job on partial failure
 - Regression tests (PR #204, open): 52 dedicated tests in `electric-hinge-regression.test.ts` locking down PRs #196, #197, #203 fixes; full suite 429/429 green
 
-### 2G. Context-Aware Re-Scan from Data Badge (PR #198) — NEW FEATURE, NEEDS FIXES
+### 2G. Context-Aware Re-Scan from Data Badge (PR #198) — FIXED (PRs #206–#209)
 - Users can re-scan specific items from the data badge with PDF region selection
-- **Critical issues identified (full audit needed):**
-  - Naive name matching fails on similar item names
-  - Wrong page selected for multi-page hardware sets
-  - StepReview does wholesale item replacement instead of targeted merge
-  - Hidden point-and-scan / table-scan modes not yet exposed
+- All critical issues resolved in dedicated fix cycle:
+  - PR #206: Name matching (uses item ID instead of name), page navigation (reads `pdf_page` from opening), merge strategy (targeted update instead of wholesale replacement), error feedback. Includes migrations 024/025.
+  - PR #207: Silent failure fix (PDFRegionSelector 10px CSS threshold vs 3% normalized threshold out of sync) + item-first UX redesign (click item → region select)
+  - PR #208: Raw text extraction fallback — when pdfplumber finds no tables in a region, falls back to extracting raw text lines and field matching (micro-extraction)
+  - PR #209: Zoom view + multi-value field assignment — zoomed view for fine-tuning after initial selection; supports assigning extracted values to multiple fields
+
+### 2M. Security: IDOR Fix (PR #210 — OPEN)
+- All 5 user-facing parse-pdf routes accepted `projectId` without membership check
+- `fetchProjectPdfBase64` uses admin client bypassing RLS — any authenticated user could access any project's PDF
+- Fix: shared `assertProjectMember()` helper in `src/lib/auth-helpers.ts` + membership checks in all 5 routes
+- Correctly preserves service-role bypass for background jobs
+
+### 2N. Zoom Overhaul (PR #212 — OPEN)
+- Canvas re-crop approach replaces broken CSS transform zoom — draws selected region onto temp canvas at up to 4x, displays as plain `<img>`
+- `getHandleAtPositionZoomed()` fixes handle hit-test in zoom phase (14px threshold caused all corners to overlap for small selections)
+- `pdf_page` null guard on modal mount condition
+- iPad scroll containment: `overscrollBehavior: "contain"` + body `overflow: hidden` lock
+- `imageDims` and `zoomImageUrl` cleared on page change to prevent stale state
 
 ### 2H. Batch Job Path (PR #200)
 - `buildPerOpeningItems` added to batch job code path for structural rows
@@ -172,12 +185,9 @@ The wizard flow shipped in Phase 0 (PRs #161–#162). Phase 2 focused on UX poli
 
 ## Known Issues / Next Priorities
 
-### Critical — PDF Region-Scan Feature (PR #198)
-The re-scan feature has critical issues that need a dedicated audit and fix cycle:
-- **Naive name matching**: Similar item names (e.g., "Hinge" vs "Hinge, Electric") cause incorrect matches
-- **Wrong page for multi-page sets**: Region selector picks the wrong page when a hardware set spans multiple pages
-- **StepReview wholesale replacement**: Re-scanned items replace all items in the set instead of merging targeted updates
-- **Hidden scan modes**: Point-and-scan and table-scan modes exist in code but are not exposed in UI
+### Awaiting Merge
+- **PR #210 (Security)**: IDOR fix — project membership enforcement on all parse-pdf routes
+- **PR #212 (Zoom)**: PDFRegionSelector zoom overhaul — canvas re-crop, handle hit-test, scroll lock, null guards
 
 ### Medium Priority
 - **Hinge pipeline simplification**: Merged (PR #202) — extracted shared hinge helpers, consolidated taxonomy cache, removed dead code across `normalizeQuantities`, `groupItemsByLeaf`, `buildPerOpeningItems`
@@ -212,6 +222,12 @@ Gated on Phase 1 (done) + Phase 3. Can export once the review page correctly pre
 
 | Item | Notes |
 |---|---|
+| E: Point/table threshold misfires | `isPointScan = area < 0.15` misfires with tight zoom selections — route by item count instead of bbox area |
+| F: PDF re-parse on every page change | `pdfBuffer.slice(0)` re-parses entire PDF on each `renderPage` — cache `PDFDocumentProxy` in ref |
+| G: Zero Sentry on region-extract | Only `console.error` — no `Sentry.captureException` in region-extract routes or client-side |
+| I: qty_source audit | `qty_source: 'region_extract'` is set but may not be in DB schema — grep all `hardware_items` SELECTs |
+| J: No keyboard/aria on drag handles | Low priority for iPad-first use case, needed for desktop accessibility |
+| K: Stale worktrees in .claude/ | Sweep `.claude/worktrees/` during next fresh-clone git operation |
 | Storage policy naming oddity | Pre-existing, cosmetic |
 | 164 skipped Python tests | By design — require golden PDF fixtures not in repo |
 | `test_zero_doors` xfail | Spec-doc edge case — extractor finds 1 opening in a 0-door doc |
