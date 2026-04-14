@@ -330,6 +330,10 @@ export type Database = {
           error_message: string | null
           error_phase: string | null
           retry_count: number | null
+          deep_extraction: boolean
+          auto_triggered: boolean
+          extraction_confidence: Json | null
+          reconciliation_result: Json | null
           created_at: string
           updated_at: string
         }
@@ -354,6 +358,10 @@ export type Database = {
           error_message?: string | null
           error_phase?: string | null
           retry_count?: number | null
+          deep_extraction?: boolean
+          auto_triggered?: boolean
+          extraction_confidence?: Json | null
+          reconciliation_result?: Json | null
           created_at?: string
           updated_at?: string
         }
@@ -378,6 +386,10 @@ export type Database = {
           error_message?: string | null
           error_phase?: string | null
           retry_count?: number | null
+          deep_extraction?: boolean
+          auto_triggered?: boolean
+          extraction_confidence?: Json | null
+          reconciliation_result?: Json | null
           created_at?: string
           updated_at?: string
         }

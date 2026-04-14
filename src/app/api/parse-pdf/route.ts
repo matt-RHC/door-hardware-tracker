@@ -21,7 +21,9 @@ import {
   createAnthropicClient,
   type PdfplumberResult,
 } from '@/lib/parse-pdf-helpers'
+import { shouldAutoTriggerDeepExtraction } from '@/lib/types/confidence'
 import type { ExtractionConfidence } from '@/lib/types/confidence'
+import { createAdminSupabaseClient } from '@/lib/supabase/admin'
 
 // Vercel Fluid Compute: 800s timeout (Pro plan max)
 export const maxDuration = 800
@@ -251,6 +253,73 @@ export async function POST(request: NextRequest) {
     const requestOrigin = new URL(request.url).origin
     const { hardwareSets, doors, corrections, punchyObservations, punchyQuantityCheck, confidence, stats } = await extractFromPDF(base64, filteredPdfBase64, userColumnMapping, projectId, goldenSample, requestOrigin)
 
+    // ── Auto-queue deep extraction job if confidence is low ──
+    const suggestDeep = shouldAutoTriggerDeepExtraction(confidence)
+    let deepExtractionAutoQueued = false
+
+    if (suggestDeep && projectId) {
+      try {
+        const adminSupabase = createAdminSupabaseClient()
+
+        // Look up project to get PDF storage path
+        const { data: project } = await adminSupabase
+          .from('projects')
+          .select('pdf_storage_path, last_pdf_hash, pdf_page_count')
+          .eq('id', projectId)
+          .single()
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const projectRow = project as any
+        if (projectRow?.pdf_storage_path) {
+          const { data: job, error: insertError } = await adminSupabase
+            .from('extraction_jobs')
+            .insert({
+              project_id: projectId,
+              created_by: (await (await createServerSupabaseClient()).auth.getUser()).data.user?.id ?? '',
+              status: 'queued',
+              status_message: 'Auto-queued: low confidence extraction',
+              pdf_storage_path: projectRow.pdf_storage_path,
+              pdf_hash: projectRow.last_pdf_hash ?? null,
+              pdf_page_count: projectRow.pdf_page_count ?? null,
+              deep_extraction: true,
+              auto_triggered: true,
+              extraction_confidence: {
+                overall: confidence.overall,
+                score: confidence.score,
+                suggest_deep_extraction: confidence.suggest_deep_extraction,
+                deep_extraction_reasons: confidence.deep_extraction_reasons,
+              },
+            })
+            .select('id')
+            .single()
+
+          if (!insertError && job) {
+            deepExtractionAutoQueued = true
+            console.log(`[parse-pdf] Auto-queued deep extraction job ${job.id} for project ${projectId} (confidence score: ${confidence.score})`)
+
+            // Fire-and-forget: kick off the job
+            const baseUrl = process.env.NEXT_PUBLIC_APP_URL
+              || (requestOrigin && requestOrigin !== 'null' ? requestOrigin : null)
+              || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000')
+
+            fetch(`${baseUrl}/api/jobs/${job.id}/run`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'x-internal-secret': process.env.CRON_SECRET!,
+              },
+            }).catch(err => {
+              console.error(`[parse-pdf] Fire-and-forget deep extraction job ${job.id} failed:`, err)
+            })
+          } else if (insertError) {
+            console.error('[parse-pdf] Failed to auto-queue deep extraction job:', insertError.message)
+          }
+        }
+      } catch (err) {
+        console.error('[parse-pdf] Error auto-queuing deep extraction:', err instanceof Error ? err.message : String(err))
+      }
+    }
+
     return NextResponse.json({
       success: true,
       doors,
@@ -261,6 +330,14 @@ export async function POST(request: NextRequest) {
       punchyObservations,
       punchyQuantityCheck,
       confidence,
+      suggest_deep_extraction: suggestDeep,
+      extraction_confidence: {
+        overall: confidence.overall,
+        score: confidence.score,
+        suggest_deep_extraction: confidence.suggest_deep_extraction,
+        deep_extraction_reasons: confidence.deep_extraction_reasons,
+      },
+      deep_extraction_auto_queued: deepExtractionAutoQueued,
     })
   } catch (error) {
     console.error('Parse PDF error:', error)

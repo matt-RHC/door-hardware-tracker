@@ -24,6 +24,7 @@ import {
   type VisionExtractionResult,
 } from '@/lib/parse-pdf-helpers'
 import type { ExtractionConfidence } from '@/lib/types/confidence'
+import { shouldAutoTriggerDeepExtraction } from '@/lib/types/confidence'
 import { reconcileExtractions } from '@/lib/reconciliation'
 import type { ReconciliationResult } from '@/lib/types/reconciliation'
 import {
@@ -334,6 +335,10 @@ async function updateJob(supabase: any, jobId: string, updates: {
   duration_ms?: number
   error_message?: string
   error_phase?: string
+  deep_extraction?: boolean
+  auto_triggered?: boolean
+  extraction_confidence?: unknown
+  reconciliation_result?: unknown
 }) {
   const { error } = await supabase
     .from('extraction_jobs')
@@ -582,17 +587,68 @@ export async function POST(
     // later reconciliation (Phase C).
     // ══════════════════════════════════════════════════════════════
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const jobDeepFlag = (claimed as any).extraction_summary?.deep_extraction === true
-    const shouldRunVision = jobDeepFlag ||
-      (extractionConfidence?.suggest_deep_extraction ?? false)
+    const jobDeepFlag = (claimed as any).deep_extraction === true ||
+      (claimed as any).extraction_summary?.deep_extraction === true
+    const autoTriggered = !jobDeepFlag && extractionConfidence != null &&
+      shouldAutoTriggerDeepExtraction(extractionConfidence)
+    const shouldRunVision = jobDeepFlag || autoTriggered
+
+    // Persist confidence result to the dedicated column
+    if (extractionConfidence) {
+      await updateJob(adminSupabase, jobId, {
+        extraction_summary: {
+          ...(typeof claimed.extraction_summary === 'object' && claimed.extraction_summary !== null
+            ? claimed.extraction_summary as Record<string, unknown>
+            : {}),
+          confidence: {
+            overall: extractionConfidence.overall,
+            score: extractionConfidence.score,
+            suggest_deep_extraction: extractionConfidence.suggest_deep_extraction,
+          },
+        },
+      })
+      // Also write to the dedicated extraction_confidence column
+      await adminSupabase
+        .from('extraction_jobs')
+        .update({
+          extraction_confidence: {
+            overall: extractionConfidence.overall,
+            score: extractionConfidence.score,
+            suggest_deep_extraction: extractionConfidence.suggest_deep_extraction,
+            deep_extraction_reasons: extractionConfidence.deep_extraction_reasons,
+            signals: extractionConfidence.signals,
+          },
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', jobId)
+    }
+
+    // If auto-triggered, upgrade the job in-place
+    if (autoTriggered) {
+      console.log(
+        `[job-orchestrator] Job ${jobId}: auto-triggering deep extraction ` +
+        `(confidence score: ${extractionConfidence!.score}, reasons: ${extractionConfidence!.deep_extraction_reasons.join('; ')})`
+      )
+      await adminSupabase
+        .from('extraction_jobs')
+        .update({
+          deep_extraction: true,
+          auto_triggered: true,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', jobId)
+    }
 
     let visionResult: VisionExtractionResult | null = null
 
     if (shouldRunVision) {
-      console.log(`[job-orchestrator] Job ${jobId}: running vision extraction (Strategy B)`)
+      const triggerSource = jobDeepFlag ? 'user-requested' : 'auto-triggered'
+      console.log(`[job-orchestrator] Job ${jobId}: running vision extraction (Strategy B, ${triggerSource})`)
       await updateJob(adminSupabase, jobId, {
         progress: 65,
-        status_message: 'Running vision extraction (deep analysis)...',
+        status_message: autoTriggered
+          ? 'Running deep extraction for higher accuracy \u2014 this submittal had unusual formatting'
+          : 'Running vision extraction (deep analysis)...',
       })
 
       try {
@@ -661,16 +717,35 @@ export async function POST(
             finish: String(ri.finish.value),
           })),
         }))
+        // Persist reconciliation result to the dedicated column
+        await adminSupabase
+          .from('extraction_jobs')
+          .update({
+            reconciliation_result: {
+              total_sets: reconciliationResult.summary.total_sets,
+              total_items: reconciliationResult.summary.total_items,
+              full_agreement_pct: reconciliationResult.summary.full_agreement_pct,
+              conflicts: reconciliationResult.summary.conflicts,
+              single_source_fields: reconciliationResult.summary.single_source_fields,
+              score: reconciliationResult.summary.score,
+              overall_confidence: reconciliationResult.summary.overall_confidence,
+              audit_log: reconciliationResult.audit_log,
+            },
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', jobId)
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err)
         console.error(`[job-orchestrator] Job ${jobId}: reconciliation failed (non-fatal): ${msg}`)
       }
     }
 
+    const deepExtractionLabel = autoTriggered ? ' (deep extraction, auto-triggered)' :
+      jobDeepFlag ? ' (deep extraction)' : ''
     await updateJob(adminSupabase, jobId, {
       status: 'triaging',
       progress: 70,
-      status_message: `Extraction complete: ${extractedDoors.length} doors, ${extractedSets.length} sets${extractionIsPartial ? ` (${failedChunks.length} chunk(s) failed)` : ''}${visionResult ? ` + ${visionResult.hardware_sets.length} vision sets` : ''}${reconciliationResult ? ` (reconciled, score=${reconciliationResult.summary.score})` : ''}. Running triage...`,
+      status_message: `Extraction complete${deepExtractionLabel}: ${extractedDoors.length} doors, ${extractedSets.length} sets${extractionIsPartial ? ` (${failedChunks.length} chunk(s) failed)` : ''}${visionResult ? ` + ${visionResult.hardware_sets.length} vision sets` : ''}${reconciliationResult ? ` (reconciled, score=${reconciliationResult.summary.score})` : ''}. Running triage...`,
       extraction_summary: {
         doors_extracted: extractedDoors.length,
         sets_extracted: extractedSets.length,
@@ -678,6 +753,8 @@ export async function POST(
         compliance_issues: allQtyComplianceIssues.length,
         partial: extractionIsPartial,
         failedChunks: extractionIsPartial ? failedChunks : undefined,
+        deep_extraction: shouldRunVision,
+        auto_triggered: autoTriggered,
         confidence: extractionConfidence ? {
           overall: extractionConfidence.overall,
           score: extractionConfidence.score,
