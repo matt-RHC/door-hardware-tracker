@@ -91,7 +91,7 @@ function QuestionCard({ question, onAnswer, onDismiss }: QuestionCardProps) {
     <div className="p-2.5 rounded-lg bg-accent-dim border border-accent text-[13px] text-primary">
       <p className="mb-2 leading-[18px]">{question.text}</p>
       <div className="flex flex-wrap gap-1.5">
-        {question.options.map((opt) => (
+        {(question.options ?? []).map((opt) => (
           <button
             key={opt}
             type="button"

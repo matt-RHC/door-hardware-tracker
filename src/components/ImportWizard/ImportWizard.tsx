@@ -275,15 +275,15 @@ export default function ImportWizard({
         const summary = state.classifyResult.summary;
         return classifyMessages({
           totalPages: summary.total_pages,
-          doorSchedulePages: summary.door_schedule_pages.length,
-          hardwareSetPages: summary.hardware_set_pages.length,
+          doorSchedulePages: (summary.door_schedule_pages ?? []).length,
+          hardwareSetPages: (summary.hardware_set_pages ?? []).length,
           scannedPages: summary.scanned_pages ?? 0,
         });
       }
       case WizardStep.MapColumns: {
         if (!state.detectResult) return [];
         const scores: Record<string, number> = {};
-        for (const col of state.detectResult.columns) {
+        for (const col of state.detectResult.columns ?? []) {
           if (col.mapped_field) scores[col.mapped_field] = col.confidence;
         }
         return mapColumnsMessages({ confidenceScores: scores });
@@ -291,10 +291,10 @@ export default function ImportWizard({
       case WizardStep.Triage: {
         if (!state.triageResult) return [];
         return triageMessages({
-          extractedDoors: state.triageResult.doors_found,
-          extractedSets: state.hardwareSets.length,
-          byOthersCount: state.triageResult.by_others,
-          rejectedCount: state.triageResult.rejected,
+          extractedDoors: state.triageResult.doors_found ?? 0,
+          extractedSets: (state.hardwareSets ?? []).length,
+          byOthersCount: state.triageResult.by_others ?? 0,
+          rejectedCount: state.triageResult.rejected ?? 0,
         });
       }
       case WizardStep.Review: {

@@ -135,8 +135,8 @@ export default function StepTriage({
         setStatus("Splitting large PDF into chunks...");
 
         let chunks: string[];
-        const schedulePages = classifyResult.summary.door_schedule_pages;
-        const hwPages = classifyResult.summary.hardware_set_pages;
+        const schedulePages = classifyResult.summary.door_schedule_pages ?? [];
+        const hwPages = classifyResult.summary.hardware_set_pages ?? [];
         const allContentPages = [...schedulePages, ...hwPages].sort(
           (a, b) => a - b
         );
@@ -152,7 +152,7 @@ export default function StepTriage({
               allContentPages.slice(i, i + FALLBACK_PAGES_PER_CHUNK)
             );
           }
-          const refPages = classifyResult.summary.submittal_pages;
+          const refPages = classifyResult.summary.submittal_pages ?? [];
           chunks = await splitPDFByPages(arrayBuffer, chunkSets, refPages);
         } else {
           chunks = await splitPDFFixed(arrayBuffer, FALLBACK_PAGES_PER_CHUNK);
@@ -434,11 +434,11 @@ export default function StepTriage({
       // Always include base64 as fallback — ensures the API has PDF data
       // even if storage fetch fails server-side
       if (!pdfStoragePath) {
-        const hwPages = classifyResult.summary.hardware_set_pages ?? [];
+        const deepHwPages = classifyResult?.summary?.hardware_set_pages ?? [];
         let pdfBase64 = "";
-        if (hwPages.length > 0) {
+        if (deepHwPages.length > 0) {
           const arrayBuffer = await file.arrayBuffer();
-          const chunks = await splitPDFByPages(arrayBuffer, [hwPages], []);
+          const chunks = await splitPDFByPages(arrayBuffer, [deepHwPages], []);
           pdfBase64 = chunks[0] ?? "";
         }
         if (!pdfBase64) {
@@ -722,9 +722,9 @@ export default function StepTriage({
       // Build filtered PDF (door schedule + hardware set pages only) so the
       // triage LLM can see the actual PDF content, not just text metadata.
       let filteredPdfBase64: string | undefined;
-      const schedulePages = classifyResult.summary.door_schedule_pages ?? [];
-      const hwPages = classifyResult.summary.hardware_set_pages ?? [];
-      const relevantPages = [...schedulePages, ...hwPages];
+      const schedulePages2 = classifyResult?.summary?.door_schedule_pages ?? [];
+      const hwPages3 = classifyResult?.summary?.hardware_set_pages ?? [];
+      const relevantPages = [...schedulePages2, ...hwPages3];
       if (relevantPages.length > 0) {
         try {
           const arrayBuffer = await file.arrayBuffer();
@@ -775,7 +775,7 @@ export default function StepTriage({
           class: string;
           confidence: string;
           reason: string;
-        }> = raw.classifications ?? [];
+        }> = Array.isArray(raw.classifications) ? raw.classifications : [];
 
         const acceptedDoors = doors.filter((d) => {
           const c = classifications.find(
@@ -905,9 +905,9 @@ export default function StepTriage({
               <p className="text-warning text-sm font-semibold mb-1">
                 Some fields have low confidence. Deep extraction can improve accuracy.
               </p>
-              {extractionConfidence.deep_extraction_reasons.length > 0 && (
+              {(extractionConfidence.deep_extraction_reasons ?? []).length > 0 && (
                 <ul className="text-secondary text-xs space-y-0.5 mb-2">
-                  {extractionConfidence.deep_extraction_reasons.map((r, i) => (
+                  {(extractionConfidence.deep_extraction_reasons ?? []).map((r, i) => (
                     <li key={i}>{r}</li>
                   ))}
                 </ul>
@@ -976,9 +976,10 @@ export default function StepTriage({
           onComplete={(updates) => {
             setHardwareSets(updates.hardwareSets);
             // Store triage questions for hints
-            generatedQuestionsRef.current = updates.triageQuestions;
-            if (updates.triageQuestions.length > 0) {
-              onQuestionsGenerated(updates.triageQuestions);
+            const tqs = updates.triageQuestions ?? [];
+            generatedQuestionsRef.current = tqs;
+            if (tqs.length > 0) {
+              onQuestionsGenerated(tqs);
             }
             setPhase("triaging");
           }}
@@ -1062,13 +1063,13 @@ export default function StepTriage({
           </div>
 
           {/* Flagged items */}
-          {triageResult.flagged.length > 0 && (
+          {(triageResult.flagged ?? []).length > 0 && (
             <div className="mb-4">
               <h4 className="text-warning text-sm font-semibold mb-2">
-                Flagged Items ({triageResult.flagged.length})
+                Flagged Items ({(triageResult.flagged ?? []).length})
               </h4>
               <div className="space-y-1">
-                {triageResult.flagged.map((flag) => (
+                {(triageResult.flagged ?? []).map((flag) => (
                   <div
                     key={flag.door_number}
                     className="flex items-center justify-between bg-tint border border-border-dim-strong rounded-lg px-3 py-2 text-sm"

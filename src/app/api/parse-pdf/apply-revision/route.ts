@@ -107,7 +107,7 @@ export async function POST(request: NextRequest) {
     // ==========================================
     // 1. Handle REMOVED doors
     // ==========================================
-    const toDelete = removed_decisions.filter(d => d.action === 'delete').map(d => d.existing_id)
+    const toDelete = (removed_decisions ?? []).filter(d => d.action === 'delete').map(d => d.existing_id)
     if (toDelete.length > 0) {
       // Delete in chunks
       for (let i = 0; i < toDelete.length; i += CHUNK_SIZE) {
@@ -127,7 +127,7 @@ export async function POST(request: NextRequest) {
     // ==========================================
     // 2. Handle CHANGED doors
     // ==========================================
-    for (const decision of changed_decisions) {
+    for (const decision of changed_decisions ?? []) {
       const parsedDoor = doorMap.get(decision.door_number)
       if (!parsedDoor) continue
 
@@ -234,7 +234,7 @@ export async function POST(request: NextRequest) {
     // ==========================================
     // 3. Handle NEW doors
     // ==========================================
-    const newDoors = new_door_numbers.map(dn => doorMap.get(dn)).filter(Boolean) as DoorEntry[]
+    const newDoors = (new_door_numbers ?? []).map(dn => doorMap.get(dn)).filter(Boolean) as DoorEntry[]
 
     if (newDoors.length > 0) {
       const openingRows = newDoors.map(door => ({
@@ -292,7 +292,7 @@ export async function POST(request: NextRequest) {
       doors_added: doorsAdded,
       progress_transferred: progressTransferred,
       progress_reset: progressReset,
-      doors_kept: removed_decisions.filter(d => d.action === 'keep').length,
+      doors_kept: (removed_decisions ?? []).filter(d => d.action === 'keep').length,
     }
 
     // Audit trail

@@ -269,7 +269,7 @@ export function generatePunchCards(input: {
     const groups = new Map<string, typeof qtyQuestions>()
     for (const q of qtyQuestions) {
       // Group key: item_name (lowercased) + same options = same question type
-      const key = `${(q.item_name ?? '').toLowerCase()}|${q.options.join('|')}`
+      const key = `${(q.item_name ?? '').toLowerCase()}|${(q.options ?? []).join('|')}`
       const group = groups.get(key) ?? []
       group.push(q)
       groups.set(key, group)

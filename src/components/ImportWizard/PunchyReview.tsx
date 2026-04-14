@@ -590,10 +590,10 @@ function renderCard(card: PunchCardData, ctx: RenderContext) {
             </div>
 
             {/* Missing sets */}
-            {p.missingSetIds.length > 0 && (
+            {(p.missingSetIds ?? []).length > 0 && (
               <div className="bg-warning-dim border border-warning rounded-lg p-2.5">
                 <span className="text-warning text-xs font-semibold">Missing Sets: </span>
-                <span className="text-xs text-primary">{p.missingSetIds.join(", ")}</span>
+                <span className="text-xs text-primary">{(p.missingSetIds ?? []).join(", ")}</span>
               </div>
             )}
 
@@ -606,7 +606,7 @@ function renderCard(card: PunchCardData, ctx: RenderContext) {
             </button>
             {ctx.setsExpanded && (
               <div className="space-y-1 max-h-48 overflow-y-auto">
-                {p.sets.map(s => (
+                {(p.sets ?? []).map(s => (
                   <div key={s.set_id} className={`flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs ${s.itemCount === 0 ? "bg-danger-dim border border-danger" : "bg-tint border border-border-dim"}`}>
                     <div className="flex items-center gap-2 min-w-0">
                       <span className={`font-mono font-medium ${s.itemCount === 0 ? "text-danger" : "text-accent"}`}>{s.set_id}</span>
@@ -650,7 +650,7 @@ function renderCard(card: PunchCardData, ctx: RenderContext) {
               These sets were found in the PDF but the table reader couldn&apos;t parse their items. For each one, add a hint and retry, mark it for manual entry, or remove it if it&apos;s a phantom.
             </p>
             <ul className="space-y-2">
-              {p.emptySets.map((s) => {
+              {(p.emptySets ?? []).map((s) => {
                 const showHint = ctx.hintVisible.has(s.set_id);
                 const hintValue = ctx.hintInputs[s.set_id] ?? "";
                 const submitDisabled = busy || hintValue.trim().length === 0;
@@ -814,7 +814,7 @@ function renderCard(card: PunchCardData, ctx: RenderContext) {
 
     // ── Auto-Correction Card ──
     case "auto_correction": {
-      const corrections = (card.payload as { corrections: NonNullable<PunchyQuantityCheck["auto_corrections"]> }).corrections;
+      const corrections = (card.payload as { corrections: NonNullable<PunchyQuantityCheck["auto_corrections"]> }).corrections ?? [];
       return (
         <PunchCard
           type="auto_correction"
@@ -903,7 +903,7 @@ function renderCard(card: PunchCardData, ctx: RenderContext) {
             )}
             {/* Answer options — larger targets */}
             <div className="flex flex-wrap gap-2">
-              {(q.options as string[]).map((opt: string) => (
+              {((q.options ?? []) as string[]).map((opt: string) => (
                 <button
                   key={opt}
                   onClick={() => ctx.handleAnswerQuestion(q.id, opt, q.set_id, q.item_name)}
@@ -932,7 +932,7 @@ function renderCard(card: PunchCardData, ctx: RenderContext) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const representative = card.payload.representative as any;
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const questions = card.payload.questions as any[];
+      const questions = (card.payload.questions ?? []) as any[];
       const setIds = (card.payload.setIds ?? []) as string[];
       const answered = ctx.answers[card.id];
       return (
@@ -989,7 +989,7 @@ function renderCard(card: PunchCardData, ctx: RenderContext) {
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
-              {(representative.options as string[]).map((opt: string) => (
+              {((representative.options ?? []) as string[]).map((opt: string) => (
                 <button
                   key={opt}
                   onClick={() => {
@@ -1042,7 +1042,7 @@ function renderCard(card: PunchCardData, ctx: RenderContext) {
                 <div key={q.id} className={`p-2.5 rounded-lg border ${qAnswered ? "bg-success-dim border-success" : "bg-tint border-border-dim"}`}>
                   <p className="text-primary text-sm mb-2">{q.text}</p>
                   <div className="flex flex-wrap gap-1.5">
-                    {q.options.map(opt => (
+                    {(q.options ?? []).map(opt => (
                       <button
                         key={opt}
                         onClick={() => ctx.handleAnswerQuestion(q.id, opt)}
