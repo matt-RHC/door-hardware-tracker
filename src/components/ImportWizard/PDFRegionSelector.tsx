@@ -54,6 +54,11 @@ export default function PDFRegionSelector({
   /** Full image natural dimensions (pixel size of the rendered data URL). */
   const [imageDims, setImageDims] = useState<{ w: number; h: number } | null>(null);
 
+  /** Canvas-cropped zoom image data URL. */
+  const [zoomImageUrl, setZoomImageUrl] = useState<string | null>(null);
+  /** Zoom scale factor used for the current crop. */
+  const [zoomScale, setZoomScale] = useState<number>(1);
+
   const imageRef = useRef<HTMLImageElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const zoomContainerRef = useRef<HTMLDivElement>(null);
@@ -274,88 +279,130 @@ export default function PDFRegionSelector({
 
   const handleBackToSelect = useCallback(() => {
     setPhase("select");
+    setZoomImageUrl(null);
   }, []);
 
-  // --- Zoom view: pointer handlers for dragging handles in zoom view ---
-  const getZoomRelativePosition = useCallback((e: React.PointerEvent) => {
-    // Convert pointer position in zoom view back to full-image coordinates
-    const zoomContainer = zoomContainerRef.current;
+  // --- Canvas re-crop: generate zoomed image when entering zoom phase ---
+  const renderZoomCrop = useCallback(() => {
     const img = imageRef.current;
-    if (!zoomContainer || !img || !selectionRect) return null;
+    if (!img || !selectionRect || !imageDims) return;
 
-    const containerRect = zoomContainer.getBoundingClientRect();
-    const imgRect = img.getBoundingClientRect();
-    const imgDisplayW = imgRect.width;
-    const imgDisplayH = imgRect.height;
+    // Map selection rect from display coords to natural (pixel) coords
+    const displayRect = img.getBoundingClientRect();
+    const scaleX = imageDims.w / displayRect.width;
+    const scaleY = imageDims.h / displayRect.height;
 
-    // Zoom scale: container width / selection width, capped at MAX_ZOOM
-    const zoomScale = Math.min(containerRect.width / selectionRect.width, MAX_ZOOM);
+    const srcX = selectionRect.left * scaleX;
+    const srcY = selectionRect.top * scaleY;
+    const srcW = selectionRect.width * scaleX;
+    const srcH = selectionRect.height * scaleY;
 
-    // Pointer offset within the zoom container
-    const px = e.clientX - containerRect.left;
-    const py = e.clientY - containerRect.top;
+    // Zoom scale: fit to container width (~full modal width), capped
+    const containerW = containerRef.current?.offsetWidth ?? 600;
+    const scale = Math.min(containerW / selectionRect.width, MAX_ZOOM);
+    setZoomScale(scale);
 
-    // Convert to full-image display coordinates
-    const fullX = selectionRect.left + px / zoomScale;
-    const fullY = selectionRect.top + py / zoomScale;
+    const destW = Math.round(srcW * (scale / scaleX));
+    const destH = Math.round(srcH * (scale / scaleY));
 
-    return {
-      x: Math.max(0, Math.min(fullX, imgDisplayW)),
-      y: Math.max(0, Math.min(fullY, imgDisplayH)),
-    };
-  }, [selectionRect]);
+    const canvas = document.createElement("canvas");
+    canvas.width = destW;
+    canvas.height = destH;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
 
+    ctx.drawImage(img, srcX, srcY, srcW, srcH, 0, 0, destW, destH);
+    const dataUrl = canvas.toDataURL("image/jpeg", 0.95);
+    canvas.width = 0;
+    canvas.height = 0;
+
+    setZoomImageUrl(dataUrl);
+  }, [selectionRect, imageDims]);
+
+  // Trigger canvas crop when entering zoom phase or when selection changes (handle drag release)
+  useEffect(() => {
+    if (phase === "zoom" && selectionRect) {
+      renderZoomCrop();
+    }
+  }, [phase, renderZoomCrop]);
+  // Note: renderZoomCrop depends on selectionRect which changes on handle release
+
+  // --- Zoom view: pointer handlers for dragging handles in zoom view ---
   const handleZoomPointerDown = useCallback((e: React.PointerEvent) => {
-    if (loading || !selection) return;
+    if (loading || !selection || !zoomImageUrl) return;
     e.preventDefault();
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
 
-    const pos = getZoomRelativePosition(e);
-    if (!pos) return;
+    const zoomContainer = zoomContainerRef.current;
+    if (!zoomContainer) return;
 
-    const handle = getHandleAtPosition(pos.x, pos.y, selection);
+    const containerRect = zoomContainer.getBoundingClientRect();
+    const px = e.clientX - containerRect.left;
+    const py = e.clientY - containerRect.top;
+
+    // Use zoom-space hit test (handles are at corners of the zoomed image)
+    const zoomedW = containerRect.width;
+    const zoomedH = containerRect.height;
+    const handle = getHandleAtPositionZoomed(px, py, zoomedW, zoomedH, 20);
     if (handle) {
       setResizeHandle(handle);
       setIsDragging(true);
     }
-  }, [loading, selection, getZoomRelativePosition]);
+  }, [loading, selection, zoomImageUrl]);
 
   const handleZoomPointerMove = useCallback((e: React.PointerEvent) => {
-    if (!isDragging || !resizeHandle) return;
+    if (!isDragging || !resizeHandle || !selectionRect) return;
     e.preventDefault();
 
-    const pos = getZoomRelativePosition(e);
-    if (!pos) return;
+    const zoomContainer = zoomContainerRef.current;
+    if (!zoomContainer) return;
+
+    const containerRect = zoomContainer.getBoundingClientRect();
+    const px = e.clientX - containerRect.left;
+    const py = e.clientY - containerRect.top;
+
+    // Convert zoom-view deltas back to full-image display coordinates
+    const img = imageRef.current;
+    const imgDisplayW = img?.getBoundingClientRect().width ?? imageDims?.w ?? 800;
+    const imgDisplayH = img?.getBoundingClientRect().height ?? imageDims?.h ?? 600;
+
+    const fullX = Math.max(0, Math.min(selectionRect.left + px / zoomScale, imgDisplayW));
+    const fullY = Math.max(0, Math.min(selectionRect.top + py / zoomScale, imgDisplayH));
 
     setSelection(prev => {
       if (!prev) return prev;
       const updated = { ...prev };
       if (resizeHandle === "nw") {
-        updated.startX = pos.x;
-        updated.startY = pos.y;
+        updated.startX = fullX;
+        updated.startY = fullY;
       } else if (resizeHandle === "ne") {
-        updated.endX = pos.x;
-        updated.startY = pos.y;
+        updated.endX = fullX;
+        updated.startY = fullY;
       } else if (resizeHandle === "sw") {
-        updated.startX = pos.x;
-        updated.endY = pos.y;
+        updated.startX = fullX;
+        updated.endY = fullY;
       } else if (resizeHandle === "se") {
-        updated.endX = pos.x;
-        updated.endY = pos.y;
+        updated.endX = fullX;
+        updated.endY = fullY;
       }
       return updated;
     });
-  }, [isDragging, resizeHandle, getZoomRelativePosition]);
+  }, [isDragging, resizeHandle, selectionRect, zoomScale, imageDims]);
 
   const handleZoomPointerUp = useCallback(() => {
+    if (!isDragging) return;
     setIsDragging(false);
     setResizeHandle(null);
-  }, []);
+    // Re-render the canvas crop with updated coordinates
+    renderZoomCrop();
+  }, [isDragging, renderZoomCrop]);
 
-  // Reset phase when page changes or image reloads
+  // Reset phase, selection, and imageDims when page changes
   useEffect(() => {
     setPhase("select");
     setSelection(null);
+    setImageDims(null);
+    setZoomImageUrl(null);
   }, [pageIndex]);
 
   return (
@@ -493,14 +540,11 @@ export default function PDFRegionSelector({
         </>
       )}
 
-      {/* Phase: ZOOM — cropped, scaled view with fine-tune handles */}
-      {phase === "zoom" && imageUrl && selectionRect && (
+      {/* Phase: ZOOM — canvas-cropped view with fine-tune handles */}
+      {phase === "zoom" && selectionRect && (
         <>
           <ZoomView
-            imageUrl={imageUrl}
-            selectionRect={selectionRect}
-            imageDims={imageDims}
-            imageRef={imageRef}
+            zoomImageUrl={zoomImageUrl}
             zoomContainerRef={zoomContainerRef}
             isDragging={isDragging}
             onPointerDown={handleZoomPointerDown}
@@ -545,54 +589,22 @@ export default function PDFRegionSelector({
   );
 }
 
-/** Zoomed-in view of the selected region with fine-tune handles. */
+/** Zoomed-in view using a canvas-cropped image with fine-tune handles. */
 function ZoomView({
-  imageUrl,
-  selectionRect,
-  imageDims,
-  imageRef,
+  zoomImageUrl,
   zoomContainerRef,
   isDragging,
   onPointerDown,
   onPointerMove,
   onPointerUp,
 }: {
-  imageUrl: string;
-  selectionRect: { left: number; top: number; width: number; height: number };
-  imageDims: { w: number; h: number } | null;
-  imageRef: React.RefObject<HTMLImageElement | null>;
+  zoomImageUrl: string | null;
   zoomContainerRef: React.RefObject<HTMLDivElement | null>;
   isDragging: boolean;
   onPointerDown: (e: React.PointerEvent) => void;
   onPointerMove: (e: React.PointerEvent) => void;
   onPointerUp: (e: React.PointerEvent) => void;
 }) {
-  // We need the display dimensions of the image in the select phase.
-  // Since the image element is hidden in zoom phase, use the stored display size.
-  const imgEl = imageRef.current;
-  const imgDisplayW = imgEl?.getBoundingClientRect().width ?? imageDims?.w ?? 800;
-  const imgDisplayH = imgEl?.getBoundingClientRect().height ?? imageDims?.h ?? 600;
-
-  // Compute zoom scale: fit the selection to ~full container width, capped at MAX_ZOOM
-  const zoomScale = Math.min(
-    // Approximate container width — the container will flex to fill, so use a reasonable estimate.
-    // The actual container width is determined by CSS; the image width is close enough.
-    imgDisplayW / selectionRect.width,
-    MAX_ZOOM,
-  );
-
-  // The zoomed container dimensions
-  const zoomedW = selectionRect.width * zoomScale;
-  const zoomedH = selectionRect.height * zoomScale;
-
-  // Handles in zoom-view space: offset from the selection origin, scaled by zoomScale
-  const handlePositions = [
-    { x: 0, y: 0, cursor: "nw-resize" },
-    { x: zoomedW, y: 0, cursor: "ne-resize" },
-    { x: 0, y: zoomedH, cursor: "sw-resize" },
-    { x: zoomedW, y: zoomedH, cursor: "se-resize" },
-  ];
-
   return (
     <div
       ref={zoomContainerRef}
@@ -600,73 +612,94 @@ function ZoomView({
       style={{
         touchAction: "none",
         width: "100%",
-        height: zoomedH,
         maxHeight: "60vh",
       }}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
     >
-      {/* Full-page image, CSS-transformed to show only the selected region */}
-      <img
-        src={imageUrl}
-        alt="Zoomed selection"
-        draggable={false}
-        className="absolute"
-        style={{
-          width: imgDisplayW * zoomScale,
-          height: imgDisplayH * zoomScale,
-          left: -selectionRect.left * zoomScale,
-          top: -selectionRect.top * zoomScale,
-          pointerEvents: "none",
-        }}
-      />
+      {zoomImageUrl ? (
+        <>
+          <img
+            src={zoomImageUrl}
+            alt="Zoomed selection"
+            draggable={false}
+            className="w-full h-auto"
+            style={{ pointerEvents: "none" }}
+          />
 
-      {/* Selection border overlay in zoom view */}
-      <div
-        className="absolute pointer-events-none"
-        style={{
-          left: 0,
-          top: 0,
-          width: zoomedW,
-          height: zoomedH,
-          border: "2px solid var(--blue)",
-          boxShadow: "0 0 8px var(--glow-blue)",
-        }}
-      />
+          {/* Selection border overlay */}
+          <div
+            className="absolute inset-0 pointer-events-none"
+            style={{
+              border: "2px solid var(--blue)",
+              boxShadow: "0 0 8px var(--glow-blue)",
+            }}
+          />
 
-      {/* Corner handles for fine-tuning */}
-      {!isDragging && handlePositions.map((hp) => (
-        <Handle
-          key={`${hp.cursor}`}
-          x={hp.x}
-          y={hp.y}
-          cursor={hp.cursor}
-        />
-      ))}
+          {/* Corner handles for fine-tuning */}
+          {!isDragging && (
+            <>
+              <Handle x={0} y={0} cursor="nw-resize" />
+              <Handle x="100%" y={0} cursor="ne-resize" isRight />
+              <Handle x={0} y="100%" cursor="sw-resize" isBottom />
+              <Handle x="100%" y="100%" cursor="se-resize" isRight isBottom />
+            </>
+          )}
+        </>
+      ) : (
+        <div className="flex items-center justify-center py-16">
+          <div className="w-5 h-5 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+          <span className="ml-2 text-xs text-tertiary">Rendering zoom...</span>
+        </div>
+      )}
     </div>
   );
 }
 
 /** Small square handle rendered at selection corners. */
-function Handle({ x, y, cursor }: { x: number; y: number; cursor: string }) {
+function Handle({
+  x,
+  y,
+  cursor,
+  isRight,
+  isBottom,
+}: {
+  x: number | string;
+  y: number | string;
+  cursor: string;
+  isRight?: boolean;
+  isBottom?: boolean;
+}) {
+  // For percentage-based positioning (zoom view), anchor from right/bottom edges
+  const style: React.CSSProperties = {
+    width: 10,
+    height: 10,
+    backgroundColor: "var(--blue)",
+    border: "1px solid rgba(255,255,255,0.8)",
+    cursor,
+  };
+
+  if (typeof x === "string" && isRight) {
+    style.right = -5;
+  } else {
+    style.left = typeof x === "number" ? x - 5 : undefined;
+  }
+  if (typeof y === "string" && isBottom) {
+    style.bottom = -5;
+  } else {
+    style.top = typeof y === "number" ? y - 5 : undefined;
+  }
+
   return (
     <div
       className="absolute pointer-events-none"
-      style={{
-        left: x - 5,
-        top: y - 5,
-        width: 10,
-        height: 10,
-        backgroundColor: "var(--blue)",
-        border: "1px solid rgba(255,255,255,0.8)",
-        cursor,
-      }}
+      style={style}
     />
   );
 }
 
-/** Check if a position is near one of the selection's corner handles. */
+/** Check if a position is near one of the selection's corner handles (select phase). */
 function getHandleAtPosition(
   x: number,
   y: number,
@@ -682,5 +715,24 @@ function getHandleAtPosition(
   if (Math.abs(x - right) < threshold && Math.abs(y - top) < threshold) return "ne";
   if (Math.abs(x - left) < threshold && Math.abs(y - bottom) < threshold) return "sw";
   if (Math.abs(x - right) < threshold && Math.abs(y - bottom) < threshold) return "se";
+  return null;
+}
+
+/**
+ * Check if a position is near a corner handle in the zoom view.
+ * Handles are at the four corners of the zoomed image (0,0), (w,0), (0,h), (w,h).
+ * This avoids the overlap problem with getHandleAtPosition on small selections.
+ */
+function getHandleAtPositionZoomed(
+  px: number,
+  py: number,
+  zoomedW: number,
+  zoomedH: number,
+  threshold: number,
+): "nw" | "ne" | "sw" | "se" | null {
+  if (Math.abs(px) < threshold && Math.abs(py) < threshold) return "nw";
+  if (Math.abs(px - zoomedW) < threshold && Math.abs(py) < threshold) return "ne";
+  if (Math.abs(px) < threshold && Math.abs(py - zoomedH) < threshold) return "sw";
+  if (Math.abs(px - zoomedW) < threshold && Math.abs(py - zoomedH) < threshold) return "se";
   return null;
 }

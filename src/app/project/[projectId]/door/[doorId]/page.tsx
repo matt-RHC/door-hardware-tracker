@@ -117,6 +117,14 @@ export default function DoorDetailPage() {
   const fetchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { showToast } = useToast();
 
+  // Lock body scroll while rescan modal is open (iPad scroll containment)
+  useEffect(() => {
+    if (rescanItem) {
+      document.body.style.overflow = "hidden";
+      return () => { document.body.style.overflow = ""; };
+    }
+  }, [rescanItem]);
+
   const fetchOpeningData = useCallback(async () => {
     try {
       const response = await fetch(
@@ -1565,9 +1573,9 @@ export default function DoorDetailPage() {
       )}
 
       {/* Rescan Modal */}
-      {rescanItem && pdfBuffer && opening && (
+      {rescanItem && pdfBuffer && opening && opening.pdf_page != null && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto">
-          <div className="panel corner-brackets w-full max-w-2xl p-5 animate-fade-in-up max-h-[90vh] overflow-y-auto" style={{ background: 'var(--surface)' }}>
+          <div className="panel corner-brackets w-full max-w-2xl p-5 animate-fade-in-up max-h-[90vh] overflow-y-auto" style={{ background: 'var(--surface)', overscrollBehavior: 'contain' }}>
             {rescanRawText ? (
               <>
                 {/* Multi-Value Field Assignment UI */}
