@@ -137,6 +137,16 @@ export function groupItemsByLeaf<T extends LeafGroupableItem>(
   const leaf2: T[] = []
   const isPair = leafCount >= 2
 
+  // Pre-scan: count electric hinge qty in the set. On pair doors the electric
+  // hinge occupies one hinge position on the active leaf, so the standard hinge
+  // qty on the active leaf must be reduced by this amount during wizard preview
+  // (when leaf_side is still null and items haven't been split by the save path).
+  const electricHingeQty = isPair
+    ? items
+        .filter(i => !i.leaf_side && classifyItem(i.name) === 'electric_hinge')
+        .reduce((sum, i) => sum + (i.qty || 0), 0)
+    : 0
+
   for (const item of items) {
     // Phase 3: prefer persisted leaf_side when the DB carries a value.
     // Migration 013 backfilled the unambiguous cases and the save path
@@ -187,6 +197,17 @@ export function groupItemsByLeaf<T extends LeafGroupableItem>(
     // guard, electric hinges fall through to the per_opening branch and appear on BOTH leaves.
     if (isPair && !item.leaf_side && classifyItem(item.name) === 'electric_hinge') {
       leaf1.push(item)
+      continue
+    }
+
+    // Standard hinge qty adjustment for pair doors with electric hinges.
+    // The electric hinge replaces one standard hinge position on the active leaf,
+    // so active leaf standard qty = total standard qty - electric hinge qty.
+    // Only applies during wizard preview (leaf_side is null); after save, the
+    // qty is already correct from buildPerOpeningItems.
+    if (isPair && electricHingeQty > 0 && !item.leaf_side && classifyItem(item.name) === 'hinges') {
+      leaf1.push({ ...item, qty: (item.qty || 0) - electricHingeQty } as T)
+      leaf2.push({ ...item } as T)
       continue
     }
 
