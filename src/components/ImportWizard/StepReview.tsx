@@ -11,6 +11,7 @@ import ConfidenceBadge from "./ConfidenceBadge";
 import { findPageForSet } from "@/lib/punch-cards";
 import { buildDoorToSetMap, normalizeDoorNumber, detectIsPair } from "@/lib/parse-pdf-helpers";
 import { groupItemsByLeaf, getLeafDisplayQty } from "@/lib/classify-leaf-items";
+import { useToast } from "@/components/ToastProvider";
 import WizardNav from "./WizardNav";
 
 // ─── Confidence scoring ───
@@ -107,6 +108,7 @@ export default function StepReview({
   // Local copy of hardware sets to support Punchy revert without modifying parent state
   const [hardwareSets, setHardwareSets] = useState(initialHardwareSets);
   const { registerRef } = usePunchHighlight();
+  const { showToast } = useToast();
   const [doors, setDoors] = useState<DoorEntry[]>(initialDoors);
   // Which set groups have their PDF preview open (lazy-mounted when expanded)
   const [previewOpen, setPreviewOpen] = useState<Set<string>>(new Set());
@@ -335,6 +337,17 @@ export default function StepReview({
   }, []);
 
   // ─── Region extract handler ───
+
+  /** Token-based name matching: split into words, count shared tokens, divide by max token count. */
+  function tokenMatchScore(a: string, b: string): number {
+    const tokensA = a.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim().split(/\s+/).filter(Boolean);
+    const tokensB = b.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim().split(/\s+/).filter(Boolean);
+    if (tokensA.length === 0 || tokensB.length === 0) return 0;
+    const setB = new Set(tokensB);
+    const shared = tokensA.filter(t => setB.has(t)).length;
+    return shared / Math.max(tokensA.length, tokensB.length);
+  }
+
   const handleRegionExtract = useCallback(async (bbox: { x0: number; y0: number; x1: number; y1: number }) => {
     if (!regionExtractSetId || regionExtractPageIdx == null) return;
     setRegionExtracting(true);
@@ -352,24 +365,75 @@ export default function StepReview({
       if (!resp.ok) {
         const errBody = await resp.text().catch(() => "");
         console.error("[region-extract] API error:", resp.status, errBody.slice(0, 300));
+        showToast("error", "Region scan failed \u2014 try selecting a larger area");
         return;
       }
       const result = await resp.json();
-      const items = result.items ?? [];
-      if (items.length > 0) {
-        setHardwareSets(prev => prev.map(s => {
-          if (s.set_id !== regionExtractSetId) return s;
-          return { ...s, items };
-        }));
+      const extractedItems = result.items ?? [];
+      if (extractedItems.length === 0) {
+        showToast("error", "No items found in selected region \u2014 try a different area");
+        setRegionExtractSetId(null);
+        setRegionExtractPageIdx(null);
+        return;
       }
+
+      // Merge strategy: match extracted items to existing items, update matched, append new
+      setHardwareSets(prev => prev.map(s => {
+        if (s.set_id !== regionExtractSetId) return s;
+        const existing = [...s.items];
+        const matched = new Set<number>();
+        let updatedCount = 0;
+        let addedCount = 0;
+
+        for (const ext of extractedItems) {
+          const extName = ext?.name || '';
+          let bestIdx = -1;
+          let bestScore = 0;
+          for (let i = 0; i < existing.length; i++) {
+            if (matched.has(i)) continue;
+            const score = tokenMatchScore(extName, existing[i]?.name || '');
+            if (score > bestScore || (score === bestScore && bestIdx >= 0 && (existing[i]?.name || '').length < (existing[bestIdx]?.name || '').length)) {
+              bestScore = score;
+              bestIdx = i;
+            }
+          }
+
+          if (bestIdx >= 0 && bestScore > 0) {
+            // Update matched item fields only if new value is non-empty
+            matched.add(bestIdx);
+            const merged = { ...existing[bestIdx] };
+            const mergeFields = ['qty', 'manufacturer', 'model', 'finish'] as const;
+            for (const f of mergeFields) {
+              if (ext[f] != null && ext[f] !== '') {
+                (merged as Record<string, unknown>)[f] = ext[f];
+              }
+            }
+            existing[bestIdx] = merged;
+            updatedCount++;
+          } else {
+            // Append as new item
+            existing.push(ext);
+            addedCount++;
+          }
+        }
+
+        const parts: string[] = [];
+        if (updatedCount > 0) parts.push(`Updated ${updatedCount} item${updatedCount !== 1 ? 's' : ''}`);
+        if (addedCount > 0) parts.push(`added ${addedCount} new item${addedCount !== 1 ? 's' : ''}`);
+        if (parts.length > 0) showToast("success", parts.join(', '));
+
+        return { ...s, items: existing };
+      }));
+
       setRegionExtractSetId(null);
       setRegionExtractPageIdx(null);
     } catch (err) {
       console.error("[region-extract] Failed:", err);
+      showToast("error", "Region scan failed \u2014 try selecting a larger area");
     } finally {
       setRegionExtracting(false);
     }
-  }, [regionExtractSetId, regionExtractPageIdx, projectId]);
+  }, [regionExtractSetId, regionExtractPageIdx, projectId, showToast]);
 
   const handleSort = useCallback(
     (field: DoorStringField) => {
@@ -869,6 +933,7 @@ export default function StepReview({
                 setRegionExtractSetId(null);
                 setRegionExtractPageIdx(null);
               }}
+              onPageChange={setRegionExtractPageIdx}
             />
           </div>
         </div>

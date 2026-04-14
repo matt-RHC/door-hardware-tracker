@@ -8,6 +8,8 @@ interface PDFRegionSelectorProps {
   onSelect: (bbox: { x0: number; y0: number; x1: number; y1: number }) => void;
   onCancel: () => void;
   loading?: boolean;
+  /** Callback when the user navigates to a different page. */
+  onPageChange?: (newPageIndex: number) => void;
 }
 
 interface Selection {
@@ -28,6 +30,7 @@ export default function PDFRegionSelector({
   onSelect,
   onCancel,
   loading = false,
+  onPageChange,
 }: PDFRegionSelectorProps) {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [pageLoading, setPageLoading] = useState(true);
@@ -35,6 +38,7 @@ export default function PDFRegionSelector({
   const [selection, setSelection] = useState<Selection | null>(null);
   const [isDragging, setIsDragging] = useState(false);
   const [resizeHandle, setResizeHandle] = useState<"nw" | "ne" | "sw" | "se" | null>(null);
+  const [totalPages, setTotalPages] = useState<number>(1);
 
   const imageRef = useRef<HTMLImageElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -51,6 +55,7 @@ export default function PDFRegionSelector({
       const bufferCopy = pdfBuffer.slice(0);
       const loadingTask = pdfjsLib.getDocument({ data: new Uint8Array(bufferCopy) });
       const doc = await loadingTask.promise;
+      setTotalPages(doc.numPages);
 
       if (pageIndex + 1 > doc.numPages) {
         setError(`Page ${pageIndex + 1} not found (PDF has ${doc.numPages} pages)`);
@@ -207,13 +212,50 @@ export default function PDFRegionSelector({
     ? selectionRect.width > 10 && selectionRect.height > 10
     : false;
 
+  const canGoPrev = pageIndex > 0;
+  const canGoNext = pageIndex < totalPages - 1;
+
+  const handlePageNav = useCallback((delta: number) => {
+    const next = pageIndex + delta;
+    if (next < 0 || next >= totalPages) return;
+    setSelection(null);
+    onPageChange?.(next);
+  }, [pageIndex, totalPages, onPageChange]);
+
   return (
     <div className="flex flex-col gap-3">
       {/* Header */}
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-bold text-primary">
-          Select region to re-scan — Page {pageIndex + 1}
-        </h3>
+        <div className="flex items-center gap-2">
+          <h3 className="text-sm font-bold text-primary">
+            Select region to re-scan
+          </h3>
+          <div className="flex items-center gap-1">
+            {onPageChange && (
+              <button
+                onClick={() => handlePageNav(-1)}
+                disabled={!canGoPrev || loading}
+                className="w-6 h-6 flex items-center justify-center rounded text-xs font-bold text-secondary hover:bg-tint-strong transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                aria-label="Previous page"
+              >
+                &lt;
+              </button>
+            )}
+            <span className="text-xs text-secondary tabular-nums">
+              Page {pageIndex + 1}{totalPages > 1 ? ` / ${totalPages}` : ''}
+            </span>
+            {onPageChange && (
+              <button
+                onClick={() => handlePageNav(1)}
+                disabled={!canGoNext || loading}
+                className="w-6 h-6 flex items-center justify-center rounded text-xs font-bold text-secondary hover:bg-tint-strong transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                aria-label="Next page"
+              >
+                &gt;
+              </button>
+            )}
+          </div>
+        </div>
         <button
           onClick={onCancel}
           className="text-lg leading-none text-tertiary hover:text-primary transition-colors px-2"
