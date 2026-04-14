@@ -73,6 +73,7 @@ export async function GET(
           options,
           sort_order,
           install_type,
+          leaf_side,
           created_at
         ),
         checklist_progress(

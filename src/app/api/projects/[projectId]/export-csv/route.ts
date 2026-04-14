@@ -66,6 +66,7 @@ export async function GET(
           model,
           finish,
           sort_order,
+          leaf_side,
           checklist_progress(checked)
         )
       `)
