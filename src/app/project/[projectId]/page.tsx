@@ -8,6 +8,13 @@ import ImportWizard from "@/components/ImportWizard/ImportWizard";
 import { useToast } from "@/components/ToastProvider";
 import { openProjectPdfAtPage } from "@/lib/pdf-page-link";
 
+interface StageCounts {
+  received: number;
+  pre_install: number;
+  installed: number;
+  qa_qc: number;
+}
+
 interface OpeningWithProgress {
   id: string;
   project_id: string;
@@ -23,6 +30,7 @@ interface OpeningWithProgress {
   created_at: string;
   total_items: number;
   checked_items: number;
+  stage_counts?: StageCounts;
 }
 
 interface Filters {
@@ -385,10 +393,27 @@ export default function ProjectDetailPage() {
                   {/* Progress bar */}
                   <ProgressBar value={progressPercent} size="sm" showLabel={false} />
 
-                  {/* Item count */}
-                  <p className="text-[11px] text-tertiary mt-2 tabular-nums">
-                    {opening.checked_items} / {opening.total_items} items
-                  </p>
+                  {/* Item count + stage breakdown */}
+                  <div className="flex items-center justify-between mt-2">
+                    <p className="text-[11px] text-tertiary tabular-nums">
+                      {opening.checked_items} / {opening.total_items} items
+                    </p>
+                    {opening.stage_counts && (opening.stage_counts.received > 0 || opening.stage_counts.installed > 0 || opening.stage_counts.qa_qc > 0) && (
+                      <div className="flex items-center gap-2 text-[10px] tabular-nums">
+                        {opening.stage_counts.received > 0 && (
+                          <span style={{ color: 'var(--blue)' }}>{opening.stage_counts.received}R</span>
+                        )}
+                        {(opening.stage_counts.pre_install > 0 || opening.stage_counts.installed > 0) && (
+                          <span style={{ color: 'var(--field)' }}>
+                            {(opening.stage_counts.pre_install + opening.stage_counts.installed)}I
+                          </span>
+                        )}
+                        {opening.stage_counts.qa_qc > 0 && (
+                          <span style={{ color: 'var(--green)' }}>{opening.stage_counts.qa_qc}Q</span>
+                        )}
+                      </div>
+                    )}
+                  </div>
 
                   {/* Hover arrow */}
                   <div className="absolute bottom-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">

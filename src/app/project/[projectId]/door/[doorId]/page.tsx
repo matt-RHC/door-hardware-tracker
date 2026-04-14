@@ -42,6 +42,8 @@ export default function DoorDetailPage() {
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [issueModal, setIssueModal] = useState<{ doorNumber: string; hardwareItemName: string } | null>(null);
   const [activeLeafTab, setActiveLeafTab] = useState<'shared' | 'leaf1' | 'leaf2'>('leaf1');
+  const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
+  const [batchActionLoading, setBatchActionLoading] = useState(false);
 
   const supabase = createClient();
   const fetchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -150,6 +152,62 @@ export default function DoorDetailPage() {
     } catch (err) {
       console.error("Error toggling step:", err);
       showToast("error", "Failed to update step. Check your connection and try again.");
+    }
+  };
+
+  // --- Batch selection helpers ---
+  const toggleItemSelection = (itemId: string) => {
+    setSelectedItems(prev => {
+      const next = new Set(prev);
+      if (next.has(itemId)) next.delete(itemId);
+      else next.add(itemId);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = (items: HardwareItemWithProgress[]) => {
+    const allIds = items.map(i => i.id);
+    const allSelected = allIds.every(id => selectedItems.has(id));
+    if (allSelected) {
+      setSelectedItems(prev => {
+        const next = new Set(prev);
+        allIds.forEach(id => next.delete(id));
+        return next;
+      });
+    } else {
+      setSelectedItems(prev => {
+        const next = new Set(prev);
+        allIds.forEach(id => next.add(id));
+        return next;
+      });
+    }
+  };
+
+  const handleBatchStepToggle = async (step: WorkflowStep, leafIndex: number = 1) => {
+    if (selectedItems.size === 0) return;
+    setBatchActionLoading(true);
+    try {
+      const promises = Array.from(selectedItems).map(itemId =>
+        fetch(`/api/openings/${doorId}/check`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            item_id: itemId,
+            leaf_index: leafIndex,
+            step,
+            value: true,
+          }),
+        })
+      );
+      await Promise.all(promises);
+      playSuccess();
+      setSelectedItems(new Set());
+      await fetchOpeningData();
+    } catch (err) {
+      console.error("Error in batch update:", err);
+      showToast("error", "Some items failed to update. Check your connection and try again.");
+    } finally {
+      setBatchActionLoading(false);
     }
   };
 
@@ -344,7 +402,7 @@ export default function DoorDetailPage() {
   // --- Edit form for inline editing (shown below table row) ---
   const renderEditForm = (item: HardwareItemWithProgress) => (
     <tr key={`edit-${item.id}`}>
-      <td colSpan={8} className="p-3 bg-surface-hover border-b border-th-border">
+      <td colSpan={9} className="p-3 bg-surface-hover border-b border-th-border">
         <div className="space-y-3">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
@@ -413,21 +471,74 @@ export default function DoorDetailPage() {
       return <p className="text-tertiary text-center py-6 text-[13px]">No items in this section</p>;
     }
 
+    const allItemIds = items.map(i => i.id);
+    const allSelected = allItemIds.length > 0 && allItemIds.every(id => selectedItems.has(id));
+    const someSelected = allItemIds.some(id => selectedItems.has(id));
+    const selectedInThisSection = items.filter(i => selectedItems.has(i.id));
+
     return (
-      <div className="overflow-x-auto border border-th-border rounded-md">
-        <table className="w-full text-left text-[13px]">
-          <thead>
-            <tr className="border-b border-th-border bg-surface text-[11px] text-tertiary uppercase tracking-wider">
-              <th className="px-3 py-2 font-medium">Item Name</th>
-              <th className="px-3 py-2 font-medium w-14 text-center">Qty</th>
-              <th className="px-3 py-2 font-medium hidden md:table-cell">Manufacturer</th>
-              <th className="px-3 py-2 font-medium hidden md:table-cell">Model</th>
-              <th className="px-3 py-2 font-medium hidden md:table-cell">Finish</th>
-              <th className="px-3 py-2 font-medium hidden md:table-cell text-center w-16" title="Data completeness — how many fields are filled in">Data</th>
-              <th className="px-3 py-2 font-medium text-center">Status</th>
-              <th className="px-3 py-2 font-medium w-20 text-right">Actions</th>
-            </tr>
-          </thead>
+      <>
+        {/* Floating batch action bar */}
+        {selectedInThisSection.length > 0 && (
+          <div
+            className="mb-3 flex items-center gap-2 flex-wrap px-3 py-2.5 rounded-md border text-[12px] animate-fade-in-up"
+            style={{
+              background: 'var(--blue-dim)',
+              borderColor: 'var(--blue)',
+            }}
+          >
+            <span className="font-semibold tabular-nums" style={{ color: 'var(--blue)' }}>
+              {selectedInThisSection.length} selected
+            </span>
+            <span className="text-tertiary">—</span>
+            {(['received', 'pre_install', 'installed', 'qa_qc'] as WorkflowStep[]).map(step => (
+              <button
+                key={step}
+                onClick={() => handleBatchStepToggle(step, leafIndex)}
+                disabled={batchActionLoading}
+                className="px-2.5 py-1 rounded font-medium transition-colors disabled:opacity-40"
+                style={{
+                  background: 'var(--surface)',
+                  color: step === 'received' ? 'var(--blue)' : step === 'pre_install' ? 'var(--purple)' : step === 'installed' ? 'var(--field)' : 'var(--green)',
+                  border: `1px solid var(--border)`,
+                }}
+              >
+                {batchActionLoading ? '...' : step === 'received' ? 'Mark Received' : step === 'pre_install' ? 'Mark Pre-Install' : step === 'installed' ? 'Mark Installed' : 'Mark QA/QC'}
+              </button>
+            ))}
+            <button
+              onClick={() => setSelectedItems(new Set())}
+              className="ml-auto text-tertiary hover:text-secondary transition-colors px-2 py-1"
+            >
+              Clear
+            </button>
+          </div>
+        )}
+
+        <div className="overflow-x-auto border border-th-border rounded-md">
+          <table className="w-full text-left text-[13px]">
+            <thead className="sticky top-0 z-10">
+              <tr className="border-b border-th-border bg-surface text-[11px] text-tertiary uppercase tracking-wider">
+                <th className="px-2 py-2 w-10 text-center">
+                  <input
+                    type="checkbox"
+                    checked={allSelected}
+                    ref={(el) => { if (el) el.indeterminate = someSelected && !allSelected; }}
+                    onChange={() => toggleSelectAll(items)}
+                    className="w-4 h-4 rounded border-th-border bg-transparent accent-accent cursor-pointer"
+                    title={allSelected ? 'Deselect all' : 'Select all'}
+                  />
+                </th>
+                <th className="px-3 py-2 font-medium">Item Name</th>
+                <th className="px-3 py-2 font-medium w-14 text-center">Qty</th>
+                <th className="px-3 py-2 font-medium hidden md:table-cell">Manufacturer</th>
+                <th className="px-3 py-2 font-medium hidden md:table-cell">Model</th>
+                <th className="px-3 py-2 font-medium hidden md:table-cell">Finish</th>
+                <th className="px-3 py-2 font-medium hidden md:table-cell text-center w-16" title="Data completeness — how many fields are filled in">Data</th>
+                <th className="px-3 py-2 font-medium text-center">Status</th>
+                <th className="px-3 py-2 font-medium w-20 text-right">Actions</th>
+              </tr>
+            </thead>
           <tbody>
             {items.map((item, idx) => {
               const scope = classifyItemScope(item.name);
@@ -448,8 +559,18 @@ export default function DoorDetailPage() {
                         : item.install_type === 'field'
                         ? 'border-l-2 border-l-warning'
                         : ''
+                    } ${
+                      selectedItems.has(item.id) ? 'bg-accent-dim/30' : ''
                     }`}
                   >
+                    <td className="px-2 py-2 text-center">
+                      <input
+                        type="checkbox"
+                        checked={selectedItems.has(item.id)}
+                        onChange={() => toggleItemSelection(item.id)}
+                        className="w-4 h-4 rounded border-th-border bg-transparent accent-accent cursor-pointer"
+                      />
+                    </td>
                     <td className="px-3 py-2">
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <span className="font-semibold text-primary">{item.name}</span>
@@ -565,7 +686,7 @@ export default function DoorDetailPage() {
                   {isEditing && leafIndex === 1 && renderEditForm(item)}
                   {isEditing && leafIndex !== 1 && (
                     <tr key={`edit-msg-${item.id}`}>
-                      <td colSpan={8} className="px-3 py-3 text-tertiary text-[13px] italic text-center bg-surface-hover border-b border-th-border">
+                      <td colSpan={9} className="px-3 py-3 text-tertiary text-[13px] italic text-center bg-surface-hover border-b border-th-border">
                         Editing on Leaf 1...
                       </td>
                     </tr>
@@ -574,8 +695,9 @@ export default function DoorDetailPage() {
               );
             })}
           </tbody>
-        </table>
-      </div>
+          </table>
+        </div>
+      </>
     );
   };
 
