@@ -187,6 +187,12 @@ export default function StepQuestions({
     return "bg-accent"
   }, [job.isFailed, job.isComplete])
 
+  // Detect deep extraction in status message
+  const isDeepExtracting = useMemo(() => {
+    const msg = (job.statusMessage ?? "").toLowerCase()
+    return msg.includes("deep extract") || msg.includes("vision") || msg.includes("cross-validat")
+  }, [job.statusMessage])
+
   return (
     <div className="max-w-2xl mx-auto">
       {/* Header */}
@@ -219,9 +225,16 @@ export default function StepQuestions({
               <span className="text-sm text-primary font-medium truncate">
                 {job.statusMessage ?? "Processing..."}
               </span>
-              <span className="text-xs text-tertiary flex-shrink-0">
-                {job.progress}%
-              </span>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                {isDeepExtracting && (
+                  <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-accent-dim text-accent border border-accent">
+                    Deep Extraction
+                  </span>
+                )}
+                <span className="text-xs text-tertiary">
+                  {job.progress}%
+                </span>
+              </div>
             </div>
             <div className="w-full bg-tint rounded-full h-2 overflow-hidden">
               <div

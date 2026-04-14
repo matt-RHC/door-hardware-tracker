@@ -9,6 +9,8 @@ import type {
   HardwareSet,
 } from "./types";
 import type { PunchyQuantityCheck } from "@/lib/types";
+import type { ExtractionConfidence } from "@/lib/types/confidence";
+import type { ReconciliationResult } from "@/lib/types/reconciliation";
 import { scoreExtraction } from "@/lib/confidence-scoring";
 import { findPageForSet } from "@/lib/punch-cards";
 import { type PunchQuestion } from "@/lib/punch-messages";
@@ -83,6 +85,11 @@ export default function StepTriage({
     confirmed: boolean;
   } | null>(null);
   const [qtyCheck, setQtyCheck] = useState<PunchyQuantityCheck | null>(null);
+  const [extractionConfidence, setExtractionConfidence] = useState<ExtractionConfidence | null>(null);
+  const [reconciliationResult, setReconciliationResult] = useState<ReconciliationResult | null>(null);
+  // Deep extract for full submittal (not just empty sets)
+  const [deepExtractProgress, setDeepExtractProgress] = useState<string | null>(null);
+  const [deepExtractComplete, setDeepExtractComplete] = useState(false);
   const [pdfBuffer, setPdfBuffer] = useState<ArrayBuffer | null>(null);
   const [failedChunks, setFailedChunks] = useState<Array<{ index: number; error: string }>>([]);
   const [totalChunks, setTotalChunks] = useState(0);
@@ -259,6 +266,11 @@ export default function StepTriage({
         // Capture Punchy quantity check for the qty_review phase
         if (parseResult.punchyQuantityCheck) {
           setQtyCheck(parseResult.punchyQuantityCheck);
+        }
+
+        // Capture extraction confidence for deep extract banner
+        if (parseResult.confidence) {
+          setExtractionConfidence(parseResult.confidence);
         }
       }
 
@@ -537,6 +549,96 @@ export default function StepTriage({
     }
   }, [file, pdfStoragePath, projectId, classifyResult, goldenSample]);
 
+  // ─── Full-submittal deep extract (vision cross-validation) ───
+  // Unlike handleDeepExtract (which targets empty sets), this sends the
+  // entire submittal for vision-model extraction + reconciliation.
+  const handleFullDeepExtract = useCallback(async () => {
+    if (typeof window !== "undefined" &&
+      !window.confirm(
+        "Deep extraction sends each page to an AI vision model for cross-validation. This takes 2\u20135 minutes. Continue?"
+      )
+    ) {
+      return;
+    }
+
+    setDeepExtracting(true);
+    setDeepExtractProgress("Starting deep extraction...");
+    setDeepExtractComplete(false);
+
+    try {
+      const body: Record<string, unknown> = {};
+      if (pdfStoragePath) {
+        body.projectId = projectId;
+      } else {
+        const arrayBuffer = await file.arrayBuffer();
+        body.pdfBase64 = arrayBufferToBase64(arrayBuffer);
+      }
+
+      // Include all current sets so the API can reconcile
+      body.hardwareSets = hardwareSetsRef.current.map(s => ({
+        set_id: s.set_id,
+        heading: s.heading,
+        items: (s.items ?? []).map(i => ({
+          qty: i.qty, name: i.name, manufacturer: i.manufacturer, model: i.model, finish: i.finish,
+        })),
+      }));
+
+      setDeepExtractProgress("Sending pages to vision model...");
+
+      const resp = await fetch("/api/parse-pdf/deep-extract", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      if (!resp.ok) {
+        const err = await resp.json().catch(() => ({ error: `HTTP ${resp.status}` }));
+        setStatus(`Deep extraction failed: ${err.error ?? resp.status}. You can still continue.`);
+        setDeepExtractProgress(null);
+        setDeepExtracting(false);
+        return;
+      }
+
+      setDeepExtractProgress("Reconciling results...");
+
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const result: any = await resp.json();
+      const extractedSets = result.sets ?? [];
+
+      // Merge results into current hardware sets
+      if (extractedSets.length > 0) {
+        setHardwareSets((prev) => {
+          const updated = [...prev];
+          for (const extracted of extractedSets) {
+            const idx = updated.findIndex((s) => s.set_id === extracted.set_id);
+            if (idx >= 0 && extracted.items?.length > 0) {
+              updated[idx] = { ...updated[idx], items: extracted.items };
+            }
+          }
+          return updated;
+        });
+      }
+
+      // Store reconciliation result if available
+      if (result.reconciliation) {
+        setReconciliationResult(result.reconciliation);
+      }
+
+      const totalItems = extractedSets.reduce(
+        (sum: number, s: { items?: unknown[] }) => sum + (s.items?.length ?? 0), 0
+      );
+      setDeepExtractComplete(true);
+      setDeepExtractProgress(null);
+      setStatus(`Deep extraction complete \u2014 ${totalItems} items verified across ${extractedSets.length} sets.`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      setStatus(`Deep extraction failed: ${message}. You can still continue.`);
+      setDeepExtractProgress(null);
+    } finally {
+      setDeepExtracting(false);
+    }
+  }, [file, pdfStoragePath, projectId]);
+
   // ─── Empty-set resolution: phantom-set removal ───
   // Removes a hardware set entirely and clears `hw_set` on every door that
   // referenced it. Used by the "Remove" button on the empty_sets card when the
@@ -790,6 +892,65 @@ export default function StepTriage({
             >
               {retryingChunks ? "Retrying..." : `Retry ${failedChunks.length} Failed Chunk${failedChunks.length !== 1 ? "s" : ""}`}
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* ─── Deep Extract Banner ─── */}
+      {phase === "punchy_review" && !deepExtracting && !deepExtractComplete && extractionConfidence?.suggest_deep_extraction && (
+        <div className="mb-4 p-4 bg-warning-dim border border-warning rounded-xl">
+          <div className="flex items-start gap-2 mb-2">
+            <span className="text-warning text-lg leading-none" aria-hidden="true">&#x26A0;&#xFE0F;</span>
+            <div>
+              <p className="text-warning text-sm font-semibold mb-1">
+                Some fields have low confidence. Deep extraction can improve accuracy.
+              </p>
+              {extractionConfidence.deep_extraction_reasons.length > 0 && (
+                <ul className="text-secondary text-xs space-y-0.5 mb-2">
+                  {extractionConfidence.deep_extraction_reasons.map((r, i) => (
+                    <li key={i}>{r}</li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+          <div className="ml-6">
+            <button
+              onClick={handleFullDeepExtract}
+              className="px-4 py-2 rounded-lg bg-accent hover:bg-accent/80 text-white text-sm font-semibold transition-colors"
+            >
+              Run Deep Extract
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Deep extract running indicator */}
+      {deepExtracting && deepExtractProgress && (
+        <div className="mb-4 p-4 bg-accent-dim border border-accent rounded-xl">
+          <div className="flex items-center gap-3">
+            <span className="text-accent animate-pulse text-lg" aria-hidden="true">&#x1F50D;</span>
+            <div className="flex-1">
+              <p className="text-primary text-sm font-medium mb-1">
+                Deep extraction is running — this may take a few minutes.
+              </p>
+              <p className="text-secondary text-xs">{deepExtractProgress}</p>
+              <div className="mt-2 w-full bg-tint rounded-full h-1.5 overflow-hidden">
+                <div className="h-full rounded-full bg-accent animate-pulse" style={{ width: "60%" }} />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Deep extract complete banner */}
+      {deepExtractComplete && reconciliationResult && (
+        <div className="mb-4 p-4 bg-success-dim border border-success rounded-xl">
+          <div className="flex items-center gap-2">
+            <span className="text-success text-lg" aria-hidden="true">&#x2713;</span>
+            <p className="text-success text-sm font-semibold">
+              Deep extraction complete — {reconciliationResult.summary.full_agreement_pct}% of fields verified by multiple strategies.
+            </p>
           </div>
         </div>
       )}
