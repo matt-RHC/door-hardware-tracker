@@ -843,7 +843,7 @@ export async function callDeepExtraction(
   // Build the user message — include golden sample as few-shot if available
   let userText = ''
   if (goldenSample && (goldenSample.items?.length ?? 0) > 0) {
-    const sampleItems = goldenSample.items.map(i => ({
+    const sampleItems = (goldenSample.items ?? []).map(i => ({
       qty: i.qty, name: i.name, manufacturer: i.manufacturer, model: i.model, finish: i.finish,
     }))
     userText += `Here is a VERIFIED example from this same submittal. Set "${goldenSample.set_id}" was confirmed by the user:\n\n`
@@ -1105,10 +1105,10 @@ export async function callVisionExtraction(
         if (existing && batchResult.continuation) {
           // Merge items — deduplicate by name+model
           for (const newItem of items) {
-            const dup = existing.items.find(
+            const dup = (existing.items ?? []).find(
               e => e.name === newItem.name && e.model === newItem.model,
             )
-            if (!dup) existing.items.push(newItem)
+            if (!dup) { if (!existing.items) existing.items = []; existing.items.push(newItem) }
           }
           // Merge door numbers
           for (const dn of rawSet.door_numbers ?? []) {
@@ -2216,7 +2216,7 @@ export function calculateExtractionConfidence(
     }
 
     // ── Per-set signals ──
-    if (set.items.length === 0) {
+    if ((set.items ?? []).length === 0) {
       signals.push(`Set ${set.set_id} has zero hardware items`)
     }
 
@@ -2228,7 +2228,7 @@ export function calculateExtractionConfidence(
         if (lower.includes(cat)) setCategories.add(cat)
       }
     }
-    if (set.items.length > 0 && setCategories.size === EXPECTED_SET_CATEGORIES.length) {
+    if ((set.items ?? []).length > 0 && setCategories.size === EXPECTED_SET_CATEGORIES.length) {
       signals.push(`Set ${set.set_id} has expected categories (hinges, lockset, closer)`)
     }
   }
@@ -2339,7 +2339,7 @@ export function calculateExtractionConfidence(
   }
 
   // Negative: empty sets
-  const emptySets = hardwareSets.filter(s => s.items.length === 0).length
+  const emptySets = hardwareSets.filter(s => (s.items ?? []).length === 0).length
   if (hardwareSets.length > 0) {
     score -= Math.round((emptySets / hardwareSets.length) * 15) // up to -15
   }
