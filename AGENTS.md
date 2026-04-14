@@ -6,6 +6,48 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 # Agent Rules for Door Hardware Tracker
 
+## Infrastructure Map
+
+This app runs across four services. When diagnosing issues, know where to look:
+
+| Service | What It Does | When To Check It |
+|---------|-------------|------------------|
+| **Vercel** | Hosts the Next.js app + Python serverless functions. Manages deployments, env vars, cron jobs, and function logs. | Deploy failures, env var issues, function timeouts (800s max), cold starts, cron job behavior (`process-jobs` runs every 2 min, `cleanup-staging` daily at 3am UTC) |
+| **Supabase** | Postgres database, auth (email/password), file storage (PDF uploads), Row Level Security. | Auth failures, RLS policy bugs (users can't see projects), migration issues, storage access errors, database connection limits |
+| **Sentry** | Error monitoring and session replay. Captures client-side JS errors, server-side API route failures, and edge/middleware errors. | Production errors, stack traces, error frequency/patterns, session replays of user-facing bugs. **Check Sentry first when investigating any production bug** — it captures errors with full context (stack trace, breadcrumbs, request data) that console logs miss. |
+| **GitHub** | Source code, CI (GitHub Actions), pull requests. CI runs Python tests, TS lint, type checking, and vitest on every push/PR. | CI failures, merge conflicts, branch state. CI workflow is `.github/workflows/ci.yml`. |
+
+### Debugging Flowchart
+
+1. **User reports a bug →** Check **Sentry** first for the error + stack trace + session replay
+2. **Error points to API route →** Check **Vercel** function logs for that route's execution
+3. **Error involves data or auth →** Check **Supabase** logs, RLS policies, and the relevant migration history
+4. **Error only in preview/production →** Check **Vercel** env vars (Production vs Preview) — a missing env var is the #1 cause of "works locally, breaks deployed"
+5. **CI fails →** Check **GitHub Actions** logs — could be a real test failure or a transient npm network error
+
+### Key Env Vars (all set in Vercel)
+
+| Variable | Purpose | Scope |
+|----------|---------|-------|
+| `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL | Client + Server |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase public API key | Client + Server |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase admin access (bypasses RLS) | Server only |
+| `ANTHROPIC_API_KEY` | LLM calls for extraction + Punchy | Server only |
+| `PYTHON_INTERNAL_SECRET` | Auth token for Next.js → Python endpoint calls | Server only |
+| `NEXT_PUBLIC_SENTRY_DSN` | Sentry error reporting endpoint | Client + Server |
+| `SENTRY_AUTH_TOKEN` | Source map uploads to Sentry (build-time only) | Build only |
+
+### Audit Trail
+
+The `activity_log` table records who did what and when. Check it when tracing data discrepancies:
+- `extraction_job_created` — who started an extraction and for which project
+- `extraction_promoted` — who promoted staging data to production, with item/opening counts
+- Written via `src/lib/activity-log.ts` using the service role client (tamper-proof)
+
+### Rate Limiting
+
+Extraction jobs are rate-limited to 5 per project per hour (`src/lib/extraction-rate-limit.ts`). If a user hits this, the API returns 429 with a `Retry-After` header.
+
 ## Before You Write Code
 
 1. **Read CLAUDE.md first.** It contains the Turbopack TS rules, git workflow, and architecture context that will save you from known pitfalls.
