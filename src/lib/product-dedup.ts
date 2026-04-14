@@ -179,7 +179,7 @@ export function analyzeProducts(hardwareSets: HardwareSet[]): ProductAnalysis {
         }
       }
 
-      const categoryId = classifyItem(item.name ?? '', manufacturer)
+      const categoryId = classifyItem(item.name ?? '', manufacturer, item.model)
       const normalized = normalizeModel(model)
       const key = `${(manufacturer ?? '').toLowerCase()}|${(baseSeries ?? '').toLowerCase()}`
 

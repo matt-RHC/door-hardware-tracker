@@ -170,18 +170,27 @@ export async function POST(request: NextRequest) {
       { extraction_run_id: runId },
     )
 
-    // 6. Chunk-insert staging hardware items
+    // 6. Chunk-insert staging hardware items (with single retry on failure)
     let itemsInserted = 0
     const failedItemChunks: Array<{ offset: number; count: number; error: string }> = []
     for (let i = 0; i < allItems.length; i += CHUNK_SIZE) {
       const chunk = allItems.slice(i, i + CHUNK_SIZE)
-      const { data, error } = await (supabase as any)
+      let { data, error } = await (supabase as any)
         .from('staging_hardware_items')
         .insert(chunk as any)
         .select('id')
 
+      // Retry once on transient failure before recording it as failed
       if (error) {
-        console.error(`Error inserting staging hw items chunk at ${i}:`, error)
+        console.warn(`Retrying staging hw items chunk at ${i} after error:`, error.message)
+        ;({ data, error } = await (supabase as any)
+          .from('staging_hardware_items')
+          .insert(chunk as any)
+          .select('id'))
+      }
+
+      if (error) {
+        console.error(`Error inserting staging hw items chunk at ${i} (after retry):`, error)
         failedItemChunks.push({ offset: i, count: chunk.length, error: error.message })
       } else if (data) {
         itemsInserted += data.length
@@ -200,6 +209,26 @@ export async function POST(request: NextRequest) {
 
     const isPartialSave = failedItemChunks.length > 0
     console.log(`Staging save complete: ${stagingResult.openingsCount} openings, ${itemsInserted} items, run=${runId}${isPartialSave ? ` (${failedItemChunks.length} chunk(s) failed)` : ''}`)
+
+    // Block auto-promotion when chunks failed: some staging_openings would
+    // have zero items, causing merge_extraction() to reject the promotion
+    // with a generic "Promotion Failed" error. Surface the real cause instead.
+    if (isPartialSave) {
+      console.error(`Skipping auto-promote: ${failedItemChunks.length} chunk(s) failed, ${allItems.length - itemsInserted} items missing`)
+      return NextResponse.json({
+        success: false,
+        partial: true,
+        error: `Save partially failed: ${failedItemChunks.length} chunk(s) could not be inserted (${allItems.length - itemsInserted} of ${allItems.length} items missing). Promotion skipped to prevent orphaned openings. Please retry the save.`,
+        stagingSuccess: false,
+        openingsCount: stagingResult.openingsCount,
+        itemsCount: itemsInserted,
+        expectedItemsCount: allItems.length,
+        hardwareSets: hardwareSets.length,
+        unmatchedSets: unmatchedSets.length > 0 ? unmatchedSets : undefined,
+        failedChunks: failedItemChunks,
+        extraction_run_id: runId,
+      })
+    }
 
     // 8. Auto-promote: staging → production in the same request
     const promoteResult = await promoteExtraction(supabase, runId, user.id)

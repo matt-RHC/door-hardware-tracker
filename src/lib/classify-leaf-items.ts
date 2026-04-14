@@ -176,12 +176,12 @@ export function groupItemsByLeaf<T extends LeafGroupableItem>(
     }
 
     // Hardware items: classified by taxonomy scope
-    const scope = classifyItemScope(item.name)
+    const scope = classifyItemScope(item.name, item.model ?? undefined)
 
     // Electric hinges: always active leaf only on pairs (even without persisted leaf_side).
     // During wizard preview, items haven't been saved so leaf_side is null. Without this
     // guard, electric hinges fall through to the per_opening branch and appear on BOTH leaves.
-    if (isPair && !item.leaf_side && classifyItem(item.name) === 'electric_hinge') {
+    if (isPair && !item.leaf_side && classifyItem(item.name, undefined, item.model ?? undefined) === 'electric_hinge') {
       leaf1.push(item)
       continue
     }
@@ -191,7 +191,7 @@ export function groupItemsByLeaf<T extends LeafGroupableItem>(
     // so active leaf standard qty = total standard qty - electric hinge qty.
     // Only applies during wizard preview (leaf_side is null); after save, the
     // qty is already correct from buildPerOpeningItems.
-    if (isPair && electricHingeQty > 0 && !item.leaf_side && classifyItem(item.name) === 'hinges') {
+    if (isPair && electricHingeQty > 0 && !item.leaf_side && classifyItem(item.name, undefined, item.model ?? undefined) === 'hinges') {
       leaf1.push({ ...item, qty: (item.qty || 0) - electricHingeQty } as T)
       leaf2.push({ ...item } as T)
       continue

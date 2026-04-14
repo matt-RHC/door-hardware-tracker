@@ -59,6 +59,12 @@ export const HARDWARE_TAXONOMY: HardwareCategory[] = [
       'electr.*hinge',
       'conductor.*hinge',
       'power\\s*transfer\\s*hinge',
+      // Standalone pattern: matches "CON TW8" in model field when name is
+      // generic "Hinges". Real PDF data splits: name="Hinges", model="5BB1 HW
+      // 4 1/2 x 4 1/2 CON TW8". classifyItem() concatenates name+model, so
+      // this pattern catches the model-only identifier without requiring
+      // "hinge" adjacent to "CON TW".
+      '\\bCON\\s*TW\\d',
     ],
     universal: false,
     exterior: true,
@@ -735,13 +741,13 @@ export const TAXONOMY_REGEX_CACHE: Array<{
  * buildPerOpeningItems(), and groupItemsByLeaf().
  */
 export function scanElectricHinges(
-  items: Array<{ name: string; qty?: number | null; leaf_side?: string | null }>,
+  items: Array<{ name: string; model?: string | null; qty?: number | null; leaf_side?: string | null }>,
   isPair: boolean,
 ): { totalElectricQty: number; hasElectricHinge: boolean } {
   if (!isPair) return { totalElectricQty: 0, hasElectricHinge: false }
   let total = 0
   for (const item of items) {
-    if (!item.leaf_side && classifyItem(item.name) === 'electric_hinge') {
+    if (!item.leaf_side && classifyItem(item.name, undefined, item.model ?? undefined) === 'electric_hinge') {
       total += (item.qty || 0)
     }
   }
@@ -766,12 +772,22 @@ export function isAsymmetricHingeSplit(
  * Classify an item name into a category. Returns the category ID or 'unknown'.
  * Optionally accepts a manufacturer for fallback classification when the
  * item name is a model number only (e.g., "Von Duprin 99").
+ *
+ * The `model` parameter handles real PDF data where extraction splits the
+ * data across fields: name="Hinges", model="5BB1 HW 4 1/2 x 4 1/2 CON TW8".
+ * When provided, patterns are tested against `name + " " + model` so that
+ * identifiers like "CON TW8" in the model field are matched.
  */
-export function classifyItem(itemName: string, manufacturer?: string): string {
-  const lower = (itemName ?? '').toLowerCase().trim()
+export function classifyItem(itemName: string, manufacturer?: string, model?: string): string {
+  // Concatenate name + model for pattern matching. Real PDF data often has
+  // the category-distinguishing identifier (e.g., "CON TW8") in the model
+  // field while name is a generic "Hinges".
+  const combined = model
+    ? `${(itemName ?? '')} ${model}`.toLowerCase().trim()
+    : (itemName ?? '').toLowerCase().trim()
   for (const cat of HARDWARE_TAXONOMY) {
     for (const pattern of cat.name_patterns) {
-      if (new RegExp(pattern, 'i').test(lower)) {
+      if (new RegExp(pattern, 'i').test(combined)) {
         return cat.id
       }
     }
@@ -789,7 +805,7 @@ export function classifyItem(itemName: string, manufacturer?: string): string {
 
   // Also check if the item name itself starts with a known manufacturer
   for (const [prefix, category] of Object.entries(MANUFACTURER_CATEGORY_MAP)) {
-    if (lower.startsWith(prefix)) {
+    if (combined.startsWith(prefix)) {
       return category
     }
   }
