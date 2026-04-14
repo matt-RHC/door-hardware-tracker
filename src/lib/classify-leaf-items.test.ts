@@ -100,6 +100,42 @@ describe('groupItemsByLeaf — DB leaf_side preference (Phase 3)', () => {
   })
 
 
+  it('routes electric hinge to active leaf only on pairs when leaf_side is null (wizard preview)', () => {
+    // Wizard preview: items haven't been saved to DB so leaf_side is null.
+    // Electric hinges (per_opening) should NOT appear on both leaves.
+    const items = [
+      makeItem('Hinges 5BB1 4.5x4.5 NRP'),            // standard hinge → both leaves
+      makeItem('Hinges 5BB1 4.5x4.5 CON TW8', { qty: 1 }),  // electric hinge → active only
+    ]
+    const { shared, leaf1, leaf2 } = groupItemsByLeaf(items, 2)
+    expect(shared).toHaveLength(0)
+    // Active leaf: standard + electric
+    expect(leaf1).toHaveLength(2)
+    expect(leaf1.map(i => i.name)).toEqual([
+      'Hinges 5BB1 4.5x4.5 NRP',
+      'Hinges 5BB1 4.5x4.5 CON TW8',
+    ])
+    // Inactive leaf: standard only — NO electric hinge
+    expect(leaf2).toHaveLength(1)
+    expect(leaf2[0].name).toBe('Hinges 5BB1 4.5x4.5 NRP')
+  })
+
+  it('routes electric/conductor hinge to active leaf only on pairs when leaf_side is null', () => {
+    // "electr.*hinge" pattern matches "Electric Hinge" names
+    const items = [makeItem('Electric Hinge 4.5x4.5', { qty: 1 })]
+    const { leaf1, leaf2 } = groupItemsByLeaf(items, 2)
+    expect(leaf1).toHaveLength(1)
+    expect(leaf2).toHaveLength(0)
+  })
+
+  it('does not apply electric hinge guard on single doors', () => {
+    // Single doors: electric hinge should go to leaf1 (no leaf2 regardless)
+    const items = [makeItem('Hinges 5BB1 4.5x4.5 CON TW8', { qty: 1 })]
+    const { leaf1, leaf2 } = groupItemsByLeaf(items, 1)
+    expect(leaf1).toHaveLength(1)
+    expect(leaf2).toHaveLength(0)
+  })
+
   it('routes electric hinge with leaf_side="active" to active leaf only on pairs', () => {
     // Phase 4: buildPerOpeningItems stamps leaf_side='active' on electric
     // hinges for pair doors. groupItemsByLeaf should route them correctly.

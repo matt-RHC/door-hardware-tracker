@@ -28,6 +28,7 @@
  */
 
 import { classifyItemScope } from '@/lib/parse-pdf-helpers'
+import { classifyItem } from '@/lib/hardware-taxonomy'
 import type { InstallScope } from '@/lib/hardware-taxonomy'
 
 /** Minimal item shape — works with both API response items and wizard preview items. */
@@ -180,6 +181,14 @@ export function groupItemsByLeaf<T extends LeafGroupableItem>(
 
     // Hardware items: classified by taxonomy scope
     const scope = classifyItemScope(item.name)
+
+    // Electric hinges: always active leaf only on pairs (even without persisted leaf_side).
+    // During wizard preview, items haven't been saved so leaf_side is null. Without this
+    // guard, electric hinges fall through to the per_opening branch and appear on BOTH leaves.
+    if (isPair && !item.leaf_side && classifyItem(item.name) === 'electric_hinge') {
+      leaf1.push(item)
+      continue
+    }
 
     if (scope === 'per_pair' || scope === 'per_frame') {
       shared.push(item)
