@@ -28,6 +28,46 @@ interface Selection {
 }
 
 /**
+ * Pure function: crop the full-page image to the selection rect and return
+ * a data-URL + zoom scale. Works without any DOM element being mounted.
+ */
+function computeZoomCrop(
+  img: HTMLImageElement,
+  selectionRect: { left: number; top: number; width: number; height: number },
+  imageDims: { w: number; h: number },
+  displayDims: { w: number; h: number },
+  containerWidth: number,
+): { dataUrl: string; scale: number } | null {
+  if (displayDims.w === 0 || displayDims.h === 0) return null;
+
+  const scaleX = imageDims.w / displayDims.w;
+  const scaleY = imageDims.h / displayDims.h;
+
+  const srcX = selectionRect.left * scaleX;
+  const srcY = selectionRect.top * scaleY;
+  const srcW = selectionRect.width * scaleX;
+  const srcH = selectionRect.height * scaleY;
+
+  const scale = Math.min(containerWidth / selectionRect.width, MAX_ZOOM);
+
+  const destW = Math.round(srcW * (scale / scaleX));
+  const destH = Math.round(srcH * (scale / scaleY));
+
+  const canvas = document.createElement("canvas");
+  canvas.width = destW;
+  canvas.height = destH;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return null;
+
+  ctx.drawImage(img, srcX, srcY, srcW, srcH, 0, 0, destW, destH);
+  const dataUrl = canvas.toDataURL("image/jpeg", 0.95);
+  canvas.width = 0;
+  canvas.height = 0;
+
+  return { dataUrl, scale };
+}
+
+/**
  * Renders a PDF page with a draggable selection rectangle overlay.
  * Two-phase flow: 'select' (draw rectangle) → 'zoom' (fine-tune + extract).
  * Returns normalized 0-1 percentage coordinates via onSelect.
@@ -62,6 +102,11 @@ export default function PDFRegionSelector({
   const imageRef = useRef<HTMLImageElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const zoomContainerRef = useRef<HTMLDivElement>(null);
+
+  /** Off-screen Image that persists across phase changes (not tied to DOM mount). */
+  const fullPageImageRef = useRef<HTMLImageElement | null>(null);
+  /** Display dimensions captured when the on-screen img loads. */
+  const displayDimsRef = useRef<{ w: number; h: number } | null>(null);
 
   // Render PDF page to image (same pattern as PDFPagePreview)
   const renderPage = useCallback(async () => {
@@ -127,11 +172,27 @@ export default function PDFRegionSelector({
     renderPage();
   }, [renderPage]);
 
-  /** Track image natural dimensions once loaded. */
+  // Keep an off-screen Image in sync with imageUrl so crop logic works even
+  // after the DOM <img> is unmounted during the zoom phase.
+  useEffect(() => {
+    if (!imageUrl) {
+      fullPageImageRef.current = null;
+      return;
+    }
+    const img = new Image();
+    img.src = imageUrl;
+    img.onload = () => {
+      fullPageImageRef.current = img;
+    };
+  }, [imageUrl]);
+
+  /** Track image natural dimensions + display dimensions once loaded. */
   const handleImageLoad = useCallback(() => {
     const img = imageRef.current;
     if (img) {
       setImageDims({ w: img.naturalWidth, h: img.naturalHeight });
+      const rect = img.getBoundingClientRect();
+      displayDimsRef.current = { w: rect.width, h: rect.height };
     }
   }, []);
 
@@ -215,20 +276,43 @@ export default function PDFRegionSelector({
           const normW = selW / rect.width;
           const normH = selH / rect.height;
           if (normW >= MIN_NORMALIZED_DIM && normH >= MIN_NORMALIZED_DIM && selW > 10 && selH > 10) {
+            // Compute zoom crop BEFORE changing phase so imageRef is still in
+            // the DOM and display dimensions are fresh.
+            const sr = {
+              left: Math.min(selection.startX, selection.endX),
+              top: Math.min(selection.startY, selection.endY),
+              width: selW,
+              height: selH,
+            };
+            // Snapshot display dims while the DOM img is still mounted
+            displayDimsRef.current = { w: rect.width, h: rect.height };
+            const cropImg = fullPageImageRef.current ?? img;
+            if (imageDims) {
+              const crop = computeZoomCrop(
+                cropImg,
+                sr,
+                imageDims,
+                displayDimsRef.current,
+                containerRef.current?.offsetWidth ?? 600,
+              );
+              if (crop) {
+                setZoomImageUrl(crop.dataUrl);
+                setZoomScale(crop.scale);
+              }
+            }
             setPhase("zoom");
           }
         }
       }
     }
-  }, [isDragging, phase, selection]);
+  }, [isDragging, phase, selection, imageDims]);
 
   const handleExtract = useCallback(() => {
-    if (!selection || !imageRef.current) return;
+    const dd = displayDimsRef.current;
+    if (!selection || !dd) return;
 
-    const img = imageRef.current;
-    const rect = img.getBoundingClientRect();
-    const w = rect.width;
-    const h = rect.height;
+    const w = dd.w;
+    const h = dd.h;
 
     // Normalize to 0-1 percentages, ensuring x0 < x1 and y0 < y1
     const bbox = {
@@ -256,13 +340,13 @@ export default function PDFRegionSelector({
   } : null;
 
   const hasValidSelection = (() => {
-    if (!selectionRect || !imageRef.current) return false;
+    const dd = displayDimsRef.current;
+    if (!selectionRect || !dd) return false;
     if (selectionRect.width <= 10 || selectionRect.height <= 10) return false;
     // Also check normalized dimensions to stay in sync with handleExtract
-    const rect = imageRef.current.getBoundingClientRect();
-    if (rect.width === 0 || rect.height === 0) return false;
-    const normW = selectionRect.width / rect.width;
-    const normH = selectionRect.height / rect.height;
+    if (dd.w === 0 || dd.h === 0) return false;
+    const normW = selectionRect.width / dd.w;
+    const normH = selectionRect.height / dd.h;
     return normW >= MIN_NORMALIZED_DIM && normH >= MIN_NORMALIZED_DIM;
   })();
 
@@ -282,41 +366,23 @@ export default function PDFRegionSelector({
     setZoomImageUrl(null);
   }, []);
 
-  // --- Canvas re-crop: generate zoomed image when entering zoom phase ---
+  // --- Canvas re-crop: generate zoomed image (used for handle-drag re-renders in zoom phase) ---
   const renderZoomCrop = useCallback(() => {
-    const img = imageRef.current;
-    if (!img || !selectionRect || !imageDims) return;
+    const img = fullPageImageRef.current;
+    const dd = displayDimsRef.current;
+    if (!img || !selectionRect || !imageDims || !dd) return;
 
-    // Map selection rect from display coords to natural (pixel) coords
-    const displayRect = img.getBoundingClientRect();
-    const scaleX = imageDims.w / displayRect.width;
-    const scaleY = imageDims.h / displayRect.height;
-
-    const srcX = selectionRect.left * scaleX;
-    const srcY = selectionRect.top * scaleY;
-    const srcW = selectionRect.width * scaleX;
-    const srcH = selectionRect.height * scaleY;
-
-    // Zoom scale: fit to container width (~full modal width), capped
-    const containerW = containerRef.current?.offsetWidth ?? 600;
-    const scale = Math.min(containerW / selectionRect.width, MAX_ZOOM);
-    setZoomScale(scale);
-
-    const destW = Math.round(srcW * (scale / scaleX));
-    const destH = Math.round(srcH * (scale / scaleY));
-
-    const canvas = document.createElement("canvas");
-    canvas.width = destW;
-    canvas.height = destH;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
-
-    ctx.drawImage(img, srcX, srcY, srcW, srcH, 0, 0, destW, destH);
-    const dataUrl = canvas.toDataURL("image/jpeg", 0.95);
-    canvas.width = 0;
-    canvas.height = 0;
-
-    setZoomImageUrl(dataUrl);
+    const crop = computeZoomCrop(
+      img,
+      selectionRect,
+      imageDims,
+      dd,
+      containerRef.current?.offsetWidth ?? 600,
+    );
+    if (crop) {
+      setZoomImageUrl(crop.dataUrl);
+      setZoomScale(crop.scale);
+    }
   }, [selectionRect, imageDims]);
 
   // Trigger canvas crop when entering zoom phase or when selection changes (handle drag release)
@@ -362,9 +428,9 @@ export default function PDFRegionSelector({
     const py = e.clientY - containerRect.top;
 
     // Convert zoom-view deltas back to full-image display coordinates
-    const img = imageRef.current;
-    const imgDisplayW = img?.getBoundingClientRect().width ?? imageDims?.w ?? 800;
-    const imgDisplayH = img?.getBoundingClientRect().height ?? imageDims?.h ?? 600;
+    const dd = displayDimsRef.current;
+    const imgDisplayW = dd?.w ?? imageDims?.w ?? 800;
+    const imgDisplayH = dd?.h ?? imageDims?.h ?? 600;
 
     const fullX = Math.max(0, Math.min(selectionRect.left + px / zoomScale, imgDisplayW));
     const fullY = Math.max(0, Math.min(selectionRect.top + py / zoomScale, imgDisplayH));
@@ -403,6 +469,7 @@ export default function PDFRegionSelector({
     setSelection(null);
     setImageDims(null);
     setZoomImageUrl(null);
+    displayDimsRef.current = null;
   }, [pageIndex]);
 
   return (
