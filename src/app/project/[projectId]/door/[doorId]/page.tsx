@@ -38,6 +38,38 @@ interface RescanResult {
   applied?: boolean;
 }
 
+const KNOWN_MANUFACTURERS = ['IV', 'SC', 'ZE', 'LC', 'BE', 'AB', 'NA', 'AC', 'BO', 'RHR'];
+
+/** Parse raw extracted text into likely field values using heuristics. */
+function parseRawTextHeuristic(text: string): Record<string, string> {
+  const result: Record<string, string> = {};
+  const tokens = text.split(/\s+/).filter(Boolean);
+  const remaining: string[] = [];
+
+  for (const token of tokens) {
+    const upper = token.toUpperCase();
+    // 3-digit finish codes or US-prefixed codes (e.g., US26D, US32D)
+    if (!result.finish && (/^\d{3}$/.test(token) || /^US\d{1,2}[A-Z]?$/i.test(token))) {
+      result.finish = token;
+    // Known 2-3 letter manufacturer abbreviations
+    } else if (!result.manufacturer && /^[A-Z]{2,3}$/i.test(token) && KNOWN_MANUFACTURERS.includes(upper)) {
+      result.manufacturer = upper;
+    // Pure number that could be qty (1-4 digits, small value)
+    } else if (!result.qty && /^\d{1,2}$/.test(token) && parseInt(token, 10) <= 99 && parseInt(token, 10) > 0) {
+      result.qty = token;
+    } else {
+      remaining.push(token);
+    }
+  }
+
+  // Remaining tokens that look like a model number
+  if (!result.model && remaining.length > 0) {
+    result.model = remaining.join(' ');
+  }
+
+  return result;
+}
+
 const RESCAN_HINTS: Record<string, string> = {
   per_frame: "Frame items (seals, weatherstripping, silencers) are often in a separate frame schedule section",
   per_leaf: "Per-leaf items like hinges and closers are usually in the main hardware group table",
@@ -78,7 +110,7 @@ export default function DoorDetailPage() {
   const [rescanResults, setRescanResults] = useState<RescanResult[] | null>(null);
   const [rescanPage, setRescanPage] = useState<number>(0);
   const [rescanRawText, setRescanRawText] = useState<string | null>(null);
-  const [rescanRawField, setRescanRawField] = useState<string>('model');
+  const [rescanRawFields, setRescanRawFields] = useState<Record<string, string>>({});
   const [rescanRawApplied, setRescanRawApplied] = useState(false);
 
   const supabase = createClient();
@@ -362,18 +394,11 @@ export default function DoorDetailPage() {
       const { items: extractedItems, raw_text } = await resp.json();
 
       if (!extractedItems || extractedItems.length === 0) {
-        // Raw text fallback: if table extraction failed but we got raw text, let the user assign it to a field
+        // Raw text fallback: if table extraction failed but we got raw text, let the user assign fields
         const trimmed = (raw_text || '').trim();
         if (trimmed) {
-          // Pre-select the most likely field based on text pattern
-          let guessedField = 'model';
-          if (/^\d{3}$/.test(trimmed) || /^US\d{1,2}[A-Z]?$/i.test(trimmed)) {
-            guessedField = 'finish';
-          } else if (/^[A-Z]{2,3}$/.test(trimmed) && ['IV', 'SC', 'ZE', 'LC', 'BE', 'AB', 'NA', 'AC', 'BO'].includes(trimmed.toUpperCase())) {
-            guessedField = 'manufacturer';
-          }
           setRescanRawText(trimmed);
-          setRescanRawField(guessedField);
+          setRescanRawFields(parseRawTextHeuristic(trimmed));
           setRescanRawApplied(false);
           setRescanLoading(false);
           return;
@@ -487,20 +512,27 @@ export default function DoorDetailPage() {
   }, [opening, rescanResults, doorId, showToast]);
 
   const handleRescanApplyRawText = useCallback(async () => {
-    if (!rescanItem || !rescanRawText || !rescanRawField) return;
+    if (!rescanItem || !rescanRawFields) return;
+    const payload: Record<string, string> = {};
+    for (const [field, value] of Object.entries(rescanRawFields)) {
+      const trimmed = value.trim();
+      if (trimmed) payload[field] = trimmed;
+    }
+    if (Object.keys(payload).length === 0) return;
     try {
       const resp = await fetch(`/api/openings/${doorId}/items/${rescanItem.id}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ [rescanRawField]: rescanRawText }),
+        body: JSON.stringify(payload),
       });
       if (!resp.ok) throw new Error("Failed to update item");
       setRescanRawApplied(true);
-      showToast("success", `Set ${rescanRawField} to "${rescanRawText}" on ${rescanItem.name}`);
+      const count = Object.keys(payload).length;
+      showToast("success", `Updated ${count} field${count !== 1 ? 's' : ''} on ${rescanItem.name}`);
     } catch {
       showToast("error", `Failed to update ${rescanItem.name}`);
     }
-  }, [rescanItem, rescanRawText, rescanRawField, doorId, showToast]);
+  }, [rescanItem, rescanRawFields, doorId, showToast]);
 
   const handleRescanClose = useCallback(() => {
     const anyApplied = rescanResults?.some(r => r.applied) || rescanRawApplied;
@@ -509,7 +541,7 @@ export default function DoorDetailPage() {
     setRescanLoading(false);
     setRescanPage(0);
     setRescanRawText(null);
-    setRescanRawField('model');
+    setRescanRawFields({});
     setRescanRawApplied(false);
     if (anyApplied) fetchOpeningData();
   }, [rescanResults, rescanRawApplied, fetchOpeningData]);
@@ -1538,16 +1570,16 @@ export default function DoorDetailPage() {
           <div className="panel corner-brackets w-full max-w-2xl p-5 animate-fade-in-up max-h-[90vh] overflow-y-auto" style={{ background: 'var(--surface)' }}>
             {rescanRawText ? (
               <>
-                {/* Raw Text Assignment UI */}
+                {/* Multi-Value Field Assignment UI */}
                 <div className="mb-4">
                   <h3
                     className="text-[15px] font-bold text-primary mb-1"
                     style={{ fontFamily: "var(--font-display)", letterSpacing: "0.03em" }}
                   >
-                    ASSIGN VALUE: {rescanItem.name}
+                    ASSIGN VALUES: {rescanItem.name}
                   </h3>
                   <p className="text-[12px] text-secondary mb-3">
-                    No structured items found, but text was extracted. Assign it to a field.
+                    No structured items found. Review the extracted text and assign values to fields.
                   </p>
                 </div>
 
@@ -1561,29 +1593,69 @@ export default function DoorDetailPage() {
 
                 {!rescanRawApplied ? (
                   <>
-                    <div className="mb-4">
-                      <span className="text-[12px] text-secondary font-medium block mb-2">Apply to field:</span>
-                      <div className="flex flex-wrap gap-2">
-                        {['finish', 'manufacturer', 'model', 'qty'].map((field) => (
-                          <label key={field} className="flex items-center gap-1.5 cursor-pointer min-h-[36px]">
-                            <input
-                              type="radio"
-                              name="rawTextField"
-                              value={field}
-                              checked={rescanRawField === field}
-                              onChange={() => setRescanRawField(field)}
-                              className="w-4 h-4 accent-accent cursor-pointer"
-                            />
-                            <span className="text-[13px] text-primary">{field}</span>
-                          </label>
-                        ))}
+                    <div className="rounded-md border overflow-hidden mb-4" style={{ borderColor: 'var(--border)' }}>
+                      {/* Table header */}
+                      <div className="grid grid-cols-[100px_1fr_1fr_auto] gap-2 px-3 py-2" style={{ background: 'var(--tint)', borderBottom: '1px solid var(--border)' }}>
+                        <span className="text-[11px] uppercase tracking-wider text-tertiary font-medium">Field</span>
+                        <span className="text-[11px] uppercase tracking-wider text-tertiary font-medium">Current</span>
+                        <span className="text-[11px] uppercase tracking-wider text-tertiary font-medium">New value</span>
+                        <span className="text-[11px] uppercase tracking-wider text-tertiary font-medium w-[52px]">&nbsp;</span>
                       </div>
+                      {/* Field rows */}
+                      {(['finish', 'manufacturer', 'model', 'qty'] as const).map((field) => {
+                        const currentVal = (rescanItem as unknown as Record<string, unknown>)?.[field];
+                        const currentStr = currentVal != null && currentVal !== '' ? String(currentVal) : '';
+                        const newVal = rescanRawFields[field] || '';
+                        const hasNew = newVal.trim() !== '';
+                        const currentEmpty = currentStr === '';
+                        const isChanged = hasNew && !currentEmpty && newVal.trim() !== currentStr;
+                        const isNew = hasNew && currentEmpty;
+                        return (
+                          <div
+                            key={field}
+                            className="grid grid-cols-[100px_1fr_1fr_auto] gap-2 px-3 py-2 items-center"
+                            style={{ borderBottom: '1px solid var(--border-dim)' }}
+                          >
+                            <span className="text-[13px] font-medium text-primary">{field}</span>
+                            <span className="text-[13px] text-secondary truncate" title={currentStr || 'empty'}>
+                              {currentStr || <span className="text-tertiary italic">empty</span>}
+                            </span>
+                            <input
+                              type="text"
+                              value={newVal}
+                              onChange={(e) => setRescanRawFields(prev => ({ ...prev, [field]: e.target.value }))}
+                              placeholder="—"
+                              className="text-[13px] px-2 py-1 rounded border bg-transparent text-primary w-full"
+                              style={{ borderColor: 'var(--border)', background: 'var(--surface)' }}
+                            />
+                            <span className="w-[52px] flex justify-end">
+                              {isNew && (
+                                <span
+                                  className="text-[9px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded"
+                                  style={{ background: 'var(--green-dim)', color: 'var(--green)' }}
+                                >
+                                  new
+                                </span>
+                              )}
+                              {isChanged && (
+                                <span
+                                  className="text-[9px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded"
+                                  style={{ background: 'var(--yellow-dim)', color: 'var(--yellow)' }}
+                                >
+                                  update
+                                </span>
+                              )}
+                            </span>
+                          </div>
+                        );
+                      })}
                     </div>
 
                     <div className="flex items-center gap-2">
                       <button
                         onClick={handleRescanApplyRawText}
-                        className="px-4 py-2 rounded-lg text-[13px] font-medium transition-colors"
+                        disabled={!Object.values(rescanRawFields).some(v => v.trim())}
+                        className="px-4 py-2 rounded-lg text-[13px] font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                         style={{ background: 'var(--blue)', color: 'white' }}
                       >
                         Apply

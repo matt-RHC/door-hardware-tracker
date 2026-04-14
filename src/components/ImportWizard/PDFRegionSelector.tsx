@@ -5,6 +5,9 @@ import { useState, useEffect, useRef, useCallback } from "react";
 /** Minimum normalized dimension (0-1) for a valid selection. */
 const MIN_NORMALIZED_DIM = 0.01;
 
+/** Maximum zoom to avoid pixelation. */
+const MAX_ZOOM = 4;
+
 interface PDFRegionSelectorProps {
   pdfBuffer: ArrayBuffer;
   pageIndex: number;
@@ -26,6 +29,7 @@ interface Selection {
 
 /**
  * Renders a PDF page with a draggable selection rectangle overlay.
+ * Two-phase flow: 'select' (draw rectangle) → 'zoom' (fine-tune + extract).
  * Returns normalized 0-1 percentage coordinates via onSelect.
  * Uses Pointer Events API for combined mouse + touch support.
  */
@@ -45,9 +49,14 @@ export default function PDFRegionSelector({
   const [isDragging, setIsDragging] = useState(false);
   const [resizeHandle, setResizeHandle] = useState<"nw" | "ne" | "sw" | "se" | null>(null);
   const [totalPages, setTotalPages] = useState<number>(1);
+  const [phase, setPhase] = useState<"select" | "zoom">("select");
+
+  /** Full image natural dimensions (pixel size of the rendered data URL). */
+  const [imageDims, setImageDims] = useState<{ w: number; h: number } | null>(null);
 
   const imageRef = useRef<HTMLImageElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const zoomContainerRef = useRef<HTMLDivElement>(null);
 
   // Render PDF page to image (same pattern as PDFPagePreview)
   const renderPage = useCallback(async () => {
@@ -112,6 +121,14 @@ export default function PDFRegionSelector({
   useEffect(() => {
     renderPage();
   }, [renderPage]);
+
+  /** Track image natural dimensions once loaded. */
+  const handleImageLoad = useCallback(() => {
+    const img = imageRef.current;
+    if (img) {
+      setImageDims({ w: img.naturalWidth, h: img.naturalHeight });
+    }
+  }, []);
 
   // Get mouse/touch position relative to the image element
   const getRelativePosition = useCallback((e: React.PointerEvent) => {
@@ -178,9 +195,27 @@ export default function PDFRegionSelector({
   }, [isDragging, resizeHandle, selection, getRelativePosition]);
 
   const handlePointerUp = useCallback(() => {
+    if (!isDragging) return;
     setIsDragging(false);
     setResizeHandle(null);
-  }, []);
+
+    // Auto-transition to zoom phase if selection is valid
+    if (phase === "select" && selection) {
+      const img = imageRef.current;
+      if (img) {
+        const rect = img.getBoundingClientRect();
+        const selW = Math.abs(selection.endX - selection.startX);
+        const selH = Math.abs(selection.endY - selection.startY);
+        if (rect.width > 0 && rect.height > 0) {
+          const normW = selW / rect.width;
+          const normH = selH / rect.height;
+          if (normW >= MIN_NORMALIZED_DIM && normH >= MIN_NORMALIZED_DIM && selW > 10 && selH > 10) {
+            setPhase("zoom");
+          }
+        }
+      }
+    }
+  }, [isDragging, phase, selection]);
 
   const handleExtract = useCallback(() => {
     if (!selection || !imageRef.current) return;
@@ -205,7 +240,7 @@ export default function PDFRegionSelector({
     }
 
     onSelect(bbox);
-  }, [selection, onSelect]);
+  }, [selection, onSelect, onError]);
 
   // Compute selection rect for rendering
   const selectionRect = selection ? {
@@ -233,8 +268,95 @@ export default function PDFRegionSelector({
     const next = pageIndex + delta;
     if (next < 0 || next >= totalPages) return;
     setSelection(null);
+    setPhase("select");
     onPageChange?.(next);
   }, [pageIndex, totalPages, onPageChange]);
+
+  const handleBackToSelect = useCallback(() => {
+    setPhase("select");
+  }, []);
+
+  // --- Zoom view: pointer handlers for dragging handles in zoom view ---
+  const getZoomRelativePosition = useCallback((e: React.PointerEvent) => {
+    // Convert pointer position in zoom view back to full-image coordinates
+    const zoomContainer = zoomContainerRef.current;
+    const img = imageRef.current;
+    if (!zoomContainer || !img || !selectionRect) return null;
+
+    const containerRect = zoomContainer.getBoundingClientRect();
+    const imgRect = img.getBoundingClientRect();
+    const imgDisplayW = imgRect.width;
+    const imgDisplayH = imgRect.height;
+
+    // Zoom scale: container width / selection width, capped at MAX_ZOOM
+    const zoomScale = Math.min(containerRect.width / selectionRect.width, MAX_ZOOM);
+
+    // Pointer offset within the zoom container
+    const px = e.clientX - containerRect.left;
+    const py = e.clientY - containerRect.top;
+
+    // Convert to full-image display coordinates
+    const fullX = selectionRect.left + px / zoomScale;
+    const fullY = selectionRect.top + py / zoomScale;
+
+    return {
+      x: Math.max(0, Math.min(fullX, imgDisplayW)),
+      y: Math.max(0, Math.min(fullY, imgDisplayH)),
+    };
+  }, [selectionRect]);
+
+  const handleZoomPointerDown = useCallback((e: React.PointerEvent) => {
+    if (loading || !selection) return;
+    e.preventDefault();
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+
+    const pos = getZoomRelativePosition(e);
+    if (!pos) return;
+
+    const handle = getHandleAtPosition(pos.x, pos.y, selection);
+    if (handle) {
+      setResizeHandle(handle);
+      setIsDragging(true);
+    }
+  }, [loading, selection, getZoomRelativePosition]);
+
+  const handleZoomPointerMove = useCallback((e: React.PointerEvent) => {
+    if (!isDragging || !resizeHandle) return;
+    e.preventDefault();
+
+    const pos = getZoomRelativePosition(e);
+    if (!pos) return;
+
+    setSelection(prev => {
+      if (!prev) return prev;
+      const updated = { ...prev };
+      if (resizeHandle === "nw") {
+        updated.startX = pos.x;
+        updated.startY = pos.y;
+      } else if (resizeHandle === "ne") {
+        updated.endX = pos.x;
+        updated.startY = pos.y;
+      } else if (resizeHandle === "sw") {
+        updated.startX = pos.x;
+        updated.endY = pos.y;
+      } else if (resizeHandle === "se") {
+        updated.endX = pos.x;
+        updated.endY = pos.y;
+      }
+      return updated;
+    });
+  }, [isDragging, resizeHandle, getZoomRelativePosition]);
+
+  const handleZoomPointerUp = useCallback(() => {
+    setIsDragging(false);
+    setResizeHandle(null);
+  }, []);
+
+  // Reset phase when page changes or image reloads
+  useEffect(() => {
+    setPhase("select");
+    setSelection(null);
+  }, [pageIndex]);
 
   return (
     <div className="flex flex-col gap-3">
@@ -242,33 +364,35 @@ export default function PDFRegionSelector({
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2">
           <h3 className="text-sm font-bold text-primary">
-            Select region to re-scan
+            {phase === "zoom" ? "Fine-tune selection" : "Select region to re-scan"}
           </h3>
-          <div className="flex items-center gap-1">
-            {onPageChange && (
-              <button
-                onClick={() => handlePageNav(-1)}
-                disabled={!canGoPrev || loading}
-                className="w-6 h-6 flex items-center justify-center rounded text-xs font-bold text-secondary hover:bg-tint-strong transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                aria-label="Previous page"
-              >
-                &lt;
-              </button>
-            )}
-            <span className="text-xs text-secondary tabular-nums">
-              Page {pageIndex + 1}{totalPages > 1 ? ` / ${totalPages}` : ''}
-            </span>
-            {onPageChange && (
-              <button
-                onClick={() => handlePageNav(1)}
-                disabled={!canGoNext || loading}
-                className="w-6 h-6 flex items-center justify-center rounded text-xs font-bold text-secondary hover:bg-tint-strong transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                aria-label="Next page"
-              >
-                &gt;
-              </button>
-            )}
-          </div>
+          {phase === "select" && (
+            <div className="flex items-center gap-1">
+              {onPageChange && (
+                <button
+                  onClick={() => handlePageNav(-1)}
+                  disabled={!canGoPrev || loading}
+                  className="w-6 h-6 flex items-center justify-center rounded text-xs font-bold text-secondary hover:bg-tint-strong transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                  aria-label="Previous page"
+                >
+                  &lt;
+                </button>
+              )}
+              <span className="text-xs text-secondary tabular-nums">
+                Page {pageIndex + 1}{totalPages > 1 ? ` / ${totalPages}` : ''}
+              </span>
+              {onPageChange && (
+                <button
+                  onClick={() => handlePageNav(1)}
+                  disabled={!canGoNext || loading}
+                  className="w-6 h-6 flex items-center justify-center rounded text-xs font-bold text-secondary hover:bg-tint-strong transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                  aria-label="Next page"
+                >
+                  &gt;
+                </button>
+              )}
+            </div>
+          )}
         </div>
         <button
           onClick={onCancel}
@@ -280,101 +404,246 @@ export default function PDFRegionSelector({
       </div>
 
       <p className="text-xs text-tertiary">
-        Draw a rectangle around the table you want to re-extract.
+        {phase === "zoom"
+          ? "Drag the corner handles to fine-tune your selection, then extract."
+          : "Draw a rectangle around the table you want to re-extract."}
       </p>
 
-      {/* PDF page with selection overlay */}
-      <div
-        ref={containerRef}
-        className="relative rounded-lg overflow-hidden border border-border-dim bg-tint select-none"
-        style={{ touchAction: "none" }}
-      >
-        {pageLoading && (
-          <div className="flex items-center justify-center py-16">
-            <div className="w-5 h-5 border-2 border-accent border-t-transparent rounded-full animate-spin" />
-            <span className="ml-2 text-xs text-tertiary">Rendering page...</span>
-          </div>
-        )}
+      {/* Phase: SELECT — full page PDF with drawing overlay */}
+      {phase === "select" && (
+        <>
+          <div
+            ref={containerRef}
+            className="relative rounded-lg overflow-hidden border border-border-dim bg-tint select-none"
+            style={{ touchAction: "none" }}
+          >
+            {pageLoading && (
+              <div className="flex items-center justify-center py-16">
+                <div className="w-5 h-5 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+                <span className="ml-2 text-xs text-tertiary">Rendering page...</span>
+              </div>
+            )}
 
-        {error && (
-          <div className="px-3 py-8 text-xs text-danger text-center">{error}</div>
-        )}
+            {error && (
+              <div className="px-3 py-8 text-xs text-danger text-center">{error}</div>
+            )}
 
-        {imageUrl && !pageLoading && (
-          <div className="relative">
-            <img
-              ref={imageRef}
-              src={imageUrl}
-              alt={`PDF page ${pageIndex + 1}`}
-              className="w-full h-auto"
-              draggable={false}
-              onPointerDown={handlePointerDown}
-              onPointerMove={handlePointerMove}
-              onPointerUp={handlePointerUp}
-              style={{ cursor: isDragging ? "crosshair" : "crosshair" }}
-            />
-
-            {/* Selection rectangle overlay */}
-            {selectionRect && selectionRect.width > 0 && selectionRect.height > 0 && (
-              <>
-                <div
-                  className="absolute pointer-events-none"
-                  style={{
-                    left: selectionRect.left,
-                    top: selectionRect.top,
-                    width: selectionRect.width,
-                    height: selectionRect.height,
-                    border: "2px solid var(--blue)",
-                    backgroundColor: "var(--blue-dim)",
-                    boxShadow: "0 0 8px var(--glow-blue)",
-                  }}
+            {imageUrl && !pageLoading && (
+              <div className="relative">
+                <img
+                  ref={imageRef}
+                  src={imageUrl}
+                  alt={`PDF page ${pageIndex + 1}`}
+                  className="w-full h-auto"
+                  draggable={false}
+                  onLoad={handleImageLoad}
+                  onPointerDown={handlePointerDown}
+                  onPointerMove={handlePointerMove}
+                  onPointerUp={handlePointerUp}
+                  style={{ cursor: "crosshair" }}
                 />
-                {/* Corner handles */}
-                {!isDragging && (
+
+                {/* Selection rectangle overlay */}
+                {selectionRect && selectionRect.width > 0 && selectionRect.height > 0 && (
                   <>
-                    <Handle x={selectionRect.left} y={selectionRect.top} cursor="nw-resize" />
-                    <Handle x={selectionRect.left + selectionRect.width} y={selectionRect.top} cursor="ne-resize" />
-                    <Handle x={selectionRect.left} y={selectionRect.top + selectionRect.height} cursor="sw-resize" />
-                    <Handle x={selectionRect.left + selectionRect.width} y={selectionRect.top + selectionRect.height} cursor="se-resize" />
+                    <div
+                      className="absolute pointer-events-none"
+                      style={{
+                        left: selectionRect.left,
+                        top: selectionRect.top,
+                        width: selectionRect.width,
+                        height: selectionRect.height,
+                        border: "2px solid var(--blue)",
+                        backgroundColor: "var(--blue-dim)",
+                        boxShadow: "0 0 8px var(--glow-blue)",
+                      }}
+                    />
+                    {/* Corner handles */}
+                    {!isDragging && (
+                      <>
+                        <Handle x={selectionRect.left} y={selectionRect.top} cursor="nw-resize" />
+                        <Handle x={selectionRect.left + selectionRect.width} y={selectionRect.top} cursor="ne-resize" />
+                        <Handle x={selectionRect.left} y={selectionRect.top + selectionRect.height} cursor="sw-resize" />
+                        <Handle x={selectionRect.left + selectionRect.width} y={selectionRect.top + selectionRect.height} cursor="se-resize" />
+                      </>
+                    )}
                   </>
                 )}
-              </>
+              </div>
             )}
           </div>
-        )}
-      </div>
 
-      {/* Action buttons */}
-      <div className="flex items-center gap-3">
-        <button
-          onClick={handleExtract}
-          disabled={!hasValidSelection || loading}
-          className="px-4 py-2 rounded-lg bg-accent text-white text-sm font-medium disabled:opacity-40 disabled:cursor-not-allowed hover:bg-accent/90 transition-colors"
-        >
-          {loading ? (
-            <span className="flex items-center gap-2">
-              <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-              Extracting...
-            </span>
-          ) : (
-            "Extract from selection"
-          )}
-        </button>
-        <button
-          onClick={() => setSelection(null)}
-          disabled={!selection || loading}
-          className="px-3 py-2 rounded-lg border border-border-dim text-secondary text-sm hover:bg-tint-strong transition-colors disabled:opacity-40"
-        >
-          Clear
-        </button>
-        <button
-          onClick={onCancel}
-          disabled={loading}
-          className="px-3 py-2 rounded-lg border border-border-dim text-tertiary text-sm hover:bg-tint-strong transition-colors ml-auto"
-        >
-          Cancel
-        </button>
-      </div>
+          {/* Select-phase action buttons — only Clear & Cancel (no Extract here) */}
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setSelection(null)}
+              disabled={!selection || loading}
+              className="px-3 py-2 rounded-lg border border-border-dim text-secondary text-sm hover:bg-tint-strong transition-colors disabled:opacity-40"
+            >
+              Clear
+            </button>
+            <button
+              onClick={onCancel}
+              disabled={loading}
+              className="px-3 py-2 rounded-lg border border-border-dim text-tertiary text-sm hover:bg-tint-strong transition-colors ml-auto"
+            >
+              Cancel
+            </button>
+          </div>
+        </>
+      )}
+
+      {/* Phase: ZOOM — cropped, scaled view with fine-tune handles */}
+      {phase === "zoom" && imageUrl && selectionRect && (
+        <>
+          <ZoomView
+            imageUrl={imageUrl}
+            selectionRect={selectionRect}
+            imageDims={imageDims}
+            imageRef={imageRef}
+            zoomContainerRef={zoomContainerRef}
+            isDragging={isDragging}
+            onPointerDown={handleZoomPointerDown}
+            onPointerMove={handleZoomPointerMove}
+            onPointerUp={handleZoomPointerUp}
+          />
+
+          {/* Zoom-phase action buttons */}
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleExtract}
+              disabled={!hasValidSelection || loading}
+              className="px-4 py-2 rounded-lg bg-accent text-white text-sm font-medium disabled:opacity-40 disabled:cursor-not-allowed hover:bg-accent/90 transition-colors"
+            >
+              {loading ? (
+                <span className="flex items-center gap-2">
+                  <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  Extracting...
+                </span>
+              ) : (
+                "Extract from selection"
+              )}
+            </button>
+            <button
+              onClick={handleBackToSelect}
+              disabled={loading}
+              className="px-3 py-2 rounded-lg border border-border-dim text-secondary text-sm hover:bg-tint-strong transition-colors"
+            >
+              Back
+            </button>
+            <button
+              onClick={onCancel}
+              disabled={loading}
+              className="px-3 py-2 rounded-lg border border-border-dim text-tertiary text-sm hover:bg-tint-strong transition-colors ml-auto"
+            >
+              Cancel
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+/** Zoomed-in view of the selected region with fine-tune handles. */
+function ZoomView({
+  imageUrl,
+  selectionRect,
+  imageDims,
+  imageRef,
+  zoomContainerRef,
+  isDragging,
+  onPointerDown,
+  onPointerMove,
+  onPointerUp,
+}: {
+  imageUrl: string;
+  selectionRect: { left: number; top: number; width: number; height: number };
+  imageDims: { w: number; h: number } | null;
+  imageRef: React.RefObject<HTMLImageElement | null>;
+  zoomContainerRef: React.RefObject<HTMLDivElement | null>;
+  isDragging: boolean;
+  onPointerDown: (e: React.PointerEvent) => void;
+  onPointerMove: (e: React.PointerEvent) => void;
+  onPointerUp: (e: React.PointerEvent) => void;
+}) {
+  // We need the display dimensions of the image in the select phase.
+  // Since the image element is hidden in zoom phase, use the stored display size.
+  const imgEl = imageRef.current;
+  const imgDisplayW = imgEl?.getBoundingClientRect().width ?? imageDims?.w ?? 800;
+  const imgDisplayH = imgEl?.getBoundingClientRect().height ?? imageDims?.h ?? 600;
+
+  // Compute zoom scale: fit the selection to ~full container width, capped at MAX_ZOOM
+  const zoomScale = Math.min(
+    // Approximate container width — the container will flex to fill, so use a reasonable estimate.
+    // The actual container width is determined by CSS; the image width is close enough.
+    imgDisplayW / selectionRect.width,
+    MAX_ZOOM,
+  );
+
+  // The zoomed container dimensions
+  const zoomedW = selectionRect.width * zoomScale;
+  const zoomedH = selectionRect.height * zoomScale;
+
+  // Handles in zoom-view space: offset from the selection origin, scaled by zoomScale
+  const handlePositions = [
+    { x: 0, y: 0, cursor: "nw-resize" },
+    { x: zoomedW, y: 0, cursor: "ne-resize" },
+    { x: 0, y: zoomedH, cursor: "sw-resize" },
+    { x: zoomedW, y: zoomedH, cursor: "se-resize" },
+  ];
+
+  return (
+    <div
+      ref={zoomContainerRef}
+      className="relative rounded-lg overflow-hidden border border-border-dim bg-tint select-none"
+      style={{
+        touchAction: "none",
+        width: "100%",
+        height: zoomedH,
+        maxHeight: "60vh",
+      }}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+    >
+      {/* Full-page image, CSS-transformed to show only the selected region */}
+      <img
+        src={imageUrl}
+        alt="Zoomed selection"
+        draggable={false}
+        className="absolute"
+        style={{
+          width: imgDisplayW * zoomScale,
+          height: imgDisplayH * zoomScale,
+          left: -selectionRect.left * zoomScale,
+          top: -selectionRect.top * zoomScale,
+          pointerEvents: "none",
+        }}
+      />
+
+      {/* Selection border overlay in zoom view */}
+      <div
+        className="absolute pointer-events-none"
+        style={{
+          left: 0,
+          top: 0,
+          width: zoomedW,
+          height: zoomedH,
+          border: "2px solid var(--blue)",
+          boxShadow: "0 0 8px var(--glow-blue)",
+        }}
+      />
+
+      {/* Corner handles for fine-tuning */}
+      {!isDragging && handlePositions.map((hp) => (
+        <Handle
+          key={`${hp.cursor}`}
+          x={hp.x}
+          y={hp.y}
+          cursor={hp.cursor}
+        />
+      ))}
     </div>
   );
 }
