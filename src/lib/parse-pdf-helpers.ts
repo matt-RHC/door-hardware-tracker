@@ -1698,6 +1698,14 @@ export function normalizeQuantities(
       (isSubHeading ? ` sub-heading(generic=${genericTotal.doors}d/${genericTotal.leaves}l)` : '')
     )
 
+    // Pre-compute electric hinge presence in this set. Used in PATH 5 to
+    // detect asymmetric hinge splits on pair doors: when standard hinges
+    // don't divide evenly by leafCount, the remainder is often explained
+    // by electric hinges replacing one standard position on the active leaf.
+    const setElectricHingeQty = (set.items ?? [])
+      .filter(i => classifyItem(i.name) === 'electric_hinge')
+      .reduce((sum, i) => sum + (i.qty || 0), 0)
+
     for (const item of set.items ?? []) {
       // ── GUARD: terminal states are never re-normalized ──────────────────────
       // See NEVER_RENORMALIZE definition above for the full list and rationale.
@@ -1717,9 +1725,28 @@ export function normalizeQuantities(
       // non-integer results we round and mark 'flagged' so Punchy CP3 and the
       // UI both surface it for user review. We do NOT silently discard the
       // fractional part as was done previously.
+      //
+      // ELECTRIC HINGE OVERRIDE: Python doesn't know the item's install scope,
+      // so it may set qty_door_count to leafCount for all items in a set.
+      // Electric hinges are per_opening (1 per opening, not per leaf), so when
+      // the Python divisor looks like leafCount (> doorCount on a pair set), we
+      // override it to use doorCount. This prevents electric hinge qtys from
+      // being incorrectly divided by leafCount (e.g. 4 ÷ 8 = 0.5 flagged
+      // instead of the correct 4 ÷ 4 = 1 divided).
       if (item.qty_source === 'needs_division' && item.qty_door_count != null && item.qty_door_count > 1) {
         const raw = item.qty_total ?? item.qty  // qty_total = raw PDF value (set by Python)
-        const divisor = item.qty_door_count
+        let divisor = item.qty_door_count
+
+        // Electric hinges: per_opening scope — override leafCount divisor to doorCount.
+        if (classifyItem(item.name) === 'electric_hinge' && doorCount > 0 && divisor > doorCount) {
+          console.debug(
+            `[qty-norm] ${set.set_id}: "${item.name}" electric hinge — ` +
+            `overriding python divisor ${divisor} → doorCount ${doorCount} (per_opening)`
+          )
+          divisor = doorCount
+          item.qty_door_count = doorCount
+        }
+
         const result = raw / divisor
         item.qty_total = raw
         if (Number.isInteger(result)) {
@@ -1727,6 +1754,21 @@ export function normalizeQuantities(
           item.qty_source = 'divided'
           console.debug(
             `[qty-norm] ${set.set_id}: "${item.name}" ${raw} ÷ ${divisor} = ${result} (python-annotated)`
+          )
+        } else if (
+          setElectricHingeQty > 0
+          && classifyItem(item.name) === 'hinges'
+          && Number.isInteger((raw + setElectricHingeQty) / divisor)
+        ) {
+          // Asymmetric hinge split (python-annotated path): the standard hinge
+          // total doesn't divide cleanly because electric hinges create an
+          // asymmetric per-leaf split. Use ceil to get the larger-leaf count.
+          item.qty = Math.ceil(result)
+          item.qty_source = 'divided'
+          console.debug(
+            `[qty-norm] ${set.set_id}: "${item.name}" asymmetric hinge split (python) — ` +
+            `${raw} standard + ${setElectricHingeQty} electric = ${raw + setElectricHingeQty} total ÷ ` +
+            `${divisor} = ${item.qty} per leaf (electric accounts for asymmetry)`
           )
         } else {
           // Non-integer: round and flag for user review.
@@ -1837,6 +1879,16 @@ export function normalizeQuantities(
 
       // per_leaf: divide by leafCount (preferred) or doorCount (fallback).
       // Use Math.round for non-integer results and flag for review.
+      //
+      // ASYMMETRIC HINGE SPLIT: When a set contains both standard and electric
+      // hinges on pair doors, the standard hinge total is often odd because
+      // the electric hinge replaces one standard position on the active leaf.
+      // Example: 8 total hinge positions on a pair → 4 per leaf. Electric takes
+      // 1 position on active → 7 standard total (3 active + 4 inactive).
+      // Dividing 7/2 = 3.5 is non-integer, but the count IS correct. We detect
+      // this by checking if (standardQty + electricQty) divides cleanly — if so,
+      // the asymmetry is explained and we use ceil() to get the larger-leaf qty
+      // (which is what the consolidation step and buildPerOpeningItems expect).
       if (scope === 'per_leaf') {
         if (leafCount > 1 && item.qty >= leafCount) {
           const perLeaf = item.qty / leafCount
@@ -1845,6 +1897,23 @@ export function normalizeQuantities(
           if (Number.isInteger(perLeaf)) {
             item.qty = perLeaf
             item.qty_source = 'divided'
+          } else if (
+            setElectricHingeQty > 0
+            && classifyItem(item.name) === 'hinges'
+            && Number.isInteger((item.qty + setElectricHingeQty) / leafCount)
+          ) {
+            // Asymmetric hinge split: the non-integer division is explained by
+            // electric hinges. Use ceil to get the larger-leaf (inactive) count.
+            // The consolidation step will subtract the electric qty for the
+            // active leaf, and buildPerOpeningItems will reconstitute per-leaf.
+            item.qty = Math.ceil(perLeaf)
+            item.qty_source = 'divided'
+            console.debug(
+              `[qty-norm] ${set.set_id}: "${item.name}" asymmetric hinge split — ` +
+              `${item.qty_total} standard + ${setElectricHingeQty} electric = ` +
+              `${(item.qty_total ?? 0) + setElectricHingeQty} total ÷ ${leafCount} leaves = ` +
+              `${item.qty} per leaf (electric accounts for asymmetry)`
+            )
           } else {
             item.qty = Math.round(perLeaf)
             item.qty_source = 'flagged'

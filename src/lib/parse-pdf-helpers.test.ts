@@ -607,6 +607,128 @@ describe('normalizeQuantities — category-aware division', () => {
 
     expect(sets[0].items[0].qty).toBe(3)
   })
+
+  // === Mixed hinge type normalization (electric + standard on pair doors) ===
+
+  it('handles asymmetric hinge split: 7 standard + 1 electric on single pair door', () => {
+    // Single pair door (1 opening, 2 leaves). PDF shows:
+    //   "Hinge, Full Mortise — 7 EA" + "Electric Hinge — 1 EA"
+    // Total hinge positions: 8 (4 per leaf). Electric replaces 1 standard on active.
+    // Standard 7 / 2 leaves = 3.5 — non-integer BUT explained by electric.
+    // Expected: ceil(3.5) = 4 per leaf, marked 'divided' (not 'flagged'),
+    // then consolidation: 4 - 1 = 3 standard on active.
+    const sets = [makeSet('DH_ASYM', [
+      { name: 'Hinges 5BB1 4.5x4.5 NRP', qty: 7 },
+      { name: 'Hinges 5BB1 4.5x4.5 CON TW8', qty: 1 },
+    ], { heading_leaf_count: 2, heading_door_count: 1 })]
+    const doors = [makeDoor('AS1', 'DH_ASYM')]
+
+    normalizeQuantities(sets, doors)
+
+    // Standard hinge: 7 → 4 per leaf (ceil), then consolidated 4 - 1 = 3
+    expect(sets[0].items[0].qty).toBe(3)
+    expect(sets[0].items[0].qty_source).toBe('divided')
+    // Electric hinge: unchanged (per_opening, doorCount=1, no division)
+    expect(sets[0].items[1].qty).toBe(1)
+  })
+
+  it('handles asymmetric hinge split: 21 standard + 3 electric across 3 pair doors', () => {
+    // 3 pair doors (3 openings, 6 leaves). PDF shows:
+    //   "Hinges NRP — 21 EA" + "Electric Hinge CON TW8 — 3 EA"
+    // Total positions: 24 (4 per leaf × 6 leaves). Electric = 3 (1 per opening).
+    // Standard: 21/6 = 3.5 → asymmetric split explained by electric.
+    // ceil(3.5) = 4, then consolidation: 4 - 1 = 3.
+    // Electric: per_opening, 3/3 = 1.
+    const sets = [makeSet('DH_ASYM_MULTI', [
+      { name: 'Hinges 5BB1 NRP', qty: 21 },
+      { name: 'Hinges CON TW8', qty: 3 },
+    ], { heading_leaf_count: 6, heading_door_count: 3 })]
+    const doors = Array.from({ length: 3 }, (_, i) => makeDoor(`AM-${i + 1}`, 'DH_ASYM_MULTI'))
+
+    normalizeQuantities(sets, doors)
+
+    // Standard: 21 → 4 per leaf (ceil), then 4 - 1 = 3
+    expect(sets[0].items[0].qty).toBe(3)
+    expect(sets[0].items[0].qty_source).toBe('divided')
+    // Electric: 3 ÷ 3 (doorCount) = 1
+    expect(sets[0].items[1].qty).toBe(1)
+  })
+
+  it('does not apply asymmetric hinge logic when no electric hinges in set', () => {
+    // Pair door with 7 standard hinges but NO electric hinge.
+    // 7/2 = 3.5 → should be flagged (not explained by electric).
+    const sets = [makeSet('DH_ODD_NO_ELEC', [
+      { name: 'Hinges 5BB1 NRP', qty: 7 },
+    ], { heading_leaf_count: 2, heading_door_count: 1 })]
+    const doors = [makeDoor('ON1', 'DH_ODD_NO_ELEC')]
+
+    normalizeQuantities(sets, doors)
+
+    // Should be flagged because 7/2 is non-integer with no electric hinge explanation
+    expect(sets[0].items[0].qty).toBe(4) // Math.round(3.5) = 4
+    expect(sets[0].items[0].qty_source).toBe('flagged')
+  })
+
+  it('standard hinges divide evenly on pair doors with electric (even total)', () => {
+    // 8 standard + 1 electric on a pair door. 8/2 = 4 (clean division).
+    // Electric is separate, consolidation: 4 - 1 = 3.
+    const sets = [makeSet('DH_EVEN', [
+      { name: 'Hinges 5BB1 NRP', qty: 8 },
+      { name: 'Electric Hinge ETH', qty: 1 },
+    ], { heading_leaf_count: 2, heading_door_count: 1 })]
+    const doors = [makeDoor('EV1', 'DH_EVEN')]
+
+    normalizeQuantities(sets, doors)
+
+    // Standard: 8/2 = 4, then 4 - 1 = 3 (clean division, no asymmetric logic needed)
+    expect(sets[0].items[0].qty).toBe(3)
+    expect(sets[0].items[0].qty_source).toBe('divided')
+    // Electric: unchanged (per_opening, doorCount=1)
+    expect(sets[0].items[1].qty).toBe(1)
+  })
+
+  it('single door with electric hinge: no leaf splitting needed', () => {
+    // Single door (1 leaf). 3 standard + 1 electric.
+    // No division needed (leafCount=1, doorCount=1).
+    const sets = [makeSet('DH_SINGLE', [
+      { name: 'Hinges 5BB1 NRP', qty: 3 },
+      { name: 'Hinges CON TW8', qty: 1 },
+    ], { heading_leaf_count: 1, heading_door_count: 1 })]
+    const doors = [makeDoor('SG1', 'DH_SINGLE')]
+
+    normalizeQuantities(sets, doors)
+
+    // No division — leafCount and doorCount are both 1
+    // Consolidation still applies: 3 - 1 = 2 standard
+    expect(sets[0].items[0].qty).toBe(2)
+    expect(sets[0].items[1].qty).toBe(1)
+  })
+
+  it('PATH 1: electric hinge divisor overridden from leafCount to doorCount', () => {
+    // Python annotated all items with needs_division and qty_door_count=6 (leafCount).
+    // Electric hinge should use doorCount=3 instead of leafCount=6.
+    const sets: HardwareSet[] = [{
+      set_id: 'DH_P1_ELEC',
+      heading: 'Set DH_P1_ELEC',
+      heading_door_count: 3,
+      heading_leaf_count: 6,
+      items: [
+        { name: 'Hinges 5BB1 NRP', qty: 21, qty_source: 'needs_division', qty_door_count: 6, model: '', finish: '', manufacturer: '' },
+        { name: 'Hinges CON TW8', qty: 3, qty_source: 'needs_division', qty_door_count: 6, model: '', finish: '', manufacturer: '' },
+      ],
+    }]
+    const doors = Array.from({ length: 3 }, (_, i) => makeDoor(`P1E-${i + 1}`, 'DH_P1_ELEC'))
+
+    normalizeQuantities(sets, doors)
+
+    // Standard: 21/6 = 3.5 → asymmetric split → ceil = 4, then 4 - 1 = 3
+    expect(sets[0].items[0].qty).toBe(3)
+    expect(sets[0].items[0].qty_source).toBe('divided')
+    // Electric: divisor overridden from 6 to 3, 3/3 = 1
+    expect(sets[0].items[1].qty).toBe(1)
+    expect(sets[0].items[1].qty_source).toBe('divided')
+    expect(sets[0].items[1].qty_door_count).toBe(3)
+  })
 })
 
 // ─── normalizeDoorNumber ───
