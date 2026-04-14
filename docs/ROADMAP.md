@@ -2,7 +2,7 @@
 
 > **Guiding principle:** Hardware counts coming out of PDFs must be accurate before we build features on top of them. Export is gated on extraction accuracy.
 
-Last updated: 2026-04-14 (afternoon session)
+Last updated: 2026-04-14 (late afternoon — memory-layer sweep)
 
 ---
 
@@ -140,7 +140,7 @@ The wizard flow shipped in Phase 0 (PRs #161–#162). Phase 2 focused on UX poli
 - `classifyItem()` now concatenates `item.name + item.model` before regex matching (previously checked `name` only, missing "CON TW8" which lives in `model`)
 - Added standalone `CON TW` regex pattern for identifiers without the "Hinge" prefix
 - Chunk insert resilience: non-critical inserts no longer abort the whole job on partial failure
-- Regression tests (PR #204, open): 52 dedicated tests in `electric-hinge-regression.test.ts` locking down PRs #196, #197, #203 fixes; full suite 429/429 green
+- Regression tests (PR #204, merged): 52 dedicated tests in `electric-hinge-regression.test.ts` locking down PRs #196, #197, #203 fixes; full suite 429/429 green
 
 ### 2G. Context-Aware Re-Scan from Data Badge (PR #198) — FIXED (PRs #206–#209)
 - Users can re-scan specific items from the data badge with PDF region selection
@@ -150,18 +150,24 @@ The wizard flow shipped in Phase 0 (PRs #161–#162). Phase 2 focused on UX poli
   - PR #208: Raw text extraction fallback — when pdfplumber finds no tables in a region, falls back to extracting raw text lines and field matching (micro-extraction)
   - PR #209: Zoom view + multi-value field assignment — zoomed view for fine-tuning after initial selection; supports assigning extracted values to multiple fields
 
-### 2M. Security: IDOR Fix (PR #210 — OPEN)
+### 2M. Security: IDOR Fix (PR #210 — MERGED)
 - All 5 user-facing parse-pdf routes accepted `projectId` without membership check
 - `fetchProjectPdfBase64` uses admin client bypassing RLS — any authenticated user could access any project's PDF
 - Fix: shared `assertProjectMember()` helper in `src/lib/auth-helpers.ts` + membership checks in all 5 routes
 - Correctly preserves service-role bypass for background jobs
 
-### 2N. Zoom Overhaul (PR #212 — OPEN)
+### 2N. Zoom Overhaul (PR #212 — MERGED)
 - Canvas re-crop approach replaces broken CSS transform zoom — draws selected region onto temp canvas at up to 4x, displays as plain `<img>`
 - `getHandleAtPositionZoomed()` fixes handle hit-test in zoom phase (14px threshold caused all corners to overlap for small selections)
 - `pdf_page` null guard on modal mount condition
 - iPad scroll containment: `overscrollBehavior: "contain"` + body `overflow: hidden` lock
 - `imageDims` and `zoomImageUrl` cleared on page change to prevent stale state
+
+### 2O. Zoom Infinite Spinner Fix (PR #214 — MERGED)
+- Follow-up to PR #212: after auto-transition to zoom phase, the `<canvas>` DOM element (mounted only in `select` phase) was unmounted, so `imageRef.current` became `null` and `renderZoomCrop` silently returned → infinite "Rendering zoom..." spinner
+- Fix: compute the zoom crop **synchronously in `handlePointerUp`** before `setPhase("zoom")`, so DOM is still mounted
+- Added `fullPageImageRef` (off-screen `Image`) + `displayDimsRef` (cached dimensions) so handle-drag re-renders in zoom phase don't depend on the unmounted canvas
+- `computeZoomCrop` extracted as a pure function (no DOM dependency)
 
 ### 2H. Batch Job Path (PR #200)
 - `buildPerOpeningItems` added to batch job code path for structural rows
@@ -186,8 +192,13 @@ The wizard flow shipped in Phase 0 (PRs #161–#162). Phase 2 focused on UX poli
 ## Known Issues / Next Priorities
 
 ### Awaiting Merge
-- **PR #210 (Security)**: IDOR fix — project membership enforcement on all parse-pdf routes
-- **PR #212 (Zoom)**: PDFRegionSelector zoom overhaul — canvas re-crop, handle hit-test, scroll lock, null guards
+- **PR #215 (Responsive Layout)**: door detail fluid-width refactor, table horizontal scroll at <640px, shortened batch-action labels, rescan diff grid breakpoint tweak — currently in flight (Vercel deploy pending as of this sweep)
+
+### Recently Merged (this session)
+- **PR #210 (Security)**: IDOR fix — project membership enforcement on all parse-pdf routes (merged)
+- **PR #212 (Zoom)**: PDFRegionSelector zoom overhaul — canvas re-crop, handle hit-test, scroll lock, null guards (merged)
+- **PR #214 (Zoom spinner)**: infinite spinner fix — compute crop before phase transition (merged)
+- **PR #211**: closed without merge — superseded by #212
 
 ### Medium Priority
 - **Hinge pipeline simplification**: Merged (PR #202) — extracted shared hinge helpers, consolidated taxonomy cache, removed dead code across `normalizeQuantities`, `groupItemsByLeaf`, `buildPerOpeningItems`
