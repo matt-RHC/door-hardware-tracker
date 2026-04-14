@@ -154,6 +154,7 @@ class RegionExtractionResult(BaseModel):
     """Lightweight result for bbox-cropped region extraction."""
     success: bool
     items: list[HardwareItem] = []
+    raw_text: str = ""
     error: str = ""
 
 
@@ -4502,6 +4503,7 @@ class handler(BaseHTTPRequestHandler):
                 self._send_region_json(200, RegionExtractionResult(
                     success=len(items) > 0,
                     items=items,
+                    raw_text=cropped_text.strip(),
                     error="" if items else "No hardware items found in selected region"
                 ))
         except Exception as e:
