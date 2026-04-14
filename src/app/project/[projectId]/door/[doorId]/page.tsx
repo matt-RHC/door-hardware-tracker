@@ -102,6 +102,8 @@ export default function DoorDetailPage() {
   const [activeLeafTab, setActiveLeafTab] = useState<'shared' | 'leaf1' | 'leaf2'>('leaf1');
   const [selectedItems, setSelectedItems] = useState<Set<string>>(new Set());
   const [batchActionLoading, setBatchActionLoading] = useState(false);
+  const [activePhase, setActivePhase] = useState<'all' | 'receive' | 'install' | 'qa'>('all');
+  const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
 
   // Rescan state
   const [rescanItem, setRescanItem] = useState<HardwareItemWithProgress | null>(null);
@@ -190,6 +192,58 @@ export default function DoorDetailPage() {
   }, [opening, doorId, debouncedFetch, supabase]);
 
   type WorkflowStep = 'received' | 'pre_install' | 'installed' | 'qa_qc';
+  type WorkflowPhase = 'all' | 'receive' | 'install' | 'qa';
+
+  // --- Phase filtering helpers ---
+  const getPhaseStep = (phase: WorkflowPhase, item: HardwareItemWithProgress): WorkflowStep | null => {
+    if (phase === 'receive') return 'received';
+    if (phase === 'install') {
+      if (item.install_type === 'bench') return 'pre_install';
+      if (item.install_type === 'field') return 'installed';
+      return null; // needs classification
+    }
+    if (phase === 'qa') return 'qa_qc';
+    return null;
+  };
+
+  const isItemRelevantToPhase = (item: HardwareItemWithProgress, phase: WorkflowPhase, leafIndex: number): boolean => {
+    if (phase === 'all') return true;
+    const p = getLeafProgress(item, leafIndex);
+    if (phase === 'receive') return true; // all items need receiving
+    if (phase === 'install') return true; // all items need install (even if unclassified — we'll prompt)
+    if (phase === 'qa') return true; // all items need QA
+    return true;
+  };
+
+  const getPhaseStepDone = (item: HardwareItemWithProgress, phase: WorkflowPhase, leafIndex: number): boolean => {
+    const p = getLeafProgress(item, leafIndex);
+    if (!p) return false;
+    if (phase === 'receive') return !!p.received;
+    if (phase === 'install') {
+      if (item.install_type === 'bench') return !!p.pre_install;
+      if (item.install_type === 'field') return !!p.installed;
+      return false;
+    }
+    if (phase === 'qa') return !!p.qa_qc;
+    return false;
+  };
+
+  const getPhaseCounts = (items: HardwareItemWithProgress[], leafIndex: number, phase: WorkflowPhase) => {
+    let done = 0;
+    let remaining = 0;
+    let needsClassification = 0;
+    for (const item of items) {
+      if (phase === 'install' && !item.install_type) {
+        needsClassification++;
+        remaining++;
+      } else if (getPhaseStepDone(item, phase, leafIndex)) {
+        done++;
+      } else {
+        remaining++;
+      }
+    }
+    return { done, remaining, needsClassification, total: items.length };
+  };
 
   const handleStepToggle = async (itemId: string, step: WorkflowStep, currentValue: boolean, leafIndex: number = 1) => {
     try {
@@ -769,8 +823,80 @@ export default function DoorDetailPage() {
     const someSelected = allItemIds.some(id => selectedItems.has(id));
     const selectedInThisSection = items.filter(i => selectedItems.has(i.id));
 
+    // Phase-aware: compute counts for the summary bar
+    const phaseCounts = activePhase !== 'all' ? getPhaseCounts(items, leafIndex, activePhase) : null;
+
+    // Bulk classify helper for install phase
+    const unclassifiedItems = activePhase === 'install' ? items.filter(i => !i.install_type) : [];
+
     return (
       <>
+        {/* Phase summary bar */}
+        {phaseCounts && activePhase !== 'all' && (
+          <div
+            className="mb-3 flex items-center gap-3 px-3 py-2 rounded-md border text-[12px]"
+            style={{
+              background: 'var(--surface)',
+              borderColor: 'var(--border)',
+            }}
+          >
+            <span className="font-semibold tabular-nums" style={{ color: 'var(--green)' }}>
+              {phaseCounts.done} done
+            </span>
+            <span className="text-tertiary">&middot;</span>
+            <span className="font-semibold tabular-nums" style={{ color: phaseCounts.remaining > 0 ? 'var(--yellow)' : 'var(--text-tertiary)' }}>
+              {phaseCounts.remaining} remaining
+            </span>
+            {phaseCounts.needsClassification > 0 && (
+              <>
+                <span className="text-tertiary">&middot;</span>
+                <span className="font-semibold tabular-nums" style={{ color: 'var(--red)' }}>
+                  {phaseCounts.needsClassification} need classification
+                </span>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* Bulk classify banner for Install phase */}
+        {activePhase === 'install' && unclassifiedItems.length > 0 && (
+          <div
+            className="mb-3 flex items-center gap-2 flex-wrap px-3 py-2.5 rounded-md border text-[12px] animate-fade-in-up"
+            style={{
+              background: 'var(--yellow-dim)',
+              borderColor: 'var(--yellow)',
+            }}
+          >
+            <span className="font-semibold" style={{ color: 'var(--yellow)' }}>
+              {unclassifiedItems.length} item{unclassifiedItems.length > 1 ? 's' : ''} need bench/field classification
+            </span>
+            <div className="flex gap-1.5 ml-auto">
+              <button
+                onClick={async () => {
+                  for (const item of unclassifiedItems) {
+                    await handleInstallTypeChange(item.id, 'field');
+                  }
+                }}
+                className="px-2.5 py-1 rounded font-medium transition-colors"
+                style={{ background: 'var(--field-dim)', color: 'var(--field)', border: '1px solid var(--field)' }}
+              >
+                All Field
+              </button>
+              <button
+                onClick={async () => {
+                  for (const item of unclassifiedItems) {
+                    await handleInstallTypeChange(item.id, 'bench');
+                  }
+                }}
+                className="px-2.5 py-1 rounded font-medium transition-colors"
+                style={{ background: 'var(--bench-dim)', color: 'var(--bench)', border: '1px solid var(--bench)' }}
+              >
+                All Bench
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Floating batch action bar */}
         {selectedInThisSection.length > 0 && (
           <div
@@ -809,7 +935,7 @@ export default function DoorDetailPage() {
         )}
 
         <div className="overflow-x-auto border border-th-border rounded-md">
-          <table className="w-full min-w-[640px] text-left text-[13px]">
+          <table className={`w-full text-left text-[13px] ${activePhase === 'all' ? 'min-w-[640px]' : 'min-w-0 md:min-w-[640px]'}`}>
             <thead className="sticky top-0 z-10">
               <tr className="border-b border-th-border bg-surface text-[11px] text-tertiary uppercase tracking-wider">
                 <th className="px-2 py-2 w-10 text-center">
@@ -828,8 +954,15 @@ export default function DoorDetailPage() {
                 <th className="px-3 py-2 font-medium hidden md:table-cell">Model</th>
                 <th className="px-3 py-2 font-medium hidden md:table-cell">Finish</th>
                 <th className="px-3 py-2 font-medium hidden md:table-cell text-center w-16" title="Data completeness — how many fields are filled in">Data</th>
-                <th className="px-3 py-2 font-medium text-center">Status</th>
-                <th className="px-3 py-2 font-medium w-20 text-right">Actions</th>
+                {/* Desktop: always show full status column. Mobile: show status only in 'all' phase */}
+                <th className={`px-3 py-2 font-medium text-center ${activePhase !== 'all' ? 'hidden md:table-cell' : ''}`}>Status</th>
+                {/* Mobile in phase view: single action column */}
+                {activePhase !== 'all' && (
+                  <th className="px-3 py-2 font-medium text-center md:hidden">
+                    {activePhase === 'receive' ? 'Received' : activePhase === 'install' ? 'Install' : 'QA/QC'}
+                  </th>
+                )}
+                <th className={`px-3 py-2 font-medium w-20 text-right ${activePhase !== 'all' ? 'hidden md:table-cell' : ''}`}>Actions</th>
               </tr>
             </thead>
           <tbody>
@@ -840,11 +973,24 @@ export default function DoorDetailPage() {
               const completedSteps = steps.filter(s => getStepValue(item, s, leafIndex)).length;
               const isEditing = editingItemId === item.id && editingItem;
               const confidence = getItemConfidence(item);
+              const isExpanded = expandedItemId === item.id;
+
+              // Phase-specific: determine the single action step for mobile
+              const phaseStep = activePhase !== 'all' ? getPhaseStep(activePhase, item) : null;
+              const phaseStepDone = activePhase !== 'all' ? getPhaseStepDone(item, activePhase, leafIndex) : false;
+              const needsInstallClassification = activePhase === 'install' && !item.install_type;
 
               return (
                 <React.Fragment key={`${item.id}-leaf${leafIndex}`}>
                   <tr
+                    onClick={() => {
+                      if (activePhase !== 'all') {
+                        setExpandedItemId(isExpanded ? null : item.id);
+                      }
+                    }}
                     className={`border-b border-th-border transition-colors hover:bg-surface-hover ${
+                      activePhase !== 'all' ? 'cursor-pointer md:cursor-default' : ''
+                    } ${
                       idx % 2 === 1 ? 'bg-surface/50' : ''
                     } ${
                       item.install_type === 'bench'
@@ -854,9 +1000,11 @@ export default function DoorDetailPage() {
                         : ''
                     } ${
                       selectedItems.has(item.id) ? 'bg-accent-dim/30' : ''
+                    } ${
+                      phaseStepDone ? 'opacity-50' : ''
                     }`}
                   >
-                    <td className="px-2 py-2 text-center">
+                    <td className="px-2 py-2 text-center" onClick={e => e.stopPropagation()}>
                       <input
                         type="checkbox"
                         checked={selectedItems.has(item.id)}
@@ -902,7 +1050,7 @@ export default function DoorDetailPage() {
                     <td className="px-3 py-2 hidden md:table-cell text-center">
                       {confidence.score <= 80 ? (
                         <button
-                          onClick={() => handleRescanClick(item)}
+                          onClick={(e) => { e.stopPropagation(); handleRescanClick(item); }}
                           className="inline-flex items-center justify-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-semibold tabular-nums transition-all hover:scale-110 hover:shadow-sm cursor-pointer"
                           style={{
                             background: confidence.level === 'medium' ? 'var(--yellow-dim)' : 'var(--red-dim)',
@@ -928,7 +1076,8 @@ export default function DoorDetailPage() {
                         </span>
                       )}
                     </td>
-                    <td className="px-3 py-2">
+                    {/* Desktop: full status circles (always visible) */}
+                    <td className={`px-3 py-2 ${activePhase !== 'all' ? 'hidden md:table-cell' : ''}`}>
                       <div className="flex items-center justify-center gap-1.5">
                         {steps.map((step) => {
                           const isActive = getStepValue(item, step, leafIndex);
@@ -937,7 +1086,8 @@ export default function DoorDetailPage() {
                           return (
                             <div key={step} className="flex flex-col items-center gap-0.5">
                               <button
-                                onClick={() => {
+                                onClick={(e) => {
+                                  e.stopPropagation();
                                   playToggle();
                                   handleStepToggle(item.id, step, isActive, leafIndex);
                                 }}
@@ -967,10 +1117,56 @@ export default function DoorDetailPage() {
                         <span className="text-[10px] text-tertiary ml-0.5 tabular-nums self-center">{completedSteps}/{steps.length}</span>
                       </div>
                     </td>
-                    <td className="px-3 py-2 text-right">
+                    {/* Mobile phase view: single action button for the active phase */}
+                    {activePhase !== 'all' && (
+                      <td className="px-3 py-2 text-center md:hidden" onClick={e => e.stopPropagation()}>
+                        {needsInstallClassification ? (
+                          <div className="flex items-center justify-center gap-1">
+                            <button
+                              onClick={() => handleInstallTypeChange(item.id, 'field')}
+                              className="px-2 py-1.5 rounded text-[10px] font-semibold uppercase min-h-[36px] transition-colors"
+                              style={{ background: 'var(--field-dim)', color: 'var(--field)', border: '1px solid var(--field)' }}
+                            >
+                              Field
+                            </button>
+                            <button
+                              onClick={() => handleInstallTypeChange(item.id, 'bench')}
+                              className="px-2 py-1.5 rounded text-[10px] font-semibold uppercase min-h-[36px] transition-colors"
+                              style={{ background: 'var(--bench-dim)', color: 'var(--bench)', border: '1px solid var(--bench)' }}
+                            >
+                              Bench
+                            </button>
+                          </div>
+                        ) : phaseStep ? (
+                          <button
+                            onClick={() => {
+                              playToggle();
+                              handleStepToggle(item.id, phaseStep, phaseStepDone, leafIndex);
+                            }}
+                            className="flex items-center justify-center w-10 h-10 rounded-full transition-colors mx-auto"
+                            style={{
+                              background: phaseStepDone ? getStepColor(phaseStep) : getStepDimColor(phaseStep),
+                              border: phaseStepDone ? `2px solid ${getStepColor(phaseStep)}` : `2px solid var(--border-hover)`,
+                            }}
+                          >
+                            {phaseStepDone ? (
+                              <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                              </svg>
+                            ) : (
+                              <span className="text-[11px] font-bold" style={{ color: 'var(--text-tertiary)' }}>
+                                {getStepShortLabel(phaseStep)}
+                              </span>
+                            )}
+                          </button>
+                        ) : null}
+                      </td>
+                    )}
+                    {/* Desktop actions (hidden on mobile in phase view) */}
+                    <td className={`px-3 py-2 text-right ${activePhase !== 'all' ? 'hidden md:table-cell' : ''}`}>
                       <div className="flex items-center justify-end gap-1">
                         <button
-                          onClick={() => startEditItem(item)}
+                          onClick={(e) => { e.stopPropagation(); startEditItem(item); }}
                           className="text-tertiary hover:text-secondary w-8 h-8 flex items-center justify-center transition-colors"
                           title="Edit item"
                         >
@@ -979,10 +1175,13 @@ export default function DoorDetailPage() {
                           </svg>
                         </button>
                         <button
-                          onClick={() => setIssueModal({
-                            doorNumber: opening.door_number,
-                            hardwareItemName: item.name,
-                          })}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setIssueModal({
+                              doorNumber: opening.door_number,
+                              hardwareItemName: item.name,
+                            });
+                          }}
                           className="text-tertiary hover:text-danger w-8 h-8 flex items-center justify-center transition-colors"
                           title="Report issue"
                         >
@@ -993,10 +1192,75 @@ export default function DoorDetailPage() {
                       </div>
                     </td>
                   </tr>
+                  {/* Mobile tap-to-expand: show actions + full status when row is tapped in phase view */}
+                  {activePhase !== 'all' && isExpanded && (
+                    <tr key={`expand-${item.id}`} className="md:hidden border-b border-th-border bg-surface-hover">
+                      <td colSpan={10} className="px-3 py-3">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-1.5">
+                            {steps.map((step) => {
+                              const isActive = getStepValue(item, step, leafIndex);
+                              const stepColor = getStepColor(step);
+                              const stepDimColor = getStepDimColor(step);
+                              return (
+                                <div key={step} className="flex flex-col items-center gap-0.5">
+                                  <button
+                                    onClick={() => {
+                                      playToggle();
+                                      handleStepToggle(item.id, step, isActive, leafIndex);
+                                    }}
+                                    className="flex items-center justify-center w-7 h-7 rounded-full transition-colors"
+                                    style={{
+                                      background: isActive ? stepColor : stepDimColor,
+                                      border: isActive ? `2px solid ${stepColor}` : `2px solid var(--border-hover)`,
+                                    }}
+                                  >
+                                    {isActive ? (
+                                      <svg className="w-3 h-3 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                      </svg>
+                                    ) : (
+                                      <span className="text-[9px] font-bold" style={{ color: 'var(--text-tertiary)' }}>
+                                        {getStepShortLabel(step)}
+                                      </span>
+                                    )}
+                                  </button>
+                                  <span className="text-[7px] font-medium uppercase" style={{ color: isActive ? stepColor : 'var(--text-tertiary)' }}>
+                                    {getStepShortLabel(step)}
+                                  </span>
+                                </div>
+                              );
+                            })}
+                            <span className="text-[10px] text-tertiary ml-1 tabular-nums">{completedSteps}/{steps.length}</span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={() => startEditItem(item)}
+                              className="text-tertiary hover:text-secondary w-9 h-9 flex items-center justify-center transition-colors rounded-md border border-th-border"
+                              title="Edit item"
+                            >
+                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                              </svg>
+                            </button>
+                            <button
+                              onClick={() => setIssueModal({ doorNumber: opening.door_number, hardwareItemName: item.name })}
+                              className="text-tertiary hover:text-danger w-9 h-9 flex items-center justify-center transition-colors rounded-md border border-th-border"
+                              title="Report issue"
+                            >
+                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                              </svg>
+                            </button>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  )}
                   {isEditing && leafIndex === 1 && renderEditForm(item)}
                   {isEditing && leafIndex !== 1 && (
                     <tr key={`edit-msg-${item.id}`}>
-                      <td colSpan={9} className="px-3 py-3 text-tertiary text-[13px] italic text-center bg-surface-hover border-b border-th-border">
+                      <td colSpan={10} className="px-3 py-3 text-tertiary text-[13px] italic text-center bg-surface-hover border-b border-th-border">
                         Editing on Leaf 1...
                       </td>
                     </tr>
@@ -1238,47 +1502,91 @@ export default function DoorDetailPage() {
           <div className="mb-8">
             {opening.hardware_items.length === 0 ? (
               <p className="text-secondary text-center py-8">No hardware items yet</p>
-            ) : isPair ? (
+            ) : (
               <>
-                {/* Leaf sub-tabs for pair doors */}
-                <div className="flex gap-0.5 mb-5 bg-surface rounded-md p-1">
+                {/* Workflow Phase Tabs */}
+                <div className="flex gap-0.5 mb-4 bg-surface rounded-md p-1">
                   {([
-                    { key: 'shared' as const, label: 'Shared', count: shared.length, color: 'var(--text-tertiary)' },
-                    { key: 'leaf1' as const, label: 'Leaf 1', count: leaf1.length, color: 'var(--blue)' },
-                    { key: 'leaf2' as const, label: 'Leaf 2', count: leaf2.length, color: 'var(--purple)' },
-                  ]).map((tab) => (
-                    <button
-                      key={tab.key}
-                      onClick={() => setActiveLeafTab(tab.key)}
-                      className={`flex-1 px-2 py-3 min-h-[44px] rounded-md text-[11px] font-semibold uppercase transition-colors flex flex-col items-center gap-0.5 ${
-                        activeLeafTab === tab.key
-                          ? 'bg-surface-hover border border-th-border-hover'
-                          : 'text-tertiary hover:text-secondary'
-                      }`}
-                      style={{
-                        fontFamily: "var(--font-display)",
-                        letterSpacing: "0.06em",
-                        color: activeLeafTab === tab.key ? tab.color : undefined,
-                      }}
-                    >
-                      <span>{tab.label}</span>
-                      <span className="text-[10px] opacity-60">{tab.count} items</span>
-                    </button>
-                  ))}
+                    { key: 'all' as const, label: 'All', color: 'var(--text-primary)' },
+                    { key: 'receive' as const, label: 'Receive', color: 'var(--blue)' },
+                    { key: 'install' as const, label: 'Install', color: 'var(--field)' },
+                    { key: 'qa' as const, label: 'QA', color: 'var(--green)' },
+                  ] as const).map((tab) => {
+                    // Count items done in this phase for the badge
+                    const allItems = isPair
+                      ? (activeLeafTab === 'shared' ? shared : activeLeafTab === 'leaf2' ? leaf2 : leaf1)
+                      : opening.hardware_items;
+                    const phaseLeafIndex = isPair && activeLeafTab === 'leaf2' ? 2 : 1;
+                    const counts = tab.key !== 'all' ? getPhaseCounts(allItems, phaseLeafIndex, tab.key) : null;
+                    return (
+                      <button
+                        key={tab.key}
+                        onClick={() => { setActivePhase(tab.key); setExpandedItemId(null); }}
+                        className={`flex-1 px-2 py-2.5 min-h-[44px] rounded-md text-[11px] font-semibold uppercase transition-colors flex flex-col items-center gap-0.5 ${
+                          activePhase === tab.key
+                            ? 'bg-surface-hover border border-th-border-hover'
+                            : 'text-tertiary hover:text-secondary'
+                        }`}
+                        style={{
+                          fontFamily: "var(--font-display)",
+                          letterSpacing: "0.06em",
+                          color: activePhase === tab.key ? tab.color : undefined,
+                        }}
+                      >
+                        <span>{tab.label}</span>
+                        {counts && (
+                          <span className="text-[10px] opacity-60 tabular-nums">
+                            {counts.done}/{counts.total}
+                          </span>
+                        )}
+                      </button>
+                    );
+                  })}
                 </div>
 
-                {/* Active leaf section content */}
-                <div>
-                  {activeLeafTab === 'shared' && renderItemsTable(shared, 1)}
-                  {activeLeafTab === 'leaf1' && renderItemsTable(leaf1, 1)}
-                  {activeLeafTab === 'leaf2' && renderItemsTable(leaf2, 2)}
-                </div>
+                {isPair ? (
+                  <>
+                    {/* Leaf sub-tabs for pair doors */}
+                    <div className="flex gap-0.5 mb-5 bg-surface rounded-md p-1">
+                      {([
+                        { key: 'shared' as const, label: 'Shared', count: shared.length, color: 'var(--text-tertiary)' },
+                        { key: 'leaf1' as const, label: 'Leaf 1', count: leaf1.length, color: 'var(--blue)' },
+                        { key: 'leaf2' as const, label: 'Leaf 2', count: leaf2.length, color: 'var(--purple)' },
+                      ]).map((tab) => (
+                        <button
+                          key={tab.key}
+                          onClick={() => setActiveLeafTab(tab.key)}
+                          className={`flex-1 px-2 py-3 min-h-[44px] rounded-md text-[11px] font-semibold uppercase transition-colors flex flex-col items-center gap-0.5 ${
+                            activeLeafTab === tab.key
+                              ? 'bg-surface-hover border border-th-border-hover'
+                              : 'text-tertiary hover:text-secondary'
+                          }`}
+                          style={{
+                            fontFamily: "var(--font-display)",
+                            letterSpacing: "0.06em",
+                            color: activeLeafTab === tab.key ? tab.color : undefined,
+                          }}
+                        >
+                          <span>{tab.label}</span>
+                          <span className="text-[10px] opacity-60">{tab.count} items</span>
+                        </button>
+                      ))}
+                    </div>
+
+                    {/* Active leaf section content */}
+                    <div>
+                      {activeLeafTab === 'shared' && renderItemsTable(shared, 1)}
+                      {activeLeafTab === 'leaf1' && renderItemsTable(leaf1, 1)}
+                      {activeLeafTab === 'leaf2' && renderItemsTable(leaf2, 2)}
+                    </div>
+                  </>
+                ) : (
+                  /* Single door — flat list, no sub-tabs */
+                  <div>
+                    {renderItemsTable(opening.hardware_items, 1)}
+                  </div>
+                )}
               </>
-            ) : (
-              /* Single door — flat list, no sub-tabs */
-              <div>
-                {renderItemsTable(opening.hardware_items, 1)}
-              </div>
             )}
           </div>
         )}
