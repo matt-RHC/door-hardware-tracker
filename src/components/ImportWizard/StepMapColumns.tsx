@@ -216,7 +216,7 @@ export default function StepMapColumns({
                 ref={(el) => {
                   if (detected?.mapped_field) registerRef(detected.mapped_field, el);
                 }}
-                className="grid grid-cols-[1fr_auto_1fr] gap-3 items-center bg-tint border border-border-dim-strong rounded-xl px-3 py-2"
+                className="grid grid-cols-[1fr_auto_1fr] gap-3 items-center bg-tint border border-border-dim-strong rounded-md px-3 py-2"
               >
                 {/* Source header */}
                 <div className="text-primary text-sm font-mono truncate">

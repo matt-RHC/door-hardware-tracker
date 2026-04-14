@@ -164,14 +164,14 @@ export default function ProjectDetailPage() {
             Projects
           </button>
           <h1
-            className="text-2xl sm:text-3xl font-bold text-primary mb-4"
+            className="text-xl sm:text-2xl font-bold text-primary mb-4 pb-3 border-b border-th-border"
             style={{ fontFamily: "var(--font-display)", letterSpacing: "0.02em" }}
           >
             PROJECT DETAILS
           </h1>
 
           {/* Overall Progress */}
-          <div className="panel p-4 rounded-lg">
+          <div className="panel p-4 rounded-md">
             <div className="flex justify-between items-center mb-2">
               <span className="text-[13px] text-secondary uppercase tracking-wider">
                 Overall Progress
@@ -198,7 +198,7 @@ export default function ProjectDetailPage() {
           <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
             <button
               onClick={() => setShowFilters(!showFilters)}
-              className={`shrink-0 glow-btn text-[13px] rounded-lg ${
+              className={`shrink-0 glow-btn text-[13px] rounded ${
                 showFilters || activeFilterCount > 0
                   ? "bg-accent-dim border-accent text-accent"
                   : "glow-btn--ghost"
@@ -217,7 +217,7 @@ export default function ProjectDetailPage() {
             </button>
             <button
               onClick={() => router.push(`/project/${projectId}/qr-codes`)}
-              className="shrink-0 glow-btn glow-btn--ghost text-[13px] rounded-lg"
+              className="shrink-0 glow-btn glow-btn--ghost text-[13px] rounded"
               style={{ padding: "0.5rem 0.875rem" }}
             >
               QR Codes
@@ -226,14 +226,14 @@ export default function ProjectDetailPage() {
               onClick={() => {
                 window.location.href = `/api/projects/${projectId}/export-csv`;
               }}
-              className="shrink-0 glow-btn glow-btn--ghost text-[13px] rounded-lg"
+              className="shrink-0 glow-btn glow-btn--ghost text-[13px] rounded"
               style={{ padding: "0.5rem 0.875rem" }}
             >
               CSV
             </button>
             <button
               onClick={() => setShowUploadModal(true)}
-              className="shrink-0 glow-btn glow-btn--primary text-[13px] rounded-lg"
+              className="shrink-0 glow-btn glow-btn--primary text-[13px] rounded"
               style={{ padding: "0.5rem 0.875rem" }}
             >
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -246,7 +246,7 @@ export default function ProjectDetailPage() {
 
         {/* ── Filter Panel ── */}
         {showFilters && (
-          <div className="panel p-4 rounded-lg mb-5 animate-fade-in-up">
+          <div className="panel p-4 rounded-md mb-5 animate-fade-in-up">
             <div className="flex justify-between items-center mb-3">
               <span className="text-[12px] text-secondary font-medium uppercase tracking-wider">
                 Filter Openings
@@ -297,7 +297,7 @@ export default function ProjectDetailPage() {
             <span className="text-[13px] text-tertiary">Loading openings...</span>
           </div>
         ) : error ? (
-          <div className="p-4 bg-danger-dim border border-danger rounded-lg text-danger text-[14px]">
+          <div className="p-4 bg-danger-dim border border-danger rounded-md text-danger text-[14px]">
             {error}
           </div>
         ) : filteredOpenings.length === 0 ? (
@@ -322,11 +322,11 @@ export default function ProjectDetailPage() {
                   onClick={() =>
                     router.push(`/project/${projectId}/door/${opening.id}`)
                   }
-                  className={`glow-card ${getCardVariant(progressPercent)} p-4 cursor-pointer group`}
+                  className={`glow-card ${getCardVariant(progressPercent)} px-4 py-3 cursor-pointer group`}
                 >
                   {/* Door number + badges row */}
-                  <div className="flex items-start justify-between mb-2">
-                    <h2 className="text-[17px] font-bold text-primary leading-tight">
+                  <div className="flex items-start justify-between mb-1.5">
+                    <h2 className="text-[15px] font-bold text-primary leading-tight">
                       {opening.door_number}
                     </h2>
                     <div className="flex items-center gap-1.5 shrink-0 ml-2">
@@ -353,7 +353,7 @@ export default function ProjectDetailPage() {
                   </div>
 
                   {/* Badges */}
-                  <div className="flex flex-wrap gap-1.5 mb-2.5">
+                  <div className="flex flex-wrap gap-1.5 mb-2">
                     {opening.hw_set && (
                       <span className="status-badge status-badge--active" style={{ fontSize: "10px", padding: "2px 8px" }}>
                         {opening.hw_set}
@@ -377,7 +377,7 @@ export default function ProjectDetailPage() {
                   </div>
 
                   {opening.location && (
-                    <p className="text-[12px] text-tertiary mb-3 truncate">
+                    <p className="text-[12px] text-tertiary mb-2 truncate">
                       {opening.location}
                     </p>
                   )}

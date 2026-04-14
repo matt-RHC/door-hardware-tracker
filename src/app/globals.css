@@ -101,8 +101,8 @@
   --border-dim-strong: rgba(255,255,255,0.08);
 
   /* Radii */
-  --radius: 10px;
-  --radius-sm: 6px;
+  --radius: 6px;
+  --radius-sm: 4px;
   --radius-pill: 20px;
 }
 
@@ -215,27 +215,13 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-inter), system-ui, -apple-system, sans-serif;
+  font-size: 14px;
+  line-height: 1.5;
   height: 100%;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Scan line overlay — login page only */
-.login-scanlines::after {
-  content: '';
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  z-index: 9999;
-  background: repeating-linear-gradient(
-    0deg,
-    transparent,
-    transparent 2px,
-    rgba(0,0,0,0.03) 2px,
-    rgba(0,0,0,0.03) 4px
-  );
-  mix-blend-mode: multiply;
-}
 
 /* NOTE: #__next was the Pages Router mount point; App Router has no such element.
    Layout spacing now lives on <body> in src/app/layout.tsx (min-h-full flex flex-col). */
@@ -249,7 +235,7 @@ body {
 .glow-card {
   position: relative;
   background: var(--surface);
-  border: 1px solid var(--border);
+  border: 1px solid color-mix(in srgb, var(--border) 70%, transparent);
   border-left: 3px solid var(--blue);
   border-radius: var(--radius);
   transition: all 0.25s ease;

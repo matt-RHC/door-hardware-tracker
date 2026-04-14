@@ -543,7 +543,7 @@ export default function ImportWizard({
 
         {/* Error banner */}
         {state.error && (
-          <div className="mx-6 mt-4 p-3 bg-danger-dim border border-danger rounded-xl text-danger text-sm">
+          <div className="mx-6 mt-4 p-3 bg-danger-dim border border-danger rounded-md text-danger text-sm">
             {state.error}
           </div>
         )}
@@ -624,13 +624,13 @@ export default function ImportWizard({
               <div className="flex gap-3">
                 <button
                   onClick={() => setShowCloseConfirm(false)}
-                  className="glow-btn--ghost flex-1 min-h-11 rounded-lg text-sm font-medium"
+                  className="glow-btn--ghost flex-1 min-h-11 rounded text-sm font-medium"
                 >
                   Continue Editing
                 </button>
                 <button
                   onClick={() => { setShowCloseConfirm(false); onClose(); }}
-                  className="glow-btn--danger flex-1 min-h-11 rounded-lg text-sm font-semibold"
+                  className="glow-btn--danger flex-1 min-h-11 rounded text-sm font-semibold"
                 >
                   Discard &amp; Close
                 </button>
@@ -663,7 +663,7 @@ export default function ImportWizard({
 
       {/* Error banner */}
       {state.error && (
-        <div className="mx-6 mt-4 p-3 bg-danger-dim border border-danger rounded-xl text-danger text-sm">
+        <div className="mx-6 mt-4 p-3 bg-danger-dim border border-danger rounded-md text-danger text-sm">
           {state.error}
         </div>
       )}
@@ -781,13 +781,13 @@ export default function ImportWizard({
             <div className="flex gap-3">
               <button
                 onClick={() => setShowCloseConfirm(false)}
-                className="glow-btn--ghost flex-1 min-h-11 rounded-lg text-sm font-medium"
+                className="glow-btn--ghost flex-1 min-h-11 rounded text-sm font-medium"
               >
                 Continue Editing
               </button>
               <button
                 onClick={() => { setShowCloseConfirm(false); onClose(); }}
-                className="glow-btn--danger flex-1 min-h-11 rounded-lg text-sm font-semibold"
+                className="glow-btn--danger flex-1 min-h-11 rounded text-sm font-semibold"
               >
                 Discard &amp; Close
               </button>

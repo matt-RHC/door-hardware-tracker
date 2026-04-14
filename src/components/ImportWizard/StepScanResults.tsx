@@ -78,7 +78,7 @@ export default function StepScanResults({
 
       {/* ── Summary cards ── */}
       <div className="grid grid-cols-3 gap-2 mb-4">
-        <div className="bg-tint border border-border-dim rounded-xl p-3 text-center">
+        <div className="bg-tint border border-border-dim rounded-md p-3 text-center">
           <div className="text-lg font-bold text-accent">
             {summary.total_pages}
           </div>
@@ -86,7 +86,7 @@ export default function StepScanResults({
             Total Pages
           </div>
         </div>
-        <div className="bg-tint border border-border-dim rounded-xl p-3 text-center">
+        <div className="bg-tint border border-border-dim rounded-md p-3 text-center">
           <div className="text-lg font-bold text-success">
             {summary.door_schedule_pages.length}
           </div>
@@ -94,7 +94,7 @@ export default function StepScanResults({
             Door Schedule
           </div>
         </div>
-        <div className="bg-tint border border-border-dim rounded-xl p-3 text-center">
+        <div className="bg-tint border border-border-dim rounded-md p-3 text-center">
           <div className="text-lg font-bold text-warning">
             {allSetIds.length > 0 ? allSetIds.length : summary.hardware_set_pages.length}
           </div>
@@ -106,7 +106,7 @@ export default function StepScanResults({
 
       {/* ── Document profile (if detected) ── */}
       {profile && (
-        <div className="bg-tint border border-border-dim rounded-xl p-3 mb-4">
+        <div className="bg-tint border border-border-dim rounded-md p-3 mb-4">
           <div className="text-[10px] text-tertiary uppercase tracking-wide mb-2 font-semibold">
             Document Profile
           </div>
@@ -141,13 +141,13 @@ export default function StepScanResults({
 
       {/* ── Scanned page warning ── */}
       {(summary.scanned_pages ?? 0) > 0 && (
-        <div className="bg-danger-dim border border-danger rounded-xl p-3 mb-4 text-xs text-danger">
+        <div className="bg-danger-dim border border-danger rounded-md p-3 mb-4 text-xs text-danger">
           {summary.scanned_pages} scanned page{(summary.scanned_pages ?? 0) > 1 ? "s" : ""} detected — text extraction may be limited on these pages.
         </div>
       )}
 
       {/* ── Page classification breakdown ── */}
-      <div className="bg-tint border border-border-dim rounded-xl p-3 mb-4">
+      <div className="bg-tint border border-border-dim rounded-md p-3 mb-4">
         <div className="text-[10px] text-tertiary uppercase tracking-wide mb-3 font-semibold">
           Page Classification
         </div>

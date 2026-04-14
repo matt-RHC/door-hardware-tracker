@@ -109,7 +109,7 @@ export default function ToastProvider({ children }: { children: ReactNode }) {
               role="status"
               aria-label={`${s.label}: ${t.message}. Tap to dismiss.`}
               onClick={() => dismiss(t.id)}
-              className={`pointer-events-auto w-full text-left cursor-pointer bg-surface-raised border ${s.border} rounded-xl px-4 py-3 text-sm text-primary shadow-2xl flex items-start gap-3 backdrop-blur-sm transition-opacity hover:opacity-90`}
+              className={`pointer-events-auto w-full text-left cursor-pointer bg-surface-raised border ${s.border} rounded-md px-4 py-3 text-sm text-primary shadow-2xl flex items-start gap-3 backdrop-blur-sm transition-opacity hover:opacity-90`}
             >
               <span
                 className={`${s.accent} font-bold text-base leading-none mt-0.5 shrink-0`}

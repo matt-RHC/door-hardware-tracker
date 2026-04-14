@@ -217,7 +217,7 @@ export default function StepUpload({
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
         onClick={() => fileInputRef.current?.click()}
-        className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors ${
+        className={`border-2 border-dashed rounded-md p-8 text-center cursor-pointer transition-colors ${
           dragOver
             ? "border-accent bg-accent-dim"
             : file

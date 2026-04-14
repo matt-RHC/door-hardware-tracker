@@ -166,7 +166,7 @@ export default function StepConfirm({
         </p>
 
         <div className="grid grid-cols-2 gap-3 max-w-sm mx-auto text-sm mb-6">
-          <div className="bg-tint border border-border-dim rounded-xl p-3">
+          <div className="bg-tint border border-border-dim rounded-md p-3">
             <div className="text-lg font-bold text-accent">
               {saveResult.openingsCount}
             </div>
@@ -174,7 +174,7 @@ export default function StepConfirm({
               Doors Staged
             </div>
           </div>
-          <div className="bg-tint border border-border-dim rounded-xl p-3">
+          <div className="bg-tint border border-border-dim rounded-md p-3">
             <div className="text-lg font-bold text-warning">
               {saveResult.itemsCount}
             </div>
@@ -204,7 +204,7 @@ export default function StepConfirm({
         </h3>
 
         <div className="grid grid-cols-2 gap-3 max-w-sm mx-auto text-sm mb-6">
-          <div className="bg-tint border border-border-dim rounded-xl p-3">
+          <div className="bg-tint border border-border-dim rounded-md p-3">
             <div className="text-lg font-bold text-accent">
               {saveResult.openingsCount}
             </div>
@@ -212,7 +212,7 @@ export default function StepConfirm({
               Doors Saved
             </div>
           </div>
-          <div className="bg-tint border border-border-dim rounded-xl p-3">
+          <div className="bg-tint border border-border-dim rounded-md p-3">
             <div className="text-lg font-bold text-success">
               {saveResult.itemsCount}
             </div>
@@ -223,7 +223,7 @@ export default function StepConfirm({
         </div>
 
         {saveResult.partial && (
-          <div className="mb-4 p-3 bg-warning-dim border border-warning rounded-xl text-sm">
+          <div className="mb-4 p-3 bg-warning-dim border border-warning rounded-md text-sm">
             <p className="text-warning font-semibold mb-1">Partial Save</p>
             <p className="text-secondary text-xs">
               {saveResult.itemsCount} of {saveResult.expectedItemsCount ?? "?"} hardware items were saved successfully.
@@ -234,7 +234,7 @@ export default function StepConfirm({
         )}
 
         {saveResult.unmatchedSets && saveResult.unmatchedSets.length > 0 && (
-          <div className="mb-4 p-3 bg-warning-dim border border-warning rounded-xl text-warning text-xs">
+          <div className="mb-4 p-3 bg-warning-dim border border-warning rounded-md text-warning text-xs">
             {saveResult.unmatchedSets.length} unmatched set(s):{" "}
             {saveResult.unmatchedSets.join(", ")}
           </div>
@@ -265,22 +265,22 @@ export default function StepConfirm({
 
       {/* Summary */}
       <div className="space-y-2 mb-4">
-        <div className="bg-tint border border-border-dim rounded-xl p-3 flex justify-between">
+        <div className="bg-tint border border-border-dim rounded-md p-3 flex justify-between">
           <span className="text-secondary">Doors</span>
           <span className="text-primary font-mono">{doors.length}</span>
         </div>
-        <div className="bg-tint border border-border-dim rounded-xl p-3 flex justify-between">
+        <div className="bg-tint border border-border-dim rounded-md p-3 flex justify-between">
           <span className="text-secondary">Hardware Sets</span>
           <span className="text-primary font-mono">
             {hardwareSets.length}
           </span>
         </div>
-        <div className="bg-tint border border-border-dim rounded-xl p-3 flex justify-between">
+        <div className="bg-tint border border-border-dim rounded-md p-3 flex justify-between">
           <span className="text-secondary">Total Hardware Items</span>
           <span className="text-primary font-mono">{totalItems}</span>
         </div>
         {triageResult && triageResult.by_others > 0 && (
-          <div className="bg-tint border border-border-dim rounded-xl p-3 flex justify-between">
+          <div className="bg-tint border border-border-dim rounded-md p-3 flex justify-between">
             <span className="text-secondary">By Others (excluded)</span>
             <span className="text-warning font-mono">
               {triageResult.by_others}
@@ -291,7 +291,7 @@ export default function StepConfirm({
 
       {/* Blocking error: unmatched hardware sets */}
       {doorsWithUnmatchedSets.length > 0 && (
-        <div className="mb-4 p-3 bg-danger-dim border border-danger rounded-xl">
+        <div className="mb-4 p-3 bg-danger-dim border border-danger rounded-md">
           <p className="text-danger text-sm font-semibold">
             Cannot save: {doorsWithUnmatchedSets.length} door(s) reference
             hardware sets that don&apos;t exist. Go back and fix the hw_set
@@ -315,7 +315,7 @@ export default function StepConfirm({
           {warnings.map((w, i) => (
             <div
               key={i}
-              className="p-3 bg-warning-dim border border-warning rounded-xl text-warning text-xs"
+              className="p-3 bg-warning-dim border border-warning rounded-md text-warning text-xs"
             >
               {w}
             </div>

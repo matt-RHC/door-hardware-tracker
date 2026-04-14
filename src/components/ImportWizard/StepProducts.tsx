@@ -360,7 +360,7 @@ function TypoAlert({
 }) {
   return (
     <div
-      className="bg-warning-dim/30 border border-warning/20 rounded-xl p-3 text-sm"
+      className="bg-warning-dim/30 border border-warning/20 rounded-md p-3 text-sm"
       onClick={(e) => e.stopPropagation()}
     >
       <p className="text-secondary mb-2">

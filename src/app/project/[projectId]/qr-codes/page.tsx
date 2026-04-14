@@ -75,7 +75,7 @@ export default function QRCodesPrintPage() {
             return (
               <div
                 key={opening.id}
-                className="qr-code-item bg-tint border border-border-dim p-4 rounded-xl flex flex-col items-center"
+                className="qr-code-item bg-tint border border-border-dim p-4 rounded-md flex flex-col items-center"
               >
                 <QRCodeSVG
                   value={qrUrl}

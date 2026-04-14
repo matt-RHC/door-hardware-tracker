@@ -4,49 +4,6 @@ import { useState, useEffect, FormEvent, ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
-/* ─── Floating particles background ─── */
-function Particles() {
-  const [particles] = useState(() =>
-    Array.from({ length: 24 }, (_, i) => ({
-      id: i,
-      x: Math.random() * 100,
-      y: Math.random() * 100,
-      size: 2 + Math.random() * 3,
-      duration: 15 + Math.random() * 25,
-      delay: Math.random() * -20,
-      opacity: 0.08 + Math.random() * 0.12,
-    }))
-  );
-
-  return (
-    <div className="absolute inset-0 overflow-hidden pointer-events-none">
-      {particles.map((p) => (
-        <div
-          key={p.id}
-          className="absolute rounded-full"
-          style={{
-            left: `${p.x}%`,
-            top: `${p.y}%`,
-            width: p.size,
-            height: p.size,
-            background: "var(--blue)",
-            opacity: p.opacity,
-            animation: `float-particle ${p.duration}s ease-in-out ${p.delay}s infinite`,
-          }}
-        />
-      ))}
-      <style>{`
-        @keyframes float-particle {
-          0%, 100% { transform: translate(0, 0) scale(1); }
-          25% { transform: translate(30px, -40px) scale(1.2); }
-          50% { transform: translate(-20px, -80px) scale(0.8); }
-          75% { transform: translate(40px, -30px) scale(1.1); }
-        }
-      `}</style>
-    </div>
-  );
-}
-
 /* ─── Door illustration (SVG) ───
    Uses `currentColor` on strokes/fills so every accent derives from the
    wrapping element's `color: var(--blue)` — theme swaps cascade for free. */
@@ -170,39 +127,15 @@ export default function LoginPage() {
 
   return (
     <div
-      className="min-h-screen w-full flex items-center justify-center px-4 py-8 relative overflow-hidden login-scanlines"
+      className="min-h-screen w-full flex items-center justify-center px-4 py-8 relative overflow-hidden"
       style={{ background: "var(--background)" }}
     >
-      {/* Layered background */}
-      <Particles />
-
-      {/* Grid overlay — pulls its color from the current theme's accent token */}
-      <div
-        className="absolute inset-0 opacity-[0.025]"
-        style={{
-          backgroundImage: `
-            linear-gradient(color-mix(in srgb, var(--blue) 40%, transparent) 1px, transparent 1px),
-            linear-gradient(90deg, color-mix(in srgb, var(--blue) 40%, transparent) 1px, transparent 1px)
-          `,
-          backgroundSize: "80px 80px",
-        }}
-      />
-
-      {/* Top-left radial glow */}
+      {/* Subtle top-left radial glow */}
       <div
         className="absolute -top-40 -left-40 w-[600px] h-[600px] rounded-full"
         style={{
           background:
             "radial-gradient(circle, color-mix(in srgb, var(--blue) 6%, transparent) 0%, transparent 65%)",
-        }}
-      />
-
-      {/* Bottom-right accent glow */}
-      <div
-        className="absolute -bottom-32 -right-32 w-[400px] h-[400px] rounded-full"
-        style={{
-          background:
-            "radial-gradient(circle, color-mix(in srgb, var(--green) 4%, transparent) 0%, transparent 70%)",
         }}
       />
 
@@ -239,14 +172,14 @@ export default function LoginPage() {
         >
           <form
             onSubmit={handleLogin}
-            className="panel corner-brackets p-6 sm:p-8"
+            className="panel p-6 sm:p-8"
           >
             <h2 className="text-[15px] font-semibold text-primary mb-5 text-center">
               Sign in to your account
             </h2>
 
             {error && (
-              <div className="mb-5 p-3 bg-danger-dim border border-danger rounded-lg text-danger text-[13px] flex items-center gap-2.5 animate-fade-in-up">
+              <div className="mb-5 p-3 bg-danger-dim border border-danger rounded-md text-danger text-[13px] flex items-center gap-2.5 animate-fade-in-up">
                 <svg className="w-4 h-4 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                 </svg>
@@ -301,7 +234,7 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="glow-btn--primary w-full rounded-lg disabled:opacity-40 disabled:cursor-not-allowed py-3 mt-6 text-[14px] font-semibold tracking-wide"
+              className="glow-btn--primary w-full rounded disabled:opacity-40 disabled:cursor-not-allowed py-3 mt-6 text-[14px] font-semibold tracking-wide"
             >
               {loading ? (
                 <span className="flex items-center justify-center gap-2.5">
@@ -345,7 +278,7 @@ export default function LoginPage() {
           ].map(({ icon, label }) => (
             <div
               key={label}
-              className="flex flex-col items-center gap-1.5 py-3 px-2 rounded-lg bg-tint border border-border-dim"
+              className="flex flex-col items-center gap-1.5 py-3 px-2 rounded-md bg-tint border border-border-dim"
             >
               <svg className="w-5 h-5 text-accent/40" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={1.5}>
                 <path strokeLinecap="round" strokeLinejoin="round" d={icon} />
