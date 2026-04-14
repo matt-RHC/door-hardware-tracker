@@ -109,7 +109,7 @@ export default function ProjectDetailPage() {
       const q = filters.search.toLowerCase();
       filtered = filtered.filter(
         (o) =>
-          o.door_number.toLowerCase().includes(q) ||
+          (o.door_number ?? '').toLowerCase().includes(q) ||
           o.location?.toLowerCase().includes(q) ||
           o.hw_set?.toLowerCase().includes(q)
       );

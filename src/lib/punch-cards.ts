@@ -269,7 +269,7 @@ export function generatePunchCards(input: {
     const groups = new Map<string, typeof qtyQuestions>()
     for (const q of qtyQuestions) {
       // Group key: item_name (lowercased) + same options = same question type
-      const key = `${q.item_name.toLowerCase()}|${q.options.join('|')}`
+      const key = `${(q.item_name ?? '').toLowerCase()}|${q.options.join('|')}`
       const group = groups.get(key) ?? []
       group.push(q)
       groups.set(key, group)
@@ -293,7 +293,7 @@ export function generatePunchCards(input: {
       } else {
         // Batch — one card for N sets with the same question
         cards.push({
-          id: `batch-${representative.item_name.toLowerCase().replace(/\s+/g, '-')}`,
+          id: `batch-${(representative.item_name ?? '').toLowerCase().replace(/\s+/g, '-')}`,
           kind: 'question_batch',
           title: `${representative.item_name} — ${group.length} sets`,
           required: true,

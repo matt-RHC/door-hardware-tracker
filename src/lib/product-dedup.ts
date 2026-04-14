@@ -52,7 +52,7 @@ export interface ProductAnalysis {
 
 /** Normalize a model string: lowercase, collapse whitespace, strip trailing punctuation. */
 export function normalizeModel(model: string): string {
-  return model
+  return (model ?? '')
     .toLowerCase()
     .replace(/\s+/g, ' ')
     .replace(/[.,;:]+$/, '')
@@ -181,7 +181,7 @@ export function analyzeProducts(hardwareSets: HardwareSet[]): ProductAnalysis {
 
       const categoryId = classifyItem(item.name ?? '', manufacturer)
       const normalized = normalizeModel(model)
-      const key = `${manufacturer.toLowerCase()}|${baseSeries.toLowerCase()}`
+      const key = `${(manufacturer ?? '').toLowerCase()}|${(baseSeries ?? '').toLowerCase()}`
 
       let family = familyMap.get(key)
       if (!family) {
@@ -251,10 +251,10 @@ export function analyzeProducts(hardwareSets: HardwareSet[]): ProductAnalysis {
         const a = catFamilies[i]
         const b = catFamilies[j]
         // Only compare within same manufacturer
-        if (a.manufacturer.toLowerCase() !== b.manufacturer.toLowerCase()) continue
+        if ((a.manufacturer ?? '').toLowerCase() !== (b.manufacturer ?? '').toLowerCase()) continue
         const dist = levenshtein(
-          a.baseSeries.toLowerCase(),
-          b.baseSeries.toLowerCase(),
+          (a.baseSeries ?? '').toLowerCase(),
+          (b.baseSeries ?? '').toLowerCase(),
         )
         if (dist === 1) {
           typoCandidates.push({ familyA: a, familyB: b, distance: dist })
