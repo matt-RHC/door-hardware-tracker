@@ -16,7 +16,14 @@ interface OpeningWithCounts {
   pdf_page: number | null
   created_at: string
   hardware_items: Array<{ id: string }>
-  checklist_progress: Array<{ id: string; checked: boolean }>
+  checklist_progress: Array<{
+    id: string
+    checked: boolean
+    received: boolean | null
+    pre_install: boolean | null
+    installed: boolean | null
+    qa_qc: boolean | null
+  }>
 }
 
 export async function GET(
@@ -67,7 +74,7 @@ export async function GET(
         pdf_page,
         created_at,
         hardware_items:hardware_items(id),
-        checklist_progress(id, checked)
+        checklist_progress(id, checked, received, pre_install, installed, qa_qc)
       `)
       .eq('project_id', projectId)
       .order('door_number', { ascending: true })
@@ -80,15 +87,24 @@ export async function GET(
       )
     }
 
-    // Transform data to include counts
-    const transformedOpenings = (openings as OpeningWithCounts[]).map((opening) => ({
-      ...opening,
-      total_items: opening.hardware_items?.length || 0,
-      checked_items: opening.checklist_progress?.filter((cp) => cp.checked).length || 0,
-      total_checklist: opening.checklist_progress?.length || 0,
-      hardware_items: undefined,
-      checklist_progress: undefined,
-    }))
+    // Transform data to include counts + per-stage breakdown
+    const transformedOpenings = (openings as OpeningWithCounts[]).map((opening) => {
+      const cp = opening.checklist_progress || []
+      return {
+        ...opening,
+        total_items: opening.hardware_items?.length || 0,
+        checked_items: cp.filter((c) => c.checked).length || 0,
+        total_checklist: cp.length || 0,
+        stage_counts: {
+          received: cp.filter((c) => c.received).length,
+          pre_install: cp.filter((c) => c.pre_install).length,
+          installed: cp.filter((c) => c.installed).length,
+          qa_qc: cp.filter((c) => c.qa_qc).length,
+        },
+        hardware_items: undefined,
+        checklist_progress: undefined,
+      }
+    })
 
     return NextResponse.json(transformedOpenings)
   } catch (error) {
