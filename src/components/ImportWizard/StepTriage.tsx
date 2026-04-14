@@ -870,7 +870,7 @@ export default function StepTriage({
 
       {/* Chunk failure warning banner */}
       {failedChunks.length > 0 && !isLoading && (
-        <div className="mb-4 p-4 bg-warning-dim border border-warning rounded-xl">
+        <div className="mb-4 p-4 bg-warning-dim border border-warning rounded-md">
           <div className="flex items-start gap-2 mb-2">
             <span className="text-warning text-lg leading-none" aria-label="Warning">&#x26A0;</span>
             <p className="text-warning text-sm font-semibold">
@@ -898,7 +898,7 @@ export default function StepTriage({
 
       {/* ─── Deep Extract Banner ─── */}
       {phase === "punchy_review" && !deepExtracting && !deepExtractComplete && extractionConfidence?.suggest_deep_extraction && (
-        <div className="mb-4 p-4 bg-warning-dim border border-warning rounded-xl">
+        <div className="mb-4 p-4 bg-warning-dim border border-warning rounded-md">
           <div className="flex items-start gap-2 mb-2">
             <span className="text-warning text-lg leading-none" aria-hidden="true">&#x26A0;&#xFE0F;</span>
             <div>
@@ -927,7 +927,7 @@ export default function StepTriage({
 
       {/* Deep extract running indicator */}
       {deepExtracting && deepExtractProgress && (
-        <div className="mb-4 p-4 bg-accent-dim border border-accent rounded-xl">
+        <div className="mb-4 p-4 bg-accent-dim border border-accent rounded-md">
           <div className="flex items-center gap-3">
             <span className="text-accent animate-pulse text-lg" aria-hidden="true">&#x1F50D;</span>
             <div className="flex-1">
@@ -945,7 +945,7 @@ export default function StepTriage({
 
       {/* Deep extract complete banner */}
       {deepExtractComplete && reconciliationResult && (
-        <div className="mb-4 p-4 bg-success-dim border border-success rounded-xl">
+        <div className="mb-4 p-4 bg-success-dim border border-success rounded-md">
           <div className="flex items-center gap-2">
             <span className="text-success text-lg" aria-hidden="true">&#x2713;</span>
             <p className="text-success text-sm font-semibold">
@@ -988,7 +988,7 @@ export default function StepTriage({
 
       {/* Triage-failed warning: backend signaled triage_error */}
       {triageResult?.triage_error && (
-        <div className="mb-4 p-4 bg-danger-dim border border-danger rounded-xl">
+        <div className="mb-4 p-4 bg-danger-dim border border-danger rounded-md">
           <div className="flex items-start gap-2 mb-3">
             <span className="text-danger text-lg leading-none" aria-label="Warning">&#x26A0;</span>
             <p className="text-danger text-sm font-semibold">
@@ -1035,7 +1035,7 @@ export default function StepTriage({
       {triageResult && (
         <>
           <div className="grid grid-cols-3 gap-3 mb-4">
-            <div className="bg-tint border border-border-dim rounded-xl p-3 text-center">
+            <div className="bg-tint border border-border-dim rounded-md p-3 text-center">
               <div className="text-xl font-bold text-success">
                 {triageResult.doors_found}
               </div>
@@ -1043,7 +1043,7 @@ export default function StepTriage({
                 Doors Found
               </div>
             </div>
-            <div className="bg-tint border border-border-dim rounded-xl p-3 text-center">
+            <div className="bg-tint border border-border-dim rounded-md p-3 text-center">
               <div className="text-xl font-bold text-warning">
                 {triageResult.by_others}
               </div>
@@ -1051,7 +1051,7 @@ export default function StepTriage({
                 By Others
               </div>
             </div>
-            <div className="bg-tint border border-border-dim rounded-xl p-3 text-center">
+            <div className="bg-tint border border-border-dim rounded-md p-3 text-center">
               <div className="text-xl font-bold text-danger">
                 {triageResult.rejected}
               </div>

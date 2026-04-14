@@ -125,10 +125,10 @@ export default function DashboardPage() {
 
       <main className="max-w-7xl mx-auto px-4 py-6 sm:py-8">
         {/* Header */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 pb-4 border-b border-th-border">
           <div>
             <h1
-              className="text-2xl sm:text-3xl font-bold text-primary"
+              className="text-xl sm:text-2xl font-bold text-primary"
               style={{ fontFamily: "var(--font-display)", letterSpacing: "0.02em" }}
             >
               PROJECTS
@@ -142,7 +142,7 @@ export default function DashboardPage() {
               playClick();
               openNewProject();
             }}
-            className="glow-btn--primary text-[13px] rounded-lg"
+            className="glow-btn--primary text-[13px] rounded"
             style={{ padding: "0.5rem 1rem" }}
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -159,7 +159,7 @@ export default function DashboardPage() {
             <span className="text-[13px] text-tertiary">Loading projects...</span>
           </div>
         ) : error ? (
-          <div className="p-4 bg-danger-dim border border-danger rounded-lg text-danger text-[14px] mb-4 flex items-center justify-between">
+          <div className="p-4 bg-danger-dim border border-danger rounded-md text-danger text-[14px] mb-4 flex items-center justify-between">
             <span>{error}</span>
             <button
               onClick={() => setError(null)}
@@ -170,7 +170,7 @@ export default function DashboardPage() {
           </div>
         ) : projects.length === 0 ? (
           <div className="text-center py-20">
-            <div className="w-16 h-16 mx-auto mb-4 rounded-xl bg-accent-dim border border-accent flex items-center justify-center">
+            <div className="w-16 h-16 mx-auto mb-4 rounded-md bg-accent-dim border border-accent flex items-center justify-center">
               <svg className="w-7 h-7 text-accent/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
               </svg>
@@ -179,7 +179,7 @@ export default function DashboardPage() {
             <p className="text-[13px] text-tertiary">Create one to start tracking door hardware</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 stagger-children">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 stagger-children">
             {projects.map((project) => (
               <div
                 key={project.id}
@@ -188,18 +188,18 @@ export default function DashboardPage() {
                   router.push(`/project/${project.id}`);
                 }}
                 onMouseEnter={() => playHover()}
-                className="glow-card glow-card--blue cursor-pointer p-5 relative group"
+                className="glow-card glow-card--blue cursor-pointer px-4 py-3 relative group"
               >
                 {/* Actions menu */}
                 <div
-                  className="absolute top-3 right-3 z-10"
+                  className="absolute top-2 right-2 z-10"
                   onClick={(e) => e.stopPropagation()}
                 >
                   <button
                     onClick={() =>
                       setMenuOpen(menuOpen === project.id ? null : project.id)
                     }
-                    className="w-8 h-8 rounded-md flex items-center justify-center text-tertiary hover:text-secondary hover:bg-surface-hover transition-all"
+                    className="w-8 h-8 rounded flex items-center justify-center text-tertiary hover:text-secondary hover:bg-surface-hover transition-all"
                   >
                     <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
                       <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
@@ -207,10 +207,10 @@ export default function DashboardPage() {
                   </button>
 
                   {menuOpen === project.id && (
-                    <div className="absolute right-0 mt-1 w-36 panel rounded-lg shadow-xl z-20 overflow-hidden animate-fade-in-up">
+                    <div className="absolute right-0 mt-1 w-36 panel rounded-md shadow-xl z-20 overflow-hidden animate-fade-in-up">
                       <button
                         onClick={() => openEditProject(project)}
-                        className="w-full text-left px-4 py-2.5 text-[13px] text-secondary hover:bg-surface-hover hover:text-primary transition-colors"
+                        className="w-full text-left px-4 py-2 text-[13px] text-secondary hover:bg-surface-hover hover:text-primary transition-colors"
                       >
                         Edit
                       </button>
@@ -220,7 +220,7 @@ export default function DashboardPage() {
                           setDeleteConfirm(project.id);
                           setMenuOpen(null);
                         }}
-                        className="w-full text-left px-4 py-2.5 text-[13px] text-danger hover:bg-danger-dim transition-colors"
+                        className="w-full text-left px-4 py-2 text-[13px] text-danger hover:bg-danger-dim transition-colors"
                       >
                         Delete
                       </button>
@@ -229,7 +229,7 @@ export default function DashboardPage() {
                 </div>
 
                 {/* Project info */}
-                <h2 className="text-[16px] font-semibold text-primary mb-2 pr-8 leading-snug">
+                <h2 className="text-[15px] font-semibold text-primary mb-1 pr-8 leading-snug">
                   {project.name}
                 </h2>
                 {project.general_contractor && (
@@ -237,11 +237,11 @@ export default function DashboardPage() {
                     <svg className="w-3.5 h-3.5 text-tertiary shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
                     </svg>
-                    {project.general_contractor}
+                    <span className="font-semibold">{project.general_contractor}</span>
                   </p>
                 )}
                 {project.job_number && (
-                  <p className="text-[12px] text-tertiary mb-3 flex items-center gap-1.5">
+                  <p className="text-[12px] text-tertiary mb-2 flex items-center gap-1.5">
                     <svg className="w-3.5 h-3.5 text-tertiary shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14" />
                     </svg>
@@ -259,7 +259,7 @@ export default function DashboardPage() {
                 )}
 
                 {/* Bottom arrow hint on hover */}
-                <div className="absolute bottom-3 right-4 opacity-0 group-hover:opacity-100 transition-opacity">
+                <div className="absolute bottom-2 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
                   <svg className="w-4 h-4 text-accent/60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                   </svg>
@@ -309,14 +309,14 @@ export default function DashboardPage() {
             <div className="flex gap-3 mt-6">
               <button
                 onClick={() => setShowModal(false)}
-                className="glow-btn--ghost flex-1 rounded-lg"
+                className="glow-btn--ghost flex-1 rounded"
               >
                 Cancel
               </button>
               <button
                 onClick={handleSave}
                 disabled={saving || !formData.name.trim()}
-                className="glow-btn--primary flex-1 rounded-lg disabled:opacity-40 disabled:cursor-not-allowed"
+                className="glow-btn--primary flex-1 rounded disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 {saving
                   ? "Saving..."
@@ -346,13 +346,13 @@ export default function DashboardPage() {
             <div className="flex gap-3">
               <button
                 onClick={() => setDeleteConfirm(null)}
-                className="glow-btn--ghost flex-1 rounded-lg"
+                className="glow-btn--ghost flex-1 rounded"
               >
                 Cancel
               </button>
               <button
                 onClick={() => handleDelete(deleteConfirm)}
-                className="glow-btn--danger flex-1 rounded-lg"
+                className="glow-btn--danger flex-1 rounded"
               >
                 Delete
               </button>

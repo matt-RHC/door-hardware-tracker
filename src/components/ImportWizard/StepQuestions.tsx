@@ -255,7 +255,7 @@ export default function StepQuestions({
 
       {/* ─── Error state ─── */}
       {job.isFailed && (
-        <div className="p-4 mb-6 bg-danger-dim border border-danger rounded-xl">
+        <div className="p-4 mb-6 bg-danger-dim border border-danger rounded-md">
           <p className="text-danger text-sm font-medium mb-1">
             Extraction failed
           </p>

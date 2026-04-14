@@ -559,15 +559,15 @@ function renderCard(card: PunchCardData, ctx: RenderContext) {
           <div className="space-y-4">
             {/* Big numbers */}
             <div className="grid grid-cols-3 gap-2">
-              <div className="bg-tint border border-border-dim rounded-xl p-3 text-center">
+              <div className="bg-tint border border-border-dim rounded-md p-3 text-center">
                 <div className="text-xl font-bold text-success">{p.doorCount}</div>
                 <div className="text-[9px] text-secondary uppercase tracking-wide">Doors</div>
               </div>
-              <div className="bg-tint border border-border-dim rounded-xl p-3 text-center">
+              <div className="bg-tint border border-border-dim rounded-md p-3 text-center">
                 <div className="text-xl font-bold text-accent">{p.setCount}</div>
                 <div className="text-[9px] text-secondary uppercase tracking-wide">HW Sets</div>
               </div>
-              <div className={`bg-tint border rounded-xl p-3 text-center ${p.grade === "critical" ? "border-danger" : p.grade === "warning" ? "border-warning" : "border-border-dim"}`}>
+              <div className={`bg-tint border rounded-md p-3 text-center ${p.grade === "critical" ? "border-danger" : p.grade === "warning" ? "border-warning" : "border-border-dim"}`}>
                 <div className={`text-xl font-bold ${p.grade === "critical" ? "text-danger" : p.grade === "warning" ? "text-warning" : "text-success"}`}>
                   {p.itemCount}
                 </div>

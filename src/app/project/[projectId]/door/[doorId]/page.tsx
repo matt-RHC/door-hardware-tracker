@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useRef } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { QRCodeSVG } from "qrcode.react";
 import OfflineIndicator from "@/components/OfflineIndicator";
@@ -243,7 +243,7 @@ export default function DoorDetailPage() {
   if (error && !opening) {
     return (
       <div className="min-h-screen bg-background p-4">
-        <div className="p-4 bg-danger-dim border border-danger rounded-lg text-danger">
+        <div className="p-4 bg-danger-dim border border-danger rounded-md text-danger">
           {error}
         </div>
       </div>
@@ -317,246 +317,210 @@ export default function DoorDetailPage() {
     setClassifyPrompt, handleInstallTypeChange, applySingleClassification, applyClassification,
   } = classification;
 
-  // --- Item card renderer (shared across all leaf sections) ---
-  const renderItemCard = (item: HardwareItemWithProgress, leafIndex: number) => {
-    const scope = classifyItemScope(item.name);
-    const displayQty = getLeafDisplayQty(item, leafCount, scope);
-    // Use composite key for per-leaf items that appear on both leaves
-    const cardKey = `${item.id}-leaf${leafIndex}`;
+  // --- Edit form for inline editing (shown below table row) ---
+  const renderEditForm = (item: HardwareItemWithProgress) => (
+    <tr key={`edit-${item.id}`}>
+      <td colSpan={8} className="p-3 bg-surface-hover border-b border-th-border">
+        <div className="space-y-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-[11px] text-tertiary mb-1 uppercase tracking-wider">Name</label>
+              <input type="text" value={editingItem!.name} onChange={(e) => setEditingItem({ ...editingItem!, name: e.target.value })} className="w-full px-3 py-2 bg-surface border border-th-border rounded text-primary placeholder-tertiary focus:border-accent focus:outline-none text-[13px]" />
+            </div>
+            <div>
+              <label className="block text-[11px] text-tertiary mb-1 uppercase tracking-wider">Qty</label>
+              <input type="number" value={editingItem!.qty} onChange={(e) => setEditingItem({ ...editingItem!, qty: parseInt(e.target.value) || 0 })} className="w-full px-3 py-2 bg-surface border border-th-border rounded text-primary placeholder-tertiary focus:border-accent focus:outline-none text-[13px]" />
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <div>
+              <label className="block text-[11px] text-tertiary mb-1 uppercase tracking-wider">Manufacturer</label>
+              <input type="text" value={editingItem!.manufacturer || ""} onChange={(e) => setEditingItem({ ...editingItem!, manufacturer: e.target.value || null })} placeholder="Optional" className="w-full px-3 py-2 bg-surface border border-th-border rounded text-primary placeholder-tertiary focus:border-accent focus:outline-none text-[13px]" />
+            </div>
+            <div>
+              <label className="block text-[11px] text-tertiary mb-1 uppercase tracking-wider">Model</label>
+              <input type="text" value={editingItem!.model || ""} onChange={(e) => setEditingItem({ ...editingItem!, model: e.target.value || null })} placeholder="Optional" className="w-full px-3 py-2 bg-surface border border-th-border rounded text-primary placeholder-tertiary focus:border-accent focus:outline-none text-[13px]" />
+            </div>
+            <div>
+              <label className="block text-[11px] text-tertiary mb-1 uppercase tracking-wider">Finish</label>
+              <input type="text" value={editingItem!.finish || ""} onChange={(e) => setEditingItem({ ...editingItem!, finish: e.target.value || null })} placeholder="Optional" className="w-full px-3 py-2 bg-surface border border-th-border rounded text-primary placeholder-tertiary focus:border-accent focus:outline-none text-[13px]" />
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-[11px] text-tertiary mb-1 uppercase tracking-wider">Options</label>
+              <input type="text" value={editingItem!.options || ""} onChange={(e) => setEditingItem({ ...editingItem!, options: e.target.value || null })} placeholder="Optional" className="w-full px-3 py-2 bg-surface border border-th-border rounded text-primary placeholder-tertiary focus:border-accent focus:outline-none text-[13px]" />
+            </div>
+            <div>
+              <label className="block text-[11px] text-tertiary mb-1 uppercase tracking-wider">Install Type</label>
+              <select value={editingItem!.install_type || ""} onChange={(e) => setEditingItem({ ...editingItem!, install_type: (e.target.value as 'bench' | 'field') || null })} className="w-full px-3 py-2 min-h-[44px] bg-surface border border-th-border rounded text-primary focus:border-accent focus:outline-none text-[13px]">
+                <option value="">Not set</option>
+                <option value="bench">Bench</option>
+                <option value="field">Field</option>
+              </select>
+            </div>
+          </div>
+          <div className="flex gap-2 pt-2">
+            <button onClick={saveEditItem} disabled={savingItem} className="flex-1 px-3 py-2 min-h-[44px] bg-accent hover:bg-accent/80 disabled:bg-surface text-white disabled:text-tertiary rounded transition-colors text-[13px] font-medium">
+              {savingItem ? "Saving..." : "Save"}
+            </button>
+            <button onClick={cancelEditItem} disabled={savingItem} className="flex-1 px-3 py-2 min-h-[44px] bg-surface border border-th-border hover:bg-surface-hover disabled:opacity-50 text-secondary rounded transition-colors text-[13px] font-medium">
+              Cancel
+            </button>
+          </div>
+        </div>
+      </td>
+    </tr>
+  );
+
+  // --- Confidence score based on data completeness ---
+  const getItemConfidence = (item: HardwareItemWithProgress): { level: 'high' | 'medium' | 'low'; score: number } => {
+    const fields = [item.manufacturer, item.model, item.finish, item.install_type, item.qty];
+    const filled = fields.filter(f => f != null && f !== '').length;
+    const score = Math.round((filled / fields.length) * 100);
+    if (score > 80) return { level: 'high', score };
+    if (score >= 50) return { level: 'medium', score };
+    return { level: 'low', score };
+  };
+
+  // --- Table renderer for hardware items ---
+  const renderItemsTable = (items: HardwareItemWithProgress[], leafIndex: number) => {
+    if (items.length === 0) {
+      return <p className="text-tertiary text-center py-6 text-[13px]">No items in this section</p>;
+    }
 
     return (
-      <div
-        key={cardKey}
-        className={`glow-card p-4 shadow-sm ${
-          item.install_type === 'bench'
-            ? 'glow-card--purple corner-brackets'
-            : item.install_type === 'field'
-            ? 'glow-card--orange corner-brackets'
-            : ''
-        }`}
-      >
-        {editingItemId === item.id && editingItem ? (
-          // Edit mode (only shown on one leaf — prevents double-edit confusion)
-          leafIndex === 1 ? (
-            <div className="space-y-3">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[12px] text-secondary mb-1">Name</label>
-                  <input
-                    type="text"
-                    value={editingItem.name}
-                    onChange={(e) => setEditingItem({ ...editingItem, name: e.target.value })}
-                    className="w-full px-3 py-2 bg-surface border border-th-border rounded-lg text-primary placeholder-tertiary focus:border-accent focus:outline-none text-[13px]"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[12px] text-secondary mb-1">Qty</label>
-                  <input
-                    type="number"
-                    value={editingItem.qty}
-                    onChange={(e) => setEditingItem({ ...editingItem, qty: parseInt(e.target.value) || 0 })}
-                    className="w-full px-3 py-2 bg-surface border border-th-border rounded-lg text-primary placeholder-tertiary focus:border-accent focus:outline-none text-[13px]"
-                  />
-                </div>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                <div>
-                  <label className="block text-[12px] text-secondary mb-1">Manufacturer</label>
-                  <input type="text" value={editingItem.manufacturer || ""} onChange={(e) => setEditingItem({ ...editingItem, manufacturer: e.target.value || null })} placeholder="Optional" className="w-full px-3 py-2 bg-surface border border-th-border rounded-lg text-primary placeholder-tertiary focus:border-accent focus:outline-none text-[13px]" />
-                </div>
-                <div>
-                  <label className="block text-[12px] text-secondary mb-1">Model</label>
-                  <input type="text" value={editingItem.model || ""} onChange={(e) => setEditingItem({ ...editingItem, model: e.target.value || null })} placeholder="Optional" className="w-full px-3 py-2 bg-surface border border-th-border rounded-lg text-primary placeholder-tertiary focus:border-accent focus:outline-none text-[13px]" />
-                </div>
-                <div>
-                  <label className="block text-[12px] text-secondary mb-1">Finish</label>
-                  <input type="text" value={editingItem.finish || ""} onChange={(e) => setEditingItem({ ...editingItem, finish: e.target.value || null })} placeholder="Optional" className="w-full px-3 py-2 bg-surface border border-th-border rounded-lg text-primary placeholder-tertiary focus:border-accent focus:outline-none text-[13px]" />
-                </div>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-[12px] text-secondary mb-1">Options</label>
-                  <input type="text" value={editingItem.options || ""} onChange={(e) => setEditingItem({ ...editingItem, options: e.target.value || null })} placeholder="Optional" className="w-full px-3 py-2 bg-surface border border-th-border rounded-lg text-primary placeholder-tertiary focus:border-accent focus:outline-none text-[13px]" />
-                </div>
-                <div>
-                  <label className="block text-[12px] text-secondary mb-1">Install Type</label>
-                  <select
-                    value={editingItem.install_type || ""}
-                    onChange={(e) => setEditingItem({ ...editingItem, install_type: (e.target.value as 'bench' | 'field') || null })}
-                    className="w-full px-3 py-2 min-h-[44px] bg-surface border border-th-border rounded-lg text-primary focus:border-accent focus:outline-none text-[13px]"
+      <div className="overflow-x-auto border border-th-border rounded-md">
+        <table className="w-full text-left text-[13px]">
+          <thead>
+            <tr className="border-b border-th-border bg-surface text-[11px] text-tertiary uppercase tracking-wider">
+              <th className="px-3 py-2 font-medium">Item Name</th>
+              <th className="px-3 py-2 font-medium w-14 text-center">Qty</th>
+              <th className="px-3 py-2 font-medium hidden md:table-cell">Manufacturer</th>
+              <th className="px-3 py-2 font-medium hidden md:table-cell">Model</th>
+              <th className="px-3 py-2 font-medium hidden md:table-cell">Finish</th>
+              <th className="px-3 py-2 font-medium hidden md:table-cell text-center w-12" title="Data completeness">Conf.</th>
+              <th className="px-3 py-2 font-medium text-center">Status</th>
+              <th className="px-3 py-2 font-medium w-20 text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {items.map((item, idx) => {
+              const scope = classifyItemScope(item.name);
+              const displayQty = getLeafDisplayQty(item, leafCount, scope);
+              const steps = getWorkflowSteps(item);
+              const completedSteps = steps.filter(s => getStepValue(item, s, leafIndex)).length;
+              const isEditing = editingItemId === item.id && editingItem;
+              const confidence = getItemConfidence(item);
+
+              return (
+                <React.Fragment key={`${item.id}-leaf${leafIndex}`}>
+                  <tr
+                    className={`border-b border-th-border transition-colors hover:bg-surface-hover ${
+                      idx % 2 === 1 ? 'bg-surface/50' : ''
+                    } ${
+                      item.install_type === 'bench'
+                        ? 'border-l-2 border-l-purple'
+                        : item.install_type === 'field'
+                        ? 'border-l-2 border-l-warning'
+                        : ''
+                    }`}
                   >
-                    <option value="">Not set</option>
-                    <option value="bench">Bench</option>
-                    <option value="field">Field</option>
-                  </select>
-                </div>
-              </div>
-              <div className="flex gap-2 pt-2">
-                <button onClick={saveEditItem} disabled={savingItem} className="flex-1 px-3 py-2 min-h-[44px] bg-accent hover:bg-accent/80 disabled:bg-surface text-white disabled:text-tertiary rounded-lg transition-colors text-[13px] font-medium">
-                  {savingItem ? "Saving..." : "Save"}
-                </button>
-                <button onClick={cancelEditItem} disabled={savingItem} className="flex-1 px-3 py-2 min-h-[44px] bg-surface border border-th-border hover:bg-surface-hover disabled:opacity-50 text-secondary rounded-lg transition-colors text-[13px] font-medium">
-                  Cancel
-                </button>
-              </div>
-            </div>
-          ) : (
-            <p className="text-tertiary text-[13px] italic text-center py-4">Editing on Leaf 1...</p>
-          )
-        ) : (
-          // View mode
-          <>
-            {/* Header row: item name + compact install-type toggle */}
-            <div className="flex justify-between items-start gap-3 mb-2">
-              <div className="flex-1 min-w-0">
-                <h3
-                  className="text-[18px] font-bold uppercase text-primary leading-tight break-words"
-                  style={{ fontFamily: "var(--font-display)", letterSpacing: "0.02em" }}
-                >
-                  {item.name}
-                </h3>
-                {formatSpec(item) && (
-                  <p className="text-[13px] text-secondary mt-1">
-                    {formatSpec(item)}
-                  </p>
-                )}
-                <div className="flex items-center gap-2 mt-1">
-                  {displayQty > 0 && (
-                    <span
-                      className="text-[11px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-md border"
-                      style={{
-                        fontFamily: "var(--font-display)",
-                        color: "var(--blue)",
-                        background: "var(--blue-dim)",
-                        borderColor: "var(--blue)",
-                        letterSpacing: "0.06em",
-                      }}
-                    >
-                      Qty {displayQty}
-                    </span>
-                  )}
-                  {item.options && (
-                    <span className="text-[11px] text-tertiary truncate">
-                      {item.options}
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              {/* Install-type compact toggle pair */}
-              <div
-                className="flex shrink-0 rounded-md overflow-hidden border"
-                style={{ borderColor: "var(--border)", background: "var(--surface-raised)" }}
-                role="group"
-                aria-label="Install type"
-              >
-                <button
-                  type="button"
-                  onClick={() => handleInstallTypeChange(item.id, 'bench')}
-                  aria-pressed={item.install_type === 'bench'}
-                  title="Classify as bench"
-                  className="min-w-[44px] min-h-[44px] px-2 text-[11px] font-semibold uppercase transition-colors"
-                  style={{
-                    fontFamily: "var(--font-display)",
-                    letterSpacing: "0.06em",
-                    background: item.install_type === 'bench' ? "var(--bench-dim)" : "transparent",
-                    color: item.install_type === 'bench' ? "var(--bench)" : "var(--text-tertiary)",
-                    boxShadow: item.install_type === 'bench' ? "inset 0 0 0 1px var(--bench)" : "none",
-                  }}
-                >
-                  Bench
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleInstallTypeChange(item.id, 'field')}
-                  aria-pressed={item.install_type === 'field'}
-                  title="Classify as field"
-                  className="min-w-[44px] min-h-[44px] px-2 text-[11px] font-semibold uppercase transition-colors"
-                  style={{
-                    fontFamily: "var(--font-display)",
-                    letterSpacing: "0.06em",
-                    background: item.install_type === 'field' ? "var(--field-dim)" : "transparent",
-                    color: item.install_type === 'field' ? "var(--field)" : "var(--text-tertiary)",
-                    boxShadow: item.install_type === 'field' ? "inset 0 0 0 1px var(--field)" : "none",
-                    borderLeft: "1px solid var(--border)",
-                  }}
-                >
-                  Field
-                </button>
-              </div>
-            </div>
-
-            {/* Workflow steps with green checks (per-leaf aware) */}
-            <div className="flex flex-wrap items-center gap-2 mt-3">
-              {getWorkflowSteps(item).map((step, idx) => {
-                const isActive = getStepValue(item, step, leafIndex);
-                const label = getStepLabel(item, step);
-                return (
-                  <div key={step} className="flex items-center gap-2">
-                    <button
-                      onClick={() => {
-                        playToggle();
-                        handleStepToggle(item.id, step, isActive, leafIndex);
-                      }}
-                      className="flex items-center justify-center w-12 h-12 rounded-full transition-colors"
-                      style={{
-                        background: isActive ? 'var(--green)' : 'transparent',
-                        border: isActive ? '2px solid var(--green)' : `2px solid var(--border-hover)`,
-                      }}
-                    >
-                      {isActive && (
-                        <svg className="w-5 h-5 text-white" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                        </svg>
+                    <td className="px-3 py-2">
+                      <span className="font-semibold text-primary">{item.name}</span>
+                      {item.options && (
+                        <span className="block text-[11px] text-tertiary mt-0.5">{item.options}</span>
                       )}
-                    </button>
-                    <span
-                      className="text-[10px] uppercase font-semibold"
-                      style={{
-                        fontFamily: "var(--font-display)",
-                        letterSpacing: "0.06em",
-                        color: isActive ? 'var(--green)' : 'var(--text-tertiary)',
-                      }}
-                    >
-                      {label}
-                    </span>
-                    {idx < getWorkflowSteps(item).length - 1 && (
-                      <div
-                        className="w-6 h-0.5"
+                    </td>
+                    <td className="px-3 py-2 text-center font-semibold text-primary tabular-nums">
+                      {displayQty > 0 ? displayQty : '—'}
+                    </td>
+                    <td className="px-3 py-2 hidden md:table-cell text-secondary">
+                      {item.manufacturer || <span className="text-tertiary">—</span>}
+                    </td>
+                    <td className="px-3 py-2 hidden md:table-cell text-secondary">
+                      {item.model || <span className="text-tertiary">—</span>}
+                    </td>
+                    <td className="px-3 py-2 hidden md:table-cell text-secondary">
+                      {item.finish || <span className="text-tertiary">—</span>}
+                    </td>
+                    <td className="px-3 py-2 hidden md:table-cell text-center">
+                      <span
+                        className="inline-block w-2.5 h-2.5 rounded-full"
                         style={{
-                          background: isActive ? 'var(--green)' : 'var(--border)',
+                          background: confidence.level === 'high' ? 'var(--green)' : confidence.level === 'medium' ? 'var(--yellow)' : 'var(--red)',
                         }}
+                        title={`${confidence.score}% data completeness`}
                       />
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Bottom action row: edit + report issue */}
-            <div className="flex items-center justify-end gap-2 mt-3 pt-2 border-t border-th-border">
-              <button
-                onClick={() => startEditItem(item)}
-                className="text-tertiary hover:text-secondary min-h-[44px] min-w-[44px] flex items-center justify-center transition-colors"
-                title="Edit item"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
-                </svg>
-              </button>
-              <button
-                onClick={() => setIssueModal({
-                  doorNumber: opening.door_number,
-                  hardwareItemName: item.name,
-                })}
-                className="text-[11px] uppercase text-danger hover:text-danger/80 transition-colors min-h-[44px] px-2 flex items-center"
-                style={{ fontFamily: "var(--font-display)", letterSpacing: "0.06em" }}
-              >
-                Report Issue
-              </button>
-            </div>
-          </>
-        )}
+                    </td>
+                    <td className="px-3 py-2">
+                      <div className="flex items-center justify-center gap-1">
+                        {steps.map((step) => {
+                          const isActive = getStepValue(item, step, leafIndex);
+                          return (
+                            <button
+                              key={step}
+                              onClick={() => {
+                                playToggle();
+                                handleStepToggle(item.id, step, isActive, leafIndex);
+                              }}
+                              className="flex items-center justify-center w-8 h-8 rounded-full transition-colors"
+                              style={{
+                                background: isActive ? 'var(--green)' : 'transparent',
+                                border: isActive ? '2px solid var(--green)' : '2px solid var(--border-hover)',
+                              }}
+                              title={getStepLabel(item, step)}
+                            >
+                              {isActive && (
+                                <svg className="w-3.5 h-3.5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                </svg>
+                              )}
+                            </button>
+                          );
+                        })}
+                        <span className="text-[10px] text-tertiary ml-1 tabular-nums">{completedSteps}/{steps.length}</span>
+                      </div>
+                    </td>
+                    <td className="px-3 py-2 text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <button
+                          onClick={() => startEditItem(item)}
+                          className="text-tertiary hover:text-secondary w-8 h-8 flex items-center justify-center transition-colors"
+                          title="Edit item"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                          </svg>
+                        </button>
+                        <button
+                          onClick={() => setIssueModal({
+                            doorNumber: opening.door_number,
+                            hardwareItemName: item.name,
+                          })}
+                          className="text-tertiary hover:text-danger w-8 h-8 flex items-center justify-center transition-colors"
+                          title="Report issue"
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                          </svg>
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                  {isEditing && leafIndex === 1 && renderEditForm(item)}
+                  {isEditing && leafIndex !== 1 && (
+                    <tr key={`edit-msg-${item.id}`}>
+                      <td colSpan={8} className="px-3 py-3 text-tertiary text-[13px] italic text-center bg-surface-hover border-b border-th-border">
+                        Editing on Leaf 1...
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
     );
   };
@@ -596,14 +560,14 @@ export default function DoorDetailPage() {
       <main className="max-w-[430px] md:max-w-[900px] mx-auto px-4 py-6">
         {/* Edit Opening Form (full width, above hero) */}
         {editingOpening && editingOpeningData && (
-          <div className="mb-6 bg-surface border border-th-border rounded-xl p-4 space-y-4">
+          <div className="mb-6 bg-surface border border-th-border rounded-md p-4 space-y-4">
             <div>
               <label className="block text-[13px] text-secondary mb-2">Door Number</label>
               <input
                 type="text"
                 value={editingOpeningData.door_number}
                 onChange={(e) => setEditingOpeningData(prev => prev ? { ...prev, door_number: e.target.value } : null)}
-                className="w-full px-3 py-2.5 bg-surface border border-th-border rounded-lg text-primary placeholder-tertiary focus:border-accent focus:outline-none text-[15px]"
+                className="w-full px-3 py-2.5 bg-surface border border-th-border rounded text-primary placeholder-tertiary focus:border-accent focus:outline-none text-[15px]"
               />
             </div>
 
@@ -615,7 +579,7 @@ export default function DoorDetailPage() {
                   value={editingOpeningData.hw_set || ""}
                   onChange={(e) => setEditingOpeningData(prev => prev ? { ...prev, hw_set: e.target.value || null } : null)}
                   placeholder="Optional"
-                  className="w-full px-3 py-2.5 bg-surface border border-th-border rounded-lg text-primary placeholder-tertiary focus:border-accent focus:outline-none text-[15px]"
+                  className="w-full px-3 py-2.5 bg-surface border border-th-border rounded text-primary placeholder-tertiary focus:border-accent focus:outline-none text-[15px]"
                 />
               </div>
               <div>
@@ -625,7 +589,7 @@ export default function DoorDetailPage() {
                   value={editingOpeningData.location || ""}
                   onChange={(e) => setEditingOpeningData(prev => prev ? { ...prev, location: e.target.value || null } : null)}
                   placeholder="Optional"
-                  className="w-full px-3 py-2.5 bg-surface border border-th-border rounded-lg text-primary placeholder-tertiary focus:border-accent focus:outline-none text-[15px]"
+                  className="w-full px-3 py-2.5 bg-surface border border-th-border rounded text-primary placeholder-tertiary focus:border-accent focus:outline-none text-[15px]"
                 />
               </div>
             </div>
@@ -638,7 +602,7 @@ export default function DoorDetailPage() {
                   value={editingOpeningData.door_type || ""}
                   onChange={(e) => setEditingOpeningData(prev => prev ? { ...prev, door_type: e.target.value || null } : null)}
                   placeholder="Optional"
-                  className="w-full px-3 py-2.5 bg-surface border border-th-border rounded-lg text-primary placeholder-tertiary focus:border-accent focus:outline-none text-[15px]"
+                  className="w-full px-3 py-2.5 bg-surface border border-th-border rounded text-primary placeholder-tertiary focus:border-accent focus:outline-none text-[15px]"
                 />
               </div>
               <div>
@@ -648,7 +612,7 @@ export default function DoorDetailPage() {
                   value={editingOpeningData.frame_type || ""}
                   onChange={(e) => setEditingOpeningData(prev => prev ? { ...prev, frame_type: e.target.value || null } : null)}
                   placeholder="Optional"
-                  className="w-full px-3 py-2.5 bg-surface border border-th-border rounded-lg text-primary placeholder-tertiary focus:border-accent focus:outline-none text-[15px]"
+                  className="w-full px-3 py-2.5 bg-surface border border-th-border rounded text-primary placeholder-tertiary focus:border-accent focus:outline-none text-[15px]"
                 />
               </div>
             </div>
@@ -661,7 +625,7 @@ export default function DoorDetailPage() {
                   value={editingOpeningData.fire_rating || ""}
                   onChange={(e) => setEditingOpeningData(prev => prev ? { ...prev, fire_rating: e.target.value || null } : null)}
                   placeholder="Optional"
-                  className="w-full px-3 py-2.5 bg-surface border border-th-border rounded-lg text-primary placeholder-tertiary focus:border-accent focus:outline-none text-[15px]"
+                  className="w-full px-3 py-2.5 bg-surface border border-th-border rounded text-primary placeholder-tertiary focus:border-accent focus:outline-none text-[15px]"
                 />
               </div>
               <div>
@@ -671,7 +635,7 @@ export default function DoorDetailPage() {
                   value={editingOpeningData.hand || ""}
                   onChange={(e) => setEditingOpeningData(prev => prev ? { ...prev, hand: e.target.value || null } : null)}
                   placeholder="Optional"
-                  className="w-full px-3 py-2.5 bg-surface border border-th-border rounded-lg text-primary placeholder-tertiary focus:border-accent focus:outline-none text-[15px]"
+                  className="w-full px-3 py-2.5 bg-surface border border-th-border rounded text-primary placeholder-tertiary focus:border-accent focus:outline-none text-[15px]"
                 />
               </div>
             </div>
@@ -680,14 +644,14 @@ export default function DoorDetailPage() {
               <button
                 onClick={saveEditOpening}
                 disabled={savingOpening}
-                className="flex-1 px-4 py-2.5 min-h-[44px] bg-accent hover:bg-accent/80 disabled:bg-surface text-white disabled:text-tertiary rounded-lg transition-colors text-[15px] font-medium"
+                className="flex-1 px-4 py-2.5 min-h-[44px] bg-accent hover:bg-accent/80 disabled:bg-surface text-white disabled:text-tertiary rounded transition-colors text-[15px] font-medium"
               >
                 {savingOpening ? "Saving..." : "Save"}
               </button>
               <button
                 onClick={cancelEditOpening}
                 disabled={savingOpening}
-                className="flex-1 px-4 py-2.5 min-h-[44px] bg-surface border border-th-border hover:bg-surface-hover disabled:opacity-50 text-secondary rounded-lg transition-colors text-[15px] font-medium"
+                className="flex-1 px-4 py-2.5 min-h-[44px] bg-surface border border-th-border hover:bg-surface-hover disabled:opacity-50 text-secondary rounded transition-colors text-[15px] font-medium"
               >
                 Cancel
               </button>
@@ -697,14 +661,14 @@ export default function DoorDetailPage() {
 
         {/* Hero Card */}
         {!editingOpening && (
-          <div className="mb-6 bg-surface border border-th-border rounded-xl p-4">
-            <h1 className="text-[34px] md:text-[42px] font-bold tracking-tight text-primary mb-2">
+          <div className="mb-5 bg-surface border border-th-border rounded-md px-4 py-3">
+            <h1 className="text-[28px] md:text-[34px] font-bold tracking-tight text-primary mb-1">
               {opening.door_number}
             </h1>
 
             {opening.hw_set && (
-              <div className="mb-3 flex items-center gap-2">
-                <span className="inline-flex items-center px-2.5 py-1 rounded-full bg-success-dim border border-success text-[12px] font-medium text-success">
+              <div className="mb-2 flex items-center gap-2">
+                <span className="inline-flex items-center px-2 py-0.5 rounded bg-success-dim border border-success text-[12px] font-medium text-success">
                   {opening.hw_set}
                   {opening.hw_heading && ` — ${opening.hw_heading}`}
                 </span>
@@ -712,7 +676,7 @@ export default function DoorDetailPage() {
             )}
 
             {opening.location && (
-              <p className="text-[15px] text-secondary mb-3">
+              <p className="text-[14px] text-secondary mb-2">
                 {opening.location}
               </p>
             )}
@@ -766,12 +730,12 @@ export default function DoorDetailPage() {
 
         {/* Tab Navigation */}
         {!editingOpening && (
-          <div className="flex gap-0.5 mb-6 bg-surface rounded-lg p-1">
+          <div className="flex gap-0.5 mb-6 bg-surface rounded-md p-1">
             {(['hardware', 'files', 'notes', 'qr'] as const).map((tab) => (
               <button
                 key={tab}
                 onClick={() => setActiveTab(tab)}
-                className={`flex-1 px-3 py-3 min-h-[44px] rounded-lg text-[13px] font-medium uppercase transition-colors ${
+                className={`flex-1 px-3 py-3 min-h-[44px] rounded-md text-[13px] font-medium uppercase transition-colors ${
                   activeTab === tab
                     ? 'bg-surface-hover text-primary border border-th-border-hover'
                     : 'text-tertiary hover:text-secondary'
@@ -791,7 +755,7 @@ export default function DoorDetailPage() {
             ) : isPair ? (
               <>
                 {/* Leaf sub-tabs for pair doors */}
-                <div className="flex gap-0.5 mb-5 bg-surface rounded-lg p-1">
+                <div className="flex gap-0.5 mb-5 bg-surface rounded-md p-1">
                   {([
                     { key: 'shared' as const, label: 'Shared', count: shared.length, color: 'var(--text-tertiary)' },
                     { key: 'leaf1' as const, label: 'Leaf 1', count: leaf1.length, color: 'var(--blue)' },
@@ -800,7 +764,7 @@ export default function DoorDetailPage() {
                     <button
                       key={tab.key}
                       onClick={() => setActiveLeafTab(tab.key)}
-                      className={`flex-1 px-2 py-3 min-h-[44px] rounded-lg text-[11px] font-semibold uppercase transition-colors flex flex-col items-center gap-0.5 ${
+                      className={`flex-1 px-2 py-3 min-h-[44px] rounded-md text-[11px] font-semibold uppercase transition-colors flex flex-col items-center gap-0.5 ${
                         activeLeafTab === tab.key
                           ? 'bg-surface-hover border border-th-border-hover'
                           : 'text-tertiary hover:text-secondary'
@@ -818,19 +782,16 @@ export default function DoorDetailPage() {
                 </div>
 
                 {/* Active leaf section content */}
-                <div className="space-y-5">
-                  {activeLeafTab === 'shared' && shared.map((item) => renderItemCard(item, 1))}
-                  {activeLeafTab === 'shared' && shared.length === 0 && (
-                    <p className="text-tertiary text-center py-6 text-[13px]">No shared items for this opening</p>
-                  )}
-                  {activeLeafTab === 'leaf1' && leaf1.map((item) => renderItemCard(item, 1))}
-                  {activeLeafTab === 'leaf2' && leaf2.map((item) => renderItemCard(item, 2))}
+                <div>
+                  {activeLeafTab === 'shared' && renderItemsTable(shared, 1)}
+                  {activeLeafTab === 'leaf1' && renderItemsTable(leaf1, 1)}
+                  {activeLeafTab === 'leaf2' && renderItemsTable(leaf2, 2)}
                 </div>
               </>
             ) : (
               /* Single door — flat list, no sub-tabs */
-              <div className="space-y-5">
-                {opening.hardware_items.map((item) => renderItemCard(item, 1))}
+              <div>
+                {renderItemsTable(opening.hardware_items, 1)}
               </div>
             )}
           </div>
@@ -875,7 +836,7 @@ export default function DoorDetailPage() {
                       <button
                         key={attachment.id}
                         onClick={() => setViewingAttachment(attachment)}
-                        className="w-full text-left bg-surface border border-th-border rounded-xl overflow-hidden hover:bg-surface-hover hover:border-th-border-hover transition-colors group"
+                        className="w-full text-left bg-surface border border-th-border rounded-md overflow-hidden hover:bg-surface-hover hover:border-th-border-hover transition-colors group"
                       >
                         {/* Preview area */}
                         <div className="relative w-full h-40 bg-surface overflow-hidden">
@@ -942,7 +903,7 @@ export default function DoorDetailPage() {
             )}
 
             {/* Upload button */}
-            <label className="block p-4 min-h-[44px] bg-surface border border-dashed border-th-border rounded-xl text-center cursor-pointer hover:bg-surface-hover active:bg-surface-hover transition-colors">
+            <label className="block p-4 min-h-[44px] bg-surface border border-dashed border-th-border rounded-md text-center cursor-pointer hover:bg-surface-hover active:bg-surface-hover transition-colors">
               <input
                 type="file"
                 onChange={(e) => {
@@ -975,12 +936,12 @@ export default function DoorDetailPage() {
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               placeholder="Add notes about this opening..."
-              className="w-full px-4 py-3 bg-surface border border-th-border rounded-xl text-primary placeholder-tertiary focus:border-accent focus:outline-none min-h-32 resize-none text-[15px]"
+              className="w-full px-4 py-3 bg-surface border border-th-border rounded-md text-primary placeholder-tertiary focus:border-accent focus:outline-none min-h-32 resize-none text-[15px]"
             />
             <button
               onClick={handleSaveNotes}
               disabled={savingNotes}
-              className="mt-4 px-4 py-2.5 min-h-[44px] bg-accent hover:bg-accent/80 disabled:bg-surface text-white disabled:text-tertiary rounded-lg transition-colors text-[15px] font-medium"
+              className="mt-4 px-4 py-2.5 min-h-[44px] bg-accent hover:bg-accent/80 disabled:bg-surface text-white disabled:text-tertiary rounded transition-colors text-[15px] font-medium"
             >
               {savingNotes ? "Saving..." : notesSaved ? "Saved!" : "Save Notes"}
             </button>
@@ -990,7 +951,7 @@ export default function DoorDetailPage() {
         {/* QR Tab */}
         {activeTab === 'qr' && !editingOpening && (
           <div className="flex flex-col items-center justify-center py-8 mb-8">
-            <div className="bg-surface border border-th-border rounded-xl p-4 mb-4">
+            <div className="bg-surface border border-th-border rounded-md p-4 mb-4">
               <QRCodeSVG
                 value={qrUrl}
                 size={200}

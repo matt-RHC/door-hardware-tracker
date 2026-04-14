@@ -454,7 +454,7 @@ export default function FileViewer({ attachment, onClose }: FileViewerProps) {
     // Unsupported type fallback
     return (
       <div className="text-center p-8">
-        <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-tint border border-border-dim-strong flex items-center justify-center">
+        <div className="w-16 h-16 mx-auto mb-4 rounded-md bg-tint border border-border-dim-strong flex items-center justify-center">
           <svg className="w-8 h-8 text-tertiary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
           </svg>
@@ -641,7 +641,7 @@ export default function FileViewer({ attachment, onClose }: FileViewerProps) {
           onClick={() => setShowPageJump(false)}
         >
           <div
-            className="bg-surface rounded-2xl p-6 w-[280px] border border-border-dim-strong"
+            className="bg-surface rounded-md p-6 w-[280px] border border-border-dim-strong"
             onClick={(e) => e.stopPropagation()}
           >
             <p className="text-[15px] text-primary font-medium mb-1 text-center">
@@ -661,20 +661,20 @@ export default function FileViewer({ attachment, onClose }: FileViewerProps) {
                 if (e.key === "Enter") handlePageJumpSubmit();
                 if (e.key === "Escape") setShowPageJump(false);
               }}
-              className="w-full h-12 bg-white/[0.07] border border-border-dim-strong rounded-xl text-center text-[20px] text-primary tabular-nums outline-none focus:border-accent transition-colors"
+              className="w-full h-12 bg-white/[0.07] border border-border-dim-strong rounded-md text-center text-[20px] text-primary tabular-nums outline-none focus:border-accent transition-colors"
               inputMode="numeric"
               pattern="[0-9]*"
             />
             <div className="flex gap-3 mt-4">
               <button
                 onClick={() => setShowPageJump(false)}
-                className="flex-1 h-11 rounded-xl bg-white/[0.07] text-primary text-[15px] font-medium active:bg-white/[0.14] transition-colors"
+                className="flex-1 h-11 rounded-md bg-white/[0.07] text-primary text-[15px] font-medium active:bg-white/[0.14] transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={handlePageJumpSubmit}
-                className="flex-1 h-11 rounded-xl bg-accent text-white text-[15px] font-medium active:bg-accent/80 transition-colors"
+                className="flex-1 h-11 rounded-md bg-accent text-white text-[15px] font-medium active:bg-accent/80 transition-colors"
               >
                 Go
               </button>

@@ -394,7 +394,7 @@ export default function StepReview({
   return (
     <div className="flex flex-col h-full max-w-5xl mx-auto">
       {/* ── Summary Stats Bar ── */}
-      <div className="mb-4 p-3 bg-tint border border-border-dim rounded-xl">
+      <div className="mb-4 p-3 bg-tint border border-border-dim rounded-md">
         <div className="flex items-center justify-between mb-2">
           <span className="text-sm text-primary font-medium">
             {totalDoors} doors extracted
@@ -859,7 +859,7 @@ export default function StepReview({
       {/* ── Region extract modal ── */}
       {regionExtractSetId != null && regionExtractPageIdx != null && pdfBuffer && (
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-surface border border-th-border rounded-xl p-5 w-full max-w-3xl max-h-[90vh] overflow-y-auto shadow-2xl">
+          <div className="bg-surface border border-th-border rounded-md p-5 w-full max-w-3xl max-h-[90vh] overflow-y-auto shadow-2xl">
             <PDFRegionSelector
               pdfBuffer={pdfBuffer}
               pageIndex={regionExtractPageIdx}

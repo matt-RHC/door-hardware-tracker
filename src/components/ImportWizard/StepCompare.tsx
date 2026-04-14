@@ -236,19 +236,19 @@ export default function StepCompare({
       {/* Summary banner (shown on all sub-steps after compare) */}
       {compareResult && subStep >= 1 && subStep <= 4 && (
         <div className="grid grid-cols-4 gap-2 mb-4">
-          <div className="bg-tint border border-border-dim rounded-xl p-2 text-center">
+          <div className="bg-tint border border-border-dim rounded-md p-2 text-center">
             <div className="text-lg font-bold text-success">{compareResult.summary.matched}</div>
             <div className="text-[9px] text-tertiary uppercase">Matched</div>
           </div>
-          <div className="bg-tint border border-border-dim rounded-xl p-2 text-center">
+          <div className="bg-tint border border-border-dim rounded-md p-2 text-center">
             <div className="text-lg font-bold text-warning">{compareResult.summary.changed}</div>
             <div className="text-[9px] text-tertiary uppercase">Changed</div>
           </div>
-          <div className="bg-tint border border-border-dim rounded-xl p-2 text-center">
+          <div className="bg-tint border border-border-dim rounded-md p-2 text-center">
             <div className="text-lg font-bold text-accent">{compareResult.summary.added}</div>
             <div className="text-[9px] text-tertiary uppercase">Added</div>
           </div>
-          <div className="bg-tint border border-border-dim rounded-xl p-2 text-center">
+          <div className="bg-tint border border-border-dim rounded-md p-2 text-center">
             <div className="text-lg font-bold text-danger">{compareResult.summary.removed}</div>
             <div className="text-[9px] text-tertiary uppercase">Removed</div>
           </div>
@@ -269,7 +269,7 @@ export default function StepCompare({
             </div>
             <div className="space-y-2">
               {compareResult.removed.map(r => (
-                <div key={r.door_number} className="bg-tint border border-border-dim-strong rounded-xl p-3 flex items-center justify-between">
+                <div key={r.door_number} className="bg-tint border border-border-dim-strong rounded-md p-3 flex items-center justify-between">
                   <div>
                     <span className="text-primary font-mono text-sm">{r.door_number}</span>
                     <span className="text-tertiary text-xs ml-2">{r.hw_set || "—"}</span>
@@ -297,7 +297,7 @@ export default function StepCompare({
             </div>
             <div className="space-y-3">
               {compareResult.changed.map(c => (
-                <div key={c.door_number} className="bg-tint border border-border-dim-strong rounded-xl p-3">
+                <div key={c.door_number} className="bg-tint border border-border-dim-strong rounded-md p-3">
                   <div className="flex items-center justify-between mb-2">
                     <div>
                       <span className="text-primary font-mono text-sm">{c.door_number}</span>
@@ -340,7 +340,7 @@ export default function StepCompare({
             </div>
             <div className="space-y-2 max-h-[50vh] overflow-y-auto">
               {compareResult.added.map(a => (
-                <div key={a.door_number} className={`border rounded-xl p-3 flex items-center justify-between transition-colors ${newExcluded[a.door_number] ? "bg-tint border-border-dim opacity-50" : "bg-tint border-border-dim-strong"}`}>
+                <div key={a.door_number} className={`border rounded-md p-3 flex items-center justify-between transition-colors ${newExcluded[a.door_number] ? "bg-tint border-border-dim opacity-50" : "bg-tint border-border-dim-strong"}`}>
                   <div className="flex items-center gap-3 flex-wrap">
                     <span className="text-primary font-mono text-sm">{a.door_number}</span>
                     <span className="text-accent text-xs">{a.hw_set}</span>
@@ -362,12 +362,12 @@ export default function StepCompare({
           <div>
             <h3 className="text-primary font-semibold mb-3">Review Changes</h3>
             <div className="space-y-2 text-sm">
-              <div className="bg-tint border border-border-dim rounded-xl p-3 flex justify-between">
+              <div className="bg-tint border border-border-dim rounded-md p-3 flex justify-between">
                 <span className="text-secondary">Unchanged doors</span>
                 <span className="text-success font-mono">{compareResult.summary.matched}</span>
               </div>
               {compareResult.changed.length > 0 && (
-                <div className="bg-tint border border-border-dim rounded-xl p-3">
+                <div className="bg-tint border border-border-dim rounded-md p-3">
                   <div className="flex justify-between mb-1">
                     <span className="text-secondary">Updated doors</span>
                     <span className="text-warning font-mono">{compareResult.changed.length}</span>
@@ -378,13 +378,13 @@ export default function StepCompare({
                 </div>
               )}
               {compareResult.added.length > 0 && (
-                <div className="bg-tint border border-border-dim rounded-xl p-3 flex justify-between">
+                <div className="bg-tint border border-border-dim rounded-md p-3 flex justify-between">
                   <span className="text-secondary">New doors to add</span>
                   <span className="text-accent font-mono">{compareResult.added.filter(a => !newExcluded[a.door_number]).length}</span>
                 </div>
               )}
               {compareResult.removed.length > 0 && (
-                <div className="bg-tint border border-border-dim rounded-xl p-3">
+                <div className="bg-tint border border-border-dim rounded-md p-3">
                   <div className="flex justify-between mb-1">
                     <span className="text-secondary">Removed doors</span>
                     <span className="text-danger font-mono">{compareResult.removed.length}</span>
@@ -478,7 +478,7 @@ export default function StepCompare({
             <div className="flex gap-3">
               <button
                 onClick={() => setShowApplyConfirm(false)}
-                className="glow-btn--ghost flex-1 min-h-11 rounded-lg text-sm font-medium"
+                className="glow-btn--ghost flex-1 min-h-11 rounded text-sm font-medium"
               >
                 Cancel
               </button>
@@ -487,7 +487,7 @@ export default function StepCompare({
                   setShowApplyConfirm(false);
                   applyRevision();
                 }}
-                className="glow-btn--danger flex-1 min-h-11 rounded-lg text-sm font-semibold"
+                className="glow-btn--danger flex-1 min-h-11 rounded text-sm font-semibold"
               >
                 Apply Changes
               </button>

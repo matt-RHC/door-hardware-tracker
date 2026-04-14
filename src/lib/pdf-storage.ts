@@ -25,10 +25,11 @@ async function ensureBucket(): Promise<void> {
 
 /**
  * Compute SHA-256 hex digest of a buffer.
+ * Clones the input to avoid detaching or mutating the original ArrayBuffer.
  */
 async function sha256(buffer: ArrayBuffer): Promise<string> {
   const crypto = await import('crypto')
-  return crypto.createHash('sha256').update(Buffer.from(buffer)).digest('hex')
+  return crypto.createHash('sha256').update(Buffer.from(buffer.slice(0))).digest('hex')
 }
 
 /**

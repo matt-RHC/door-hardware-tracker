@@ -65,7 +65,7 @@ export default function IssueReportModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="bg-surface border border-th-border rounded-xl p-6 w-full max-w-md mx-4 shadow-2xl">
+      <div className="bg-surface border border-th-border rounded-md p-6 w-full max-w-md mx-4 shadow-2xl">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-xl font-bold text-primary">Report Issue</h2>
           <button
