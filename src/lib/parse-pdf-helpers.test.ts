@@ -1460,13 +1460,15 @@ describe('computeLeafSide — per-item leaf attribution', () => {
     expect(computeLeafSide('Mortise Lockset L9080', 2)).toBeNull()
   })
 
-  it('returns active for electric/conductor hinges on pair doors', () => {
-    // Electric hinges carry wiring and are always installed on the active
-    // leaf only (DHI standard practice). Phase 4 fix.
-    expect(computeLeafSide('Hinges 5BB1 4.5x4.5 CON TW8', 2)).toBe('active')
-    expect(computeLeafSide('Electric Hinge ETH', 2)).toBe('active')
-    expect(computeLeafSide('Conductor Hinge', 2)).toBe('active')
-    expect(computeLeafSide('Power Transfer Hinge', 2)).toBe('active')
+  it('returns null for electric/conductor hinges on pair doors (deferred to buildPerOpeningItems)', () => {
+    // computeLeafSide no longer handles electric hinges directly.
+    // buildPerOpeningItems() is the authoritative source for electric hinge
+    // leaf routing — it creates separate active/inactive rows with adjusted
+    // quantities. Returning null here means "defer to caller context."
+    expect(computeLeafSide('Hinges 5BB1 4.5x4.5 CON TW8', 2)).toBeNull()
+    expect(computeLeafSide('Electric Hinge ETH', 2)).toBeNull()
+    expect(computeLeafSide('Conductor Hinge', 2)).toBeNull()
+    expect(computeLeafSide('Power Transfer Hinge', 2)).toBeNull()
   })
 
   it('returns null for electric hinges on single doors (no leaf split needed)', () => {
