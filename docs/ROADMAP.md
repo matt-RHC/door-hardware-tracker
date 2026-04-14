@@ -135,6 +135,13 @@ The wizard flow shipped in Phase 0 (PRs #161–#162). Phase 2 focused on UX poli
 - Root cause fix for persistent hinge qty bug: `leaf_side` was missing from API SELECT queries
 - All Supabase queries now include `leaf_side` for correct per-leaf hardware assignment
 
+### 2L. Electric Hinge Classification — Name+Model + Standalone CON TW (PR #203)
+- Second root-cause fix for the electric-hinge-misclassification bug family
+- `classifyItem()` now concatenates `item.name + item.model` before regex matching (previously checked `name` only, missing "CON TW8" which lives in `model`)
+- Added standalone `CON TW` regex pattern for identifiers without the "Hinge" prefix
+- Chunk insert resilience: non-critical inserts no longer abort the whole job on partial failure
+- Regression tests (PR #204, open): 52 dedicated tests in `electric-hinge-regression.test.ts` locking down PRs #196, #197, #203 fixes; full suite 429/429 green
+
 ### 2G. Context-Aware Re-Scan from Data Badge (PR #198) — NEW FEATURE, NEEDS FIXES
 - Users can re-scan specific items from the data badge with PDF region selection
 - **Critical issues identified (full audit needed):**
@@ -173,7 +180,7 @@ The re-scan feature has critical issues that need a dedicated audit and fix cycl
 - **Hidden scan modes**: Point-and-scan and table-scan modes exist in code but are not exposed in UI
 
 ### Medium Priority
-- **Hinge pipeline simplification**: Shared helpers and consolidated caches in progress — reduces duplication across `normalizeQuantities`, `groupItemsByLeaf`, `buildPerOpeningItems`
+- **Hinge pipeline simplification**: Merged (PR #202) — extracted shared hinge helpers, consolidated taxonomy cache, removed dead code across `normalizeQuantities`, `groupItemsByLeaf`, `buildPerOpeningItems`
 - **Python/TS classification unification**: Python and TypeScript classification logic have diverged — medium risk of inconsistency (deferred)
 - **Transform function duplication**: Wizard components and test files contain duplicated transform logic that should be extracted to shared utilities
 - **`next build` fails on Turbopack**: Module resolution errors with `pdf-lib` (CJS) and `@supabase/supabase-js` (missing ESM types) — needs `turbopack.resolveAlias` config or dependency updates
