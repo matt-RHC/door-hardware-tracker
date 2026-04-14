@@ -277,6 +277,30 @@ export default function DoorDetailPage() {
     return step;
   };
 
+  const getStepShortLabel = (step: WorkflowStep): string => {
+    if (step === 'received') return 'R';
+    if (step === 'pre_install') return 'P';
+    if (step === 'installed') return 'I';
+    if (step === 'qa_qc') return 'Q';
+    return (step as string)[0].toUpperCase();
+  };
+
+  const getStepColor = (step: WorkflowStep): string => {
+    if (step === 'received') return 'var(--blue)';
+    if (step === 'pre_install') return 'var(--purple)';
+    if (step === 'installed') return 'var(--field)';
+    if (step === 'qa_qc') return 'var(--green)';
+    return 'var(--green)';
+  };
+
+  const getStepDimColor = (step: WorkflowStep): string => {
+    if (step === 'received') return 'var(--blue-dim)';
+    if (step === 'pre_install') return 'var(--purple-dim)';
+    if (step === 'installed') return 'var(--field-dim)';
+    if (step === 'qa_qc') return 'var(--green-dim)';
+    return 'var(--green-dim)';
+  };
+
   const getStepValue = (item: HardwareItemWithProgress, step: WorkflowStep, leafIndex: number = 1): boolean => {
     const p = getLeafProgress(item, leafIndex);
     if (!p) return false;
@@ -399,7 +423,7 @@ export default function DoorDetailPage() {
               <th className="px-3 py-2 font-medium hidden md:table-cell">Manufacturer</th>
               <th className="px-3 py-2 font-medium hidden md:table-cell">Model</th>
               <th className="px-3 py-2 font-medium hidden md:table-cell">Finish</th>
-              <th className="px-3 py-2 font-medium hidden md:table-cell text-center w-12" title="Data completeness">Conf.</th>
+              <th className="px-3 py-2 font-medium hidden md:table-cell text-center w-16" title="Data completeness — how many fields are filled in">Data</th>
               <th className="px-3 py-2 font-medium text-center">Status</th>
               <th className="px-3 py-2 font-medium w-20 text-right">Actions</th>
             </tr>
@@ -427,7 +451,24 @@ export default function DoorDetailPage() {
                     }`}
                   >
                     <td className="px-3 py-2">
-                      <span className="font-semibold text-primary">{item.name}</span>
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="font-semibold text-primary">{item.name}</span>
+                        {item.install_type && (
+                          <span
+                            className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-semibold uppercase tracking-wide"
+                            style={{
+                              background: item.install_type === 'bench' ? 'var(--bench-dim)' : 'var(--field-dim)',
+                              color: item.install_type === 'bench' ? 'var(--bench)' : 'var(--field)',
+                            }}
+                          >
+                            {item.install_type === 'bench' ? 'BCH' : 'FLD'}
+                          </span>
+                        )}
+                      </div>
+                      {/* Mobile: show spec line since Manufacturer/Model/Finish columns are hidden */}
+                      {formatSpec(item) && (
+                        <span className="block text-[11px] text-tertiary mt-0.5 md:hidden">{formatSpec(item)}</span>
+                      )}
                       {item.options && (
                         <span className="block text-[11px] text-tertiary mt-0.5">{item.options}</span>
                       )}
@@ -446,40 +487,53 @@ export default function DoorDetailPage() {
                     </td>
                     <td className="px-3 py-2 hidden md:table-cell text-center">
                       <span
-                        className="inline-block w-2.5 h-2.5 rounded-full"
+                        className="inline-flex items-center justify-center gap-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-semibold tabular-nums"
                         style={{
-                          background: confidence.level === 'high' ? 'var(--green)' : confidence.level === 'medium' ? 'var(--yellow)' : 'var(--red)',
+                          background: confidence.level === 'high' ? 'var(--green-dim)' : confidence.level === 'medium' ? 'var(--yellow-dim)' : 'var(--red-dim)',
+                          color: confidence.level === 'high' ? 'var(--green)' : confidence.level === 'medium' ? 'var(--yellow)' : 'var(--red)',
                         }}
-                        title={`${confidence.score}% data completeness`}
-                      />
+                        title={`${confidence.score}% of fields filled in`}
+                      >
+                        {confidence.score}%
+                      </span>
                     </td>
                     <td className="px-3 py-2">
-                      <div className="flex items-center justify-center gap-1">
+                      <div className="flex items-center justify-center gap-1.5">
                         {steps.map((step) => {
                           const isActive = getStepValue(item, step, leafIndex);
+                          const stepColor = getStepColor(step);
+                          const stepDimColor = getStepDimColor(step);
                           return (
-                            <button
-                              key={step}
-                              onClick={() => {
-                                playToggle();
-                                handleStepToggle(item.id, step, isActive, leafIndex);
-                              }}
-                              className="flex items-center justify-center w-8 h-8 rounded-full transition-colors"
-                              style={{
-                                background: isActive ? 'var(--green)' : 'transparent',
-                                border: isActive ? '2px solid var(--green)' : '2px solid var(--border-hover)',
-                              }}
-                              title={getStepLabel(item, step)}
-                            >
-                              {isActive && (
-                                <svg className="w-3.5 h-3.5 text-white" fill="currentColor" viewBox="0 0 20 20">
-                                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                                </svg>
-                              )}
-                            </button>
+                            <div key={step} className="flex flex-col items-center gap-0.5">
+                              <button
+                                onClick={() => {
+                                  playToggle();
+                                  handleStepToggle(item.id, step, isActive, leafIndex);
+                                }}
+                                className="flex items-center justify-center w-8 h-8 rounded-full transition-colors"
+                                style={{
+                                  background: isActive ? stepColor : stepDimColor,
+                                  border: isActive ? `2px solid ${stepColor}` : `2px solid var(--border-hover)`,
+                                }}
+                                title={getStepLabel(item, step)}
+                              >
+                                {isActive ? (
+                                  <svg className="w-3.5 h-3.5 text-white" fill="currentColor" viewBox="0 0 20 20">
+                                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                                  </svg>
+                                ) : (
+                                  <span className="text-[10px] font-bold" style={{ color: 'var(--text-tertiary)' }}>
+                                    {getStepShortLabel(step)}
+                                  </span>
+                                )}
+                              </button>
+                              <span className="text-[8px] font-medium uppercase tracking-wider" style={{ color: isActive ? stepColor : 'var(--text-tertiary)' }}>
+                                {getStepShortLabel(step)}
+                              </span>
+                            </div>
                           );
                         })}
-                        <span className="text-[10px] text-tertiary ml-1 tabular-nums">{completedSteps}/{steps.length}</span>
+                        <span className="text-[10px] text-tertiary ml-0.5 tabular-nums self-center">{completedSteps}/{steps.length}</span>
                       </div>
                     </td>
                     <td className="px-3 py-2 text-right">
@@ -728,9 +782,9 @@ export default function DoorDetailPage() {
           </div>
         )}
 
-        {/* Tab Navigation */}
+        {/* Tab Navigation — desktop only (mobile uses bottom nav) */}
         {!editingOpening && (
-          <div className="flex gap-0.5 mb-6 bg-surface rounded-md p-1">
+          <div className="hidden md:flex gap-0.5 mb-6 bg-surface rounded-md p-1">
             {(['hardware', 'files', 'notes', 'qr'] as const).map((tab) => (
               <button
                 key={tab}
@@ -969,8 +1023,8 @@ export default function DoorDetailPage() {
         )}
       </main>
 
-      {/* Bottom Navigation Bar */}
-      <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[430px] md:max-w-[900px] bg-background/90 backdrop-blur-xl border-t border-th-border pb-[env(safe-area-inset-bottom)] h-16 flex items-center justify-around z-50">
+      {/* Bottom Navigation Bar — mobile only (desktop uses inline tabs) */}
+      <nav className="md:hidden fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[430px] bg-background/90 backdrop-blur-xl border-t border-th-border pb-[env(safe-area-inset-bottom)] h-16 flex items-center justify-around z-50">
         {(['hardware', 'files', 'notes', 'qr'] as const).map((tab) => (
           <button
             key={tab}
