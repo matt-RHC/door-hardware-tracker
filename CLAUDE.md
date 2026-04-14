@@ -28,6 +28,17 @@ After cloning any repository, immediately check for and read these files at the 
 
 Follow all instructions and conventions found in these files. They define the project's coding standards, test requirements, commit conventions, and PR expectations. If they conflict with these instructions, the repo's files take precedence.
 
+## Infrastructure Quick Reference
+
+This app spans four services. See `AGENTS.md → Infrastructure Map` for the full debugging flowchart and env var reference.
+
+- **Vercel** — App hosting, Python functions, cron jobs, env vars, deploy logs
+- **Supabase** — Postgres DB, auth, file storage, RLS policies, migrations (`supabase/migrations/`)
+- **Sentry** — Production error monitoring + session replay. **Check Sentry first for any production bug** before diving into code. It captures stack traces, request context, and breadcrumbs that are invisible in Vercel logs.
+- **GitHub** — Source, CI (`.github/workflows/ci.yml` runs Python tests, TS lint, tsc, and vitest)
+
+When debugging: Sentry (what error?) → Vercel (function logs) → Supabase (data/auth) → GitHub (CI/code).
+
 ## Core Rules
 
 - Ensure all changes follow the project's coding standards (as discovered from repo convention files above)
