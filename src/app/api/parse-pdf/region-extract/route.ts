@@ -26,6 +26,7 @@ interface PythonRegionResult {
     model: string
     finish: string
   }>
+  raw_text?: string
   error: string
 }
 
@@ -107,6 +108,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({
           items: [],
           setId,
+          raw_text: result.raw_text || '',
           error: result.error ?? 'No items found in selected region',
         })
       }
@@ -123,7 +125,7 @@ export async function POST(request: NextRequest) {
 
       console.debug(`[region-extract] setId=${setId}, page=${page}, items=${items.length}`)
 
-      return NextResponse.json({ items, setId })
+      return NextResponse.json({ items, setId, raw_text: result.raw_text || '' })
     } finally {
       clearTimeout(timeout)
     }

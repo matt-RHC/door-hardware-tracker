@@ -77,6 +77,9 @@ export default function DoorDetailPage() {
   const [rescanLoading, setRescanLoading] = useState(false);
   const [rescanResults, setRescanResults] = useState<RescanResult[] | null>(null);
   const [rescanPage, setRescanPage] = useState<number>(0);
+  const [rescanRawText, setRescanRawText] = useState<string | null>(null);
+  const [rescanRawField, setRescanRawField] = useState<string>('model');
+  const [rescanRawApplied, setRescanRawApplied] = useState(false);
 
   const supabase = createClient();
   const fetchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -356,9 +359,25 @@ export default function DoorDetailPage() {
         return;
       }
 
-      const { items: extractedItems } = await resp.json();
+      const { items: extractedItems, raw_text } = await resp.json();
 
       if (!extractedItems || extractedItems.length === 0) {
+        // Raw text fallback: if table extraction failed but we got raw text, let the user assign it to a field
+        const trimmed = (raw_text || '').trim();
+        if (trimmed) {
+          // Pre-select the most likely field based on text pattern
+          let guessedField = 'model';
+          if (/^\d{3}$/.test(trimmed) || /^US\d{1,2}[A-Z]?$/i.test(trimmed)) {
+            guessedField = 'finish';
+          } else if (/^[A-Z]{2,3}$/.test(trimmed) && ['IV', 'SC', 'ZE', 'LC', 'BE', 'AB', 'NA', 'AC', 'BO'].includes(trimmed.toUpperCase())) {
+            guessedField = 'manufacturer';
+          }
+          setRescanRawText(trimmed);
+          setRescanRawField(guessedField);
+          setRescanRawApplied(false);
+          setRescanLoading(false);
+          return;
+        }
         showToast("error", "No items found in selected region — try a different area");
         setRescanLoading(false);
         return;
@@ -467,14 +486,33 @@ export default function DoorDetailPage() {
     }
   }, [opening, rescanResults, doorId, showToast]);
 
+  const handleRescanApplyRawText = useCallback(async () => {
+    if (!rescanItem || !rescanRawText || !rescanRawField) return;
+    try {
+      const resp = await fetch(`/api/openings/${doorId}/items/${rescanItem.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ [rescanRawField]: rescanRawText }),
+      });
+      if (!resp.ok) throw new Error("Failed to update item");
+      setRescanRawApplied(true);
+      showToast("success", `Set ${rescanRawField} to "${rescanRawText}" on ${rescanItem.name}`);
+    } catch {
+      showToast("error", `Failed to update ${rescanItem.name}`);
+    }
+  }, [rescanItem, rescanRawText, rescanRawField, doorId, showToast]);
+
   const handleRescanClose = useCallback(() => {
-    const anyApplied = rescanResults?.some(r => r.applied);
+    const anyApplied = rescanResults?.some(r => r.applied) || rescanRawApplied;
     setRescanItem(null);
     setRescanResults(null);
     setRescanLoading(false);
     setRescanPage(0);
+    setRescanRawText(null);
+    setRescanRawField('model');
+    setRescanRawApplied(false);
     if (anyApplied) fetchOpeningData();
-  }, [rescanResults, fetchOpeningData]);
+  }, [rescanResults, rescanRawApplied, fetchOpeningData]);
 
   const handleFileUpload = async (file: File) => {
     setAttachmentLoading(true);
@@ -1498,7 +1536,93 @@ export default function DoorDetailPage() {
       {rescanItem && pdfBuffer && opening && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4 overflow-y-auto">
           <div className="panel corner-brackets w-full max-w-2xl p-5 animate-fade-in-up max-h-[90vh] overflow-y-auto" style={{ background: 'var(--surface)' }}>
-            {!rescanResults ? (
+            {rescanRawText ? (
+              <>
+                {/* Raw Text Assignment UI */}
+                <div className="mb-4">
+                  <h3
+                    className="text-[15px] font-bold text-primary mb-1"
+                    style={{ fontFamily: "var(--font-display)", letterSpacing: "0.03em" }}
+                  >
+                    ASSIGN VALUE: {rescanItem.name}
+                  </h3>
+                  <p className="text-[12px] text-secondary mb-3">
+                    No structured items found, but text was extracted. Assign it to a field.
+                  </p>
+                </div>
+
+                <div
+                  className="rounded-md border px-4 py-3 mb-4 text-center"
+                  style={{ background: 'var(--tint)', borderColor: 'var(--border)' }}
+                >
+                  <span className="text-[11px] uppercase tracking-wider text-tertiary font-medium block mb-1">Extracted text</span>
+                  <span className="text-[20px] font-bold text-primary" style={{ fontFamily: 'var(--font-mono, monospace)' }}>{rescanRawText}</span>
+                </div>
+
+                {!rescanRawApplied ? (
+                  <>
+                    <div className="mb-4">
+                      <span className="text-[12px] text-secondary font-medium block mb-2">Apply to field:</span>
+                      <div className="flex flex-wrap gap-2">
+                        {['finish', 'manufacturer', 'model', 'qty'].map((field) => (
+                          <label key={field} className="flex items-center gap-1.5 cursor-pointer min-h-[36px]">
+                            <input
+                              type="radio"
+                              name="rawTextField"
+                              value={field}
+                              checked={rescanRawField === field}
+                              onChange={() => setRescanRawField(field)}
+                              className="w-4 h-4 accent-accent cursor-pointer"
+                            />
+                            <span className="text-[13px] text-primary">{field}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={handleRescanApplyRawText}
+                        className="px-4 py-2 rounded-lg text-[13px] font-medium transition-colors"
+                        style={{ background: 'var(--blue)', color: 'white' }}
+                      >
+                        Apply
+                      </button>
+                      <button
+                        onClick={() => { setRescanRawText(null); }}
+                        className="px-3 py-2 rounded-lg text-[13px] font-medium transition-colors"
+                        style={{ background: 'var(--tint)', color: 'var(--secondary)', border: '1px solid var(--border)' }}
+                      >
+                        Re-scan
+                      </button>
+                      <button
+                        onClick={handleRescanClose}
+                        className="px-3 py-2 rounded-lg text-[13px] text-tertiary hover:text-secondary transition-colors ml-auto"
+                        style={{ border: '1px solid var(--border)' }}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 px-3 py-2">
+                      <svg className="w-4 h-4 flex-shrink-0" style={{ color: 'var(--green)' }} fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                      </svg>
+                      <span className="text-[13px] font-semibold" style={{ color: 'var(--green)' }}>Applied</span>
+                    </div>
+                    <button
+                      onClick={handleRescanClose}
+                      className="px-3 py-2 rounded-lg text-[13px] text-tertiary hover:text-secondary transition-colors ml-auto"
+                      style={{ border: '1px solid var(--border)' }}
+                    >
+                      Done
+                    </button>
+                  </div>
+                )}
+              </>
+            ) : !rescanResults ? (
               <>
                 {/* Header */}
                 <div className="mb-3">
