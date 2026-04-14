@@ -1,4 +1,5 @@
 import type { NextConfig } from "next";
+import { withSentryConfig } from "@sentry/nextjs";
 
 const nextConfig: NextConfig = {
   // Pass server-side env vars explicitly (Turbopack doesn't auto-expose .env.local to runtime)
@@ -17,4 +18,23 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+export default withSentryConfig(nextConfig, {
+  // Suppress source map upload warnings when SENTRY_AUTH_TOKEN is not set
+  // (e.g., local development). Source maps still work in Sentry if the
+  // token is configured in Vercel.
+  silent: !process.env.SENTRY_AUTH_TOKEN,
+
+  // Upload a wider set of client files for better stack traces
+  widenClientFileUpload: true,
+
+  // Source map configuration: delete after upload so they aren't served to users
+  sourcemaps: {
+    filesToDeleteAfterUpload: [".next/static/**/*.map"],
+  },
+
+  // Automatically instrument API routes and server components
+  autoInstrumentServerFunctions: true,
+
+  // Tree-shake Sentry debug logger in production
+  disableLogger: true,
+});
