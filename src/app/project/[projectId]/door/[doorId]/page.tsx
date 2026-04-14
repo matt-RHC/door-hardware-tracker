@@ -796,7 +796,7 @@ export default function DoorDetailPage() {
                   border: `1px solid var(--border)`,
                 }}
               >
-                {batchActionLoading ? '...' : step === 'received' ? 'Mark Received' : step === 'pre_install' ? 'Mark Pre-Install' : step === 'installed' ? 'Mark Installed' : 'Mark QA/QC'}
+                {batchActionLoading ? '...' : step === 'received' ? 'Received' : step === 'pre_install' ? 'Pre-Install' : step === 'installed' ? 'Installed' : 'QA/QC'}
               </button>
             ))}
             <button
@@ -809,7 +809,7 @@ export default function DoorDetailPage() {
         )}
 
         <div className="overflow-x-auto border border-th-border rounded-md">
-          <table className="w-full text-left text-[13px]">
+          <table className="w-full min-w-[640px] text-left text-[13px]">
             <thead className="sticky top-0 z-10">
               <tr className="border-b border-th-border bg-surface text-[11px] text-tertiary uppercase tracking-wider">
                 <th className="px-2 py-2 w-10 text-center">
@@ -1017,7 +1017,7 @@ export default function DoorDetailPage() {
 
       {/* Sticky Header */}
       <header className="sticky top-0 z-50 bg-background/85 backdrop-blur-xl border-b border-th-border">
-        <div className="max-w-[430px] md:max-w-[900px] mx-auto px-4 py-4 flex items-center justify-between">
+        <div className="max-w-[900px] mx-auto px-4 py-4 flex items-center justify-between">
           <button
             onClick={() => router.push(`/project/${projectId}`)}
             className="text-accent hover:text-accent/80 flex items-center gap-1 text-[15px] min-h-[44px] min-w-[44px] justify-center"
@@ -1043,7 +1043,7 @@ export default function DoorDetailPage() {
         </div>
       </header>
 
-      <main className="max-w-[430px] md:max-w-[900px] mx-auto px-4 py-6">
+      <main className="max-w-[900px] mx-auto px-4 py-6">
         {/* Edit Opening Form (full width, above hero) */}
         {editingOpening && editingOpeningData && (
           <div className="mb-6 bg-surface border border-th-border rounded-md p-4 space-y-4">
@@ -1154,7 +1154,7 @@ export default function DoorDetailPage() {
 
             {opening.hw_set && (
               <div className="mb-2 flex items-center gap-2">
-                <span className="inline-flex items-center px-2 py-0.5 rounded bg-success-dim border border-success text-[12px] font-medium text-success">
+                <span className="inline-flex items-center px-2 py-0.5 rounded bg-success-dim border border-success text-[12px] font-medium text-success max-w-full truncate">
                   {opening.hw_set}
                   {opening.hw_heading && ` — ${opening.hw_heading}`}
                 </span>
@@ -1456,7 +1456,7 @@ export default function DoorDetailPage() {
       </main>
 
       {/* Bottom Navigation Bar — mobile only (desktop uses inline tabs) */}
-      <nav className="md:hidden fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[430px] bg-background/90 backdrop-blur-xl border-t border-th-border pb-[env(safe-area-inset-bottom)] h-16 flex items-center justify-around z-50">
+      <nav className="md:hidden fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-[900px] bg-background/90 backdrop-blur-xl border-t border-th-border pb-[env(safe-area-inset-bottom)] h-16 flex items-center justify-around z-50">
         {(['hardware', 'files', 'notes', 'qr'] as const).map((tab) => (
           <button
             key={tab}
@@ -1603,7 +1603,7 @@ export default function DoorDetailPage() {
                   <>
                     <div className="rounded-md border overflow-hidden mb-4" style={{ borderColor: 'var(--border)' }}>
                       {/* Table header */}
-                      <div className="grid grid-cols-[100px_1fr_1fr_auto] gap-2 px-3 py-2" style={{ background: 'var(--tint)', borderBottom: '1px solid var(--border)' }}>
+                      <div className="grid grid-cols-[80px_1fr_1fr_auto] sm:grid-cols-[100px_1fr_1fr_auto] gap-2 px-3 py-2" style={{ background: 'var(--tint)', borderBottom: '1px solid var(--border)' }}>
                         <span className="text-[11px] uppercase tracking-wider text-tertiary font-medium">Field</span>
                         <span className="text-[11px] uppercase tracking-wider text-tertiary font-medium">Current</span>
                         <span className="text-[11px] uppercase tracking-wider text-tertiary font-medium">New value</span>
@@ -1621,7 +1621,7 @@ export default function DoorDetailPage() {
                         return (
                           <div
                             key={field}
-                            className="grid grid-cols-[100px_1fr_1fr_auto] gap-2 px-3 py-2 items-center"
+                            className="grid grid-cols-[80px_1fr_1fr_auto] sm:grid-cols-[100px_1fr_1fr_auto] gap-2 px-3 py-2 items-center"
                             style={{ borderBottom: '1px solid var(--border-dim)' }}
                           >
                             <span className="text-[13px] font-medium text-primary">{field}</span>
