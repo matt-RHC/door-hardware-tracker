@@ -3,8 +3,11 @@
 import { useState, useCallback, useEffect, useMemo } from "react";
 import { usePunchHighlight } from "./usePunchHighlight";
 import type { DoorEntry, HardwareSet, ClassifyPagesResponse } from "./types";
+import type { ItemConfidence, ConfidenceLevel } from "@/lib/types/confidence";
+import type { ReconciliationResult, ReconciledHardwareSet } from "@/lib/types/reconciliation";
 import PDFPagePreview from "./PDFPagePreview";
 import PDFRegionSelector from "./PDFRegionSelector";
+import ConfidenceBadge from "./ConfidenceBadge";
 import { findPageForSet } from "@/lib/punch-cards";
 import { buildDoorToSetMap, normalizeDoorNumber, detectIsPair, classifyItemScope } from "@/lib/parse-pdf-helpers";
 import { groupItemsByLeaf, getLeafDisplayQty } from "@/lib/classify-leaf-items";
@@ -82,6 +85,8 @@ interface StepReviewProps {
   classifyResult: ClassifyPagesResponse | null;
   /** PDF file buffer for rendering page previews. */
   pdfBuffer: ArrayBuffer | null;
+  /** Reconciliation result from deep extraction (Phase C). */
+  reconciliationResult?: ReconciliationResult | null;
   onComplete: (doors: DoorEntry[], hardwareSets: HardwareSet[]) => void;
   onBack: () => void;
   onRemapColumns?: () => void;
@@ -94,6 +99,7 @@ export default function StepReview({
   hasExistingData,
   classifyResult,
   pdfBuffer,
+  reconciliationResult,
   onComplete,
   onBack,
   onRemapColumns,
@@ -135,6 +141,26 @@ export default function StepReview({
   }, []);
   const [sortField, setSortField] = useState<DoorStringField>("door_number");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
+  // Audit trail expander state (per set_id)
+  const [auditTrailOpen, setAuditTrailOpen] = useState<Set<string>>(new Set());
+  const toggleAuditTrail = useCallback((setId: string) => {
+    setAuditTrailOpen(prev => {
+      const next = new Set(prev);
+      if (next.has(setId)) next.delete(setId);
+      else next.add(setId);
+      return next;
+    });
+  }, []);
+
+  // Build reconciled set lookup for audit trail display
+  const reconciledSetMap = useMemo(() => {
+    const m = new Map<string, ReconciledHardwareSet>();
+    if (!reconciliationResult) return m;
+    for (const rs of reconciliationResult.hardware_sets) {
+      m.set(rs.set_id, rs);
+    }
+    return m;
+  }, [reconciliationResult]);
 
   // Lookup maps for resolving door → hardware set.
   // Registered under BOTH set_id and generic_set_id — doors may be
@@ -550,6 +576,7 @@ export default function StepReview({
                   finish: item.finish ?? null,
                   qty_source: item.qty_source ?? null,
                   qty_before_correction: item.qty_before_correction ?? null,
+                  confidence: item.confidence as ItemConfidence | undefined ?? null,
                   _setId: hwSet.set_id,
                   _itemIdx: idx,
                 }));
@@ -564,15 +591,21 @@ export default function StepReview({
                     return { ...s, items: updatedItems };
                   }));
                 };
+                const hasAnyLowConfidence = items.some(i => i.confidence?.overall === 'low');
                 const renderItems = (arr: typeof items, leafIdx: number) => arr.map(item => {
                   const scope = classifyItemScope(item.name);
                   const dq = getLeafDisplayQty(item, lc, scope);
                   const isCorrected = item.qty_source === 'auto_corrected' && item.qty_before_correction != null;
+                  const conf = item.confidence;
                   return (
                     <div key={`${item.id}-l${leafIdx}`} className={`flex items-center gap-3 py-1 text-[12px] ${isCorrected ? 'bg-accent-dim rounded px-1 -mx-1' : ''}`}>
-                      <span className="text-primary font-medium truncate">{item.name}</span>
-                      <span className={`text-[11px] shrink-0 ${isCorrected ? 'text-info font-bold' : 'text-accent'}`}>
+                      <span className="text-primary font-medium truncate inline-flex items-center">
+                        {item.name}
+                        {conf && <ConfidenceBadge level={conf.name.level} tooltip={conf.name.reason} />}
+                      </span>
+                      <span className={`text-[11px] shrink-0 inline-flex items-center ${isCorrected ? 'text-info font-bold' : 'text-accent'}`}>
                         qty {dq}
+                        {conf && <ConfidenceBadge level={conf.qty.level} tooltip={conf.qty.reason} />}
                         {isCorrected && (
                           <span className="text-tertiary font-normal ml-1">(was {item.qty_before_correction})</span>
                         )}
@@ -585,8 +618,18 @@ export default function StepReview({
                           revert
                         </button>
                       )}
-                      {item.model && <span className="text-tertiary truncate">{item.model}</span>}
-                      {item.finish && <span className="text-tertiary truncate">{item.finish}</span>}
+                      {item.model && (
+                        <span className="text-tertiary truncate inline-flex items-center">
+                          {item.model}
+                          {conf && <ConfidenceBadge level={conf.model.level} tooltip={conf.model.reason} />}
+                        </span>
+                      )}
+                      {item.finish && (
+                        <span className="text-tertiary truncate inline-flex items-center">
+                          {item.finish}
+                          {conf && <ConfidenceBadge level={conf.finish.level} tooltip={conf.finish.reason} />}
+                        </span>
+                      )}
                     </div>
                   );
                 });
@@ -608,6 +651,11 @@ export default function StepReview({
                       {isPairSet && (
                         <span className="text-[9px] font-semibold uppercase px-1.5 py-0.5 rounded bg-accent-dim text-accent border border-accent ml-auto">
                           PAIR
+                        </span>
+                      )}
+                      {hasAnyLowConfidence && (
+                        <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-danger-dim text-danger border border-danger">
+                          low confidence
                         </span>
                       )}
                     </div>
@@ -656,6 +704,59 @@ export default function StepReview({
                     ) : (
                       <div>{renderItems(items, 1)}</div>
                     )}
+
+                    {/* Audit trail expander — shown when reconciliation data exists for this set */}
+                    {(() => {
+                      const reconciledSet = reconciledSetMap.get(hwSet.set_id);
+                      if (!reconciledSet) return null;
+                      const isOpen = auditTrailOpen.has(hwSet.set_id);
+                      const fullCount = reconciledSet.items.filter(i => i.overall_confidence === 'full').length;
+                      const conflictCount = reconciledSet.items.filter(i => i.overall_confidence === 'conflict').length;
+                      const singleCount = reconciledSet.items.filter(i => i.overall_confidence === 'single_source').length;
+                      return (
+                        <div className="mt-2 pt-2 border-t border-border-dim">
+                          <button
+                            onClick={() => toggleAuditTrail(hwSet.set_id)}
+                            className="flex items-center gap-1.5 text-[10px] text-tertiary hover:text-secondary transition-colors"
+                          >
+                            <span className="text-[8px]">{isOpen ? '\u25BE' : '\u25B8'}</span>
+                            <span className="font-medium">Audit Trail</span>
+                            <span className="text-[9px]">
+                              {fullCount} agreed, {conflictCount} conflicts, {singleCount} single-source
+                            </span>
+                          </button>
+                          {isOpen && (
+                            <div className="mt-1.5 space-y-1 text-[10px]">
+                              {reconciledSet.items.map((ri, riIdx) => {
+                                if (ri.overall_confidence === 'full') return null;
+                                const fields = (['name', 'qty', 'manufacturer', 'model', 'finish'] as const)
+                                  .filter(f => ri[f].confidence !== 'full');
+                                if (fields.length === 0) return null;
+                                return (
+                                  <div key={riIdx} className="pl-3 py-1 border-l-2 border-border-dim">
+                                    <span className="font-medium text-primary">{String(ri.name.value)}</span>
+                                    {fields.map(f => (
+                                      <div key={f} className="text-tertiary ml-2">
+                                        <span className="text-secondary">{f}:</span>{' '}
+                                        {ri[f].sources.strategy_a != null && (
+                                          <span>pdfplumber said <span className="text-primary">{String(ri[f].sources.strategy_a)}</span></span>
+                                        )}
+                                        {ri[f].sources.strategy_a != null && ri[f].sources.strategy_b != null && ', '}
+                                        {ri[f].sources.strategy_b != null && (
+                                          <span>vision said <span className="text-primary">{String(ri[f].sources.strategy_b)}</span></span>
+                                        )}
+                                        {' \u2014 '}
+                                        <span className="text-secondary">{ri[f].reason}</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </div>
                 );
               })()}
