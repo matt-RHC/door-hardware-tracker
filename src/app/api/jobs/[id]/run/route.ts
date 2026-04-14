@@ -20,6 +20,10 @@ import {
   callVisionExtraction,
   filterSchedulePages,
   createAnthropicClient,
+  buildPerOpeningItems,
+  buildDoorToSetMap,
+  detectIsPair,
+  normalizeDoorNumber,
   type PdfplumberResult,
   type VisionExtractionResult,
 } from '@/lib/parse-pdf-helpers'
@@ -880,46 +884,92 @@ export async function POST(
       .update({ job_id: jobId })
       .eq('id', runId)
 
-    // Convert accepted doors to StagingOpening format
-    const stagingOpenings: StagingOpening[] = acceptedDoors.map(d => ({
-      door_number: d.door_number,
-      hw_set: d.hw_set || undefined,
-      hw_heading: d.hw_heading,
-      location: d.location || undefined,
-      door_type: d.door_type || undefined,
-      frame_type: d.frame_type || undefined,
-      fire_rating: d.fire_rating || undefined,
-      hand: d.hand || undefined,
-      pdf_page: undefined, // set lookup happens in writeStagingData
-      leaf_count: d.leaf_count,
-      field_confidence: d.field_confidence,
-    }))
+    // Build lookup maps for buildPerOpeningItems (same pattern as save/route.ts)
+    const setMap = new Map<string, HardwareSet>()
+    for (const set of extractedSets) {
+      setMap.set(set.set_id, set)
+      if (set.generic_set_id && set.generic_set_id !== set.set_id) {
+        setMap.set(set.generic_set_id, set)
+      }
+    }
+    const doorToSetMap = buildDoorToSetMap(extractedSets)
 
-    const stagingSets = extractedSets.map(s => ({
-      set_id: s.set_id,
-      generic_set_id: s.generic_set_id,
-      heading: s.heading,
-      heading_doors: s.heading_doors,
-      pdf_page: s.pdf_page,
-      items: s.items.map(i => ({
-        name: i.name,
-        qty: i.qty,
-        qty_total: i.qty_total,
-        qty_door_count: i.qty_door_count,
-        qty_source: i.qty_source,
-        manufacturer: i.manufacturer,
-        model: i.model,
-        finish: i.finish,
-      })),
-    }))
+    const doorInfoMap = new Map<string, { door_type: string; frame_type: string }>()
+    for (const d of acceptedDoors) {
+      doorInfoMap.set(d.door_number, {
+        door_type: d.door_type || '',
+        frame_type: d.frame_type || '',
+      })
+    }
 
-    const { openingsCount, itemsCount } = await writeStagingData(
+    // Convert accepted doors to StagingOpening format.
+    // Compute leaf_count via detectIsPair (matching save/route.ts) so pair
+    // detection uses heading_leaf_count, opening size, and keyword signals.
+    const stagingOpenings: StagingOpening[] = acceptedDoors.map(d => {
+      const doorKey = normalizeDoorNumber(d.door_number)
+      const hwSet = doorToSetMap.get(doorKey) ?? setMap.get(d.hw_set ?? '')
+      const doorInfo = doorInfoMap.get(d.door_number)
+      const isPair = detectIsPair(hwSet, doorInfo)
+      return {
+        door_number: d.door_number,
+        hw_set: d.hw_set || undefined,
+        hw_heading: d.hw_heading,
+        location: d.location || undefined,
+        door_type: d.door_type || undefined,
+        frame_type: d.frame_type || undefined,
+        fire_rating: d.fire_rating || undefined,
+        hand: d.hand || undefined,
+        pdf_page: setMap.get(d.hw_set ?? '')?.pdf_page ?? null,
+        leaf_count: isPair ? 2 : 1,
+        field_confidence: d.field_confidence,
+      }
+    })
+
+    // 6a. Write openings only (items handled separately via buildPerOpeningItems)
+    const { openingsCount } = await writeStagingData(
       adminSupabase,
       runId,
       projectId,
       stagingOpenings,
-      stagingSets,
+      [],  // empty sets — items inserted separately below
     )
+
+    // 6b. Query back staging openings to get their DB-assigned IDs
+    const { data: stagingOpeningRows, error: fetchError } = await adminSupabase
+      .from('staging_openings')
+      .select('id, door_number, hw_set')
+      .eq('extraction_run_id', runId)
+
+    if (fetchError) {
+      throw new Error(`Failed to fetch staging openings: ${fetchError.message}`)
+    }
+
+    // 6c. Build per-opening items (structural rows + leaf_side + hinge split)
+    const allItems = buildPerOpeningItems(
+      stagingOpeningRows ?? [],
+      doorInfoMap,
+      setMap,
+      doorToSetMap,
+      'staging_opening_id',
+      { extraction_run_id: runId },
+    )
+
+    // 6d. Chunk-insert staging hardware items (same pattern as save/route.ts)
+    const ITEM_CHUNK_SIZE = 50
+    let itemsCount = 0
+    for (let i = 0; i < allItems.length; i += ITEM_CHUNK_SIZE) {
+      const chunk = allItems.slice(i, i + ITEM_CHUNK_SIZE)
+      const { data, error: chunkError } = await adminSupabase
+        .from('staging_hardware_items')
+        .insert(chunk as any)
+        .select('id')
+
+      if (chunkError) {
+        console.error(`[job-orchestrator] Error inserting staging hw items chunk at ${i}:`, chunkError)
+      } else if (data) {
+        itemsCount += data.length
+      }
+    }
 
     // ══════════════════════════════════════════════════════════════
     // Phase 7: Complete

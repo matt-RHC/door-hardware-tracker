@@ -83,6 +83,7 @@ export interface StagingHardwareItem {
   finish?: string
   options?: string
   sort_order?: number
+  leaf_side?: 'active' | 'inactive' | 'shared' | 'both' | null
 }
 
 // --- Extraction Run Management ---
@@ -190,6 +191,7 @@ export async function writeStagingData(
       finish: item.finish ?? null,
       options: item.options ?? null,
       sort_order: item.sort_order ?? 0,
+      leaf_side: item.leaf_side ?? null,
     }))
 
     return {

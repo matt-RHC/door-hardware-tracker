@@ -61,7 +61,7 @@ BEGIN
   --     "flag_reason": null,
   --     "field_confidence": {},
   --     "items": [
-  --       { "name": "Closer", "qty": 1, "manufacturer": "LCN", ... }
+  --       { "name": "Closer", "qty": 1, "manufacturer": "LCN", "leaf_side": "shared", ... }
   --     ]
   --   }
   -- ]
@@ -106,7 +106,7 @@ BEGIN
         INSERT INTO staging_hardware_items (
           staging_opening_id, extraction_run_id, name, qty,
           qty_total, qty_door_count, qty_source,
-          manufacturer, model, finish, options, sort_order
+          manufacturer, model, finish, options, sort_order, leaf_side
         )
         VALUES (
           v_opening_id,
@@ -120,7 +120,8 @@ BEGIN
           v_item->>'model',
           v_item->>'finish',
           v_item->>'options',
-          COALESCE((v_item->>'sort_order')::INTEGER, 0)
+          COALESCE((v_item->>'sort_order')::INTEGER, 0),
+          v_item->>'leaf_side'
         );
 
         v_items_count := v_items_count + 1;
