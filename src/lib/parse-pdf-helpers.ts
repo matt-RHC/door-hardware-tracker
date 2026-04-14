@@ -1202,7 +1202,7 @@ const HARDWARE_CATEGORY_KEYWORDS = [
  * Returns the first matching category keyword found, or undefined.
  */
 function extractCategory(name: string): string | undefined {
-  const lower = name.toLowerCase()
+  const lower = (name ?? '').toLowerCase()
   return HARDWARE_CATEGORY_KEYWORDS.find(kw => lower.includes(kw))
 }
 
@@ -1211,7 +1211,7 @@ function extractCategory(name: string): string | undefined {
  * dimension/spec patterns, collapse whitespace, remove trailing punctuation.
  */
 export function normalizeName(name: string): string {
-  let s = name.toLowerCase()
+  let s = (name ?? '').toLowerCase()
   // Strip parenthesized finish codes like (US26D), (689), (SP28)
   s = s.replace(/\s*\([^)]*\)\s*/g, ' ')
   // Strip trailing dimension patterns: digits with quotes/fractions e.g. 83", 4-1/2" x 4-1/2"
@@ -1231,8 +1231,8 @@ export function normalizeName(name: string): string {
  * Returns a value in [0, 1].
  */
 function tokenJaccard(a: string, b: string): number {
-  const setA = new Set(a.toLowerCase().split(/\s+/).filter(Boolean))
-  const setB = new Set(b.toLowerCase().split(/\s+/).filter(Boolean))
+  const setA = new Set((a ?? '').toLowerCase().split(/\s+/).filter(Boolean))
+  const setB = new Set((b ?? '').toLowerCase().split(/\s+/).filter(Boolean))
   if (setA.size === 0 && setB.size === 0) return 1
   if (setA.size === 0 || setB.size === 0) return 0
   let intersection = 0
@@ -1267,8 +1267,8 @@ export function findItemFuzzy(
   }
 
   // 2. Case-insensitive match
-  const lower = name.toLowerCase()
-  const ci = items.find(i => i.name.toLowerCase() === lower)
+  const lower = (name ?? '').toLowerCase()
+  const ci = items.find(i => (i.name ?? '').toLowerCase() === lower)
   if (ci) {
     console.debug(`Punchy correction fuzzy match (case): "${name}" → "${ci.name}" [${context}]`)
     return ci
@@ -1310,7 +1310,7 @@ export function findItemFuzzy(
   if (name.length >= MIN_SUBSTRING_LEN) {
     const substringMatches = items.filter(i => {
       if (!categoryCompatible(i.name)) return false
-      const iLower = i.name.toLowerCase()
+      const iLower = (i.name ?? '').toLowerCase()
       const isSubstring = iLower.includes(lower) || lower.includes(iLower)
       if (!isSubstring) return false
       // Length ratio guard: the shorter string must be at least 50% of the longer
@@ -1404,9 +1404,9 @@ export function applyCorrections(
 
         // Remove items (exact + case-insensitive only, never substring)
         if (corr.items_to_remove) {
-          const removeLower = new Set(corr.items_to_remove.map(n => n.toLowerCase()))
+          const removeLower = new Set(corr.items_to_remove.map(n => (n ?? '').toLowerCase()))
           set.items = (set.items ?? []).filter(
-            item => !removeLower.has(item.name.toLowerCase()),
+            item => !removeLower.has((item.name ?? '').toLowerCase()),
           )
         }
 
@@ -1996,7 +1996,7 @@ function worstConfidence(levels: ConfidenceLevel[]): ConfidenceLevel {
 const EXPECTED_SET_CATEGORIES = ['hinge', 'lockset', 'closer']
 
 function itemHasCategory(name: string, category: string): boolean {
-  return name.toLowerCase().includes(category)
+  return (name ?? '').toLowerCase().includes(category)
 }
 
 /**
@@ -2154,7 +2154,7 @@ export function calculateExtractionConfidence(
     // Check for expected categories
     const setCategories = new Set<string>()
     for (const item of set.items) {
-      const lower = item.name.toLowerCase()
+      const lower = (item.name ?? '').toLowerCase()
       for (const cat of EXPECTED_SET_CATEGORIES) {
         if (lower.includes(cat)) setCategories.add(cat)
       }

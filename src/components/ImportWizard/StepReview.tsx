@@ -215,7 +215,7 @@ export default function StepReview({
 
   // ─── Filter + search ───
   const filteredDoors = useMemo(() => {
-    const lowerSearch = search.toLowerCase().trim();
+    const lowerSearch = (search ?? '').toLowerCase().trim();
     return doors.map((door, idx) => ({ door, originalIndex: idx })).filter(({ door }) => {
       // Confidence filter
       if (filterLevel !== "all" && getConfidence(door) !== filterLevel) return false;

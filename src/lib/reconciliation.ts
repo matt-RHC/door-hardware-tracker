@@ -21,8 +21,8 @@ import type {
 
 /** Compute Jaccard similarity on word tokens between two strings. Returns [0, 1]. */
 function tokenJaccard(a: string, b: string): number {
-  const setA = new Set(a.toLowerCase().split(/\s+/).filter(Boolean))
-  const setB = new Set(b.toLowerCase().split(/\s+/).filter(Boolean))
+  const setA = new Set((a ?? '').toLowerCase().split(/\s+/).filter(Boolean))
+  const setB = new Set((b ?? '').toLowerCase().split(/\s+/).filter(Boolean))
   if (setA.size === 0 && setB.size === 0) return 1
   if (setA.size === 0 || setB.size === 0) return 0
   let intersection = 0
@@ -37,13 +37,13 @@ const HARDWARE_CATEGORY_KEYWORDS = [
 ] as const
 
 function extractCategory(name: string): string | undefined {
-  const lower = name.toLowerCase()
+  const lower = (name ?? '').toLowerCase()
   return HARDWARE_CATEGORY_KEYWORDS.find(kw => lower.includes(kw))
 }
 
 /** Normalize a set_id for matching: strip whitespace, hyphens, lowercase. */
 function normalizeSetId(id: string): string {
-  return id.toLowerCase().replace(/[\s\-_]+/g, '')
+  return (id ?? '').toLowerCase().replace(/[\s\-_]+/g, '')
 }
 
 /**
@@ -63,8 +63,8 @@ function matchItemName(nameB: string, namesA: string[]): number {
   if (exactIdx !== -1) return exactIdx
 
   // 2. Case-insensitive match
-  const lowerB = nameB.toLowerCase()
-  const ciIdx = namesA.findIndex(n => n.toLowerCase() === lowerB)
+  const lowerB = (nameB ?? '').toLowerCase()
+  const ciIdx = namesA.findIndex(n => (n ?? '').toLowerCase() === lowerB)
   if (ciIdx !== -1) return ciIdx
 
   // Category guard
@@ -95,7 +95,7 @@ function matchItemName(nameB: string, namesA: string[]): number {
       .map((n, i) => ({ name: n, idx: i }))
       .filter(({ name }) => {
         if (!categoryCompatible(name)) return false
-        const nLower = name.toLowerCase()
+        const nLower = (name ?? '').toLowerCase()
         const isSubstring = nLower.includes(lowerB) || lowerB.includes(nLower)
         if (!isSubstring) return false
         const shorter = Math.min(lowerB.length, nLower.length)
@@ -176,7 +176,7 @@ function reconcileField(
   // Both have values — check agreement
   const agree = typeof a === 'number' && typeof b === 'number'
     ? a === b
-    : aStr.toLowerCase().trim() === bStr.toLowerCase().trim()
+    : (aStr ?? '').toLowerCase().trim() === (bStr ?? '').toLowerCase().trim()
 
   if (agree) {
     return {

@@ -117,7 +117,7 @@ const NAME_ABBREVIATIONS: Record<string, string> = {
 }
 
 export function normalizeItemName(name: string): string {
-  let n = name.toLowerCase().trim()
+  let n = (name ?? '').toLowerCase().trim()
   // Sort abbreviations longest-first so "w/o" matches before "w/"
   const sorted = Object.entries(NAME_ABBREVIATIONS).sort(
     (a, b) => b[0].length - a[0].length,

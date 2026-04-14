@@ -170,7 +170,7 @@ export default function PunchyReview({
         if (setCorrs.length === 0) return set;
         const updatedItems = (set.items ?? []).map(item => {
           const corr = setCorrs.find(
-            c => c.item_name.toLowerCase() === item.name.toLowerCase(),
+            c => (c.item_name ?? '').toLowerCase() === (item.name ?? '').toLowerCase(),
           );
           if (corr) return {
             ...item,

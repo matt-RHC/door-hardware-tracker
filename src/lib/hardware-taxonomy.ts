@@ -594,7 +594,7 @@ export const MANUFACTURER_CATEGORY_MAP: Record<string, string> = {
  * item name is a model number only (e.g., "Von Duprin 99").
  */
 export function classifyItem(itemName: string, manufacturer?: string): string {
-  const lower = itemName.toLowerCase().trim()
+  const lower = (itemName ?? '').toLowerCase().trim()
   for (const cat of HARDWARE_TAXONOMY) {
     for (const pattern of cat.name_patterns) {
       if (new RegExp(pattern, 'i').test(lower)) {
@@ -605,7 +605,7 @@ export function classifyItem(itemName: string, manufacturer?: string): string {
 
   // Fallback: check manufacturer prefix against known mappings
   if (manufacturer) {
-    const mfrLower = manufacturer.toLowerCase().trim()
+    const mfrLower = (manufacturer ?? '').toLowerCase().trim()
     for (const [prefix, category] of Object.entries(MANUFACTURER_CATEGORY_MAP)) {
       if (mfrLower.startsWith(prefix)) {
         return category
