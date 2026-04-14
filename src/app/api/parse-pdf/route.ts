@@ -24,6 +24,7 @@ import {
 import { shouldAutoTriggerDeepExtraction } from '@/lib/types/confidence'
 import type { ExtractionConfidence } from '@/lib/types/confidence'
 import { createAdminSupabaseClient } from '@/lib/supabase/admin'
+import { assertProjectMember } from '@/lib/auth-helpers'
 
 // Vercel Fluid Compute: 800s timeout (Pro plan max)
 export const maxDuration = 800
@@ -217,15 +218,28 @@ export async function POST(request: NextRequest) {
     // Service role bypass for testing scripts (e.g. run-golden-suite.mjs)
     const serviceRoleHeader = request.headers.get('x-service-role')
     const isServiceRole = serviceRoleHeader && serviceRoleHeader === process.env.SUPABASE_SERVICE_ROLE_KEY
+    let userSupabase: Awaited<ReturnType<typeof createServerSupabaseClient>> | null = null
+    let authedUserId: string | null = null
     if (!isServiceRole) {
-      const supabase = await createServerSupabaseClient()
-      const { data: { user }, error: authError } = await supabase.auth.getUser()
+      userSupabase = await createServerSupabaseClient()
+      const { data: { user }, error: authError } = await userSupabase.auth.getUser()
       if (authError || !user) {
         return NextResponse.json({ error: 'You must be signed in' }, { status: 401 })
       }
+      authedUserId = user.id
     }
 
     const body = await request.json()
+
+    // Enforce project membership when a projectId is provided (IDOR prevention).
+    // Skipped for service-role callers (testing scripts).
+    if (userSupabase && authedUserId && body.projectId) {
+      try {
+        await assertProjectMember(userSupabase, authedUserId, body.projectId)
+      } catch {
+        return NextResponse.json({ error: 'Access denied to this project' }, { status: 403 })
+      }
+    }
 
     // Resolve PDF: prefer server-side storage fetch via projectId, fallback to base64 in body
     let base64: string = body.pdfBase64 ?? ''

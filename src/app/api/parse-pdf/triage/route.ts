@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { fetchProjectPdfBase64 } from '@/lib/pdf-storage'
 import { createAnthropicClient } from '@/lib/parse-pdf-helpers'
+import { assertProjectMember } from '@/lib/auth-helpers'
 import type Anthropic from '@anthropic-ai/sdk'
 
 // Bump to 800s — large door lists (100+) with Sonnet can take several minutes
@@ -130,6 +131,15 @@ export async function POST(request: NextRequest) {
       filteredPdfBase64?: string
       projectId?: string
       userHints?: Array<{ question_id: string; question_text: string; answer: string }>
+    }
+
+    // Enforce project membership when projectId is provided (IDOR prevention)
+    if (body.projectId) {
+      try {
+        await assertProjectMember(supabase, user.id, body.projectId)
+      } catch {
+        return NextResponse.json({ error: 'Access denied to this project' }, { status: 403 })
+      }
     }
 
     // Resolve filtered PDF: prefer client-sent filtered pages, fallback to full PDF from storage
