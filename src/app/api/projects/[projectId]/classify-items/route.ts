@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { createAdminSupabaseClient } from '@/lib/supabase/admin'
+import { logActivity } from '@/lib/activity-log'
 
 interface ClassifyRequest {
   item_name: string
@@ -45,6 +46,7 @@ export async function POST(
 
     if (item_ids && item_ids.length > 0) {
       // Update only specific items
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data, error } = await (adminSupabase as any)
         .from('hardware_items')
         .update({ install_type } as any)
@@ -56,10 +58,24 @@ export async function POST(
         return NextResponse.json({ error: 'Failed to classify items' }, { status: 500 })
       }
 
+      logActivity({
+        projectId,
+        userId: user.id,
+        action: 'install_type_changed',
+        entityType: 'hardware_item',
+        details: {
+          item_name,
+          install_type,
+          item_ids,
+          updated_count: data?.length ?? 0,
+        },
+      })
+
       return NextResponse.json({ updated: data?.length || 0, items: data })
     }
 
     // Get all openings in this project
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: openings, error: openingsError } = await (adminSupabase as any)
       .from('openings')
       .select('id')
@@ -74,9 +90,11 @@ export async function POST(
       return NextResponse.json({ updated: 0, items: [] })
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const openingIds = openings.map((o: any) => o.id)
 
     // Update all hardware items with matching name across all openings in the project
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: updatedItems, error: updateError } = await (adminSupabase as any)
       .from('hardware_items')
       .update({ install_type } as any)
@@ -88,6 +106,18 @@ export async function POST(
       console.error('Error classifying items across project:', updateError)
       return NextResponse.json({ error: 'Failed to classify items' }, { status: 500 })
     }
+
+    logActivity({
+      projectId,
+      userId: user.id,
+      action: 'install_type_changed',
+      entityType: 'hardware_item',
+      details: {
+        item_name,
+        install_type,
+        updated_count: updatedItems?.length ?? 0,
+      },
+    })
 
     return NextResponse.json({
       updated: updatedItems?.length || 0,
@@ -123,6 +153,7 @@ export async function GET(
     const adminSupabase = createAdminSupabaseClient()
 
     // Get all openings in project
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: openings } = await (adminSupabase as any)
       .from('openings')
       .select('id')
@@ -132,9 +163,11 @@ export async function GET(
       return NextResponse.json({ total: 0, unclassified: 0 })
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const openingIds = openings.map((o: any) => o.id)
 
     // Count all items with this name
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: items } = await (adminSupabase as any)
       .from('hardware_items')
       .select('id, install_type, opening_id')
@@ -142,6 +175,7 @@ export async function GET(
       .eq('name', itemName)
 
     const total = items?.length || 0
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const unclassified = items?.filter((i: any) => !i.install_type).length || 0
 
     return NextResponse.json({ total, unclassified })

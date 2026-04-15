@@ -23,6 +23,7 @@ import { classifyItemScope } from "@/lib/parse-pdf-helpers";
 import PDFRegionSelector from "@/components/ImportWizard/PDFRegionSelector";
 import SyncStatusDot from "@/components/SyncStatusDot";
 import QAFindingsChips from "@/components/QAFindingsChips";
+import { ACTION_LABELS } from "@/lib/constants/activity-actions";
 
 interface RescanFieldDiff {
   field: string;
@@ -109,6 +110,12 @@ export default function DoorDetailPage() {
   const [activePhase, setActivePhase] = useState<'all' | 'receive' | 'install' | 'qa'>('all');
   const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
 
+  // Recent activity for this opening
+  const [recentActivity, setRecentActivity] = useState<Array<{
+    id: string; action: string; user_id: string | null;
+    created_at: string; details: Record<string, unknown>;
+  }>>([]);
+
   // Rescan state
   const [rescanItem, setRescanItem] = useState<HardwareItemWithProgress | null>(null);
   const [pdfBuffer, setPdfBuffer] = useState<ArrayBuffer | null>(null);
@@ -168,6 +175,30 @@ export default function DoorDetailPage() {
   useEffect(() => {
     initDB().then(() => fetchOpeningData());
   }, [doorId, fetchOpeningData]);
+
+  // Fetch recent activity for this opening
+  useEffect(() => {
+    if (!opening) return;
+    const fetchRecentActivity = async () => {
+      try {
+        const res = await fetch(
+          `/api/projects/${projectId}/activity?limit=10&entity_type=checklist_progress`
+        );
+        if (!res.ok) return;
+        const json = await res.json();
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const filtered = (json.data ?? []).filter(
+          (e: any) =>
+            e.details?.opening_id === doorId ||
+            e.entity_id === doorId
+        );
+        setRecentActivity(filtered.slice(0, 10));
+      } catch {
+        // Activity is non-critical
+      }
+    };
+    fetchRecentActivity();
+  }, [opening, projectId, doorId]);
 
   // Subscribe to realtime updates
   useEffect(() => {
@@ -1844,6 +1875,61 @@ export default function DoorDetailPage() {
             </p>
             <button className="px-4 py-2.5 min-h-[44px] bg-accent hover:bg-accent/80 text-white rounded-lg transition-colors text-[15px] font-medium">
               Share
+            </button>
+          </div>
+        )}
+
+        {/* Recent Activity */}
+        {!editingOpening && recentActivity.length > 0 && (
+          <div className="mb-8 pb-20 md:pb-0">
+            <h3
+              className="text-[13px] font-bold text-secondary uppercase tracking-wider mb-3"
+              style={{ fontFamily: "var(--font-display)", letterSpacing: "0.03em" }}
+            >
+              Recent Activity
+            </h3>
+            <div className="panel rounded-md divide-y divide-th-border">
+              {recentActivity.map((entry) => {
+                const label = ACTION_LABELS[entry.action] ?? entry.action.replace(/_/g, ' ');
+                const timeAgo = (() => {
+                  const diffMs = Date.now() - new Date(entry.created_at).getTime();
+                  const diffMin = Math.floor(diffMs / 60000);
+                  if (diffMin < 1) return 'just now';
+                  if (diffMin < 60) return `${diffMin}m ago`;
+                  const diffHr = Math.floor(diffMin / 60);
+                  if (diffHr < 24) return `${diffHr}h ago`;
+                  return `${Math.floor(diffHr / 24)}d ago`;
+                })();
+                const isWorkflow = entry.action.startsWith('item_received') ||
+                  entry.action.startsWith('item_installed') ||
+                  entry.action.startsWith('item_pre_install') ||
+                  entry.action.startsWith('item_qa_') ||
+                  entry.action.startsWith('item_checked');
+                const dotColor = isWorkflow ? 'var(--green)' :
+                  entry.action.includes('damage') || entry.action.includes('issue') ? 'var(--danger)' :
+                  'var(--tertiary)';
+
+                return (
+                  <div key={entry.id} className="flex items-center gap-3 px-3 py-2.5">
+                    <div
+                      className="w-2 h-2 rounded-full shrink-0"
+                      style={{ backgroundColor: dotColor }}
+                    />
+                    <span className="text-[12px] text-primary flex-1 truncate">
+                      {label}
+                    </span>
+                    <span className="text-[11px] text-tertiary shrink-0 tabular-nums">
+                      {timeAgo}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+            <button
+              onClick={() => router.push(`/project/${projectId}/activity`)}
+              className="mt-2 text-[12px] text-accent hover:text-accent/80 transition-colors"
+            >
+              View all activity
             </button>
           </div>
         )}

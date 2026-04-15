@@ -1,4 +1,5 @@
 import { createAdminSupabaseClient } from '@/lib/supabase/admin'
+import type { ActivityAction as ConstantActivityAction } from '@/lib/constants/activity-actions'
 
 /**
  * Activity log — audit trail for who did what, when.
@@ -24,6 +25,27 @@ export type ActivityAction =
   | 'member_added'
   | 'member_removed'
   | 'member_role_changed'
+  | 'item_received'
+  | 'item_receive_undone'
+  | 'item_pre_installed'
+  | 'item_pre_install_undone'
+  | 'item_installed'
+  | 'item_install_undone'
+  | 'item_qa_passed'
+  | 'item_qa_failed'
+  | 'item_qa_undone'
+  | 'item_checked'
+  | 'item_unchecked'
+  | 'damage_reported'
+  | 'issue_created'
+  | 'issue_status_changed'
+  | 'issue_comment_added'
+  | 'offline_sync_started'
+  | 'offline_sync_completed'
+  | 'offline_sync_conflict'
+  | 'install_type_changed'
+  | 'batch_update'
+  | ConstantActivityAction
 
 export type EntityType =
   | 'opening'
@@ -31,6 +53,9 @@ export type EntityType =
   | 'project'
   | 'extraction_job'
   | 'project_member'
+  | 'checklist_progress'
+  | 'delivery'
+  | 'issue'
 
 interface LogActivityParams {
   projectId: string
