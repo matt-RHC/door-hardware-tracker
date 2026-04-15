@@ -21,6 +21,7 @@ import { openProjectPdfAtPage } from "@/lib/pdf-page-link";
 import { groupItemsByLeaf, getLeafDisplayQty, getLeafProgress } from "@/lib/classify-leaf-items";
 import { classifyItemScope } from "@/lib/parse-pdf-helpers";
 import PDFRegionSelector from "@/components/ImportWizard/PDFRegionSelector";
+import SyncStatusDot from "@/components/SyncStatusDot";
 
 interface RescanFieldDiff {
   field: string;
@@ -1091,6 +1092,7 @@ export default function DoorDetailPage() {
                     </td>
                     <td className="px-3 py-2">
                       <div className="flex items-center gap-1.5 flex-wrap">
+                        <SyncStatusDot openingId={doorId} itemId={item.id} leafIndex={leafIndex} />
                         <span className="font-semibold text-primary">{item.name}</span>
                         {item.install_type && (
                           <span
