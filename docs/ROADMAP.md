@@ -2,7 +2,7 @@
 
 > **Guiding principle:** Hardware counts coming out of PDFs must be accurate before we build features on top of them. Export is gated on extraction accuracy.
 
-Last updated: 2026-04-15 (memory-layer sweep — capture PRs #227–#231 merged, #232 in-flight)
+Last updated: 2026-04-15 (memory-layer sweep — PR #232 merged 11:40Z, PR #233 merged 11:41Z)
 
 ---
 
@@ -192,9 +192,11 @@ The wizard flow shipped in Phase 0 (PRs #161–#162). Phase 2 focused on UX poli
 ## Known Issues / Next Priorities
 
 ### Awaiting Merge
-- **PR #232 (Punch-list `hardware_items.category` fix)**: Removes a non-existent `category` column from the punch-list Supabase select/response mapping (was returning 400 on every page). 1 file, -2 lines. Vercel deploy green; GitHub shows `mergeable_state: blocked` (awaiting review).
+- _None_
 
 ### Recently Merged
+- **PR #233 (ROADMAP sweep, 2026-04-15 11:41Z)**: Pure docs update — captured PRs #227–#231 merged and PR #232 in-flight (PR #232 merged one minute before #233 landed). Also confirmed the three legacy Smartsheets remain retired per AGENTS.md; `docs/ROADMAP.md` remains the live persistent-memory layer — merged
+- **PR #232 (Punch-list `hardware_items.category` fix, merged 2026-04-15 11:40Z)**: Removed a non-existent `category` column from the punch-list Supabase select/response mapping that was returning 400 on every page. 1 file, -2 lines — merged
 - **PR #231 (Issue Tracking UI)**: `/project/:id/issues` list page with status/severity/category filters and pagination; responsive table (desktop) / card (mobile); Kanban board with 6 status columns and overdue indicators; issue detail page with status transitions, comments, attachments, metadata sidebar, low-confidence banner; create-issue form with opening search, hardware-item select, SLA preview, photo uploads; Parse-Email modal for AI email→issues conversion; `OpeningIssuesFeed` compact component; Issues nav link in project action bar — merged
 - **PR #230 (Issue Tracking API + Haiku Email Parsing)**: Full CRUD API for issues (list/create/detail/update/delete), Claude Haiku email-parsing pipeline, voice-memo support, SLA computation — merged
 - **PR #229 (Dashboard Visualization, Migration 031)**: Recharts stage-funnel/floor/zone/timeline panels with share tokens; schema adds `stage` on `hardware_items`, `floor_number`/`zone_name` on `openings`, `dashboard_shares` table with RLS; `/api/dashboard` aggregates stage counts / floor progress / zone heatmap / 30-day timeline; create/list/revoke share tokens; Dashboard nav link — merged
@@ -256,7 +258,7 @@ New feature area covering on-site workflow (Receive / Install / QA), deliveries,
 - UI: QA finding chips on door detail; `/project/:id/punch-list` page with filtering
 - API: `PATCH /api/openings/{id}/qa-findings` for per-dimension toggling
 - Enables punch-list generation and per-dimension compliance reporting
-- **Known follow-up: PR #232 (open)** — the punch-list route referenced a non-existent `hardware_items.category` column, causing a 400 on every page; the 1-file fix is awaiting merge
+- **Known follow-up: PR #232 (merged 2026-04-15 11:40Z)** — the punch-list route referenced a non-existent `hardware_items.category` column, causing a 400 on every page; the 1-file fix landed
 
 ### Activity Log Completeness (PR #227)
 - Expanded `ActivityAction` and `EntityType` unions to cover workflow, damage/issues, offline sync, and operations
