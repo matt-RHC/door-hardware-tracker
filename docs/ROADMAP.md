@@ -2,7 +2,7 @@
 
 > **Guiding principle:** Hardware counts coming out of PDFs must be accurate before we build features on top of them. Export is gated on extraction accuracy.
 
-Last updated: 2026-04-15 (memory-layer sweep — capture PRs #215, #217–#224)
+Last updated: 2026-04-15 (memory-layer sweep — capture PRs #227–#231 merged, #232 in-flight)
 
 ---
 
@@ -192,9 +192,14 @@ The wizard flow shipped in Phase 0 (PRs #161–#162). Phase 2 focused on UX poli
 ## Known Issues / Next Priorities
 
 ### Awaiting Merge
-- _None_ — all in-flight PRs merged as of 2026-04-15 sweep. Zero open PRs, working tree clean.
+- **PR #232 (Punch-list `hardware_items.category` fix)**: Removes a non-existent `category` column from the punch-list Supabase select/response mapping (was returning 400 on every page). 1 file, -2 lines. Vercel deploy green; GitHub shows `mergeable_state: blocked` (awaiting review).
 
 ### Recently Merged
+- **PR #231 (Issue Tracking UI)**: `/project/:id/issues` list page with status/severity/category filters and pagination; responsive table (desktop) / card (mobile); Kanban board with 6 status columns and overdue indicators; issue detail page with status transitions, comments, attachments, metadata sidebar, low-confidence banner; create-issue form with opening search, hardware-item select, SLA preview, photo uploads; Parse-Email modal for AI email→issues conversion; `OpeningIssuesFeed` compact component; Issues nav link in project action bar — merged
+- **PR #230 (Issue Tracking API + Haiku Email Parsing)**: Full CRUD API for issues (list/create/detail/update/delete), Claude Haiku email-parsing pipeline, voice-memo support, SLA computation — merged
+- **PR #229 (Dashboard Visualization, Migration 031)**: Recharts stage-funnel/floor/zone/timeline panels with share tokens; schema adds `stage` on `hardware_items`, `floor_number`/`zone_name` on `openings`, `dashboard_shares` table with RLS; `/api/dashboard` aggregates stage counts / floor progress / zone heatmap / 30-day timeline; create/list/revoke share tokens; Dashboard nav link — merged
+- **PR #228 (Issue Tracking Schema, Migration 032)**: 5 new tables (`issues`, `issue_attachments`, `issue_comments`, `issue_links`, `issue_watches`) with RLS, indexes, and updated_at triggers; TypeScript types updated with table interfaces and union types — merged
+- **PR #227 (Activity Log Completeness)**: Expanded `ActivityAction`/`EntityType` unions covering workflow (received/installed/qa_passed/qa_failed), damage/issues, offline sync, operations (install_type_changed, batch_update); check route, bulk-update route, item routes, classify-items all log activity; `/project/{id}/activity` feed page with filters; door detail shows recent activity; Activity nav link in project action bar — merged
 - **PR #215 (Responsive Layout)**: door detail fluid-width refactor, table horizontal scroll at <640px, shortened batch-action labels, rescan diff grid breakpoint tweak — merged
 - **PR #217 (Workflow Phase Tabs)**: Receive/Install/QA tabs with mobile-optimized table — merged
 - **PR #218 (Offline Sync Payload Fix)**: sync payload dropped workflow phases + wrong conflict key — merged
@@ -245,6 +250,29 @@ New feature area covering on-site workflow (Receive / Install / QA), deliveries,
 - `qty_source` values: `parsed`, `divided`, `flagged`, `capped`, `manual`, `region_extract`
 - Promote paths updated across migrations 007–025 to carry audit fields from staging to production
 - Supports DPR dispute resolution and extraction provenance
+
+### QA Findings + Punch List (PR #225 — Migration 030)
+- Replaces single `qa_qc` boolean with multi-dimension QA tracking (`qa_findings TEXT[]`, `qa_notes`, `qa_resolved_at`/`by`) with GIN index
+- UI: QA finding chips on door detail; `/project/:id/punch-list` page with filtering
+- API: `PATCH /api/openings/{id}/qa-findings` for per-dimension toggling
+- Enables punch-list generation and per-dimension compliance reporting
+- **Known follow-up: PR #232 (open)** — the punch-list route referenced a non-existent `hardware_items.category` column, causing a 400 on every page; the 1-file fix is awaiting merge
+
+### Activity Log Completeness (PR #227)
+- Expanded `ActivityAction` and `EntityType` unions to cover workflow, damage/issues, offline sync, and operations
+- All mutating routes now log activity (check, bulk-update, item, classify-items)
+- `/project/{id}/activity` feed page with filters; recent-activity list on door detail
+
+### Dashboard Visualization (PR #229 — Migration 031)
+- Migration 031 adds `stage` enum on `hardware_items`, `floor_number`/`zone_name` on `openings`, `dashboard_shares` table with RLS
+- `/api/dashboard` aggregates stage funnel, floor progress, zone heatmap, 30-day timeline, totals with blocked items
+- `/api/dashboard/shares` for token create/list/revoke
+- Dashboard page uses Recharts in a responsive 2×2 grid (dynamic imports, ssr:false)
+
+### Issue Tracking (PRs #228, #230, #231 — Migration 032)
+- Migration 032: `issues`, `issue_attachments`, `issue_comments`, `issue_links`, `issue_watches` tables with RLS, indexes, and updated_at triggers
+- API (PR #230): full CRUD for issues, Claude Haiku email-parsing pipeline, voice-memo support, SLA computation
+- UI (PR #231): list page with chip filters + pagination, responsive table/card layouts, Kanban board with 6 status columns + overdue indicators, detail page with transitions/comments/attachments, create form with opening search + SLA preview, Parse-Email modal, `OpeningIssuesFeed` on opening detail, Issues nav link
 
 ---
 
