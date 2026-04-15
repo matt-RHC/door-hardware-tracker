@@ -729,68 +729,83 @@ export type Database = {
       }
       issues: {
         Row: {
-          assigned_to: string | null
-          created_at: string | null
-          date_reported: string | null
-          date_resolved: string | null
-          description: string
-          door_number: string | null
-          hardware_item_id: string | null
-          hardware_item_name: string | null
           id: string
-          issue_id_short: string | null
-          notes: string | null
-          opening_id: string | null
           project_id: string
+          opening_id: string | null
+          hardware_item_id: string | null
+          category: string
+          issue_type: string
+          severity: string
+          status: string
+          assigned_to: string | null
+          awaiting_from: string | null
+          due_at: string | null
+          awaited_since: string | null
+          title: string
+          description: string | null
+          resolution_summary: string | null
           reported_by: string | null
-          severity: string | null
-          status: string | null
-          updated_at: string | null
+          source: string
+          source_data: Json
+          parse_confidence: number
+          created_at: string
+          updated_at: string
+          resolved_at: string | null
         }
         Insert: {
-          assigned_to?: string | null
-          created_at?: string | null
-          date_reported?: string | null
-          date_resolved?: string | null
-          description: string
-          door_number?: string | null
-          hardware_item_id?: string | null
-          hardware_item_name?: string | null
           id?: string
-          issue_id_short?: string | null
-          notes?: string | null
-          opening_id?: string | null
           project_id: string
+          opening_id?: string | null
+          hardware_item_id?: string | null
+          category: string
+          issue_type: string
+          severity?: string
+          status?: string
+          assigned_to?: string | null
+          awaiting_from?: string | null
+          due_at?: string | null
+          awaited_since?: string | null
+          title: string
+          description?: string | null
+          resolution_summary?: string | null
           reported_by?: string | null
-          severity?: string | null
-          status?: string | null
-          updated_at?: string | null
+          source?: string
+          source_data?: Json
+          parse_confidence?: number
+          created_at?: string
+          updated_at?: string
+          resolved_at?: string | null
         }
         Update: {
-          assigned_to?: string | null
-          created_at?: string | null
-          date_reported?: string | null
-          date_resolved?: string | null
-          description?: string
-          door_number?: string | null
-          hardware_item_id?: string | null
-          hardware_item_name?: string | null
           id?: string
-          issue_id_short?: string | null
-          notes?: string | null
-          opening_id?: string | null
           project_id?: string
+          opening_id?: string | null
+          hardware_item_id?: string | null
+          category?: string
+          issue_type?: string
+          severity?: string
+          status?: string
+          assigned_to?: string | null
+          awaiting_from?: string | null
+          due_at?: string | null
+          awaited_since?: string | null
+          title?: string
+          description?: string | null
+          resolution_summary?: string | null
           reported_by?: string | null
-          severity?: string | null
-          status?: string | null
-          updated_at?: string | null
+          source?: string
+          source_data?: Json
+          parse_confidence?: number
+          created_at?: string
+          updated_at?: string
+          resolved_at?: string | null
         }
         Relationships: [
           {
-            foreignKeyName: "issues_hardware_item_id_fkey"
-            columns: ["hardware_item_id"]
+            foreignKeyName: "issues_project_id_fkey"
+            columns: ["project_id"]
             isOneToOne: false
-            referencedRelation: "hardware_items"
+            referencedRelation: "projects"
             referencedColumns: ["id"]
           },
           {
@@ -801,10 +816,193 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "issues_project_id_fkey"
-            columns: ["project_id"]
+            foreignKeyName: "issues_hardware_item_id_fkey"
+            columns: ["hardware_item_id"]
             isOneToOne: false
-            referencedRelation: "projects"
+            referencedRelation: "hardware_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      issue_attachments: {
+        Row: {
+          id: string
+          issue_id: string
+          file_name: string
+          file_type: string
+          file_size_bytes: number | null
+          content_type: string | null
+          storage_path: string
+          signed_url: string | null
+          signed_url_expires_at: string | null
+          transcript: string | null
+          transcript_source: string | null
+          uploaded_by: string | null
+          uploaded_at: string
+        }
+        Insert: {
+          id?: string
+          issue_id: string
+          file_name: string
+          file_type: string
+          file_size_bytes?: number | null
+          content_type?: string | null
+          storage_path: string
+          signed_url?: string | null
+          signed_url_expires_at?: string | null
+          transcript?: string | null
+          transcript_source?: string | null
+          uploaded_by?: string | null
+          uploaded_at?: string
+        }
+        Update: {
+          id?: string
+          issue_id?: string
+          file_name?: string
+          file_type?: string
+          file_size_bytes?: number | null
+          content_type?: string | null
+          storage_path?: string
+          signed_url?: string | null
+          signed_url_expires_at?: string | null
+          transcript?: string | null
+          transcript_source?: string | null
+          uploaded_by?: string | null
+          uploaded_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "issue_attachments_issue_id_fkey"
+            columns: ["issue_id"]
+            isOneToOne: false
+            referencedRelation: "issues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      issue_comments: {
+        Row: {
+          id: string
+          issue_id: string
+          author_id: string | null
+          comment_type: string
+          visibility: string
+          body: string
+          mentions: string[]
+          email_message_id: string | null
+          email_from: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          issue_id: string
+          author_id?: string | null
+          comment_type?: string
+          visibility?: string
+          body: string
+          mentions?: string[]
+          email_message_id?: string | null
+          email_from?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          issue_id?: string
+          author_id?: string | null
+          comment_type?: string
+          visibility?: string
+          body?: string
+          mentions?: string[]
+          email_message_id?: string | null
+          email_from?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "issue_comments_issue_id_fkey"
+            columns: ["issue_id"]
+            isOneToOne: false
+            referencedRelation: "issues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      issue_links: {
+        Row: {
+          id: string
+          source_issue_id: string
+          target_issue_id: string
+          link_type: string
+          created_by: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          source_issue_id: string
+          target_issue_id: string
+          link_type: string
+          created_by?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          source_issue_id?: string
+          target_issue_id?: string
+          link_type?: string
+          created_by?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "issue_links_source_issue_id_fkey"
+            columns: ["source_issue_id"]
+            isOneToOne: false
+            referencedRelation: "issues"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "issue_links_target_issue_id_fkey"
+            columns: ["target_issue_id"]
+            isOneToOne: false
+            referencedRelation: "issues"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      issue_watches: {
+        Row: {
+          id: string
+          issue_id: string
+          user_id: string
+          notify_on: string[]
+          email_digest_preference: string
+          subscribed_at: string
+        }
+        Insert: {
+          id?: string
+          issue_id: string
+          user_id: string
+          notify_on?: string[]
+          email_digest_preference?: string
+          subscribed_at?: string
+        }
+        Update: {
+          id?: string
+          issue_id?: string
+          user_id?: string
+          notify_on?: string[]
+          email_digest_preference?: string
+          subscribed_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "issue_watches_issue_id_fkey"
+            columns: ["issue_id"]
+            isOneToOne: false
+            referencedRelation: "issues"
             referencedColumns: ["id"]
           },
         ]
@@ -1521,6 +1719,63 @@ export const QA_FINDING_LABELS: Record<QAFindingTag, string> = {
 export type Issue = Database['public']['Tables']['issues']['Row']
 export type IssueInsert = Database['public']['Tables']['issues']['Insert']
 export type IssueUpdate = Database['public']['Tables']['issues']['Update']
+
+export type IssueAttachment = Database['public']['Tables']['issue_attachments']['Row']
+export type IssueAttachmentInsert = Database['public']['Tables']['issue_attachments']['Insert']
+export type IssueAttachmentUpdate = Database['public']['Tables']['issue_attachments']['Update']
+
+export type IssueComment = Database['public']['Tables']['issue_comments']['Row']
+export type IssueCommentInsert = Database['public']['Tables']['issue_comments']['Insert']
+export type IssueCommentUpdate = Database['public']['Tables']['issue_comments']['Update']
+
+export type IssueLink = Database['public']['Tables']['issue_links']['Row']
+export type IssueLinkInsert = Database['public']['Tables']['issue_links']['Insert']
+export type IssueLinkUpdate = Database['public']['Tables']['issue_links']['Update']
+
+export type IssueWatch = Database['public']['Tables']['issue_watches']['Row']
+export type IssueWatchInsert = Database['public']['Tables']['issue_watches']['Insert']
+export type IssueWatchUpdate = Database['public']['Tables']['issue_watches']['Update']
+
+// ─── Issue tracking enums / union types ─────────────────────────────────────
+
+export type IssueType =
+  | 'wrong_sku'
+  | 'damaged'
+  | 'keying_mismatch'
+  | 'finish_variation'
+  | 'missing_items'
+  | 'substitution_needed'
+  | 'install_defect'
+  | 'photo_mismatch'
+  | 'compliance_risk'
+  | 'other'
+
+export type IssueSeverity = 'critical' | 'high' | 'medium' | 'low'
+
+export type IssueStatus =
+  | 'created'
+  | 'acknowledged'
+  | 'awaiting_action'
+  | 'blocked'
+  | 'resolved'
+  | 'duplicate'
+  | 'closed'
+
+export type IssueSource = 'form' | 'email' | 'slack' | 'api' | 'voice_memo'
+
+export type AwaitingFrom = 'assignee' | 'reporter' | 'consultant' | 'supplier' | 'other'
+
+export type LinkType = 'duplicate_of' | 'blocks' | 'related_to' | 'caused_by'
+
+export type IssueFileType = 'photo' | 'voice' | 'document' | 'spec_sheet' | 'external_link'
+
+export type CommentType = 'user_comment' | 'system_update' | 'ai_summary'
+
+export type CommentVisibility = 'internal' | 'external'
+
+export type TranscriptSource = 'deepgram' | 'browser_speech_api' | 'manual'
+
+export type DigestPreference = 'real_time' | 'daily' | 'weekly' | 'never'
 
 export type Delivery = Database['public']['Tables']['deliveries']['Row']
 export type DeliveryInsert = Database['public']['Tables']['deliveries']['Insert']
