@@ -105,7 +105,12 @@ export async function GET(
           file_type,
           category,
           uploaded_by,
-          uploaded_at
+          uploaded_at,
+          damage_flag,
+          damage_notes,
+          delivery_id,
+          progress_id,
+          leaf_index
         )
       `)
       .eq('id', openingId)

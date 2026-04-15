@@ -17,31 +17,46 @@ export type Database = {
       attachments: {
         Row: {
           category: string | null
+          damage_flag: boolean
+          damage_notes: string | null
+          delivery_id: string | null
           file_name: string | null
           file_type: string | null
           file_url: string
           id: string
-          opening_id: string
+          leaf_index: number | null
+          opening_id: string | null
+          progress_id: string | null
           uploaded_at: string | null
           uploaded_by: string | null
         }
         Insert: {
           category?: string | null
+          damage_flag?: boolean
+          damage_notes?: string | null
+          delivery_id?: string | null
           file_name?: string | null
           file_type?: string | null
           file_url: string
           id?: string
-          opening_id: string
+          leaf_index?: number | null
+          opening_id?: string | null
+          progress_id?: string | null
           uploaded_at?: string | null
           uploaded_by?: string | null
         }
         Update: {
           category?: string | null
+          damage_flag?: boolean
+          damage_notes?: string | null
+          delivery_id?: string | null
           file_name?: string | null
           file_type?: string | null
           file_url?: string
           id?: string
-          opening_id?: string
+          leaf_index?: number | null
+          opening_id?: string | null
+          progress_id?: string | null
           uploaded_at?: string | null
           uploaded_by?: string | null
         }
@@ -51,6 +66,20 @@ export type Database = {
             columns: ["opening_id"]
             isOneToOne: false
             referencedRelation: "openings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "attachments_delivery_id_fkey"
+            columns: ["delivery_id"]
+            isOneToOne: false
+            referencedRelation: "deliveries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "attachments_progress_id_fkey"
+            columns: ["progress_id"]
+            isOneToOne: false
+            referencedRelation: "checklist_progress"
             referencedColumns: ["id"]
           },
         ]
@@ -1367,6 +1396,7 @@ export type ChecklistProgressUpdate = Database['public']['Tables']['checklist_pr
 export type Attachment = Database['public']['Tables']['attachments']['Row']
 export type AttachmentInsert = Database['public']['Tables']['attachments']['Insert']
 export type AttachmentUpdate = Database['public']['Tables']['attachments']['Update']
+export type AttachmentCategory = 'floor_plan' | 'door_drawing' | 'frame_drawing' | 'general' | 'receiving_photo' | 'damage_photo' | 'install_progress' | 'qa_punch'
 
 export type Issue = Database['public']['Tables']['issues']['Row']
 export type IssueInsert = Database['public']['Tables']['issues']['Insert']
