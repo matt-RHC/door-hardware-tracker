@@ -8,7 +8,9 @@ import ProgressBar from "@/components/ProgressBar";
 import FileViewer from "@/components/FileViewer";
 import IssueReportModal from "@/components/IssueReportModal";
 import { createClient } from "@/lib/supabase/client";
-import { initDB, cacheOpening, getCachedOpening } from "@/lib/offline/db";
+import { initDB, cacheOpening, getCachedOpening, saveCheckOffline, syncPendingChecks } from "@/lib/offline/db";
+import type { WorkflowStep as OfflineWorkflowStep } from "@/lib/offline/db";
+import { v4 as uuidv4 } from "uuid";
 import { Opening, Attachment, HardwareItemWithProgress } from "@/lib/types/database";
 import { playSuccess, playToggle } from "@/lib/sounds";
 import { useItemEditing } from "@/hooks/useItemEditing";
@@ -115,9 +117,18 @@ export default function DoorDetailPage() {
   const [rescanRawFields, setRescanRawFields] = useState<Record<string, string>>({});
   const [rescanRawApplied, setRescanRawApplied] = useState(false);
 
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+
   const supabase = createClient();
   const fetchDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const { showToast } = useToast();
+
+  // Fetch current user ID for offline saves
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      if (data.user) setCurrentUserId(data.user.id);
+    });
+  }, [supabase]);
 
   // Lock body scroll while rescan modal is open (iPad scroll containment)
   useEffect(() => {
@@ -164,6 +175,22 @@ export default function DoorDetailPage() {
   useEffect(() => {
     initDB().then(() => fetchOpeningData());
   }, [doorId, fetchOpeningData]);
+
+  // Sync pending offline checks when coming back online
+  useEffect(() => {
+    const handleOnline = async () => {
+      const result = await syncPendingChecks();
+      if (result.synced > 0) {
+        showToast("success", `Synced ${result.synced} offline change${result.synced > 1 ? 's' : ''}`);
+        await fetchOpeningData();
+      }
+      if (result.failed > 0) {
+        showToast("error", `Failed to sync ${result.failed} change${result.failed > 1 ? 's' : ''}`);
+      }
+    };
+    window.addEventListener("online", handleOnline);
+    return () => window.removeEventListener("online", handleOnline);
+  }, [fetchOpeningData, showToast]);
 
   // Subscribe to realtime updates
   useEffect(() => {
@@ -246,6 +273,7 @@ export default function DoorDetailPage() {
   };
 
   const handleStepToggle = async (itemId: string, step: WorkflowStep, currentValue: boolean, leafIndex: number = 1) => {
+    const newValue = !currentValue;
     try {
       const response = await fetch(
         `/api/openings/${doorId}/check`,
@@ -256,7 +284,7 @@ export default function DoorDetailPage() {
             item_id: itemId,
             leaf_index: leafIndex,
             step,
-            value: !currentValue,
+            value: newValue,
           }),
         }
       );
@@ -280,8 +308,23 @@ export default function DoorDetailPage() {
 
       await fetchOpeningData();
     } catch (err) {
-      console.error("Error toggling step:", err);
-      showToast("error", "Failed to update step. Check your connection and try again.");
+      // Save offline if the network request failed
+      if (currentUserId) {
+        await saveCheckOffline({
+          id: uuidv4(),
+          opening_id: doorId,
+          item_id: itemId,
+          leaf_index: leafIndex,
+          step: step as OfflineWorkflowStep,
+          value: newValue,
+          actor_id: currentUserId,
+          acted_at: new Date().toISOString(),
+        });
+        showToast("success", "Saved offline — will sync when back online.");
+      } else {
+        console.error("Error toggling step:", err);
+        showToast("error", "Failed to update step. Check your connection and try again.");
+      }
     }
   };
 
@@ -334,8 +377,27 @@ export default function DoorDetailPage() {
       setSelectedItems(new Set());
       await fetchOpeningData();
     } catch (err) {
-      console.error("Error in batch update:", err);
-      showToast("error", "Some items failed to update. Check your connection and try again.");
+      // Save all batch items offline
+      if (currentUserId) {
+        const now = new Date().toISOString();
+        for (const itemId of selectedItems) {
+          await saveCheckOffline({
+            id: uuidv4(),
+            opening_id: doorId,
+            item_id: itemId,
+            leaf_index: leafIndex,
+            step: step as OfflineWorkflowStep,
+            value: true,
+            actor_id: currentUserId,
+            acted_at: now,
+          });
+        }
+        setSelectedItems(new Set());
+        showToast("success", `Saved ${selectedItems.size} change${selectedItems.size > 1 ? 's' : ''} offline — will sync when back online.`);
+      } else {
+        console.error("Error in batch update:", err);
+        showToast("error", "Some items failed to update. Check your connection and try again.");
+      }
     } finally {
       setBatchActionLoading(false);
     }
@@ -343,6 +405,7 @@ export default function DoorDetailPage() {
 
   // Legacy toggle for backward compat
   const handleItemToggle = async (itemId: string, currentChecked: boolean) => {
+    const newValue = !currentChecked;
     try {
       const response = await fetch(
         `/api/openings/${doorId}/check`,
@@ -351,7 +414,7 @@ export default function DoorDetailPage() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             item_id: itemId,
-            checked: !currentChecked,
+            checked: newValue,
           }),
         }
       );
@@ -359,8 +422,22 @@ export default function DoorDetailPage() {
       if (!response.ok) throw new Error("Failed to update item");
       await fetchOpeningData();
     } catch (err) {
-      console.error("Error toggling item:", err);
-      showToast("error", "Failed to update item. Check your connection and try again.");
+      if (currentUserId) {
+        await saveCheckOffline({
+          id: uuidv4(),
+          opening_id: doorId,
+          item_id: itemId,
+          leaf_index: 1,
+          step: 'checked',
+          value: newValue,
+          actor_id: currentUserId,
+          acted_at: new Date().toISOString(),
+        });
+        showToast("success", "Saved offline — will sync when back online.");
+      } else {
+        console.error("Error toggling item:", err);
+        showToast("error", "Failed to update item. Check your connection and try again.");
+      }
     }
   };
 
