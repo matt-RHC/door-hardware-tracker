@@ -21,15 +21,17 @@ export async function initDB() {
   db = await openDB('door-hardware-tracker', 2, {
     upgrade(database: any, oldVersion: number) {
       // v1 stores
-      if (!database.objectStoreNames.contains('pendingChecks')) {
-        const pendingStore = database.createObjectStore('pendingChecks', { keyPath: 'id' })
-        pendingStore.createIndex('by-synced', 'synced')
-      }
-      if (!database.objectStoreNames.contains('cachedOpenings')) {
-        database.createObjectStore('cachedOpenings', { keyPath: 'id' })
-      }
-      if (!database.objectStoreNames.contains('cachedItems')) {
-        database.createObjectStore('cachedItems', { keyPath: 'id' })
+      if (oldVersion < 1) {
+        if (!database.objectStoreNames.contains('pendingChecks')) {
+          const pendingStore = database.createObjectStore('pendingChecks', { keyPath: 'id' })
+          pendingStore.createIndex('by-synced', 'synced')
+        }
+        if (!database.objectStoreNames.contains('cachedOpenings')) {
+          database.createObjectStore('cachedOpenings', { keyPath: 'id' })
+        }
+        if (!database.objectStoreNames.contains('cachedItems')) {
+          database.createObjectStore('cachedItems', { keyPath: 'id' })
+        }
       }
 
       // v1→v2: add pendingChecksV2 store with new schema
