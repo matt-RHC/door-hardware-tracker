@@ -11,6 +11,7 @@ export interface OfflineCheck {
   value: boolean
   actor_id: string    // user who made the change
   acted_at: string    // ISO timestamp when the change was made
+  synced: boolean
 }
 
 let db: any = null
@@ -36,6 +37,7 @@ export async function initDB() {
         if (!database.objectStoreNames.contains('pendingChecksV2')) {
           const v2Store = database.createObjectStore('pendingChecksV2', { keyPath: 'id' })
           v2Store.createIndex('by-synced', 'synced')
+          v2Store.createIndex('by-item', ['item_id', 'leaf_index'])
         }
       }
     },
@@ -59,7 +61,7 @@ async function migrateV1ToV2(database: any) {
       // Only migrate entries that haven't been synced yet
       if (check.synced) continue
 
-      const migrated: OfflineCheck & { synced: boolean } = {
+      const migrated: OfflineCheck = {
         id: check.id,
         opening_id: check.opening_id,
         item_id: check.item_id,
@@ -89,7 +91,15 @@ export async function getOfflineDB() {
   return db
 }
 
-export async function saveCheckOffline(check: OfflineCheck) {
+export async function saveCheckOffline(check: Omit<OfflineCheck, 'synced'>) {
+  const database = await getOfflineDB()
+  await database.put('pendingChecksV2', {
+    ...check,
+    synced: false,
+  })
+}
+
+export async function saveCheckOfflineV2(check: Omit<OfflineCheck, 'synced'>) {
   const database = await getOfflineDB()
   await database.put('pendingChecksV2', {
     ...check,
@@ -140,6 +150,11 @@ export async function syncPendingChecks() {
   }
 
   return { synced, failed }
+}
+
+export async function getPendingChecksV2(): Promise<OfflineCheck[]> {
+  const database = await getOfflineDB()
+  return database.getAll('pendingChecksV2')
 }
 
 export async function cacheOpening(opening: any) {
