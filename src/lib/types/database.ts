@@ -60,6 +60,8 @@ export type Database = {
           checked: boolean | null
           checked_at: string | null
           checked_by: string | null
+          client_id: string | null
+          client_updated_at: string | null
           created_at: string | null
           id: string
           installed: boolean | null
@@ -78,11 +80,15 @@ export type Database = {
           received: boolean | null
           received_at: string | null
           received_by: string | null
+          server_updated_at: string | null
+          sync_status: 'synced' | 'pending_retry' | 'conflict' | null
         }
         Insert: {
           checked?: boolean | null
           checked_at?: string | null
           checked_by?: string | null
+          client_id?: string | null
+          client_updated_at?: string | null
           created_at?: string | null
           id?: string
           installed?: boolean | null
@@ -101,11 +107,15 @@ export type Database = {
           received?: boolean | null
           received_at?: string | null
           received_by?: string | null
+          server_updated_at?: string | null
+          sync_status?: 'synced' | 'pending_retry' | 'conflict' | null
         }
         Update: {
           checked?: boolean | null
           checked_at?: string | null
           checked_by?: string | null
+          client_id?: string | null
+          client_updated_at?: string | null
           created_at?: string | null
           id?: string
           installed?: boolean | null
@@ -124,6 +134,8 @@ export type Database = {
           received?: boolean | null
           received_at?: string | null
           received_by?: string | null
+          server_updated_at?: string | null
+          sync_status?: 'synced' | 'pending_retry' | 'conflict' | null
         }
         Relationships: [
           {

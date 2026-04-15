@@ -129,8 +129,17 @@ export async function syncPendingChecks() {
           leaf_index: check.leaf_index,
           step: check.step,
           value: check.value,
+          client_id: check.actor_id,
+          client_updated_at: check.acted_at,
         }),
       })
+
+      // Handle 409 Conflict — server version is newer, mark as synced (server wins)
+      if (response.status === 409) {
+        await database.put('pendingChecksV2', { ...check, synced: true })
+        synced++
+        continue
+      }
 
       if (!response.ok) {
         failed++

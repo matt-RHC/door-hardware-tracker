@@ -11,6 +11,10 @@ interface CheckItemRequest {
   checked?: boolean  // legacy support
   step?: WorkflowStep
   value?: boolean
+  // Offline reconciliation fields
+  client_id?: string        // Device fingerprint
+  client_updated_at?: string // When the client made the change (ISO timestamp)
+  idempotency_key?: string  // UUID to prevent duplicate replays
 }
 
 export async function POST(
@@ -101,6 +105,38 @@ export async function POST(
       updatePayload.qa_qc = value
       updatePayload.qa_qc_by = value ? user.id : null
       updatePayload.qa_qc_at = value ? now : null
+    }
+
+    // Include offline reconciliation fields if provided
+    if (body.client_id) {
+      updatePayload.client_id = body.client_id
+    }
+    if (body.client_updated_at) {
+      updatePayload.client_updated_at = body.client_updated_at
+    }
+
+    // LWW conflict check: if client_updated_at is provided, compare with server
+    if (body.client_updated_at) {
+      const { data: existing } = await (adminSupabase as any)
+        .from('checklist_progress')
+        .select('server_updated_at')
+        .eq('opening_id', openingId)
+        .eq('item_id', item_id)
+        .eq('leaf_index', body.leaf_index ?? 1)
+        .single()
+
+      if (existing?.server_updated_at &&
+          new Date(body.client_updated_at) < new Date(existing.server_updated_at)) {
+        return NextResponse.json(
+          { error: 'Conflict: server version is newer', server_updated_at: existing.server_updated_at },
+          { status: 409 }
+        )
+      }
+    }
+
+    // Log idempotency key for debugging if provided
+    if (body.idempotency_key) {
+      console.log(`Check upsert idempotency_key=${body.idempotency_key} opening=${openingId} item=${item_id}`)
     }
 
     // Upsert checklist progress
