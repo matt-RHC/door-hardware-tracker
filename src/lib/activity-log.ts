@@ -39,6 +39,7 @@ export type ActivityAction =
   | 'damage_reported'
   | 'issue_created'
   | 'issue_status_changed'
+  | 'issue_assigned'
   | 'issue_comment_added'
   | 'offline_sync_started'
   | 'offline_sync_completed'
