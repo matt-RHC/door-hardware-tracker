@@ -1,64 +1,78 @@
 "use client";
 
-import { useConnectionStatus } from "@/hooks/useConnectionStatus";
-import { useSyncStatus } from "@/hooks/useSyncStatus";
-
-function formatRelativeTime(date: Date): string {
-  const seconds = Math.round((Date.now() - date.getTime()) / 1000);
-  if (seconds < 60) return "just now";
-  const minutes = Math.floor(seconds / 60);
-  if (minutes < 60) return `${minutes} min ago`;
-  const hours = Math.floor(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return `${Math.floor(hours / 24)}d ago`;
-}
+import { useState, useEffect } from "react";
+import { useOfflineQueue } from "@/hooks/useOfflineQueue";
 
 export default function OfflineIndicator() {
-  const { isOnline } = useConnectionStatus();
-  const { pendingCount, lastSyncedAt } = useSyncStatus();
+  const [isOnline, setIsOnline] = useState(true);
+  const { syncState, pendingCount, manualSync } = useOfflineQueue();
 
-  // Online with nothing pending — hide completely
-  if (isOnline && pendingCount === 0) return null;
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- sync initial state from browser API on mount
+    setIsOnline(navigator.onLine);
 
-  // Online with pending items — subtle amber bar
-  if (isOnline && pendingCount > 0) {
-    return (
-      <div
-        className="fixed top-0 left-0 right-0 z-50 flex items-center justify-center gap-2 px-4 py-1.5 text-xs font-medium"
-        style={{
-          background: "var(--orange-dim)",
-          borderBottom: "1px solid var(--orange)",
-          color: "var(--orange)",
-        }}
-      >
-        <span>&#x27F3; {pendingCount} pending</span>
-        {lastSyncedAt && (
-          <span className="opacity-70">
-            &middot; Last synced {formatRelativeTime(lastSyncedAt)}
-          </span>
-        )}
-      </div>
-    );
-  }
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
 
-  // Offline
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, []);
+
+  // Nothing to show: online with no pending items and not syncing/error
+  if (isOnline && pendingCount === 0 && syncState === "idle") return null;
+
+  // Offline or pending state
   return (
     <div
-      className="fixed top-0 left-0 right-0 z-50 px-4 py-2 text-center text-sm font-medium"
-      style={{
-        background: "var(--orange-dim)",
-        borderBottom: "1px solid var(--orange)",
-        color: "var(--orange)",
-      }}
+      className={`fixed top-0 left-0 right-0 px-4 py-3 text-center text-sm font-medium z-50 flex items-center justify-center gap-3 ${
+        !isOnline
+          ? "bg-warning-dim border border-warning text-warning"
+          : syncState === "error"
+            ? "bg-red-900/20 border border-red-500 text-red-400"
+            : syncState === "syncing"
+              ? "bg-blue-900/20 border border-blue-500 text-blue-400"
+              : "bg-yellow-900/20 border border-yellow-500 text-yellow-400"
+      }`}
     >
-      <div>You&apos;re offline. Changes will sync when connected.</div>
-      {pendingCount > 0 && (
-        <div className="text-xs mt-0.5 opacity-80">
-          {pendingCount} change{pendingCount !== 1 ? "s" : ""} pending
-          {lastSyncedAt && (
-            <> &middot; Last synced {formatRelativeTime(lastSyncedAt)}</>
-          )}
-        </div>
+      {!isOnline ? (
+        <span>
+          You&apos;re offline.
+          {pendingCount > 0 && ` ${pendingCount} change${pendingCount === 1 ? "" : "s"} saved locally.`}
+          {" "}Changes will sync when connected.
+        </span>
+      ) : syncState === "syncing" ? (
+        <>
+          <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24" fill="none">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+          </svg>
+          <span>Syncing {pendingCount} change{pendingCount === 1 ? "" : "s"}...</span>
+        </>
+      ) : syncState === "error" ? (
+        <>
+          <span>Sync error. {pendingCount} change{pendingCount === 1 ? "" : "s"} pending.</span>
+          <button
+            onClick={manualSync}
+            className="underline hover:no-underline text-red-300"
+          >
+            Retry
+          </button>
+        </>
+      ) : (
+        <>
+          <span>{pendingCount} change{pendingCount === 1 ? "" : "s"} pending.</span>
+          <button
+            onClick={manualSync}
+            className="underline hover:no-underline"
+          >
+            Sync now
+          </button>
+        </>
       )}
     </div>
   );

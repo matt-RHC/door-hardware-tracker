@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import PerformanceProvider from "@/components/PerformanceProvider";
 import ToastProvider from "@/components/ToastProvider";
+import { ServiceWorkerRegistration } from "@/components/ServiceWorkerRegistration";
 
 export const viewport: Viewport = {
   width: "device-width",
@@ -33,6 +34,7 @@ export default function RootLayout({
       className="h-full antialiased"
     >
       <head>
+        <link rel="manifest" href="/manifest.json" />
         {/* Mirror globals.css: dark --background is #0F1117, light --background is #F7F8FA.
             Safari only reads one value, so prefer the light default per ThemeToggle; dark users
             just see a dim chrome. Kept in sync manually with globals.css :root and [data-theme]. */}
@@ -40,6 +42,7 @@ export default function RootLayout({
         <meta name="theme-color" media="(prefers-color-scheme: light)" content="#F7F8FA" />
       </head>
       <body className="min-h-full flex flex-col bg-background text-foreground">
+        <ServiceWorkerRegistration />
         <PerformanceProvider>
           <ToastProvider>
             {children}
