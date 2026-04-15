@@ -6,6 +6,8 @@ export type Json =
   | { [key: string]: Json | undefined }
   | Json[]
 
+export type HardwareStage = 'ordered' | 'shipped' | 'received' | 'installed' | 'qa_passed'
+
 export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
@@ -247,6 +249,47 @@ export type Database = {
         Relationships: [
           {
             foreignKeyName: "deliveries_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      dashboard_shares: {
+        Row: {
+          id: string
+          project_id: string
+          shared_by: string | null
+          share_token: string
+          label: string | null
+          permissions: string[]
+          expires_at: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          project_id: string
+          shared_by?: string | null
+          share_token?: string
+          label?: string | null
+          permissions?: string[]
+          expires_at?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          project_id?: string
+          shared_by?: string | null
+          share_token?: string
+          label?: string | null
+          permissions?: string[]
+          expires_at?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "dashboard_shares_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"
@@ -682,6 +725,7 @@ export type Database = {
           qty_source: string | null
           qty_total: number | null
           sort_order: number | null
+          stage: HardwareStage
         }
         Insert: {
           created_at?: string | null
@@ -699,6 +743,7 @@ export type Database = {
           qty_source?: string | null
           qty_total?: number | null
           sort_order?: number | null
+          stage?: HardwareStage
         }
         Update: {
           created_at?: string | null
@@ -716,6 +761,7 @@ export type Database = {
           qty_source?: string | null
           qty_total?: number | null
           sort_order?: number | null
+          stage?: HardwareStage
         }
         Relationships: [
           {
@@ -815,6 +861,7 @@ export type Database = {
           door_number: string
           door_type: string | null
           fire_rating: string | null
+          floor_number: number | null
           frame_type: string | null
           hand: string | null
           hw_heading: string | null
@@ -825,12 +872,14 @@ export type Database = {
           notes: string | null
           pdf_page: number | null
           project_id: string
+          zone_name: string | null
         }
         Insert: {
           created_at?: string | null
           door_number: string
           door_type?: string | null
           fire_rating?: string | null
+          floor_number?: number | null
           frame_type?: string | null
           hand?: string | null
           hw_heading?: string | null
@@ -841,12 +890,14 @@ export type Database = {
           notes?: string | null
           pdf_page?: number | null
           project_id: string
+          zone_name?: string | null
         }
         Update: {
           created_at?: string | null
           door_number?: string
           door_type?: string | null
           fire_rating?: string | null
+          floor_number?: number | null
           frame_type?: string | null
           hand?: string | null
           hw_heading?: string | null
@@ -857,6 +908,7 @@ export type Database = {
           notes?: string | null
           pdf_page?: number | null
           project_id?: string
+          zone_name?: string | null
         }
         Relationships: [
           {
@@ -1615,4 +1667,16 @@ export interface OpeningBlocked {
   blocked_item_category: string | null
   po_number: string | null
   vendor: string | null
+}
+
+/** Dashboard share for external stakeholders. */
+export interface DashboardShare {
+  id: string
+  project_id: string
+  shared_by: string | null
+  share_token: string
+  label: string | null
+  permissions: string[]
+  expires_at: string | null
+  created_at: string
 }
