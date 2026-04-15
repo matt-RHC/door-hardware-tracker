@@ -272,10 +272,11 @@ BEGIN
   END LOOP;
 
   -- Insert staging hardware items -> production hardware items (now with leaf_side)
-  INSERT INTO hardware_items (opening_id, name, qty, manufacturer, model, finish, options, sort_order, leaf_side)
+  INSERT INTO hardware_items (opening_id, name, qty, qty_total, qty_door_count, qty_source, manufacturer, model, finish, options, sort_order, leaf_side)
   SELECT
     (v_opening_map ->> shi.staging_opening_id::text)::uuid,
-    shi.name, shi.qty, shi.manufacturer, shi.model, shi.finish, shi.options, shi.sort_order,
+    shi.name, shi.qty, shi.qty_total, shi.qty_door_count, shi.qty_source,
+    shi.manufacturer, shi.model, shi.finish, shi.options, shi.sort_order,
     shi.leaf_side
   FROM staging_hardware_items shi
   WHERE shi.extraction_run_id = p_extraction_run_id

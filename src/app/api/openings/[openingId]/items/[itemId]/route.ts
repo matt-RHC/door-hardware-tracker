@@ -6,6 +6,7 @@ import { HardwareItemUpdate } from '@/lib/types/database'
 interface UpdateItemRequest {
   name?: string
   qty?: number
+  qty_source?: string | null
   manufacturer?: string | null
   model?: string | null
   finish?: string | null
@@ -77,12 +78,16 @@ export async function PATCH(
 
     const updateData: HardwareItemUpdate = {}
     if (body.name !== undefined) updateData.name = body.name
-    if (body.qty !== undefined) updateData.qty = body.qty
+    if (body.qty !== undefined) {
+      updateData.qty = body.qty
+      if (!body.qty_source) updateData.qty_source = 'manual'
+    }
     if ('manufacturer' in body) updateData.manufacturer = body.manufacturer
     if ('model' in body) updateData.model = body.model
     if ('finish' in body) updateData.finish = body.finish
     if ('options' in body) updateData.options = body.options
     if ('install_type' in body) updateData.install_type = body.install_type
+    if ('qty_source' in body) updateData.qty_source = body.qty_source
 
     const { data: updatedItem, error: updateError } = await (adminSupabase as any)
       .from('hardware_items')
