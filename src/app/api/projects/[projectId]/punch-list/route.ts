@@ -50,7 +50,6 @@ export async function GET(
         hardware_items!inner (
           id,
           name,
-          category,
           manufacturer,
           model,
           finish
@@ -78,7 +77,6 @@ export async function GET(
       door_number: row.openings?.door_number ?? '',
       location: row.openings?.location ?? null,
       item_name: row.hardware_items?.name ?? '',
-      category: row.hardware_items?.category ?? null,
       manufacturer: row.hardware_items?.manufacturer ?? null,
       model: row.hardware_items?.model ?? null,
       finish: row.hardware_items?.finish ?? null,
