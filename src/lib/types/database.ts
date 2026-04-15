@@ -201,6 +201,80 @@ export type Database = {
           },
         ]
       }
+      delivery_items: {
+        Row: {
+          id: string
+          delivery_id: string
+          hardware_item_id: string | null
+          opening_id: string | null
+          qty_expected: number
+          qty_received: number | null
+          status: string
+          eta: string | null
+          substitution_for: string | null
+          notes: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          delivery_id: string
+          hardware_item_id?: string | null
+          opening_id?: string | null
+          qty_expected?: number
+          qty_received?: number | null
+          status?: string
+          eta?: string | null
+          substitution_for?: string | null
+          notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          delivery_id?: string
+          hardware_item_id?: string | null
+          opening_id?: string | null
+          qty_expected?: number
+          qty_received?: number | null
+          status?: string
+          eta?: string | null
+          substitution_for?: string | null
+          notes?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "delivery_items_delivery_id_fkey"
+            columns: ["delivery_id"]
+            isOneToOne: false
+            referencedRelation: "deliveries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "delivery_items_hardware_item_id_fkey"
+            columns: ["hardware_item_id"]
+            isOneToOne: false
+            referencedRelation: "hardware_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "delivery_items_opening_id_fkey"
+            columns: ["opening_id"]
+            isOneToOne: false
+            referencedRelation: "openings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "delivery_items_substitution_for_fkey"
+            columns: ["substitution_for"]
+            isOneToOne: false
+            referencedRelation: "hardware_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       extraction_corrections: {
         Row: {
           corrected_at: string | null
@@ -1176,7 +1250,21 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      openings_blocked_v: {
+        Row: {
+          opening_id: string
+          project_id: string
+          door_number: string
+          location: string | null
+          block_reason: string
+          estimated_arrival: string | null
+          blocked_item_name: string
+          blocked_item_category: string | null
+          po_number: string | null
+          vendor: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       cleanup_old_staging: {
@@ -1423,4 +1511,34 @@ export interface OpeningWithHardware {
     sort_order: number
     checklist_progress: Array<{ checked: boolean }>
   }>
+}
+
+/** Delivery item linking a delivery to a specific hardware item. */
+export interface DeliveryItem {
+  id: string
+  delivery_id: string
+  hardware_item_id: string | null
+  opening_id: string | null
+  qty_expected: number
+  qty_received: number
+  status: 'expected' | 'received' | 'partial' | 'damaged' | 'backordered' | 'substituted'
+  eta: string | null
+  substitution_for: string | null
+  notes: string | null
+  created_at: string
+  updated_at: string
+}
+
+/** Row from openings_blocked_v — an opening blocked by a backordered/damaged delivery item. */
+export interface OpeningBlocked {
+  opening_id: string
+  project_id: string
+  door_number: string
+  location: string | null
+  block_reason: 'backordered' | 'damaged'
+  estimated_arrival: string | null
+  blocked_item_name: string
+  blocked_item_category: string | null
+  po_number: string | null
+  vendor: string | null
 }
