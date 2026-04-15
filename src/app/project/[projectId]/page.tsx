@@ -275,6 +275,13 @@ export default function ProjectDetailPage() {
               Activity
             </button>
             <button
+              onClick={() => router.push(`/project/${projectId}/dashboard`)}
+              className="shrink-0 glow-btn glow-btn--ghost text-[13px] rounded"
+              style={{ padding: "0.5rem 0.875rem" }}
+            >
+              Dashboard
+            </button>
+            <button
               onClick={() => router.push(`/project/${projectId}/qr-codes`)}
               className="shrink-0 glow-btn glow-btn--ghost text-[13px] rounded"
               style={{ padding: "0.5rem 0.875rem" }}
