@@ -22,6 +22,7 @@ import { groupItemsByLeaf, getLeafDisplayQty, getLeafProgress } from "@/lib/clas
 import { classifyItemScope } from "@/lib/parse-pdf-helpers";
 import PDFRegionSelector from "@/components/ImportWizard/PDFRegionSelector";
 import SyncStatusDot from "@/components/SyncStatusDot";
+import QAFindingsChips from "@/components/QAFindingsChips";
 
 interface RescanFieldDiff {
   field: string;
@@ -1313,6 +1314,21 @@ export default function DoorDetailPage() {
                             </button>
                           </div>
                         </div>
+                      </td>
+                    </tr>
+                  )}
+                  {/* QA Findings chips — show when QA phase active or item has qa_qc checked */}
+                  {(activePhase === 'qa' || (activePhase === 'all' && getStepValue(item, 'qa_qc', leafIndex))) && (
+                    <tr key={`qa-findings-${item.id}-leaf${leafIndex}`} className="border-b border-th-border bg-surface/30">
+                      <td colSpan={10} className="px-3 py-2">
+                        <QAFindingsChips
+                          openingId={doorId}
+                          itemId={item.id}
+                          leafIndex={leafIndex}
+                          currentFindings={(getLeafProgress(item, leafIndex)?.qa_findings as string[]) ?? []}
+                          currentNotes={(getLeafProgress(item, leafIndex)?.qa_notes as string) ?? null}
+                          onUpdate={() => fetchOpeningData()}
+                        />
                       </td>
                     </tr>
                   )}

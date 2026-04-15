@@ -66,6 +66,7 @@ export default function ProjectDetailPage() {
   const [showFilters, setShowFilters] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [blockedMap, setBlockedMap] = useState<Record<string, OpeningBlocked[]>>({});
+  const [qaFindingsCount, setQaFindingsCount] = useState(0);
 
   const handleViewPdfPage = useCallback(
     async (pageIndex: number) => {
@@ -83,9 +84,10 @@ export default function ProjectDetailPage() {
 
   const fetchProjectData = async () => {
     try {
-      const [openingsRes, blockedRes] = await Promise.all([
+      const [openingsRes, blockedRes, punchRes] = await Promise.all([
         fetch(`/api/projects/${projectId}/openings`),
         fetch(`/api/projects/${projectId}/blocked-openings`),
+        fetch(`/api/projects/${projectId}/punch-list`),
       ]);
       if (!openingsRes.ok) throw new Error("Failed to fetch openings");
       const data = await openingsRes.json();
@@ -98,6 +100,11 @@ export default function ProjectDetailPage() {
           (map[b.opening_id] ??= []).push(b);
         }
         setBlockedMap(map);
+      }
+
+      if (punchRes.ok) {
+        const punchItems: unknown[] = await punchRes.json();
+        setQaFindingsCount(punchItems.length);
       }
 
       setError(null);
@@ -206,6 +213,27 @@ export default function ProjectDetailPage() {
             </div>
             <ProgressBar value={overallProgress} size="lg" showLabel={true} />
           </div>
+
+          {/* QA Findings Summary */}
+          {qaFindingsCount > 0 && (
+            <button
+              onClick={() => router.push(`/project/${projectId}/punch-list`)}
+              className="mt-3 w-full panel p-3 rounded-md flex items-center gap-3 text-left transition-colors hover:bg-surface-hover group"
+            >
+              <span
+                className="inline-flex items-center justify-center w-8 h-8 rounded-full text-[12px] font-bold shrink-0"
+                style={{ background: 'var(--red-dim)', color: 'var(--red)', border: '1px solid var(--red)' }}
+              >
+                {qaFindingsCount}
+              </span>
+              <span className="text-[13px] text-secondary">
+                item{qaFindingsCount !== 1 ? 's' : ''} with QA findings
+              </span>
+              <svg className="w-4 h-4 text-tertiary ml-auto opacity-0 group-hover:opacity-100 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+          )}
         </div>
 
         {/* ── Search + Actions ── */}
@@ -245,6 +273,21 @@ export default function ProjectDetailPage() {
               style={{ padding: "0.5rem 0.875rem" }}
             >
               QR Codes
+            </button>
+            <button
+              onClick={() => router.push(`/project/${projectId}/punch-list`)}
+              className="shrink-0 glow-btn glow-btn--ghost text-[13px] rounded"
+              style={{ padding: "0.5rem 0.875rem" }}
+            >
+              Punch List
+              {qaFindingsCount > 0 && (
+                <span
+                  className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold"
+                  style={{ background: 'var(--red-dim)', color: 'var(--red)' }}
+                >
+                  {qaFindingsCount}
+                </span>
+              )}
             </button>
             <button
               onClick={() => {

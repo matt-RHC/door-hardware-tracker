@@ -106,6 +106,10 @@ export type Database = {
           qa_qc: boolean | null
           qa_qc_at: string | null
           qa_qc_by: string | null
+          qa_findings: string[] | null
+          qa_notes: string | null
+          qa_resolved_at: string | null
+          qa_resolved_by: string | null
           received: boolean | null
           received_at: string | null
           received_by: string | null
@@ -133,6 +137,10 @@ export type Database = {
           qa_qc?: boolean | null
           qa_qc_at?: string | null
           qa_qc_by?: string | null
+          qa_findings?: string[] | null
+          qa_notes?: string | null
+          qa_resolved_at?: string | null
+          qa_resolved_by?: string | null
           received?: boolean | null
           received_at?: string | null
           received_by?: string | null
@@ -160,6 +168,10 @@ export type Database = {
           qa_qc?: boolean | null
           qa_qc_at?: string | null
           qa_qc_by?: string | null
+          qa_findings?: string[] | null
+          qa_notes?: string | null
+          qa_resolved_at?: string | null
+          qa_resolved_by?: string | null
           received?: boolean | null
           received_at?: string | null
           received_by?: string | null
@@ -1494,6 +1506,17 @@ export type Attachment = Database['public']['Tables']['attachments']['Row']
 export type AttachmentInsert = Database['public']['Tables']['attachments']['Insert']
 export type AttachmentUpdate = Database['public']['Tables']['attachments']['Update']
 export type AttachmentCategory = 'floor_plan' | 'door_drawing' | 'frame_drawing' | 'general' | 'receiving_photo' | 'damage_photo' | 'install_progress' | 'qa_punch'
+
+export type QAFindingTag = 'spec_match' | 'operation' | 'finish' | 'fire_rating' | 'ada' | 'life_safety'
+
+export const QA_FINDING_LABELS: Record<QAFindingTag, string> = {
+  spec_match: 'Spec Match',
+  operation: 'Operation',
+  finish: 'Finish',
+  fire_rating: 'Fire Rating',
+  ada: 'ADA',
+  life_safety: 'Life Safety',
+}
 
 export type Issue = Database['public']['Tables']['issues']['Row']
 export type IssueInsert = Database['public']['Tables']['issues']['Insert']
