@@ -635,6 +635,8 @@ export default function DoorDetailPage() {
         if (d.enabled) enabledFields[d.field] = d.extractedValue;
       }
       if (Object.keys(enabledFields).length === 0) continue;
+      // Tag qty_source when rescan updates qty
+      if ('qty' in enabledFields) enabledFields.qty_source = 'region_extract';
       try {
         const resp = await fetch(`/api/openings/${doorId}/items/${result.itemId}`, {
           method: 'PATCH',
@@ -659,6 +661,8 @@ export default function DoorDetailPage() {
       if (trimmed) payload[field] = trimmed;
     }
     if (Object.keys(payload).length === 0) return;
+    // Tag qty_source when raw-text rescan updates qty
+    if ('qty' in payload) payload.qty_source = 'region_extract';
     try {
       const resp = await fetch(`/api/openings/${doorId}/items/${rescanItem.id}`, {
         method: 'PATCH',

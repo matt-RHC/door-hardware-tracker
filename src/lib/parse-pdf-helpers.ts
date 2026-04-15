@@ -2703,6 +2703,13 @@ export function buildPerOpeningItems(
         const category = isPair ? classifyItem(item.name, undefined, item.model) : null
         let leafSide = computeLeafSide(item.name, leafCount, item.model)
 
+        // Quantity audit columns — carry through from extraction
+        const qtyAudit = {
+          qty_total: item.qty_total ?? null,
+          qty_door_count: item.qty_door_count ?? null,
+          qty_source: item.qty_source ?? null,
+        }
+
         // ── Electric hinge: active leaf only on pairs ──
         if (isPair && category === 'electric_hinge') {
           leafSide = 'active'
@@ -2710,6 +2717,7 @@ export function buildPerOpeningItems(
             ...base,
             name: item.name,
             qty: item.qty || 1,
+            ...qtyAudit,
             manufacturer: item.manufacturer || null,
             model: item.model || null,
             finish: item.finish || null,
@@ -2732,6 +2740,7 @@ export function buildPerOpeningItems(
             ...base,
             name: item.name,
             qty: activeQty,
+            ...qtyAudit,
             manufacturer: item.manufacturer || null,
             model: item.model || null,
             finish: item.finish || null,
@@ -2743,6 +2752,7 @@ export function buildPerOpeningItems(
             ...base,
             name: item.name,
             qty: inactiveQty,
+            ...qtyAudit,
             manufacturer: item.manufacturer || null,
             model: item.model || null,
             finish: item.finish || null,
@@ -2757,6 +2767,7 @@ export function buildPerOpeningItems(
           ...base,
           name: item.name,
           qty: item.qty || 1,
+          ...qtyAudit,
           manufacturer: item.manufacturer || null,
           model: item.model || null,
           finish: item.finish || null,

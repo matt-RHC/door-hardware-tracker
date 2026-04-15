@@ -154,10 +154,11 @@ BEGIN
         DELETE FROM hardware_items WHERE opening_id = v_existing_opening_id;
 
         -- Insert new hardware items from staging
-        INSERT INTO hardware_items (opening_id, name, qty, manufacturer, model, finish, options, sort_order, leaf_side)
+        INSERT INTO hardware_items (opening_id, name, qty, qty_total, qty_door_count, qty_source, manufacturer, model, finish, options, sort_order, leaf_side)
         SELECT
           v_existing_opening_id,
-          shi.name, shi.qty, shi.manufacturer, shi.model, shi.finish,
+          shi.name, shi.qty, shi.qty_total, shi.qty_door_count, shi.qty_source,
+          shi.manufacturer, shi.model, shi.finish,
           shi.options, shi.sort_order, shi.leaf_side
         FROM staging_hardware_items shi
         WHERE shi.staging_opening_id = v_staging.staging_id;
@@ -212,10 +213,11 @@ BEGIN
       RETURNING id INTO v_new_opening_id;
 
       -- Insert hardware items for the new door
-      INSERT INTO hardware_items (opening_id, name, qty, manufacturer, model, finish, options, sort_order, leaf_side)
+      INSERT INTO hardware_items (opening_id, name, qty, qty_total, qty_door_count, qty_source, manufacturer, model, finish, options, sort_order, leaf_side)
       SELECT
         v_new_opening_id,
-        shi.name, shi.qty, shi.manufacturer, shi.model, shi.finish,
+        shi.name, shi.qty, shi.qty_total, shi.qty_door_count, shi.qty_source,
+        shi.manufacturer, shi.model, shi.finish,
         shi.options, shi.sort_order, shi.leaf_side
       FROM staging_hardware_items shi
       WHERE shi.staging_opening_id = v_staging.staging_id;

@@ -551,6 +551,9 @@ export type Database = {
           opening_id: string
           options: string | null
           qty: number | null
+          qty_door_count: number | null
+          qty_source: string | null
+          qty_total: number | null
           sort_order: number | null
         }
         Insert: {
@@ -565,6 +568,9 @@ export type Database = {
           opening_id: string
           options?: string | null
           qty?: number | null
+          qty_door_count?: number | null
+          qty_source?: string | null
+          qty_total?: number | null
           sort_order?: number | null
         }
         Update: {
@@ -579,6 +585,9 @@ export type Database = {
           opening_id?: string
           options?: string | null
           qty?: number | null
+          qty_door_count?: number | null
+          qty_source?: string | null
+          qty_total?: number | null
           sort_order?: number | null
         }
         Relationships: [
