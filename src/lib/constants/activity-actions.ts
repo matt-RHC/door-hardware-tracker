@@ -24,6 +24,7 @@ export const ACTIVITY_ACTIONS = {
   DAMAGE_REPORTED: 'damage_reported',
   ISSUE_CREATED: 'issue_created',
   ISSUE_STATUS_CHANGED: 'issue_status_changed',
+  ISSUE_ASSIGNED: 'issue_assigned',
   ISSUE_COMMENT_ADDED: 'issue_comment_added',
 
   // Offline sync
@@ -55,6 +56,7 @@ export const ACTION_LABELS: Record<string, string> = {
   damage_reported: 'Damage Reported',
   issue_created: 'Issue Created',
   issue_status_changed: 'Issue Status Changed',
+  issue_assigned: 'Issue Assigned',
   issue_comment_added: 'Comment Added',
   offline_sync_started: 'Sync Started',
   offline_sync_completed: 'Sync Completed',
