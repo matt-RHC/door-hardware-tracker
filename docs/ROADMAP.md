@@ -2,7 +2,7 @@
 
 > **Guiding principle:** Hardware counts coming out of PDFs must be accurate before we build features on top of them. Export is gated on extraction accuracy.
 
-Last updated: 2026-04-14 (late afternoon — memory-layer sweep)
+Last updated: 2026-04-15 (memory-layer sweep — capture PRs #215, #217–#224)
 
 ---
 
@@ -192,9 +192,18 @@ The wizard flow shipped in Phase 0 (PRs #161–#162). Phase 2 focused on UX poli
 ## Known Issues / Next Priorities
 
 ### Awaiting Merge
-- **PR #215 (Responsive Layout)**: door detail fluid-width refactor, table horizontal scroll at <640px, shortened batch-action labels, rescan diff grid breakpoint tweak — currently in flight (Vercel deploy pending as of this sweep)
+- _None_ — all in-flight PRs merged as of 2026-04-15 sweep. Zero open PRs, working tree clean.
 
-### Recently Merged (this session)
+### Recently Merged
+- **PR #215 (Responsive Layout)**: door detail fluid-width refactor, table horizontal scroll at <640px, shortened batch-action labels, rescan diff grid breakpoint tweak — merged
+- **PR #217 (Workflow Phase Tabs)**: Receive/Install/QA tabs with mobile-optimized table — merged
+- **PR #218 (Offline Sync Payload Fix)**: sync payload dropped workflow phases + wrong conflict key — merged
+- **PR #219 (Sync Confidence UI)**: health heartbeat, pending count, per-item dots — merged
+- **PR #220 (Migration 026)**: offline reconciliation columns on `checklist_progress` — merged
+- **PR #221 (Offline-First Architecture)**: service worker, queue handler, sync coordinator, PWA manifest — merged
+- **PR #222 (Migration 027)**: attachments expansion for delivery photos, damage tracking, per-item attribution — merged
+- **PR #223 (Migration 028)**: `delivery_items` table + blocked-openings view — merged
+- **PR #224 (Migration 029)**: `qty_total`, `qty_door_count`, `qty_source` audit columns on `hardware_items` — merged (resolves Backlog item I)
 - **PR #210 (Security)**: IDOR fix — project membership enforcement on all parse-pdf routes (merged)
 - **PR #212 (Zoom)**: PDFRegionSelector zoom overhaul — canvas re-crop, handle hit-test, scroll lock, null guards (merged)
 - **PR #214 (Zoom spinner)**: infinite spinner fix — compute crop before phase transition (merged)
@@ -210,6 +219,32 @@ The wizard flow shipped in Phase 0 (PRs #161–#162). Phase 2 focused on UX poli
 ### Phase 3 Prep
 - **Zod boundary validation**: Add Zod schemas for ImportWizard API responses (per Claude Code audit)
 - **`next build` as CI gate**: Build is not currently gated in CI — should be added once Turbopack issues are resolved
+
+---
+
+## Field Operations & Offline Readiness (IN PROGRESS — 2026-04-14/15)
+
+New feature area covering on-site workflow (Receive / Install / QA), deliveries, and offline-first capability for field use. Builds toward DPR pilot operational readiness.
+
+### Workflow Phases (PR #217)
+- Receive / Install / QA tabs on door detail page
+- Mobile-optimized table layout for on-site use
+
+### Offline-First Architecture (PRs #218–#221)
+- **PR #221**: service worker, queue handler, sync coordinator, PWA manifest — app now installable and usable offline
+- **PR #220 (Migration 026)**: offline reconciliation columns on `checklist_progress` for conflict resolution
+- **PR #219**: sync confidence UI — health heartbeat, pending count, per-item sync dots
+- **PR #218**: sync payload fix — was dropping workflow phases + using wrong conflict key
+
+### Delivery Tracking (PRs #222–#223)
+- **PR #223 (Migration 028)**: `delivery_items` table + blocked-openings view
+- **PR #222 (Migration 027)**: attachments expansion — delivery photos, damage tracking, per-item attribution
+
+### Extraction Audit Trail (PR #224 — Migration 029)
+- `qty_total`, `qty_door_count`, `qty_source` columns on `hardware_items`
+- `qty_source` values: `parsed`, `divided`, `flagged`, `capped`, `manual`, `region_extract`
+- Promote paths updated across migrations 007–025 to carry audit fields from staging to production
+- Supports DPR dispute resolution and extraction provenance
 
 ---
 
@@ -236,7 +271,7 @@ Gated on Phase 1 (done) + Phase 3. Can export once the review page correctly pre
 | E: Point/table threshold misfires | `isPointScan = area < 0.15` misfires with tight zoom selections — route by item count instead of bbox area |
 | F: PDF re-parse on every page change | `pdfBuffer.slice(0)` re-parses entire PDF on each `renderPage` — cache `PDFDocumentProxy` in ref |
 | G: Zero Sentry on region-extract | Only `console.error` — no `Sentry.captureException` in region-extract routes or client-side |
-| I: qty_source audit | `qty_source: 'region_extract'` is set but may not be in DB schema — grep all `hardware_items` SELECTs |
+| ~~I: qty_source audit~~ | **RESOLVED (PR #224, 2026-04-15)** — `qty_source` + `qty_total` + `qty_door_count` now exist on `hardware_items`; promote paths carry them from staging |
 | J: No keyboard/aria on drag handles | Low priority for iPad-first use case, needed for desktop accessibility |
 | K: Stale worktrees in .claude/ | Sweep `.claude/worktrees/` during next fresh-clone git operation |
 | Storage policy naming oddity | Pre-existing, cosmetic |
