@@ -4,9 +4,11 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import { useRouter, useParams } from "next/navigation";
 import OfflineIndicator from "@/components/OfflineIndicator";
 import ProgressBar from "@/components/ProgressBar";
+import BlockedBadge from "@/components/BlockedBadge";
 import ImportWizard from "@/components/ImportWizard/ImportWizard";
 import { useToast } from "@/components/ToastProvider";
 import { openProjectPdfAtPage } from "@/lib/pdf-page-link";
+import type { OpeningBlocked } from "@/lib/types/database";
 
 interface StageCounts {
   received: number;
@@ -63,6 +65,7 @@ export default function ProjectDetailPage() {
   const [filters, setFilters] = useState<Filters>(defaultFilters);
   const [showFilters, setShowFilters] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);
+  const [blockedMap, setBlockedMap] = useState<Record<string, OpeningBlocked[]>>({});
 
   const handleViewPdfPage = useCallback(
     async (pageIndex: number) => {
@@ -80,10 +83,23 @@ export default function ProjectDetailPage() {
 
   const fetchProjectData = async () => {
     try {
-      const response = await fetch(`/api/projects/${projectId}/openings`);
-      if (!response.ok) throw new Error("Failed to fetch openings");
-      const data = await response.json();
+      const [openingsRes, blockedRes] = await Promise.all([
+        fetch(`/api/projects/${projectId}/openings`),
+        fetch(`/api/projects/${projectId}/blocked-openings`),
+      ]);
+      if (!openingsRes.ok) throw new Error("Failed to fetch openings");
+      const data = await openingsRes.json();
       setOpenings(data);
+
+      if (blockedRes.ok) {
+        const blocked: OpeningBlocked[] = await blockedRes.json();
+        const map: Record<string, OpeningBlocked[]> = {};
+        for (const b of blocked) {
+          (map[b.opening_id] ??= []).push(b);
+        }
+        setBlockedMap(map);
+      }
+
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred");
@@ -362,6 +378,9 @@ export default function ProjectDetailPage() {
 
                   {/* Badges */}
                   <div className="flex flex-wrap gap-1.5 mb-2">
+                    {blockedMap[opening.id]?.length > 0 && (
+                      <BlockedBadge blocks={blockedMap[opening.id]} />
+                    )}
                     {opening.hw_set && (
                       <span className="status-badge status-badge--active" style={{ fontSize: "10px", padding: "2px 8px" }}>
                         {opening.hw_set}
