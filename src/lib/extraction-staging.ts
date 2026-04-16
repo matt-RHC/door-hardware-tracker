@@ -31,15 +31,6 @@ export type PdfSourceType =
   | 'bluebeam'
   | 'unknown'
 
-export type CorrectionType =
-  | 'wrong_value'
-  | 'missing_value'
-  | 'extra_value'
-  | 'wrong_column'
-  | 'split_error'
-  | 'merge_error'
-  | 'formatting'
-
 export interface ExtractionRunInput {
   projectId: string
   userId: string
@@ -268,33 +259,3 @@ export async function promoteExtraction(
   }
 }
 
-// --- Corrections ---
-
-export async function recordCorrection(
-  supabase: SupabaseClient,
-  input: {
-    extractionRunId: string
-    projectId: string
-    doorNumber?: string
-    fieldName: string
-    originalValue?: string
-    correctedValue?: string
-    correctionType?: CorrectionType
-    userId: string
-  }
-): Promise<void> {
-  const { error } = await supabase
-    .from('extraction_corrections')
-    .insert({
-      extraction_run_id: input.extractionRunId,
-      project_id: input.projectId,
-      door_number: input.doorNumber ?? null,
-      field_name: input.fieldName,
-      original_value: input.originalValue ?? null,
-      corrected_value: input.correctedValue ?? null,
-      correction_type: input.correctionType ?? 'wrong_value',
-      corrected_by: input.userId,
-    })
-
-  if (error) throw new Error(`Failed to record correction: ${error.message}`)
-}
