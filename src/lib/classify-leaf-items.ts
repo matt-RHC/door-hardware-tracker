@@ -192,7 +192,7 @@ export function groupItemsByLeaf<T extends LeafGroupableItem>(
     // Only applies during wizard preview (leaf_side is null); after save, the
     // qty is already correct from buildPerOpeningItems.
     if (isPair && electricHingeQty > 0 && !item.leaf_side && classifyItem(item.name, undefined, item.model ?? undefined) === 'hinges') {
-      leaf1.push({ ...item, qty: (item.qty || 0) - electricHingeQty } as T)
+      leaf1.push({ ...item, qty: Math.max(0, (item.qty || 0) - electricHingeQty) } as T)
       leaf2.push({ ...item } as T)
       continue
     }

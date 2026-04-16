@@ -72,6 +72,7 @@ export async function replayQueue(): Promise<{ synced: number; failed: number; c
   if (pending.length === 0) return { synced: 0, failed: 0, conflicts: 0 }
 
   const db = await getOfflineDB()
+  const syncedIdsSet = new Set<string>()
   let synced = 0
   let failed = 0
   let conflicts = 0
@@ -99,10 +100,12 @@ export async function replayQueue(): Promise<{ synced: number; failed: number; c
 
       if (response.ok) {
         await db.put('pendingChecksV2', { ...entry, synced: true })
+        syncedIdsSet.add(entry.id)
         synced++
       } else if (response.status === 409) {
         // LWW conflict — server wins, mark as synced
         await db.put('pendingChecksV2', { ...entry, synced: true })
+        syncedIdsSet.add(entry.id)
         conflicts++
         synced++ // Still counts as resolved
       } else if (response.status === 401) {
@@ -131,11 +134,14 @@ export async function replayQueue(): Promise<{ synced: number; failed: number; c
     await new Promise((r) => setTimeout(r, 100))
   }
 
-  // Clean up localStorage backup for synced entries
+  // Clean up localStorage backup for synced entries.
+  // We track IDs that were successfully synced during this replay pass rather
+  // than checking `pending[].synced`, because the `pending` array holds the
+  // original objects (all with synced=false) — the synced flag was written to
+  // IndexedDB via db.put() but not mutated on the in-memory entries.
   try {
     const backup: QueueEntry[] = JSON.parse(localStorage.getItem(LOCALSTORAGE_KEY) || '[]')
-    const syncedIds = new Set(pending.filter((p) => p.synced).map((p) => p.id))
-    const remaining = backup.filter((e) => !syncedIds.has(e.id))
+    const remaining = backup.filter((e) => !syncedIdsSet.has(e.id))
     localStorage.setItem(LOCALSTORAGE_KEY, JSON.stringify(remaining))
   } catch {
     // Best effort
