@@ -16,20 +16,74 @@ import WizardNav from "./WizardNav";
 
 // ─── Confidence scoring ───
 
-function getConfidence(door: DoorEntry): "high" | "medium" | "low" {
-  if (!door.door_number || !door.hw_set) return "low";
-  const fields = [
-    door.location,
-    door.door_type,
-    door.frame_type,
-    door.fire_rating,
-    door.hand,
-  ];
-  const filled = fields.filter((f) => f && f.trim() !== "").length;
-  if (filled >= 4) return "high";
-  if (filled >= 2) return "medium";
-  return "low";
+/** Orphan door: N/A or empty hw_set and unlikely to have hardware items. */
+function isOrphanDoor(door: DoorEntry): boolean {
+  const hwSet = (door.hw_set ?? '').trim();
+  return hwSet === '' || hwSet === 'N/A';
 }
+
+/** Identifies the specific issue(s) with a door, if any. */
+function getDoorIssues(door: DoorEntry): string[] {
+  const issues: string[] = [];
+  if (!door.door_number) issues.push('missing_door_number');
+  if (!door.hw_set || door.hw_set.trim() === '' || door.hw_set.trim() === 'N/A') issues.push('missing_hw_set');
+  if (!door.location?.trim()) issues.push('missing_location');
+  if (!door.fire_rating?.trim()) issues.push('missing_fire_rating');
+  if (!door.hand?.trim()) issues.push('missing_hand');
+  if (!door.door_type?.trim()) issues.push('missing_door_type');
+  if (!door.frame_type?.trim()) issues.push('missing_frame_type');
+
+  // Check field_confidence for low-confidence values
+  if (door.field_confidence) {
+    for (const [field, score] of Object.entries(door.field_confidence)) {
+      if (typeof score === 'number' && score < 0.6) {
+        const issueKey = `low_confidence_${field}`;
+        if (!issues.includes(issueKey)) issues.push(issueKey);
+      }
+    }
+  }
+  return issues;
+}
+
+/**
+ * Categorize a door for review. Default is "ready" unless there's a specific
+ * reason it needs attention. This prevents the old pattern of marking
+ * everything as "needs review" and forcing manual verification of every door.
+ */
+function getConfidence(door: DoorEntry): "high" | "medium" | "low" {
+  if (isOrphanDoor(door)) return "low";
+  const issues = getDoorIssues(door);
+  // Required fields missing → missing data
+  const requiredMissing = issues.some(i => i === 'missing_door_number' || i === 'missing_hw_set');
+  if (requiredMissing) return "low";
+  // Any low-confidence fields or 3+ missing optional fields → needs attention
+  const hasLowConfidence = issues.some(i => i.startsWith('low_confidence_'));
+  const missingOptionalCount = issues.filter(i =>
+    i === 'missing_location' || i === 'missing_fire_rating' ||
+    i === 'missing_hand' || i === 'missing_door_type' || i === 'missing_frame_type'
+  ).length;
+  if (hasLowConfidence || missingOptionalCount >= 3) return "medium";
+  // Everything else is ready — including doors with 1-2 missing optional fields
+  return "high";
+}
+
+/** Map issue keys to human-readable issue group labels. */
+const ISSUE_LABELS: Record<string, string> = {
+  missing_location: 'Missing location',
+  missing_fire_rating: 'Uncertain fire rating',
+  missing_hand: 'Missing hand',
+  missing_door_type: 'Missing door type',
+  missing_frame_type: 'Missing frame type',
+  missing_hw_set: 'Missing hardware set',
+  missing_door_number: 'Missing door number',
+  low_confidence_location: 'Uncertain location',
+  low_confidence_fire_rating: 'Uncertain fire rating',
+  low_confidence_hand: 'Uncertain hand',
+  low_confidence_door_type: 'Uncertain door type',
+  low_confidence_frame_type: 'Uncertain frame type',
+  low_confidence_hw_set: 'Uncertain hardware set',
+  low_confidence_manufacturer: 'Unknown manufacturer',
+};
 
 // ─── Types ───
 
@@ -209,16 +263,37 @@ export default function StepReview({
     setEditValue("");
   }, []);
 
+  // ─── Orphan detection (auto-removed) ───
+  const orphanDoors = useMemo(() => doors.filter(isOrphanDoor), [doors]);
+  const [orphanNoticeDismissed, setOrphanNoticeDismissed] = useState(false);
+  // Active doors for stats and display (exclude orphans from counts)
+  const activeDoors = useMemo(() => doors.filter(d => !isOrphanDoor(d)), [doors]);
+
   // ─── Stats ───
-  const highCount = doors.filter((d) => getConfidence(d) === "high").length;
-  const medCount = doors.filter((d) => getConfidence(d) === "medium").length;
-  const lowCount = doors.filter((d) => getConfidence(d) === "low").length;
-  const totalDoors = doors.length;
+  const highCount = activeDoors.filter((d) => getConfidence(d) === "high").length;
+  const medCount = activeDoors.filter((d) => getConfidence(d) === "medium").length;
+  const lowCount = activeDoors.filter((d) => getConfidence(d) === "low").length;
+  const totalDoors = activeDoors.length;
+
+  // ─── Issue groups (for "needs attention" summary) ───
+  const issueGroups = useMemo(() => {
+    const groups = new Map<string, string[]>();
+    for (const door of activeDoors) {
+      const issues = getDoorIssues(door);
+      for (const issue of issues) {
+        if (!groups.has(issue)) groups.set(issue, []);
+        groups.get(issue)!.push(door.door_number);
+      }
+    }
+    return groups;
+  }, [activeDoors]);
 
   // ─── Filter + search ───
   const filteredDoors = useMemo(() => {
     const lowerSearch = (search ?? '').toLowerCase().trim();
     return doors.map((door, idx) => ({ door, originalIndex: idx })).filter(({ door }) => {
+      // Exclude orphan doors from the main list
+      if (isOrphanDoor(door)) return false;
       // Confidence filter
       if (filterLevel !== "all" && getConfidence(door) !== filterLevel) return false;
       // Search
@@ -457,6 +532,29 @@ export default function StepReview({
 
   return (
     <div className="flex flex-col h-full max-w-5xl mx-auto">
+      {/* ── Auto-removed orphan notice ── */}
+      {orphanDoors.length > 0 && !orphanNoticeDismissed && (
+        <div className="mb-3 p-3 bg-tint border border-border-dim rounded-md flex items-start gap-2">
+          <span className="text-tertiary text-xs mt-0.5 shrink-0">&#9432;</span>
+          <div className="flex-1 text-xs text-secondary">
+            <span className="font-medium">{orphanDoors.length} incomplete door{orphanDoors.length !== 1 ? 's were' : ' was'} automatically excluded</span>
+            <span className="text-tertiary ml-1">
+              ({orphanDoors.slice(0, 8).map(d => d.door_number).join(', ')}{orphanDoors.length > 8 ? `, +${orphanDoors.length - 8} more` : ''})
+            </span>
+            <span className="text-tertiary ml-1">
+              — no hardware set or items found
+            </span>
+          </div>
+          <button
+            onClick={() => setOrphanNoticeDismissed(true)}
+            className="text-tertiary hover:text-secondary text-xs shrink-0 ml-2"
+            aria-label="Dismiss"
+          >
+            &times;
+          </button>
+        </div>
+      )}
+
       {/* ── Summary Stats Bar ── */}
       <div className="mb-4 p-3 bg-tint border border-border-dim rounded-md">
         <div className="flex items-center justify-between mb-2">
@@ -495,16 +593,31 @@ export default function StepReview({
         {/* Human labels */}
         <div className="flex items-center gap-4 text-xs mb-3">
           <span className="text-success">{highCount} ready</span>
-          <span className="text-warning">{medCount} need review</span>
+          <span className="text-warning">{medCount} need{medCount === 1 ? 's' : ''} attention</span>
           <span className="text-danger">{lowCount} missing data</span>
         </div>
+
+        {/* Issue-type summary (only when there are attention/missing items) */}
+        {(medCount > 0 || lowCount > 0) && (
+          <div className="flex flex-wrap gap-2 mb-3">
+            {Array.from(issueGroups.entries())
+              .filter(([key]) => !key.startsWith('missing_door_number') && !key.startsWith('missing_hw_set'))
+              .sort((a, b) => b[1].length - a[1].length)
+              .slice(0, 5)
+              .map(([issueKey, doorNumbers]) => (
+                <span key={issueKey} className="text-[11px] px-2 py-0.5 rounded bg-warning-dim text-warning border border-warning/20">
+                  {doorNumbers.length} door{doorNumbers.length !== 1 ? 's' : ''}: {ISSUE_LABELS[issueKey] ?? issueKey.replace(/_/g, ' ')}
+                </span>
+              ))}
+          </div>
+        )}
 
         {/* Filter chips + search */}
         <div className="flex items-center gap-2 flex-wrap">
           {(
             [
               ["all", "All"],
-              ["medium", "Needs Review"],
+              ["medium", "Needs Attention"],
               ["low", "Missing Data"],
             ] as const
           ).map(([level, label]) => (
@@ -581,7 +694,7 @@ export default function StepReview({
                     <span className="w-2 h-2 rounded-full bg-success" title={`${group.highCount} ready`} />
                   )}
                   {group.medCount > 0 && (
-                    <span className="w-2 h-2 rounded-full bg-warning" title={`${group.medCount} need review`} />
+                    <span className="w-2 h-2 rounded-full bg-warning" title={`${group.medCount} need attention`} />
                   )}
                   {group.lowCount > 0 && (
                     <span className="w-2 h-2 rounded-full bg-danger" title={`${group.lowCount} missing data`} />
@@ -915,7 +1028,7 @@ export default function StepReview({
       {/* ── Navigation ── */}
       <WizardNav
         onBack={onBack}
-        onNext={() => onComplete(doors, hardwareSets)}
+        onNext={() => onComplete(doors.filter(d => !isOrphanDoor(d)), hardwareSets)}
         nextLabel="Next"
         secondaryAction={onRemapColumns ? { label: "Remap Columns", onClick: onRemapColumns, variant: "warning" } : undefined}
       />

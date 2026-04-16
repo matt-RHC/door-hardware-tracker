@@ -104,12 +104,31 @@ export async function POST(request: NextRequest) {
     // third division pass — the value of having a SINGLE authoritative pass
     // is that bugs are visible and traceable.
     //
-    // Build doorInfoMap
-    // (moved comment anchor — see normalizeQuantities call removed above)
+    // 0. Filter orphan doors — doors with hw_set "N/A" (or empty) that resolve
+    // to no hardware set, or whose set has zero items. These are typically
+    // inactive leaf pairs (suffixes B, C, D, F) that the extractor picks up
+    // as separate doors but can't match to any hardware. Keeping them causes
+    // merge_extraction() to reject promotion ("openings with no hardware items").
+    const isOrphanDoor = (d: DoorEntry): boolean => {
+      const hwSetVal = (d.hw_set ?? '').trim()
+      if (hwSetVal !== '' && hwSetVal !== 'N/A') return false
+      // Check if door resolves to a set with items via door-number lookup
+      const doorKey = normalizeDoorNumber(d.door_number)
+      const resolvedSet = doorToSetMap.get(doorKey) ?? setMap.get(hwSetVal)
+      if (resolvedSet && resolvedSet.items.length > 0) return false
+      return true
+    }
+    const orphanDoors = doors.filter(isOrphanDoor)
+    const activeDoors = doors.filter(d => !isOrphanDoor(d))
+    if (orphanDoors.length > 0) {
+      console.log(
+        `[save] Filtered ${orphanDoors.length} orphan door(s) with no hardware set/items: ${orphanDoors.map(d => d.door_number).join(', ')}`
+      )
+    }
 
     // Build doorInfoMap (needed by both staging and production paths)
     const doorInfoMap = new Map<string, { door_type: string; frame_type: string }>()
-    for (const door of doors) {
+    for (const door of activeDoors) {
       doorInfoMap.set(door.door_number, {
         door_type: door.door_type || '',
         frame_type: door.frame_type || '',
@@ -124,7 +143,7 @@ export async function POST(request: NextRequest) {
     })
 
     // 2. Transform doors → StagingOpening[]
-    const stagingOpenings: StagingOpening[] = doors.map(d => {
+    const stagingOpenings: StagingOpening[] = activeDoors.map(d => {
       // Resolve the hardware set for this door (same lookup chain as buildPerOpeningItems)
       const doorKey = normalizeDoorNumber(d.door_number)
       const hwSet = doorToSetMap.get(doorKey) ?? setMap.get(d.hw_set ?? '')
@@ -205,7 +224,7 @@ export async function POST(request: NextRequest) {
       completedAt: new Date().toISOString(),
     })
 
-    const unmatchedSets = findUnmatchedSets(doors, setMap)
+    const unmatchedSets = findUnmatchedSets(activeDoors, setMap)
 
     const isPartialSave = failedItemChunks.length > 0
     console.log(`Staging save complete: ${stagingResult.openingsCount} openings, ${itemsInserted} items, run=${runId}${isPartialSave ? ` (${failedItemChunks.length} chunk(s) failed)` : ''}`)
@@ -278,6 +297,9 @@ export async function POST(request: NextRequest) {
       failedChunks: isPartialSave ? failedItemChunks : undefined,
       extraction_run_id: runId,
       promoted: true,
+      orphanDoorsFiltered: orphanDoors.length > 0
+        ? { count: orphanDoors.length, doorNumbers: orphanDoors.map(d => d.door_number) }
+        : undefined,
     })
   } catch (error) {
     console.error('Save error:', error)
