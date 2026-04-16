@@ -7,14 +7,12 @@ import Anthropic from '@anthropic-ai/sdk'
 /**
  * Construct an Anthropic client tuned for this app's workload.
  *
- *   - `maxRetries: 4` (up from the SDK default of 2). The SDK retries on
- *     429 and 5xx with exponential backoff; we see transient rate-limit
- *     errors during multi-chunk imports where 6+ Punchy calls race
- *     against each other, and two retries aren't always enough.
+ *   - `maxRetries: 2` (SDK default). Higher values risk consuming the
+ *     entire Vercel timeout budget on a single retryable call. If
+ *     Anthropic is overloaded, 2 retries with exponential backoff is
+ *     sufficient — beyond that the pipeline should fail fast.
  *   - `timeout: 290_000` ms keeps a stuck request from consuming the
- *     full 800s Vercel Fluid Compute window — Punchy calls should never
- *     take more than ~5 minutes; beyond that, we'd rather fail fast and
- *     return an observable error than block the whole chunk.
+ *     full 800s Vercel Fluid Compute window.
  *
  * Use this factory everywhere we'd otherwise call `new Anthropic(...)`
  * so the tuning stays consistent.
@@ -22,7 +20,7 @@ import Anthropic from '@anthropic-ai/sdk'
 export function createAnthropicClient(): Anthropic {
   return new Anthropic({
     apiKey: process.env.ANTHROPIC_API_KEY,
-    maxRetries: 4,
+    maxRetries: 2,       // SDK default. 4 was too aggressive — each retry can burn 290s.
     timeout: 290_000,
   })
 }
@@ -974,6 +972,9 @@ const VISION_SCHEDULE_PAGE_TYPES = new Set([
   'hardware_sets',
 ])
 
+// Default: 3 minutes. Leaves budget for triage + staging after vision completes.
+const VISION_WALL_CLOCK_LIMIT_MS = 180_000
+
 /**
  * Send PDF pages to Claude's vision model for structured hardware extraction.
  *
@@ -991,6 +992,7 @@ export async function callVisionExtraction(
     expectedFormat?: string
   },
   batchSize = 5,
+  wallClockLimitMs = VISION_WALL_CLOCK_LIMIT_MS,
 ): Promise<VisionExtractionResult> {
   const MODEL = 'claude-sonnet-4-20250514'
   const allSets: VisionHardwareSet[] = []
@@ -1005,6 +1007,27 @@ export async function callVisionExtraction(
   }
 
   for (const batch of batches) {
+    // Wall-clock guard: stop sending new batches if we've exceeded the time budget.
+    // Already-completed batches are kept — we return partial results.
+    const elapsed = Date.now() - totalStart
+    if (elapsed > wallClockLimitMs) {
+      const skippedPages = batches.slice(batches.indexOf(batch)).flat()
+      console.warn(
+        `[vision-extract] Wall-clock limit reached (${Math.round(elapsed / 1000)}s > ${Math.round(wallClockLimitMs / 1000)}s). ` +
+        `Skipping ${skippedPages.length} remaining pages: ${skippedPages.join(', ')}`,
+      )
+      // Record skipped pages in results
+      for (const p of skippedPages) {
+        pageResults.push({
+          pageNumber: p,
+          page_type: 'skipped_timeout',
+          sets_found: 0,
+          processing_time_ms: 0,
+        })
+      }
+      break
+    }
+
     const batchStart = Date.now()
 
     let contextHint = ''
@@ -1156,13 +1179,14 @@ export async function callVisionExtraction(
     }
   }
 
+  const pagesSkipped = pageResults.filter(r => r.page_type === 'skipped_timeout').length
   return {
     hardware_sets: allSets,
     page_results: pageResults,
     total_processing_time_ms: Date.now() - totalStart,
     model_used: MODEL,
     pages_processed: pagesProcessed,
-    pages_skipped: 0,
+    pages_skipped: pagesSkipped,
   }
 }
 

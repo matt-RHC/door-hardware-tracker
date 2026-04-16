@@ -49,6 +49,21 @@ import type Anthropic from '@anthropic-ai/sdk'
 
 export const maxDuration = 800
 
+// ── Pipeline deadline ─────────────────────────────────────────────
+// Vercel hard-kills at 800s. We stop at 700s to leave buffer for
+// writing the failure status to the DB so the user sees "failed"
+// instead of an infinite spinner.
+const PIPELINE_DEADLINE_MS = 700_000
+
+class PipelineDeadlineError extends Error {
+  phase: string
+  constructor(phase: string, elapsedMs: number) {
+    super(`Pipeline deadline exceeded in '${phase}' after ${Math.round(elapsedMs / 1000)}s (limit: ${PIPELINE_DEADLINE_MS / 1000}s)`)
+    this.name = 'PipelineDeadlineError'
+    this.phase = phase
+  }
+}
+
 // ── Triage system prompt (same as triage route) ──────────────────
 
 const TRIAGE_SYSTEM_PROMPT = `You are a subject matter expert in commercial door hardware, architectural door/frame/hardware (DHI) specification packages, and construction submittal documents.
@@ -372,6 +387,14 @@ export async function POST(
   const adminSupabase = createAdminSupabaseClient()
   const startTime = Date.now()
 
+  /** Throw if we've consumed too much of the Vercel timeout budget. */
+  function checkDeadline(phase: string): void {
+    const elapsed = Date.now() - startTime
+    if (elapsed > PIPELINE_DEADLINE_MS) {
+      throw new PipelineDeadlineError(phase, elapsed)
+    }
+  }
+
   // Atomic claim: set status='classifying' only if currently 'queued'
   const { data: claimed, error: claimError } = await adminSupabase
     .from('extraction_jobs')
@@ -412,6 +435,7 @@ export async function POST(
     // ══════════════════════════════════════════════════════════════
     // Phase 2: Classify pages
     // ══════════════════════════════════════════════════════════════
+    checkDeadline('classifying')
     console.log(`[job-orchestrator] Job ${jobId}: classifying pages`)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const classifyResult: any = await callClassifyPages(pdfBase64)
@@ -426,6 +450,7 @@ export async function POST(
     // ══════════════════════════════════════════════════════════════
     // Phase 3: Detect column mapping
     // ══════════════════════════════════════════════════════════════
+    checkDeadline('detecting_columns')
     console.log(`[job-orchestrator] Job ${jobId}: detecting column mapping`)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const detectResult: any = await callDetectMapping(pdfBase64)
@@ -468,6 +493,8 @@ export async function POST(
     let failedChunks: Array<{ index: number; error: string }> = []
     let extractionConfidence: ExtractionConfidence | null = null
 
+    checkDeadline('extracting')
+
     if (pdfByteLength > CHUNK_SIZE_THRESHOLD) {
       // ── Chunked extraction ──
       const summary = classifyResult?.summary ?? {}
@@ -497,6 +524,7 @@ export async function POST(
       failedChunks = []
 
       for (let i = 0; i < chunks.length; i++) {
+        checkDeadline('extracting')
         const chunkProgress = 20 + Math.round(((i + 1) / chunks.length) * 40)
         await updateJob(adminSupabase, jobId, {
           progress: chunkProgress,
@@ -646,6 +674,7 @@ export async function POST(
     let visionResult: VisionExtractionResult | null = null
 
     if (shouldRunVision) {
+      checkDeadline('vision_extraction')
       const triggerSource = jobDeepFlag ? 'user-requested' : 'auto-triggered'
       console.log(`[job-orchestrator] Job ${jobId}: running vision extraction (Strategy B, ${triggerSource})`)
       await updateJob(adminSupabase, jobId, {
@@ -786,6 +815,7 @@ export async function POST(
     // ══════════════════════════════════════════════════════════════
     // Phase 5: Triage classification
     // ══════════════════════════════════════════════════════════════
+    checkDeadline('triaging')
     console.log(`[job-orchestrator] Job ${jobId}: running triage on ${extractedDoors.length} doors`)
 
     // Build filtered PDF for triage (door schedule + hw set pages only)
@@ -867,6 +897,7 @@ export async function POST(
     // ══════════════════════════════════════════════════════════════
     // Phase 6: Create extraction run + write staging data
     // ══════════════════════════════════════════════════════════════
+    checkDeadline('writing_staging')
     console.log(`[job-orchestrator] Job ${jobId}: writing staging data`)
 
     const runId = await createExtractionRun(adminSupabase, {
@@ -1002,6 +1033,20 @@ export async function POST(
     })
   } catch (error) {
     const durationMs = Date.now() - startTime
+
+    // Specific handling for deadline exceeded — not an unexpected crash
+    if (error instanceof PipelineDeadlineError) {
+      console.error(`[job-orchestrator] Job ${jobId}: ${error.message}`)
+      await updateJob(adminSupabase, jobId, {
+        status: 'failed',
+        error_message: error.message,
+        error_phase: error.phase,
+        completed_at: new Date().toISOString(),
+        duration_ms: durationMs,
+      })
+      return NextResponse.json({ error: error.message }, { status: 504 })
+    }
+
     const message = error instanceof Error ? error.message : 'Job execution failed'
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const phase = (error as any)?.phase ?? 'unknown'
