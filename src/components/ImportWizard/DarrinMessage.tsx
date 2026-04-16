@@ -34,6 +34,7 @@ interface DarrinMessageProps {
  */
 export default function DarrinMessage({ avatar, message, children }: DarrinMessageProps) {
   const [mounted, setMounted] = useState(false)
+  const [imgError, setImgError] = useState(false)
 
   useEffect(() => {
     const raf = requestAnimationFrame(() => setMounted(true))
@@ -46,16 +47,21 @@ export default function DarrinMessage({ avatar, message, children }: DarrinMessa
         mounted ? "opacity-100 translate-y-0" : "opacity-0 translate-y-2"
       }`}
     >
-      <div className="flex-shrink-0 w-12 h-12 rounded-full overflow-hidden bg-slate-800 border border-border-dim">
-        <Image
-          src={AVATAR_SRC[avatar]}
-          alt={AVATAR_ALT[avatar]}
-          width={48}
-          height={48}
-          className="w-full h-full object-cover"
-          priority={avatar === "scanning"}
-          unoptimized
-        />
+      <div className="flex-shrink-0 w-12 h-12 rounded-full overflow-hidden bg-slate-800 border border-border-dim flex items-center justify-center">
+        {imgError ? (
+          <span className="text-xl" role="img" aria-label={AVATAR_ALT[avatar]}>👷</span>
+        ) : (
+          <Image
+            src={AVATAR_SRC[avatar]}
+            alt={AVATAR_ALT[avatar]}
+            width={48}
+            height={48}
+            className="w-full h-full object-cover"
+            priority={avatar === "scanning"}
+            unoptimized
+            onError={() => setImgError(true)}
+          />
+        )}
       </div>
       <div className="flex-1 min-w-0 bg-slate-800 rounded-lg p-4 border border-border-dim/50">
         <div className="text-sm text-primary leading-relaxed">{message}</div>
