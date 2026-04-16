@@ -608,6 +608,7 @@ export default function ImportWizard({
                 triageResult={state.triageResult}
                 onComplete={onConfirmComplete}
                 onBack={() => setJobStep(state.hasExistingData ? JobWizardStep.Compare : JobWizardStep.Products)}
+                onBackToReview={() => setJobStep(JobWizardStep.Review)}
                 onError={onError}
               />
             )}
@@ -764,6 +765,7 @@ export default function ImportWizard({
                 triageResult={state.triageResult}
                 onComplete={onConfirmComplete}
                 onBack={() => goToStep(state.hasExistingData ? WizardStep.Compare : WizardStep.Products)}
+                onBackToReview={() => goToStep(WizardStep.Review)}
                 onError={onError}
               />
             )}
