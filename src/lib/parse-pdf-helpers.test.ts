@@ -4,6 +4,7 @@ import {
   normalizeDoorNumber,
   buildDoorToSetMap,
   buildDefinedSetIds,
+  buildSetLookupMap,
   findDoorsWithUnmatchedSets,
   parseOpeningSize,
   detectIsPair,
@@ -15,6 +16,7 @@ import {
   createAnthropicClient,
   selectRepresentativeSample,
   calculateExtractionConfidence,
+  wouldProduceZeroItems,
 } from './parse-pdf-helpers'
 import type { HardwareSet, DoorEntry, DarrinCorrections } from '@/lib/types'
 import { groupItemsByLeaf } from './classify-leaf-items'
@@ -2298,5 +2300,171 @@ describe('full pipeline: normalizeQuantities → groupItemsByLeaf (no double sub
     // Inactive: 4 standard = 4 positions
     expect(leaf2).toHaveLength(1)
     expect(leaf2[0].qty).toBe(4)
+  })
+})
+
+// ─── wouldProduceZeroItems + buildSetLookupMap ───
+//
+// Regression tests for the promotion failure where merge_extraction rejected
+// the run with "Extraction run has openings with no hardware items." The
+// old orphan filter only caught empty/N/A hw_set. These tests lock in the
+// new behavior — a door is an orphan iff it would produce zero rows from
+// buildPerOpeningItems (no resolved set with items AND no door/frame type).
+describe('wouldProduceZeroItems', () => {
+  function makeDoorFull(
+    door_number: string,
+    hw_set: string,
+    door_type = '',
+    frame_type = '',
+  ): DoorEntry {
+    return {
+      door_number,
+      hw_set,
+      door_type,
+      frame_type,
+      fire_rating: '',
+      hand: '',
+      location: '',
+    } as DoorEntry
+  }
+
+  function makeSetItems(set_id: string, itemCount: number, heading_doors?: string[]): HardwareSet {
+    return {
+      set_id,
+      heading: '',
+      heading_doors,
+      items: Array.from({ length: itemCount }, (_, i) => ({
+        name: `Item ${i}`,
+        qty: 1,
+        model: '',
+        finish: '',
+        manufacturer: '',
+      })),
+    }
+  }
+
+  it('returns true for a door with empty hw_set and no door/frame type', () => {
+    const door = makeDoorFull('101', '')
+    const setMap = buildSetLookupMap([])
+    const doorToSetMap = buildDoorToSetMap([])
+    expect(wouldProduceZeroItems(door, setMap, doorToSetMap)).toBe(true)
+  })
+
+  it('returns true for hw_set "N/A" with no door/frame type', () => {
+    const door = makeDoorFull('101', 'N/A')
+    const setMap = buildSetLookupMap([])
+    const doorToSetMap = buildDoorToSetMap([])
+    expect(wouldProduceZeroItems(door, setMap, doorToSetMap)).toBe(true)
+  })
+
+  // Core regression: the old filter let this through → zero-item staging
+  // opening → merge_extraction rejection.
+  it('returns true for hw_set referencing a set that does not exist (no door/frame type)', () => {
+    const door = makeDoorFull('101', 'H99')
+    const setMap = buildSetLookupMap([makeSetItems('H01', 3)])
+    const doorToSetMap = buildDoorToSetMap([makeSetItems('H01', 3)])
+    expect(wouldProduceZeroItems(door, setMap, doorToSetMap)).toBe(true)
+  })
+
+  it('returns false when the unmatched-set door has a door_type (Door row will be emitted)', () => {
+    const door = makeDoorFull('101', 'H99', 'WD-1')
+    const setMap = buildSetLookupMap([])
+    const doorToSetMap = buildDoorToSetMap([])
+    expect(wouldProduceZeroItems(door, setMap, doorToSetMap)).toBe(false)
+  })
+
+  it('returns false when the unmatched-set door has a frame_type (Frame row will be emitted)', () => {
+    const door = makeDoorFull('101', 'H99', '', 'HM-1')
+    const setMap = buildSetLookupMap([])
+    const doorToSetMap = buildDoorToSetMap([])
+    expect(wouldProduceZeroItems(door, setMap, doorToSetMap)).toBe(false)
+  })
+
+  it('returns true when hw_set matches a set with zero items and no door/frame type', () => {
+    const door = makeDoorFull('101', 'H01')
+    const setMap = buildSetLookupMap([makeSetItems('H01', 0)])
+    const doorToSetMap = buildDoorToSetMap([makeSetItems('H01', 0)])
+    expect(wouldProduceZeroItems(door, setMap, doorToSetMap)).toBe(true)
+  })
+
+  it('returns false when hw_set matches a set with items', () => {
+    const door = makeDoorFull('101', 'H01')
+    const setMap = buildSetLookupMap([makeSetItems('H01', 2)])
+    const doorToSetMap = buildDoorToSetMap([makeSetItems('H01', 2)])
+    expect(wouldProduceZeroItems(door, setMap, doorToSetMap)).toBe(false)
+  })
+
+  // Multi-heading: door_number is registered in doorToSetMap via heading_doors
+  // even though the door's hw_set string doesn't match any set_id in setMap.
+  // This path MUST resolve correctly — otherwise the generic_set_id / sub-set
+  // case silently regresses.
+  it('returns false when doorToSetMap resolves the door via heading_doors', () => {
+    const set = makeSetItems('DH4A.0', 2, ['110-08A', '110A-04A'])
+    const door = makeDoorFull('110-08A', 'DH4A')
+    const setMap = buildSetLookupMap([set])
+    const doorToSetMap = buildDoorToSetMap([set])
+    expect(wouldProduceZeroItems(door, setMap, doorToSetMap)).toBe(false)
+  })
+
+  it('returns false when setMap resolves via generic_set_id', () => {
+    const set: HardwareSet = {
+      set_id: 'DH1-10',
+      generic_set_id: 'DH1',
+      heading: '',
+      items: [{ name: 'x', qty: 1, model: '', finish: '', manufacturer: '' }],
+    }
+    const door = makeDoorFull('101', 'DH1')
+    const setMap = buildSetLookupMap([set])
+    const doorToSetMap = buildDoorToSetMap([set])
+    expect(wouldProduceZeroItems(door, setMap, doorToSetMap)).toBe(false)
+  })
+})
+
+describe('buildSetLookupMap', () => {
+  it('registers sets under both set_id and generic_set_id', () => {
+    const set: HardwareSet = {
+      set_id: 'DH1-10',
+      generic_set_id: 'DH1',
+      heading: '',
+      items: [],
+    }
+    const map = buildSetLookupMap([set])
+    expect(map.get('DH1-10')).toBe(set)
+    expect(map.get('DH1')).toBe(set)
+  })
+
+  it('does not double-register when set_id equals generic_set_id', () => {
+    const set: HardwareSet = {
+      set_id: 'DH1',
+      generic_set_id: 'DH1',
+      heading: '',
+      items: [],
+    }
+    const map = buildSetLookupMap([set])
+    expect(map.size).toBe(1)
+  })
+})
+
+// ─── buildPerOpeningItems with no matching set ───
+describe('buildPerOpeningItems — zero-item opening', () => {
+  it('emits zero rows for an opening whose hw_set matches no set and has no door/frame type', () => {
+    // This directly demonstrates the bug wouldProduceZeroItems detects:
+    // a valid-looking hw_set that doesn't resolve, combined with empty
+    // door/frame, yields zero rows.
+    const setMap = new Map<string, HardwareSet>()
+    const doorToSetMap = new Map<string, HardwareSet>()
+    const doorInfoMap = new Map<string, { door_type: string; frame_type: string }>()
+    doorInfoMap.set('101', { door_type: '', frame_type: '' })
+
+    const rows = buildPerOpeningItems(
+      [{ id: 'op-1', door_number: '101', hw_set: 'H99' }],
+      doorInfoMap,
+      setMap,
+      doorToSetMap,
+      'staging_opening_id',
+      { extraction_run_id: 'run-1' },
+    )
+
+    expect(rows).toHaveLength(0)
   })
 })
