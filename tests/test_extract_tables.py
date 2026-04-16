@@ -720,6 +720,15 @@ class TestHeadingDoorMetadata:
         assert loc == ""
         assert hand == ""
 
+    def test_parse_pair_door_split_hand(self, extract_tables):
+        """Pair doors sometimes record one hand per leaf with a '\\'
+        separator (e.g. 'LHR\\RHR')."""
+        loc, hand = extract_tables.parse_heading_door_metadata(
+            " Phase 1B Area 6 6100 from Sorting 6101 LHR\\RHR"
+        )
+        assert loc == "Phase 1B Area 6 6100 from Sorting 6101"
+        assert hand == "LHR\\RHR"
+
 
 class TestExtractDoorsFromSetHeadings:
     """
@@ -947,6 +956,96 @@ class TestBuildHeadingPageMap:
         pdf = _FakePdf([_FakePage(page_text)])
         heading_map = extract_tables.build_heading_page_map(pdf)
         assert heading_map["110.1"].hw_heading == "H01"
+
+    def test_stitches_location_continuation_line(self, extract_tables):
+        """LyftWaymo-style wrap: the hand sits at the end of line 1 and
+        the tail of the location sits on line 2. The parser must stitch
+        the continuation back onto the location."""
+        page_text = (
+            "Heading #E01 (Set #E01)\n"
+            "1 Single Door #E102 RECEPTION 101 to LARGE RH\n"
+            "CONF. ROOM 102\n"
+            "Opening Description: 3' 0\" x 6' 9 1/2\" Type EXST Type EXST\n"
+            "1 Keypad Lockset DL2700 IC RH 26D ALRM\n"
+        )
+        pdf = _FakePdf([_FakePage(page_text)])
+        heading_map = extract_tables.build_heading_page_map(pdf)
+
+        assert "E102" in heading_map
+        assert heading_map["E102"].location == "RECEPTION 101 to LARGE CONF. ROOM 102"
+        assert heading_map["E102"].hand == "RH"
+
+    def test_stitches_multiple_door_continuations(self, extract_tables):
+        """Every door line in a tight-width layout can wrap. Each
+        continuation must stick to its own door, not leak into the next."""
+        page_text = (
+            "Heading #H01 (Set #H01)\n"
+            "1 Single Door #110.1 RECEPTION 101 from RHR\n"
+            "CORRIDOR 110\n"
+            "1 Single Door #113 OFFICE (B) 114 to SM. CONF. RH\n"
+            "ROOM 113\n"
+            "1 Single Door #114 CORRIDOR 110 from OFFICE 180° RHR\n"
+            "(B) 114\n"
+            "Opening Description: 3' 0\" x 7' 0\" Type AL-SF Type AL-SF\n"
+        )
+        pdf = _FakePdf([_FakePage(page_text)])
+        heading_map = extract_tables.build_heading_page_map(pdf)
+
+        assert heading_map["110.1"].location == "RECEPTION 101 from CORRIDOR 110"
+        assert heading_map["110.1"].hand == "RHR"
+        assert heading_map["113"].location == "OFFICE (B) 114 to SM. CONF. ROOM 113"
+        assert heading_map["113"].hand == "RH"
+        assert heading_map["114"].location == "CORRIDOR 110 from OFFICE (B) 114"
+        assert heading_map["114"].hand == "RHR"
+
+    def test_continuation_does_not_swallow_opening_description(self, extract_tables):
+        """A continuation line must never pull text from the
+        Opening Description or a later item/door line."""
+        page_text = (
+            "Heading #H01 (Set #H01)\n"
+            "1 Single Door #101 HALLWAY to STAIR RH\n"
+            "Opening Description: 3' 0\" x 7' 0\" Type HMD Type HMF\n"
+            "12 Hinges 5BB1 4 1/2 x 4 1/2 652 IV\n"
+        )
+        pdf = _FakePdf([_FakePage(page_text)])
+        heading_map = extract_tables.build_heading_page_map(pdf)
+
+        # No continuation present; location must remain exactly what
+        # the door line produced.
+        assert heading_map["101"].location == "HALLWAY to STAIR"
+        assert heading_map["101"].hand == "RH"
+
+    def test_dimension_line_is_not_a_continuation(self, extract_tables):
+        """Some PDFs (e.g. grid-RR) print the size / door-type row
+        right after the door line without the 'Opening Description:'
+        prefix. The continuation-stitch must NOT swallow that into
+        the location."""
+        page_text = (
+            "Heading #H01 (Set #H01)\n"
+            "1 Single Door #1707 Future Tenant Space 1703 from IT/IDF Room 1707 RHR\n"
+            "3' 0\" x 9' 0\" x 1 3/4\" x HMD Type B x HMF Type F1\n"
+            "3 Hinges 5BB1 HW 4 1/2 x 4 1/2 NRP 652 IV\n"
+        )
+        pdf = _FakePdf([_FakePage(page_text)])
+        heading_map = extract_tables.build_heading_page_map(pdf)
+
+        assert heading_map["1707"].location == "Future Tenant Space 1703 from IT/IDF Room 1707"
+        assert heading_map["1707"].hand == "RHR"
+
+    def test_pair_door_dimension_line_is_not_a_continuation(self, extract_tables):
+        """Pair doors print dimensions as '2 - 3' 0\" x 7' 0\" ...'
+        which must also be recognised as a non-continuation line."""
+        page_text = (
+            "Heading #H01 (Set #H01)\n"
+            "1 Pair Doors #2100A Exterior from Phase 1B Anode/ Cathode Production 2100 RHRA\n"
+            "2 - 3' 0\" x 7' 0\" x 1 3/4\" x HMD Type HG x HMF Type D\n"
+            "6 Hinges 5BB1 HW 4 1/2 x 4 1/2 NRP 652 IV\n"
+        )
+        pdf = _FakePdf([_FakePage(page_text)])
+        heading_map = extract_tables.build_heading_page_map(pdf)
+
+        assert heading_map["2100A"].location == "Exterior from Phase 1B Anode/ Cathode Production 2100"
+        assert heading_map["2100A"].hand == "RHRA"
 
 
 class TestJoinOpeningListWithHeadingPages:
