@@ -340,6 +340,43 @@ ${candidateSummary}`
 
 type JobStatus = 'queued' | 'classifying' | 'detecting_columns' | 'extracting' | 'triaging' | 'validating' | 'writing_staging' | 'completed' | 'failed' | 'cancelled'
 
+/**
+ * Merge a per-phase patch into extraction_jobs.phase_data without clobbering
+ * keys written by earlier phases. The frontend polls this column to drive
+ * Darrin's conversational questions (src/components/ImportWizard/StepQuestions).
+ */
+async function mergePhaseData(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
+  jobId: string,
+  patch: Record<string, unknown>,
+): Promise<void> {
+  const { data, error: readErr } = await supabase
+    .from('extraction_jobs')
+    .select('phase_data')
+    .eq('id', jobId)
+    .single()
+
+  if (readErr) {
+    console.error(`[job-orchestrator] mergePhaseData read failed for ${jobId}:`, readErr.message)
+    return
+  }
+
+  const existing =
+    data?.phase_data && typeof data.phase_data === 'object' && !Array.isArray(data.phase_data)
+      ? (data.phase_data as Record<string, unknown>)
+      : {}
+
+  const { error: writeErr } = await supabase
+    .from('extraction_jobs')
+    .update({ phase_data: { ...existing, ...patch }, updated_at: new Date().toISOString() })
+    .eq('id', jobId)
+
+  if (writeErr) {
+    console.error(`[job-orchestrator] mergePhaseData write failed for ${jobId}:`, writeErr.message)
+  }
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function updateJob(supabase: any, jobId: string, updates: {
   status?: JobStatus
@@ -359,6 +396,7 @@ async function updateJob(supabase: any, jobId: string, updates: {
   auto_triggered?: boolean
   extraction_confidence?: unknown
   reconciliation_result?: unknown
+  phase_data?: unknown
 }) {
   const { error } = await supabase
     .from('extraction_jobs')
@@ -477,6 +515,19 @@ export async function POST(
       progress: 10,
       status_message: 'Pages classified. Detecting column mappings...',
       classify_result: classifyResult,
+    })
+
+    // Publish classify findings for the conversational wizard
+    await mergePhaseData(adminSupabase, jobId, {
+      classify: {
+        total_pages: classifyResult.summary.total_pages,
+        schedule_pages: classifyResult.summary.door_schedule_pages,
+        hardware_pages: classifyResult.summary.hardware_set_pages,
+        skipped_pages: [
+          ...classifyResult.summary.cover_pages,
+          ...classifyResult.summary.other_pages,
+        ],
+      },
     })
 
     // ══════════════════════════════════════════════════════════════
@@ -629,6 +680,20 @@ export async function POST(
       const scores = perDoor.get(door.door_number)
       if (scores) door.field_confidence = scores
     }
+
+    // Publish extraction findings for the conversational wizard
+    await mergePhaseData(adminSupabase, jobId, {
+      extraction: {
+        door_count: extractedDoors.length,
+        hw_set_count: extractedSets.length,
+        hw_sets: extractedSets.map(s => s.set_id).filter(Boolean),
+        sample_doors: extractedDoors.slice(0, 5).map(d => ({
+          door_number: d.door_number,
+          hw_set: d.hw_set ?? null,
+          fire_rating: d.fire_rating ?? null,
+        })),
+      },
+    })
 
     // ── Populate pdf_page on sets from classify-pages metadata ──
     const classifyPages: PageClassification[] = classifyResult?.pages ?? []
@@ -924,6 +989,84 @@ export async function POST(
         triage: triageSummary,
       },
       constraint_flags: allQtyFlags,
+    })
+
+    // ── Compute triage-phase signals for the conversational wizard ──
+    //
+    // Pair detection mirrors the logic used later when building staging
+    // openings; orphan detection mirrors the filteredDoors filter below.
+    // Duplicating the math here keeps the UX responsive (Darrin can ask
+    // these questions before staging writes happen).
+    const setMapForPhase = new Map<string, HardwareSet>()
+    for (const set of extractedSets) {
+      setMapForPhase.set(set.set_id, set)
+      if (set.generic_set_id && set.generic_set_id !== set.set_id) {
+        setMapForPhase.set(set.generic_set_id, set)
+      }
+    }
+    const doorToSetMapForPhase = buildDoorToSetMap(extractedSets)
+
+    const fireRatedDoors = acceptedDoors.filter(d => {
+      const fr = (d.fire_rating ?? '').trim()
+      return fr !== '' && fr.toLowerCase() !== 'none' && fr.toLowerCase() !== 'non-rated'
+    })
+    const fireRatingsFound = Array.from(
+      new Set(
+        fireRatedDoors
+          .map(d => (d.fire_rating ?? '').trim())
+          .filter(fr => fr !== ''),
+      ),
+    )
+    const manufacturersFound = Array.from(
+      new Set(
+        extractedSets
+          .flatMap(s => s.items.map(i => (i.manufacturer ?? '').trim()))
+          .filter(m => m !== ''),
+      ),
+    ).sort((a, b) => a.localeCompare(b))
+
+    const pairDoors: Array<{ door_a: string; door_b: string | null }> = []
+    for (const door of acceptedDoors) {
+      const doorKey = normalizeDoorNumber(door.door_number)
+      const hwSet = doorToSetMapForPhase.get(doorKey) ?? setMapForPhase.get(door.hw_set ?? '')
+      const doorInfo = {
+        door_type: door.door_type ?? '',
+        location: door.location ?? '',
+      }
+      if (detectIsPair(hwSet, doorInfo)) {
+        pairDoors.push({ door_a: door.door_number, door_b: null })
+      }
+    }
+
+    const orphanDoors: Array<{ door_number: string; reason: string }> = []
+    for (const d of acceptedDoors) {
+      const hwSetVal = (d.hw_set ?? '').trim()
+      if (hwSetVal === '' || hwSetVal === 'N/A') {
+        const doorKey = normalizeDoorNumber(d.door_number)
+        const resolvedSet = doorToSetMapForPhase.get(doorKey) ?? setMapForPhase.get(hwSetVal)
+        if (!resolvedSet || resolvedSet.items.length === 0) {
+          orphanDoors.push({
+            door_number: d.door_number,
+            reason: hwSetVal === 'N/A' ? 'hw_set=N/A' : 'no_hw_set_assigned',
+          })
+        }
+      }
+    }
+
+    const fireRatedCount = fireRatedDoors.length
+    const fireRatedPct = acceptedDoors.length > 0
+      ? Math.round((fireRatedCount / acceptedDoors.length) * 100)
+      : 0
+
+    await mergePhaseData(adminSupabase, jobId, {
+      triage: {
+        fire_rated_count: fireRatedCount,
+        fire_rated_pct: fireRatedPct,
+        fire_ratings_found: fireRatingsFound,
+        manufacturers_found: manufacturersFound,
+        pair_doors_detected: pairDoors,
+        orphan_doors: orphanDoors,
+      },
     })
 
     // ══════════════════════════════════════════════════════════════

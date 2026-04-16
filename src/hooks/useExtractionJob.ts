@@ -5,6 +5,7 @@ import type {
   JobStatus,
   JobStatusResponse,
   JobResultsResponse,
+  PhaseData,
 } from '@/components/ImportWizard/types'
 
 const POLL_INTERVAL_MS = 2000
@@ -40,6 +41,7 @@ export interface UseExtractionJobReturn {
   isRunning: boolean
   isComplete: boolean
   isFailed: boolean
+  phaseData: PhaseData
   createJob: (projectId: string) => Promise<string>
   submitAnswers: (answers: Record<string, unknown>) => Promise<void>
   fetchResults: () => Promise<JobResultsResponse>
@@ -51,6 +53,7 @@ export function useExtractionJob(): UseExtractionJobReturn {
   const [progress, setProgress] = useState(0)
   const [statusMessage, setStatusMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [phaseData, setPhaseData] = useState<PhaseData>({})
 
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const jobIdRef = useRef<string | null>(null)
@@ -86,6 +89,10 @@ export function useExtractionJob(): UseExtractionJobReturn {
       setStatusMessage(
         data.statusMessage ?? STATUS_LABELS[data.status] ?? null,
       )
+
+      if (data.phaseData && typeof data.phaseData === 'object') {
+        setPhaseData(data.phaseData)
+      }
 
       if (data.error) {
         setError(data.error.message)
@@ -124,6 +131,7 @@ export function useExtractionJob(): UseExtractionJobReturn {
       setStatus('queued')
       setProgress(0)
       setStatusMessage(STATUS_LABELS.queued)
+      setPhaseData({})
 
       const resp = await fetch('/api/jobs', {
         method: 'POST',
@@ -201,6 +209,7 @@ export function useExtractionJob(): UseExtractionJobReturn {
     isRunning: jobId !== null && !TERMINAL_STATUSES.has(status),
     isComplete: status === 'completed',
     isFailed: status === 'failed',
+    phaseData,
     createJob,
     submitAnswers,
     fetchResults,

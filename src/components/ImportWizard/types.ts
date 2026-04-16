@@ -51,6 +51,36 @@ export type JobStatus =
   | 'failed'
   | 'cancelled'
 
+/** Per-phase findings published by the job orchestrator so the UI can drive
+ *  progressive, data-aware questions while extraction runs. Every sub-object
+ *  is optional — each appears once its phase has completed. */
+export interface PhaseData {
+  classify?: {
+    total_pages: number
+    schedule_pages: number[]
+    hardware_pages: number[]
+    skipped_pages: number[]
+  }
+  extraction?: {
+    door_count: number
+    hw_set_count: number
+    hw_sets: string[]
+    sample_doors: Array<{
+      door_number: string
+      hw_set: string | null
+      fire_rating: string | null
+    }>
+  }
+  triage?: {
+    fire_rated_count: number
+    fire_rated_pct: number
+    fire_ratings_found: string[]
+    manufacturers_found: string[]
+    pair_doors_detected: Array<{ door_a: string; door_b: string | null }>
+    orphan_doors: Array<{ door_number: string; reason: string }>
+  }
+}
+
 export interface JobStatusResponse {
   id: string
   projectId: string
@@ -61,6 +91,7 @@ export interface JobStatusResponse {
   constraintFlags: Record<string, unknown> | null
   classifyResult: ClassifyPagesResponse | null
   extractionSummary: Record<string, unknown> | null
+  phaseData: PhaseData
   error: { message: string; phase: string } | null
   startedAt: string | null
   completedAt: string | null

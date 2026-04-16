@@ -46,6 +46,7 @@ export async function GET(
       constraintFlags: row.constraint_flags,
       classifyResult: row.classify_result,
       extractionSummary: row.extraction_summary,
+      phaseData: row.phase_data ?? {},
       error: row.error_message ? {
         message: row.error_message,
         phase: row.error_phase,
