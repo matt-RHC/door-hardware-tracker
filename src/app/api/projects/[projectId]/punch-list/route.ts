@@ -56,6 +56,7 @@ export async function GET(
         )
       `)
       .eq('openings.project_id', projectId)
+      .eq('openings.is_active', true)
       .not('qa_findings', 'eq', '{}')
       .is('qa_resolved_at', null)
       .order('opening_id')
