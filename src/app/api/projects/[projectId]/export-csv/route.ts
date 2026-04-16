@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import type { OpeningWithHardware } from '@/lib/types/database'
+import { OPENING_COLUMNS, HARDWARE_ITEM_COLUMNS } from '@/lib/supabase-selects'
 
 function escapeCSV(value: string | null | undefined): string {
   if (value == null || value === '') return ''
@@ -48,25 +49,9 @@ export async function GET(
     const { data: openings, error: openingsError } = await supabase
       .from('openings')
       .select(`
-        id,
-        door_number,
-        hw_set,
-        hw_heading,
-        location,
-        door_type,
-        frame_type,
-        fire_rating,
-        hand,
-        notes,
+        ${OPENING_COLUMNS},
         hardware_items(
-          id,
-          name,
-          qty,
-          manufacturer,
-          model,
-          finish,
-          sort_order,
-          leaf_side,
+          ${HARDWARE_ITEM_COLUMNS},
           checklist_progress(checked)
         )
       `)

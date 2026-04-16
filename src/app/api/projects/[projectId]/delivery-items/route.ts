@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { HARDWARE_ITEM_COLUMNS } from '@/lib/supabase-selects'
 
 export async function GET(
   request: NextRequest,
@@ -33,7 +34,7 @@ export async function GET(
       .from('delivery_items')
       .select(`
         *,
-        hardware_item:hardware_items(id, name),
+        hardware_item:hardware_items(${HARDWARE_ITEM_COLUMNS}),
         delivery:deliveries!inner(id, po_number, project_id)
       `)
       .eq('delivery.project_id', projectId)
