@@ -665,3 +665,155 @@ class TestJoinSplitRows:
         items = [HardwareItem(name="Hinges", model="5BB1", finish="626")]
         result = extract_tables._join_split_rows(items)
         assert len(result) == 1
+
+
+# ── Heading door metadata parsing (Prompt 2 cross-reference) ──
+
+class TestHeadingDoorMetadata:
+    """
+    Heading blocks in hardware schedule pages carry per-door location + hand
+    on the same line as the door number. Prompt 2 requires capturing those
+    fields (previously only location was captured; hand was dropped).
+    """
+
+    def test_parse_location_and_hand(self, extract_tables):
+        """Per-door heading line yields both location and hand."""
+        loc, hand = extract_tables.parse_heading_door_metadata(
+            " RECEPTION 101 to LARGE CONF. ROOM 102 LH"
+        )
+        assert loc == "RECEPTION 101 to LARGE CONF. ROOM 102"
+        assert hand == "LH"
+
+    def test_parse_rhr_hand(self, extract_tables):
+        loc, hand = extract_tables.parse_heading_door_metadata(
+            " RECEPTION 101 from CORRIDOR 110 RHR"
+        )
+        assert loc == "RECEPTION 101 from CORRIDOR 110"
+        assert hand == "RHR"
+
+    def test_parse_rhra_hand(self, extract_tables):
+        """RHRA / LHRA are the pair-door active/inactive hand codes."""
+        loc, hand = extract_tables.parse_heading_door_metadata(
+            " CORR. to ENTRANCE RHRA"
+        )
+        assert loc == "CORR. to ENTRANCE"
+        assert hand == "RHRA"
+
+    def test_parse_degree_prefixed_hand(self, extract_tables):
+        """Degree-prefixed hand (e.g. '90° LH') is captured, location is stripped."""
+        loc, hand = extract_tables.parse_heading_door_metadata(
+            " CORR 10-90 to STOR 10-01 90° LH"
+        )
+        assert loc == "CORR 10-90 to STOR 10-01"
+        assert hand == "LH"
+
+    def test_parse_location_only(self, extract_tables):
+        """Location without hand: hand is empty, location fully captured."""
+        loc, hand = extract_tables.parse_heading_door_metadata(
+            " SOCIAL HUB 09-13 from 9TH FLOOR"
+        )
+        assert loc == "SOCIAL HUB 09-13 from 9TH FLOOR"
+        assert hand == ""
+
+    def test_parse_empty(self, extract_tables):
+        loc, hand = extract_tables.parse_heading_door_metadata("")
+        assert loc == ""
+        assert hand == ""
+
+
+class TestExtractDoorsFromSetHeadings:
+    """
+    Integration of parse_heading_door_metadata into the heading-block extractor.
+    A DoorEntry built from a hardware-schedule heading line must carry both
+    location AND hand (prior behavior captured only location).
+    """
+
+    def test_extract_doors_populates_hand(self, extract_tables, tmp_path):
+        """The DoorEntry.hand field is populated from heading door lines."""
+
+        class _FakePage:
+            def __init__(self, text):
+                self._text = text
+
+            def extract_text(self):
+                return self._text
+
+        class _FakePdf:
+            def __init__(self, pages):
+                self.pages = pages
+
+        pdf = _FakePdf([
+            _FakePage(
+                "Heading #H01 (Set #H01)\n"
+                "1 Single Door #E102 RECEPTION 101 to LARGE CONF. ROOM 102 LH\n"
+                "1 Single Door #113 OFFICE (B) 114 to SM. CONF. ROOM 113 RH\n"
+                "Opening Description: 3' 0\" x 7' 0\" Type AL-SF Type AL-SF\n"
+                "12 Hinges 5BB1 4 1/2 x 4 1/2 652 IV\n"
+            )
+        ])
+
+        doors = extract_tables.extract_doors_from_set_headings(pdf)
+        by_num = {d.door_number: d for d in doors}
+
+        assert "E102" in by_num
+        assert by_num["E102"].location == "RECEPTION 101 to LARGE CONF. ROOM 102"
+        assert by_num["E102"].hand == "LH"
+        assert by_num["E102"].hw_set == "H01"
+
+        assert "113" in by_num
+        assert by_num["113"].location == "OFFICE (B) 114 to SM. CONF. ROOM 113"
+        assert by_num["113"].hand == "RH"
+
+
+class TestEnrichOpeningsFromHeadings:
+    """
+    Prompt 2: When the Opening List table has already produced DoorEntry rows
+    with missing location/hand, the heading-block cross-reference must fill
+    those fields in place rather than skipping the door.
+    """
+
+    def test_enriches_missing_hand_and_location(self, extract_tables):
+        DoorEntry = extract_tables.DoorEntry
+        openings = [
+            DoorEntry(door_number="101", hw_set="H01", location="", hand=""),
+            DoorEntry(door_number="102", hw_set="H02", location="LOBBY", hand="RH"),
+        ]
+        heading_doors = [
+            DoorEntry(door_number="101", hw_set="H01",
+                      location="RECEPTION 101 from CORRIDOR 110", hand="RHR"),
+            DoorEntry(door_number="103", hw_set="H01",
+                      location="OFFICE 103", hand="LH"),
+        ]
+        added, enriched = extract_tables.merge_heading_doors_into_openings(
+            openings, heading_doors
+        )
+        assert added == 1
+        assert enriched == 1
+
+        by_num = {d.door_number: d for d in openings}
+        assert by_num["101"].location == "RECEPTION 101 from CORRIDOR 110"
+        assert by_num["101"].hand == "RHR"
+        # Existing non-empty values must not be overwritten
+        assert by_num["102"].location == "LOBBY"
+        assert by_num["102"].hand == "RH"
+        # New door is appended
+        assert by_num["103"].location == "OFFICE 103"
+        assert by_num["103"].hand == "LH"
+
+    def test_preserves_opening_list_values_when_heading_empty(self, extract_tables):
+        """Opening List is canonical — heading data never overwrites populated fields."""
+        DoorEntry = extract_tables.DoorEntry
+        openings = [
+            DoorEntry(door_number="101", hw_set="H01",
+                      location="RECEPTION", hand="LH"),
+        ]
+        heading_doors = [
+            DoorEntry(door_number="101", hw_set="H01", location="", hand=""),
+        ]
+        added, enriched = extract_tables.merge_heading_doors_into_openings(
+            openings, heading_doors
+        )
+        assert added == 0
+        assert enriched == 0
+        assert openings[0].location == "RECEPTION"
+        assert openings[0].hand == "LH"

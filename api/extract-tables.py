@@ -2132,6 +2132,52 @@ def extract_heading_door_numbers(section_text: str) -> list[str]:
     return doors
 
 
+# Hand codes that appear at the end of hardware-schedule heading door lines.
+# Supports LH / RH / LHR / RHR / LHA / RHA / LHRA / RHRA, optionally preceded
+# by a swing-degree indicator like "90° LH" or "180° RHR".
+_HEADING_DOOR_HAND_RE = re.compile(
+    r"(?:\d{1,3}°\s+)?(LHRA|RHRA|LHR|RHR|LHA|RHA|LH|RH)\s*$",
+    re.IGNORECASE,
+)
+
+# Trailing degree-only suffix (e.g. "90°") without a hand code.
+_TRAILING_DEGREE_RE = re.compile(r"\s+\d{1,3}°\s*$")
+
+
+def parse_heading_door_metadata(after_door_text: str) -> tuple[str, str]:
+    """Parse (location, hand) from the trailing portion of a heading door line.
+
+    The caller passes the text that appears AFTER the door number on a line
+    like ``"1 Single Door #E102 RECEPTION 101 to LARGE CONF. ROOM 102 LH"``.
+
+    Returns a ``(location, hand)`` tuple. Either value may be the empty
+    string when not present on the line.
+
+    Decision: we parse hand as a suffix and treat everything preceding it
+    as the location rather than using the previous single-regex approach
+    that only captured location. That approach silently dropped RHRA/LHRA
+    because its trailing lookahead ``\\s+[LR]H[RA]?\\s*$`` only matches one
+    of the two reverse/active letters. Doing the split explicitly keeps
+    both fields and supports the full DFH hand set documented in Prompt 2.
+    """
+    text = (after_door_text or "").strip()
+    if not text:
+        return ("", "")
+
+    hand = ""
+    location = text
+
+    hand_match = _HEADING_DOOR_HAND_RE.search(text)
+    if hand_match:
+        hand = hand_match.group(1).upper()
+        location = text[: hand_match.start()].rstrip()
+
+    # Strip a bare trailing degree suffix when no hand followed it.
+    location = _TRAILING_DEGREE_RE.sub("", location).strip()
+
+    return (location, hand)
+
+
 def extract_doors_from_set_headings(pdf) -> list[DoorEntry]:
     """
     BUG-25: Extract door numbers from hardware schedule heading blocks as a
@@ -2142,8 +2188,8 @@ def extract_doors_from_set_headings(pdf) -> list[DoorEntry]:
       "1 Single Door #10-12B CORR 10-90 to STOR 10-01 90° LH"
       "1 Pair Doors #09-15AREV1 SOCIAL HUB 09-13 from 9TH FLOOR"
 
-    Returns DoorEntry objects with door_number and hw_set populated.
-    The hw_set is taken from the current heading context.
+    Returns DoorEntry objects with door_number, hw_set, location, and hand
+    populated. The hw_set is taken from the current heading context.
     """
     doors: list[DoorEntry] = []
     seen: set[str] = set()
@@ -2163,19 +2209,14 @@ def extract_doors_from_set_headings(pdf) -> list[DoorEntry]:
                 door_num = door_match.group(3).strip().rstrip(",;:")
                 if door_num and door_num not in seen and is_valid_door_number(door_num):
                     seen.add(door_num)
-                    loc = ""
                     after_door = line[door_match.end(3):]
-                    loc_match = re.match(
-                        r"\s+(.+?)(?:\s+\d+°|\s+[LR]H[RA]?\s*$|\s*$)",
-                        after_door,
-                    )
-                    if loc_match:
-                        loc = loc_match.group(1).strip()
+                    loc, hand = parse_heading_door_metadata(after_door)
 
                     doors.append(DoorEntry(
                         door_number=door_num,
                         hw_set=current_set_id,
                         location=loc,
+                        hand=hand,
                     ))
 
     logger.info(
@@ -2183,6 +2224,55 @@ def extract_doors_from_set_headings(pdf) -> list[DoorEntry]:
         f"{len(doors)} doors from hardware schedule headings"
     )
     return doors
+
+
+def merge_heading_doors_into_openings(
+    openings: list[DoorEntry],
+    heading_doors: list[DoorEntry],
+) -> tuple[int, int]:
+    """Cross-reference heading-block doors into the Opening List openings.
+
+    The Opening List table (page 2 of a typical submittal) is the canonical
+    source of truth for door metadata. But that table often leaves location
+    and hand blank for doors whose row only carries ``Opening / Hdw Set /
+    Opening Label / Door Type / Frame Type``. The per-door lines under
+    each hardware set heading (pages 4-9) DO carry location + hand, so
+    Prompt 2 requires us to merge them.
+
+    Semantics:
+      - If a heading-block door is NEW (not in ``openings``), append it.
+      - If it already exists, FILL missing fields from the heading record.
+        Never overwrite a non-empty Opening-List value.
+
+    Mutates ``openings`` in place. Returns ``(added, enriched)`` counts.
+    """
+    existing_by_num: dict[str, DoorEntry] = {d.door_number: d for d in openings}
+    added = 0
+    enriched = 0
+
+    for hd in heading_doors:
+        existing = existing_by_num.get(hd.door_number)
+        if existing is None:
+            openings.append(hd)
+            existing_by_num[hd.door_number] = hd
+            added += 1
+            continue
+
+        changed = False
+        # Fill each field only when the Opening List left it blank.
+        if not (existing.location or "").strip() and (hd.location or "").strip():
+            existing.location = hd.location
+            changed = True
+        if not (existing.hand or "").strip() and (hd.hand or "").strip():
+            existing.hand = hd.hand
+            changed = True
+        if not (existing.hw_set or "").strip() and (hd.hw_set or "").strip():
+            existing.hw_set = hd.hw_set
+            changed = True
+        if changed:
+            enriched += 1
+
+    return (added, enriched)
 
 
 # Patterns for extracting door numbers from heading block text.
@@ -4340,20 +4430,22 @@ class handler(BaseHTTPRequestHandler):
                         openings = inline_doors
                         logger.info(f"[extract-tables] Inline door extraction found {len(openings)} doors")
 
-                # Phase 2.6: BUG-25 — Merge doors from "N Single/Pair Door #XXX" lines
-                # in hardware schedule headings. Complements Phase 2.5 by catching
-                # doors listed in heading blocks that inline extraction missed.
+                # Phase 2.6: BUG-25 + Prompt 2 — Cross-reference heading-block
+                # per-door lines into openings. Heading lines carry location
+                # and hand that the Opening List table often leaves blank.
+                # merge_heading_doors_into_openings() appends new doors AND
+                # fills missing fields on doors the Opening List already has.
                 heading_doors = extract_doors_from_set_headings(pdf)
                 if heading_doors:
-                    existing_nums = {d.door_number for d in openings}
-                    added = 0
-                    for hd in heading_doors:
-                        if hd.door_number not in existing_nums:
-                            openings.append(hd)
-                            existing_nums.add(hd.door_number)
-                            added += 1
-                    if added:
-                        logger.info(f"[extract-tables] Merged {added} doors from heading blocks (total now {len(openings)})")
+                    added, enriched = merge_heading_doors_into_openings(
+                        openings, heading_doors
+                    )
+                    if added or enriched:
+                        logger.info(
+                            f"[extract-tables] Heading-block cross-reference: "
+                            f"+{added} new, +{enriched} enriched "
+                            f"(total now {len(openings)})"
+                        )
 
                 # Phase 3: Extract reference tables
                 reference_codes = extract_reference_tables(pdf)
