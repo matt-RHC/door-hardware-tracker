@@ -1159,6 +1159,86 @@ export type Database = {
           },
         ]
       }
+      product_families: {
+        Row: {
+          id: string
+          project_id: string
+          manufacturer: string
+          base_series: string
+          canonical_model: string
+          category: string | null
+          variants: Json
+          created_by: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          project_id: string
+          manufacturer: string
+          base_series: string
+          canonical_model: string
+          category?: string | null
+          variants?: Json
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          project_id?: string
+          manufacturer?: string
+          base_series?: string
+          canonical_model?: string
+          category?: string | null
+          variants?: Json
+          created_by?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_families_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
+      product_family_members: {
+        Row: {
+          family_id: string
+          item_id: string
+          created_at: string
+        }
+        Insert: {
+          family_id: string
+          item_id: string
+          created_at?: string
+        }
+        Update: {
+          family_id?: string
+          item_id?: string
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_family_members_family_id_fkey"
+            columns: ["family_id"]
+            isOneToOne: false
+            referencedRelation: "product_families"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "product_family_members_item_id_fkey"
+            columns: ["item_id"]
+            isOneToOne: false
+            referencedRelation: "hardware_items"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
       projects: {
         Row: {
           address: string | null
