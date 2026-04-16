@@ -24,7 +24,7 @@ export interface FieldReconciliation {
     strategy_b?: string | number
   }
   /** Which strategy the winning value came from */
-  chosen_from: 'a' | 'b' | 'agreed'
+  chosen_from: 'a' | 'b' | 'agreed' | 'merged'
   /** Human-readable explanation of the reconciliation decision */
   reason: string
 }

@@ -14,21 +14,20 @@ export default function Navbar() {
   const supabase = createClient();
 
   useEffect(() => {
+    const getUser = async () => {
+      try {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        setEmail(user?.email || null);
+      } catch (err) {
+        console.error("Error getting user:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
     getUser();
-  }, []);
-
-  const getUser = async () => {
-    try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      setEmail(user?.email || null);
-    } catch (err) {
-      console.error("Error getting user:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, [supabase]);
 
   const handleSignOut = async () => {
     playClick();

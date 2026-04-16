@@ -642,7 +642,7 @@ function reconcileDoorNumbers(
     value: unionStr,
     confidence: 'conflict',
     sources: { strategy_a: doorsAStr, strategy_b: doorsBStr },
-    chosen_from: 'agreed',
+    chosen_from: 'merged',
     reason: `${context}: door number disagreement — using union (A: ${doorsAStr}, B: ${doorsBStr})`,
   }
 }

@@ -86,7 +86,7 @@ export function propagateQuantityDecision(
       setModified = true
       return {
         ...item,
-        qty_total: item.qty, // preserve original as total
+        qty_total: item.qty_total ?? item.qty, // preserve original as total
         qty: decision.resolved_qty,
         qty_source: 'propagated' as const,
       }

@@ -1444,7 +1444,12 @@ export function applyCorrections(
             if (item && fix.field in item) {
               const val = fix.new_value
               if (fix.field === 'qty') {
-                (item as any)[fix.field] = parseInt(val, 10) || 1
+                const parsed = parseInt(val, 10)
+                if (Number.isNaN(parsed) || parsed < 0) {
+                  console.warn(`[punchy] Skipping invalid qty value "${val}" for item "${fix.name}" in set ${set.set_id}`)
+                  continue
+                }
+                (item as any)[fix.field] = parsed || 1
                 // Mark as llm_override so downstream normalization (NEVER_RENORMALIZE)
                 // preserves Punchy's correction — Punchy sees per-opening values and
                 // returns per-opening values; re-dividing would clobber the fix.
