@@ -1,98 +1,115 @@
 #!/usr/bin/env bash
-# Vercel "Ignored Build Step" script.
 #
-# Exit convention (Vercel): exit 0 = SKIP build, exit 1 = PROCEED with build.
-# This is not a bug — it's how Vercel's Ignored Build Step is wired.
+# vercel-ignore-build.sh
 #
-# Rules (first match wins):
-#   1. VERCEL_ENV=production               -> always PROCEED
-#   2. Missing prev SHA or diff fails      -> PROCEED (fail safe: build)
-#   3. Draft PR (requires GITHUB_TOKEN)    -> SKIP
-#   4. Every changed file is build-irrelevant -> SKIP
-#   5. Otherwise                           -> PROCEED
+# Vercel "Ignored Build Step" for door-hardware-tracker.
 #
-# Build-irrelevant paths (BUILD_IRRELEVANT_REGEX): docs/, prompts/, test-pdfs/,
-# tests/, scripts/, .github/, .vscode/, .claude/, top-level *.md, LICENSE,
-# .gitignore, .env.example. This list is intentionally conservative — do not
-# expand without discussion.
+# Vercel invokes this script for every commit. Exit code:
+#   0  → skip the build (no deployment created)
+#   1  → proceed with the build (deployment runs)
+#
+# Rules, in priority order:
+#   1. Always build production (main).
+#   2. Skip preview builds for draft PRs (WIP branches push many times; we
+#      only care about them when the author marks "Ready for review").
+#   3. Skip the build if every file in the diff matches a path in the
+#      BUILD_IRRELEVANT allowlist (docs, tests, prompts, markdown, etc.).
+#   4. Otherwise, build.
+#
+# Why this exists: Vercel bills per build minute. Docs-only and test-only
+# commits previously triggered full Next.js builds that produced an
+# identical deployed artifact. See team cost-control notes in
+# docs/ANTHROPIC_COST_CONTROLS.md (Vercel-side analog).
+#
+# Usage in Vercel: Project → Settings → Git → "Ignored Build Step" →
+#   bash scripts/vercel-ignore-build.sh
+#
+# Local test:
+#   VERCEL_GIT_COMMIT_REF=chore/docs-only bash scripts/vercel-ignore-build.sh
 
-set -uo pipefail
+set -euo pipefail
 
-log() { echo "[vercel-ignore-build] $*" >&2; }
+# -----------------------------------------------------------------------------
+# Environment (provided by Vercel at build time)
+# -----------------------------------------------------------------------------
+# VERCEL_GIT_COMMIT_REF          — branch name
+# VERCEL_GIT_PREVIOUS_SHA        — last deployed commit on this branch/project
+# VERCEL_GIT_PULL_REQUEST_ID     — set if commit is associated with a PR
+# VERCEL_ENV                     — "production" | "preview" | "development"
+# See: https://vercel.com/docs/deployments/configure-a-build#ignored-build-step
+# -----------------------------------------------------------------------------
 
-PROCEED=1
-SKIP=0
-
-# Rule 1: Production deploys always build.
-if [[ "${VERCEL_ENV:-}" == "production" ]]; then
-  log "VERCEL_ENV=production -> PROCEED"
-  exit $PROCEED
-fi
-
-CURRENT_SHA="${VERCEL_GIT_COMMIT_SHA:-$(git rev-parse HEAD 2>/dev/null || true)}"
+BRANCH="${VERCEL_GIT_COMMIT_REF:-}"
 PREV_SHA="${VERCEL_GIT_PREVIOUS_SHA:-}"
+VERCEL_ENV_VAL="${VERCEL_ENV:-preview}"
 
-if [[ -z "$CURRENT_SHA" ]]; then
-  log "No current SHA -> PROCEED (fail safe)"
-  exit $PROCEED
+log() { echo "[ignore-build] $*"; }
+
+# -----------------------------------------------------------------------------
+# Rule 1 — always build production
+# -----------------------------------------------------------------------------
+if [[ "$VERCEL_ENV_VAL" == "production" ]]; then
+  log "Production build — proceed."
+  exit 1
 fi
 
+# -----------------------------------------------------------------------------
+# Rule 2 — skip draft PRs
+# -----------------------------------------------------------------------------
+# Vercel does not expose draft status directly. We use the GitHub API if a
+# token is available; otherwise we fall through (don't skip).
+if [[ -n "${VERCEL_GIT_PULL_REQUEST_ID:-}" && -n "${GITHUB_TOKEN:-}" ]]; then
+  REPO_SLUG="${VERCEL_GIT_REPO_OWNER:-}/${VERCEL_GIT_REPO_SLUG:-}"
+  if [[ "$REPO_SLUG" != "/" ]]; then
+    DRAFT=$(curl -s -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+      "https://api.github.com/repos/${REPO_SLUG}/pulls/${VERCEL_GIT_PULL_REQUEST_ID}" \
+      | grep -o '"draft":[[:space:]]*true' || true)
+    if [[ -n "$DRAFT" ]]; then
+      log "PR #${VERCEL_GIT_PULL_REQUEST_ID} is a draft — skip."
+      exit 0
+    fi
+  fi
+fi
+
+# -----------------------------------------------------------------------------
+# Rule 3 — skip if every changed file is build-irrelevant
+# -----------------------------------------------------------------------------
+# Files/paths that DO NOT affect the deployed artifact. Keep this list
+# conservative — when in doubt, build. A missed skip costs minutes; a
+# wrong skip ships stale code.
+BUILD_IRRELEVANT_REGEX='^(docs/|prompts/|test-pdfs/|tests/|scripts/|\.github/|\.vscode/|\.claude/|[^/]+\.md$|LICENSE$|\.gitignore$|\.env\.example$|AGENTS\.md$|CLAUDE\.md$|README\.md$)'
+
+# Determine the diff range. If we have no previous SHA (first deploy on a
+# new branch), build to be safe.
 if [[ -z "$PREV_SHA" ]]; then
-  log "No VERCEL_GIT_PREVIOUS_SHA -> PROCEED (fail safe)"
-  exit $PROCEED
+  log "No previous deploy SHA — proceed (safe default)."
+  exit 1
 fi
 
-# Make sure both commits are available locally (Vercel usually does a shallow clone).
-git cat-file -e "$PREV_SHA^{commit}" 2>/dev/null || git fetch --depth=50 origin "$PREV_SHA" 2>/dev/null || true
-git cat-file -e "$CURRENT_SHA^{commit}" 2>/dev/null || true
+# Fetch the previous SHA so the diff resolves. Vercel uses a shallow clone.
+if ! git cat-file -e "$PREV_SHA" 2>/dev/null; then
+  git fetch --depth=50 origin "$PREV_SHA" 2>/dev/null || {
+    log "Could not fetch previous SHA $PREV_SHA — proceed."
+    exit 1
+  }
+fi
 
-CHANGED_FILES="$(git diff --name-only "$PREV_SHA" "$CURRENT_SHA" 2>/dev/null || true)"
+CHANGED_FILES=$(git diff --name-only "$PREV_SHA" HEAD || true)
 
 if [[ -z "$CHANGED_FILES" ]]; then
-  log "Empty diff between $PREV_SHA..$CURRENT_SHA -> PROCEED (fail safe)"
-  exit $PROCEED
+  log "No file changes detected — skip."
+  exit 0
 fi
 
-log "Changed files:"
-echo "$CHANGED_FILES" | sed 's/^/  /' >&2
-
-# Rule 3: Draft PR detection (best-effort; requires GITHUB_TOKEN).
-PR_REF="${VERCEL_GIT_PULL_REQUEST_ID:-}"
-REPO_OWNER="${VERCEL_GIT_REPO_OWNER:-}"
-REPO_SLUG="${VERCEL_GIT_REPO_SLUG:-}"
-if [[ -n "${GITHUB_TOKEN:-}" && -n "$PR_REF" && -n "$REPO_OWNER" && -n "$REPO_SLUG" ]]; then
-  PR_API="https://api.github.com/repos/${REPO_OWNER}/${REPO_SLUG}/pulls/${PR_REF}"
-  PR_JSON="$(curl -fsSL -H "Authorization: Bearer ${GITHUB_TOKEN}" \
-    -H "Accept: application/vnd.github+json" "$PR_API" 2>/dev/null || true)"
-  if [[ -n "$PR_JSON" ]]; then
-    IS_DRAFT="$(echo "$PR_JSON" | grep -o '"draft"[[:space:]]*:[[:space:]]*true' || true)"
-    if [[ -n "$IS_DRAFT" ]]; then
-      log "PR #${PR_REF} is a draft -> SKIP"
-      exit $SKIP
-    fi
-    log "PR #${PR_REF} is not a draft"
-  else
-    log "Could not fetch PR metadata -> continuing with path check"
-  fi
-fi
-
-# Rule 4: Build-irrelevant-path check.
-BUILD_IRRELEVANT_REGEX='^(docs/|prompts/|test-pdfs/|tests/|scripts/|\.github/|\.vscode/|\.claude/|[^/]+\.md$|LICENSE$|\.gitignore$|\.env\.example$)'
-
-RELEVANT=""
-while IFS= read -r f; do
-  [[ -z "$f" ]] && continue
-  if ! [[ "$f" =~ $BUILD_IRRELEVANT_REGEX ]]; then
-    RELEVANT+="$f"$'\n'
-  fi
-done <<< "$CHANGED_FILES"
+# If any file does NOT match the irrelevant regex, build.
+RELEVANT=$(echo "$CHANGED_FILES" | grep -Ev "$BUILD_IRRELEVANT_REGEX" || true)
 
 if [[ -z "$RELEVANT" ]]; then
-  log "All changed files are build-irrelevant -> SKIP"
-  exit $SKIP
+  log "All ${CHANGED_FILES//$'\n'/ } changed files are build-irrelevant — skip."
+  exit 0
 fi
 
-log "Build-relevant files changed:"
-echo "$RELEVANT" | sed 's/^/  /' >&2
-log "-> PROCEED"
-exit $PROCEED
+log "Build-relevant changes detected:"
+echo "$RELEVANT" | sed 's/^/  /'
+log "Proceed with build."
+exit 1
