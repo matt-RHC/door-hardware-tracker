@@ -62,11 +62,17 @@ export async function GET(
         notes,
         pdf_page,
         leaf_count,
+        is_active,
+        floor_number,
+        zone_name,
         created_at,
         hardware_items(
           id,
           name,
           qty,
+          qty_total,
+          qty_door_count,
+          qty_source,
           manufacturer,
           model,
           finish,
@@ -74,6 +80,7 @@ export async function GET(
           sort_order,
           install_type,
           leaf_side,
+          stage,
           created_at
         ),
         checklist_progress(
@@ -96,6 +103,14 @@ export async function GET(
           qa_qc_by,
           qa_qc_at,
           notes,
+          qa_findings,
+          qa_notes,
+          qa_resolved_at,
+          qa_resolved_by,
+          client_id,
+          client_updated_at,
+          server_updated_at,
+          sync_status,
           created_at
         ),
         attachments(

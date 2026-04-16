@@ -147,14 +147,20 @@ export default function DoorDetailPage() {
       const data: OpeningDetail = await response.json();
       setOpening(data);
       setNotes(data.notes || "");
-      await cacheOpening(data);
       setError(null);
+      // Cache is non-critical — don't let IndexedDB errors block the page
+      try { await cacheOpening(data); } catch { /* IndexedDB unavailable */ }
     } catch (err) {
       // Try to get from cache
-      const cached = await getCachedOpening(doorId);
-      if (cached) {
-        setOpening(cached);
-      } else {
+      try {
+        const cached = await getCachedOpening(doorId);
+        if (cached) {
+          setOpening(cached);
+        } else {
+          setError(err instanceof Error ? err.message : "An error occurred");
+        }
+      } catch {
+        // Cache also unavailable
         setError(err instanceof Error ? err.message : "An error occurred");
       }
     } finally {
@@ -173,7 +179,13 @@ export default function DoorDetailPage() {
   const classification = useClassification({ projectId, doorId, opening, fetchOpeningData });
 
   useEffect(() => {
-    initDB().then(() => fetchOpeningData());
+    initDB()
+      .then(() => fetchOpeningData())
+      .catch(() => {
+        // IndexedDB unavailable (private browsing, quota, version mismatch) —
+        // skip cache and fetch directly so the page still loads.
+        fetchOpeningData();
+      });
   }, [doorId, fetchOpeningData]);
 
   // Fetch recent activity for this opening
@@ -299,7 +311,7 @@ export default function DoorDetailPage() {
       if (!response.ok) throw new Error("Failed to update step");
 
       // Fetch and check if the entire stage is now complete
-      const updatedData = await fetch(`/api/openings/${doorId}`).then(r => r.json());
+      const updatedData = await fetch(`/api/projects/${projectId}/openings/${doorId}`).then(r => r.json());
       const item = updatedData?.hardware_items?.find((i: any) => i.id === itemId);
 
       if (item) {
