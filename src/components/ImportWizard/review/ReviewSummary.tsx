@@ -3,6 +3,9 @@
 import type { ReactNode } from "react";
 import type { DoorEntry } from "../types";
 import { ISSUE_LABELS } from "./types";
+import DarrinMessage from "../DarrinMessage";
+
+type ViewMode = 'door' | 'set';
 
 interface ReviewSummaryProps {
   totalDoors: number;
@@ -14,8 +17,28 @@ interface ReviewSummaryProps {
   orphanDoors: DoorEntry[];
   orphanNoticeDismissed: boolean;
   onDismissOrphanNotice: () => void;
+  /** Optional view-mode toggle. When provided, renders a door/set switch
+   *  in the summary card header. */
+  viewMode?: ViewMode;
+  onViewModeChange?: (mode: ViewMode) => void;
   /** Rendered inside the summary card (typically the ReviewFilters row). */
   children?: ReactNode;
+}
+
+/** Short Darrin recap line based on door counts. */
+function darrinRecap(
+  totalDoors: number,
+  highCount: number,
+  medCount: number,
+  lowCount: number,
+  orphanCount: number,
+): string {
+  if (totalDoors === 0) return "No doors to review yet.";
+  const parts: string[] = [`${highCount} ready`];
+  if (medCount > 0) parts.push(`${medCount} need a look`);
+  if (lowCount > 0) parts.push(`${lowCount} missing data`);
+  if (orphanCount > 0) parts.push(`${orphanCount} orphan${orphanCount !== 1 ? 's' : ''} excluded`);
+  return parts.join(' · ');
 }
 
 export default function ReviewSummary({
@@ -28,8 +51,12 @@ export default function ReviewSummary({
   orphanDoors,
   orphanNoticeDismissed,
   onDismissOrphanNotice,
+  viewMode,
+  onViewModeChange,
   children,
 }: ReviewSummaryProps) {
+  const showToggle = viewMode !== undefined && onViewModeChange !== undefined;
+
   return (
     <>
       {/* ── Auto-removed orphan notice ── */}
@@ -55,17 +82,61 @@ export default function ReviewSummary({
         </div>
       )}
 
+      {/* ── Persistent Darrin recap (Phase 3 A.2) ── */}
+      {totalDoors > 0 && (
+        <div className="mb-3">
+          <DarrinMessage
+            avatar={lowCount > 0 ? 'concerned' : medCount > 0 ? 'scanning' : 'success'}
+            message={darrinRecap(totalDoors, highCount, medCount, lowCount, orphanDoors.length)}
+          />
+        </div>
+      )}
+
       {/* ── Summary Stats Bar ── */}
       <div className="mb-4 p-3 bg-tint border border-border-dim rounded-md">
-        <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
           <span className="text-sm text-primary font-medium">
             {totalDoors} doors extracted
           </span>
-          {hasExistingData && (
-            <span className="text-xs bg-warning-dim text-warning px-2 py-0.5 rounded-full">
-              Revision
-            </span>
-          )}
+          <div className="flex items-center gap-2">
+            {hasExistingData && (
+              <span className="text-xs bg-warning-dim text-warning px-2 py-0.5 rounded-full">
+                Revision
+              </span>
+            )}
+            {showToggle && (
+              <div
+                className="inline-flex items-center rounded-md border border-border-dim-strong p-0.5 bg-tint"
+                role="group"
+                aria-label="View mode"
+              >
+                <button
+                  type="button"
+                  onClick={() => onViewModeChange!('door')}
+                  className={`text-[11px] px-2.5 py-1 rounded min-h-9 transition-colors ${
+                    viewMode === 'door'
+                      ? 'bg-accent text-white'
+                      : 'text-secondary hover:text-primary'
+                  }`}
+                  aria-pressed={viewMode === 'door'}
+                >
+                  Door view
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onViewModeChange!('set')}
+                  className={`text-[11px] px-2.5 py-1 rounded min-h-9 transition-colors ${
+                    viewMode === 'set'
+                      ? 'bg-accent text-white'
+                      : 'text-secondary hover:text-primary'
+                  }`}
+                  aria-pressed={viewMode === 'set'}
+                >
+                  Set view
+                </button>
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Confidence bar */}
