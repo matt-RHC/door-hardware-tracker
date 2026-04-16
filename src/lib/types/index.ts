@@ -268,4 +268,11 @@ export interface PageClassification {
   hw_set_ids?: string[]
   has_door_numbers?: boolean
   is_scanned?: boolean
+  /**
+   * Short preview of the page's text (first ~200 chars, whitespace-collapsed).
+   * Populated by api/classify-pages.py for use in the Questions step's
+   * "Something's off" drill-down so the user can eyeball each flagged page.
+   * Optional — older cached classify responses may not include it.
+   */
+  text_preview?: string
 }

@@ -45,6 +45,10 @@ import type {
   DarrinQuantityCheck,
   PageClassification,
 } from '@/lib/types'
+import {
+  detectClassificationFlags,
+  buildPageDetails,
+} from '@/lib/classification-flags'
 import type Anthropic from '@anthropic-ai/sdk'
 
 export const maxDuration = 800
@@ -485,7 +489,7 @@ export async function POST(
     // Without this transform, summary fields are counts (numbers) instead of
     // page-index arrays, which causes "0 is not iterable" when spread.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const rawPages: Array<{ index: number; type: string; confidence?: number; section_labels?: string[]; hw_set_ids?: string[]; has_door_numbers?: boolean; is_scanned?: boolean }> =
+    const rawPages: Array<{ index: number; type: string; confidence?: number; section_labels?: string[]; hw_set_ids?: string[]; has_door_numbers?: boolean; is_scanned?: boolean; text_preview?: string }> =
       classifyRaw?.page_classifications ?? []
     const classifyResult = {
       pages: rawPages.map(p => ({
@@ -496,6 +500,7 @@ export async function POST(
         hw_set_ids: p.hw_set_ids ?? [],
         has_door_numbers: p.has_door_numbers ?? false,
         is_scanned: p.is_scanned ?? false,
+        text_preview: p.text_preview,
       })),
       summary: {
         total_pages: classifyRaw?.total_pages ?? rawPages.length,
@@ -517,6 +522,31 @@ export async function POST(
       classify_result: classifyResult,
     })
 
+    // Run false-positive heuristics against the classification before we
+    // surface it to the user. Pages tagged "opening_list" are a subset of
+    // schedule pages that get their own list so the UI can describe them
+    // distinctly ("Opening List" vs "Door Schedule"). See
+    // src/lib/classification-flags.ts for heuristic details.
+    const classificationFlags = detectClassificationFlags({
+      total_pages: classifyResult.summary.total_pages,
+      pages: classifyResult.pages,
+    })
+    const textPreviews: Record<number, string> = {}
+    for (const p of classifyResult.pages) {
+      if (p.text_preview) textPreviews[p.page_number] = p.text_preview
+    }
+    const pageDetails = buildPageDetails(
+      classifyResult.pages,
+      classificationFlags,
+      textPreviews,
+    )
+    const openingListPages = classifyResult.pages
+      .filter(p =>
+        p.page_type === 'door_schedule' &&
+        (p.section_labels ?? []).includes('opening_list'),
+      )
+      .map(p => p.page_number)
+
     // Publish classify findings for the conversational wizard
     await mergePhaseData(adminSupabase, jobId, {
       classify: {
@@ -527,6 +557,10 @@ export async function POST(
           ...classifyResult.summary.cover_pages,
           ...classifyResult.summary.other_pages,
         ],
+        opening_list_pages: openingListPages,
+        reference_pages: classifyResult.summary.submittal_pages,
+        flags: classificationFlags,
+        page_details: pageDetails,
       },
     })
 

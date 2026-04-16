@@ -60,6 +60,39 @@ export interface PhaseData {
     schedule_pages: number[]
     hardware_pages: number[]
     skipped_pages: number[]
+    /**
+     * Pages that *look like* the Opening List (summary mapping door
+     * numbers to set IDs). A subset of schedule_pages — broken out so
+     * the UI can describe them distinctly from raw door schedule pages.
+     */
+    opening_list_pages?: number[]
+    /** Reference pages (manufacturer/finish/option lists). */
+    reference_pages?: number[]
+    /**
+     * Heuristic warnings about the classification. Empty / missing =
+     * no warnings. See src/lib/classification-flags.ts.
+     */
+    flags?: Array<{
+      type: 'sequential_gap' | 'small_job_many_schedule' | 'suspicious_page_type'
+      message: string
+      suspect_pages: number[]
+      classified_as: 'door_schedule' | 'hardware_set'
+    }>
+    /**
+     * Compact per-page info for the "Something's off" drill-down panel.
+     * Only includes schedule/hardware/reference pages so we don't ship
+     * cover/filler detail through the job poll response.
+     */
+    page_details?: Array<{
+      page: number
+      page_type: PageClassification['page_type']
+      confidence: number
+      preview?: string
+      hw_set_ids: string[]
+      has_door_numbers: boolean
+      section_labels: string[]
+      is_false_positive_candidate: boolean
+    }>
   }
   extraction?: {
     door_count: number

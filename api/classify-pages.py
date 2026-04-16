@@ -84,6 +84,15 @@ DOOR_SCHEDULE_HEADERS = re.compile(
     r"(door|opening)\s*(no\.?|num|#|tag).*?(h\.?w\.?\s*set|hardware\s*set|hdg\s*#|location)|"
     r"(door|opening)\s+(hdw|h\.?w\.?|hardware)\s*(set|group))"
 )
+# An "Opening List" is a specific form of door schedule: it's the summary table
+# that maps door numbers to hardware set IDs. Surfacing it distinctly helps
+# downstream UI differentiate the *data source* (Opening List) from the
+# *hardware assignments* (Hardware Schedule) so the user can reason about
+# missing data more precisely.
+OPENING_LIST_HEADER = re.compile(r"(?i)\bopening\s*(list|schedule|index)\b")
+DOOR_SCHEDULE_HEADER_STRICT = re.compile(
+    r"(?i)\b(door\s*(schedule|list|index))\b"
+)
 DOOR_NUMBER_COLUMN = re.compile(
     r"(?i)^(open(ing)?|door)\s*(no\.?|num(ber)?|#|tag)|^#$|^no\.?$|^tag$"
 )
@@ -364,6 +373,23 @@ def fingerprint_page(page, page_type: str) -> dict:
     }
 
 
+def _build_text_preview(text: str, max_chars: int = 200) -> str:
+    """Compact, newline-flattened preview of page text for UI display.
+
+    Removes excessive whitespace and truncates with an ellipsis. The preview is
+    used by the Questions step's per-page drill-down panel so the user can
+    eyeball what the classifier saw without rendering a full page thumbnail.
+    """
+    if not text:
+        return ""
+    # Collapse runs of whitespace (including newlines) to single spaces so the
+    # preview is one readable line in the UI bubble.
+    flat = re.sub(r"\s+", " ", text).strip()
+    if len(flat) <= max_chars:
+        return flat
+    return flat[:max_chars].rstrip() + "\u2026"  # ellipsis
+
+
 def classify_page(page, page_index: int) -> dict:
     """
     Classify a single page by extracting its text and matching patterns.
@@ -387,6 +413,10 @@ def classify_page(page, page_index: int) -> dict:
         "is_scanned": scan_status["is_scanned"],
         "has_cid_issues": scan_status["has_cid_issues"],
         "garbage_ratio": scan_status["garbage_ratio"],
+        # Short preview of page text so the Questions step UI can show the
+        # user what we actually saw on each flagged page. Cap is intentional —
+        # the full classify-pages response is already large.
+        "text_preview": _build_text_preview(text),
     }
 
     # Check for cover page (can appear anywhere, higher confidence early)
@@ -413,6 +443,15 @@ def classify_page(page, page_index: int) -> dict:
         result["type"] = PAGE_TYPE_DOOR_SCHEDULE
         result["confidence"] = 0.9
         result["has_door_numbers"] = True
+        # Distinguish Opening List (summary mapping door → set — a data source
+        # for door metadata) from the hardware schedule itself. Downstream
+        # extraction and the UI both benefit from knowing which one they're
+        # looking at. Generic "Door Schedule" / "Door Index" pages don't get a
+        # label so existing consumers see the same behaviour.
+        if OPENING_LIST_HEADER.search(text):
+            result["section_labels"] = ["opening_list"]
+        elif DOOR_SCHEDULE_HEADER_STRICT.search(text):
+            result["section_labels"] = ["door_schedule_header"]
         return result
 
     # Check for hardware set pages BEFORE door-number-only classification.

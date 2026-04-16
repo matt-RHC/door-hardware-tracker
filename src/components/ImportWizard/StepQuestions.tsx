@@ -34,12 +34,23 @@ function compactSetIds(setIds: string[]): string {
 // route expects (see run/route.ts userHints assembly).
 const QUESTION_KEYS = {
   classifyCheck: "classify_check",
+  pageCorrections: "page_corrections",
   doorCount: "opening_count",
   fireRatedPct: "fire_rated_pct",
   manufacturers: "manufacturers",
   hasPairs: "has_pairs",
   orphans: "orphan_handling",
 } as const
+
+// Short labels for the per-page review panel.
+const PAGE_TYPE_LABEL: Record<string, string> = {
+  door_schedule: "Door Schedule",
+  hardware_set: "Hardware Set",
+  hardware_sets: "Hardware Sets",
+  reference: "Reference",
+  cover: "Cover",
+  other: "Other",
+}
 
 // ─── Component ───
 
@@ -63,6 +74,11 @@ export default function StepQuestions({
   const [pdfOpen, setPdfOpen] = useState(false)
   const [doorCountInput, setDoorCountInput] = useState("")
   const [manufacturerInput, setManufacturerInput] = useState("")
+  // Per-page review panel state. Populated only when the user clicks
+  // "Something's off" and confirmed page overrides go into
+  // `page_corrections` (QUESTION_KEYS.pageCorrections) so the backend
+  // can persist them alongside the other job constraints.
+  const [excludedPages, setExcludedPages] = useState<Set<number>>(new Set())
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const lastSavedRef = useRef<string>("")
 
@@ -271,32 +287,152 @@ export default function StepQuestions({
 
         {/* Message 2 — classify */}
         {classify && (
-          <DarrinMessage
-            avatar="scanning"
-            message={
-              <>
-                Alright, {classify.total_pages} pages total. I&apos;m seeing door
-                schedule data on pages{" "}
-                <span className="text-accent">{formatPageList(classify.schedule_pages)}</span>{" "}
-                and hardware sets on pages{" "}
-                <span className="text-accent">{formatPageList(classify.hardware_pages)}</span>.
-                Sound right?
-              </>
-            }
-          >
-            <DarrinAction
-              selected={answers[QUESTION_KEYS.classifyCheck] === "ok"}
-              onClick={() => updateAnswer(QUESTION_KEYS.classifyCheck, "ok")}
+          <>
+            <DarrinMessage
+              avatar={
+                classify.flags && classify.flags.length > 0
+                  ? "concerned"
+                  : "scanning"
+              }
+              message={
+                <>
+                  Alright, {classify.total_pages} pages total. I&apos;m seeing
+                  door schedule data on pages{" "}
+                  <span className="text-accent">{formatPageList(classify.schedule_pages)}</span>
+                  {classify.opening_list_pages && classify.opening_list_pages.length > 0 ? (
+                    <>
+                      {" "}(Opening List on{" "}
+                      <span className="text-accent">
+                        {formatPageList(classify.opening_list_pages)}
+                      </span>
+                      )
+                    </>
+                  ) : null}
+                  {" "}and hardware sets on pages{" "}
+                  <span className="text-accent">{formatPageList(classify.hardware_pages)}</span>
+                  {classify.reference_pages && classify.reference_pages.length > 0 ? (
+                    <>
+                      , reference tables on{" "}
+                      <span className="text-accent">
+                        {formatPageList(classify.reference_pages)}
+                      </span>
+                    </>
+                  ) : null}
+                  . Sound right?
+                  {classify.flags && classify.flags.length > 0 ? (
+                    <ul className="mt-2 list-disc list-inside space-y-1 text-xs text-warning">
+                      {classify.flags.map((flag, idx) => (
+                        <li key={`${flag.type}-${idx}`}>{flag.message}</li>
+                      ))}
+                    </ul>
+                  ) : null}
+                </>
+              }
             >
-              Looks right &#10003;
-            </DarrinAction>
-            <DarrinAction
-              selected={answers[QUESTION_KEYS.classifyCheck] === "off"}
-              onClick={() => updateAnswer(QUESTION_KEYS.classifyCheck, "off")}
-            >
-              Something&apos;s off &mdash; let me check
-            </DarrinAction>
-          </DarrinMessage>
+              <DarrinAction
+                selected={answers[QUESTION_KEYS.classifyCheck] === "ok"}
+                onClick={() => updateAnswer(QUESTION_KEYS.classifyCheck, "ok")}
+              >
+                Looks right &#10003;
+              </DarrinAction>
+              <DarrinAction
+                selected={answers[QUESTION_KEYS.classifyCheck] === "off"}
+                onClick={() => updateAnswer(QUESTION_KEYS.classifyCheck, "off")}
+              >
+                Something&apos;s off &mdash; let me check
+              </DarrinAction>
+            </DarrinMessage>
+
+            {/* Per-page drill-down panel: only renders when the user wants
+                to review. Shows one row per classified page with a
+                checkbox to exclude obvious false positives. */}
+            {answers[QUESTION_KEYS.classifyCheck] === "off" &&
+              classify.page_details &&
+              classify.page_details.length > 0 && (
+                <div className="ml-[3.75rem] -mt-2 bg-slate-900/60 border border-border-dim/50 rounded-lg p-3">
+                  <p className="text-[11px] font-semibold uppercase text-secondary tracking-wider mb-2">
+                    Page-by-page review
+                  </p>
+                  <p className="text-xs text-tertiary mb-3">
+                    Uncheck any page that doesn&apos;t actually contain
+                    schedule or hardware data. Darrin&apos;ll skip those when
+                    he reruns extraction.
+                  </p>
+                  <ul className="space-y-2">
+                    {classify.page_details.map((detail) => {
+                      const isExcluded = excludedPages.has(detail.page)
+                      const typeLabel =
+                        PAGE_TYPE_LABEL[detail.page_type] ?? detail.page_type
+                      const isOpeningList =
+                        detail.section_labels.includes("opening_list")
+                      return (
+                        <li
+                          key={detail.page}
+                          className={`flex items-start gap-3 p-2 rounded border ${
+                            detail.is_false_positive_candidate
+                              ? "border-warning/40 bg-warning-dim/20"
+                              : "border-border-dim/30 bg-slate-800/50"
+                          }`}
+                        >
+                          <label className="flex items-center gap-2 flex-shrink-0 min-h-11 min-w-11 justify-center cursor-pointer">
+                            <input
+                              type="checkbox"
+                              checked={!isExcluded}
+                              onChange={(e) => {
+                                const next = new Set(excludedPages)
+                                if (e.target.checked) {
+                                  next.delete(detail.page)
+                                } else {
+                                  next.add(detail.page)
+                                }
+                                setExcludedPages(next)
+                                updateAnswer(
+                                  QUESTION_KEYS.pageCorrections,
+                                  next.size === 0
+                                    ? null
+                                    : { excluded_pages: Array.from(next).sort((a, b) => a - b) },
+                                )
+                              }}
+                              className="w-5 h-5 accent-accent cursor-pointer"
+                              aria-label={`Include page ${detail.page}`}
+                            />
+                          </label>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap text-xs">
+                              <span className="font-semibold text-primary">
+                                Page {detail.page}
+                              </span>
+                              <span className="px-1.5 py-0.5 rounded bg-tint border border-border-dim text-tertiary text-[10px] uppercase tracking-wider">
+                                {isOpeningList ? "Opening List" : typeLabel}
+                              </span>
+                              {detail.hw_set_ids.length > 0 && (
+                                <span className="text-accent">
+                                  Set{detail.hw_set_ids.length > 1 ? "s" : ""}:{" "}
+                                  {detail.hw_set_ids.slice(0, 3).join(", ")}
+                                  {detail.hw_set_ids.length > 3
+                                    ? ` +${detail.hw_set_ids.length - 3}`
+                                    : ""}
+                                </span>
+                              )}
+                              {detail.is_false_positive_candidate && (
+                                <span className="text-warning text-[10px]">
+                                  possible false positive
+                                </span>
+                              )}
+                            </div>
+                            {detail.preview && (
+                              <p className="mt-1 text-[11px] text-tertiary line-clamp-2 break-words">
+                                {detail.preview}
+                              </p>
+                            )}
+                          </div>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                </div>
+              )}
+          </>
         )}
 
         {/* Message 3 — extraction */}
