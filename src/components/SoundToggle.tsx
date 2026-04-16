@@ -15,6 +15,7 @@ export default function SoundToggle() {
 
   // Prevent hydration mismatch
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- hydration guard on mount
     setMounted(true);
   }, []);
 
@@ -32,8 +33,8 @@ export default function SoundToggle() {
       onClick={handleClick}
       className={`relative p-2 rounded-md transition-all duration-200 ${
         enabled
-          ? "bg-[rgba(90,200,250,0.08)] border border-[rgba(90,200,250,0.3)] hover:border-[rgba(90,200,250,0.5)]"
-          : "bg-[rgba(255,255,255,0.03)] border border-white/[0.08] hover:border-white/[0.15]"
+          ? "bg-accent-dim border border-accent-dim hover:border-accent"
+          : "bg-tint border border-border-dim-strong hover:border-th-border-hover"
       }`}
       title={enabled ? "Sounds enabled" : "Sounds disabled"}
       aria-label="Toggle sound effects"
@@ -44,7 +45,7 @@ export default function SoundToggle() {
           className="absolute inset-0 rounded-md blur-sm opacity-50 pointer-events-none"
           style={{
             background:
-              "radial-gradient(circle, rgba(90,200,250,0.4) 0%, transparent 70%)",
+              "radial-gradient(circle, var(--blue-dim) 0%, transparent 70%)",
           }}
         />
       )}
@@ -52,7 +53,7 @@ export default function SoundToggle() {
       {/* Speaker icon when enabled */}
       {enabled && (
         <svg
-          className="w-4 h-4 text-[#5ac8fa] relative z-10 transition-all"
+          className="w-4 h-4 text-info relative z-10 transition-all"
           fill="currentColor"
           viewBox="0 0 24 24"
         >
@@ -63,7 +64,7 @@ export default function SoundToggle() {
       {/* Muted speaker icon when disabled */}
       {!enabled && (
         <svg
-          className="w-4 h-4 text-[#636366] relative z-10 transition-all"
+          className="w-4 h-4 text-tertiary relative z-10 transition-all"
           fill="currentColor"
           viewBox="0 0 24 24"
         >

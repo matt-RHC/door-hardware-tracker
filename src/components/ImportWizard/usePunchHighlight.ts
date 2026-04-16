@@ -32,13 +32,13 @@ const PULSE_MS = 2000;
 
 const HIGHLIGHT_CSS = `
 @keyframes punchPulse {
-  0%   { box-shadow: 0 0 0 0   rgba(75,163,227,0.5); }
-  50%  { box-shadow: 0 0 0 6px rgba(75,163,227,0);   }
-  100% { box-shadow: 0 0 0 0   rgba(75,163,227,0);   }
+  0%   { box-shadow: 0 0 0 0   var(--blue-dim); }
+  50%  { box-shadow: 0 0 0 6px transparent;     }
+  100% { box-shadow: 0 0 0 0   transparent;     }
 }
 .punch-highlighted {
   animation: punchPulse 1s ease-out 2;
-  background-color: rgba(75,163,227,0.08) !important;
+  background-color: var(--blue-dim) !important;
 }
 `;
 

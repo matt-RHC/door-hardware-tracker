@@ -1,5 +1,4 @@
 import { createServerClient } from '@supabase/ssr'
-import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 import { Database } from '@/lib/types/database'
 
@@ -27,11 +26,10 @@ export async function createServerSupabaseClient() {
   )
 }
 
-// Admin client bypasses RLS — use only for trusted server-side operations
-export function createAdminSupabaseClient() {
-  return createClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
-    { auth: { autoRefreshToken: false, persistSession: false } }
-  )
-}
+// NOTE: `createAdminSupabaseClient` used to live here, but this module
+// top-level-imports `next/headers` (for the cookie-aware authed client),
+// which forbids bundling into client components. Since `parse-pdf-helpers`
+// is imported by both server routes and client components (via
+// `classifyItemScope`), the admin client now lives in `./admin` where it
+// can be imported safely from any code path. Import it from
+// `@/lib/supabase/admin` directly.

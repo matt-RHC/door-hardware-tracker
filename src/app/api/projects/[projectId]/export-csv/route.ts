@@ -1,30 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
-
-interface HardwareItem {
-  id: string
-  name: string
-  qty: number
-  manufacturer: string | null
-  model: string | null
-  finish: string | null
-  sort_order: number
-  checklist_progress: Array<{ checked: boolean }>
-}
-
-interface OpeningWithHardware {
-  id: string
-  door_number: string
-  hw_set: string | null
-  hw_heading: string | null
-  location: string | null
-  door_type: string | null
-  frame_type: string | null
-  fire_rating: string | null
-  hand: string | null
-  notes: string | null
-  hardware_items: HardwareItem[]
-}
+import type { OpeningWithHardware } from '@/lib/types/database'
+import { OPENING_COLUMNS, HARDWARE_ITEM_COLUMNS } from '@/lib/supabase-selects'
 
 function escapeCSV(value: string | null | undefined): string {
   if (value == null || value === '') return ''
@@ -33,6 +10,23 @@ function escapeCSV(value: string | null | undefined): string {
     return `"${str.replace(/"/g, '""')}"`
   }
   return str
+}
+
+/** Interpret a query flag as a strict boolean ("true" | "1" → true). */
+function parseBoolFlag(value: string | null): boolean | null {
+  if (value == null) return null
+  const v = value.toLowerCase()
+  if (v === 'true' || v === '1' || v === 'yes') return true
+  if (v === 'false' || v === '0' || v === 'no') return false
+  return null
+}
+
+/** Does a fire_rating string represent a rated door? Mirrors tracking-items logic. */
+function isFireRated(value: string | null | undefined): boolean {
+  if (!value) return false
+  const normalized = value.trim().toLowerCase()
+  if (normalized === '' || normalized === 'n/a' || normalized === 'none') return false
+  return true
 }
 
 export async function GET(
@@ -61,6 +55,14 @@ export async function GET(
       return NextResponse.json({ error: 'Access denied' }, { status: 403 })
     }
 
+    // ── Query params ──
+    const url = new URL(request.url)
+    const floorParam = url.searchParams.get('floor')
+    const floorFilter = floorParam != null && floorParam !== '' ? Number(floorParam) : null
+    const fireRatedFilter = parseBoolFlag(url.searchParams.get('fire_rated'))
+    const issuesOnly = parseBoolFlag(url.searchParams.get('issues_only')) === true
+    const hwSetFilter = url.searchParams.get('hw_set')
+
     // Get project name for filename
     const { data: project } = await supabase
       .from('projects')
@@ -69,36 +71,47 @@ export async function GET(
       .single() as { data: { name: string; job_number: string | null } | null }
 
     // Get all openings with hardware items and checklist status
-    const { data: openings, error: openingsError } = await supabase
+    let query = supabase
       .from('openings')
       .select(`
-        id,
-        door_number,
-        hw_set,
-        hw_heading,
-        location,
-        door_type,
-        frame_type,
-        fire_rating,
-        hand,
-        notes,
+        ${OPENING_COLUMNS},
         hardware_items(
-          id,
-          name,
-          qty,
-          manufacturer,
-          model,
-          finish,
-          sort_order,
+          ${HARDWARE_ITEM_COLUMNS},
           checklist_progress(checked)
         )
       `)
       .eq('project_id', projectId)
-      .order('door_number', { ascending: true }) as { data: OpeningWithHardware[] | null; error: any }
+      .eq('is_active', true)
+
+    if (floorFilter != null && Number.isFinite(floorFilter)) {
+      query = query.eq('floor_number', floorFilter)
+    }
+    if (hwSetFilter) {
+      query = query.eq('hw_set', hwSetFilter)
+    }
+
+    const { data: openings, error: openingsError } = await query
+      .order('door_number', { ascending: true }) as { data: OpeningWithHardware[] | null; error: unknown }
 
     if (openingsError) {
       console.error('CSV export error:', openingsError)
       return NextResponse.json({ error: 'Failed to fetch data' }, { status: 500 })
+    }
+
+    // Post-query filters (fire_rated and issues_only need computed/semantic checks)
+    let filteredOpenings = openings ?? []
+    if (fireRatedFilter !== null) {
+      filteredOpenings = filteredOpenings.filter((o) =>
+        fireRatedFilter ? isFireRated(o.fire_rating) : !isFireRated(o.fire_rating),
+      )
+    }
+    if (issuesOnly) {
+      // Definition: an opening has an "issue" if it has zero hardware items.
+      // Additional issue definitions (missing required fields, QA findings)
+      // can be layered on later without breaking the param contract.
+      filteredOpenings = filteredOpenings.filter(
+        (o) => (o.hardware_items ?? []).length === 0,
+      )
     }
 
     // Build CSV: one row per hardware item, grouped by door
@@ -106,6 +119,7 @@ export async function GET(
       'Door Number',
       'HW Set',
       'HW Set Description',
+      'Floor',
       'Location',
       'Door Type',
       'Frame Type',
@@ -116,23 +130,25 @@ export async function GET(
       'Manufacturer',
       'Model',
       'Finish',
+      'Extraction Source',
       'Checked',
       'Notes',
     ]
 
     const rows: string[] = [headers.map(escapeCSV).join(',')]
 
-    for (const opening of (openings || [])) {
+    for (const opening of filteredOpenings) {
       const items = opening.hardware_items || []
-      // Sort by sort_order
       items.sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
 
+      const floorCell = opening.floor_number != null ? String(opening.floor_number) : ''
+
       if (items.length === 0) {
-        // Still include the door even if no hardware items
         rows.push([
           escapeCSV(opening.door_number),
           escapeCSV(opening.hw_set),
           escapeCSV(opening.hw_heading),
+          escapeCSV(floorCell),
           escapeCSV(opening.location),
           escapeCSV(opening.door_type),
           escapeCSV(opening.frame_type),
@@ -140,15 +156,17 @@ export async function GET(
           escapeCSV(opening.hand),
           '', '', '', '', '',
           '',
+          '',
           escapeCSV(opening.notes),
         ].join(','))
       } else {
         for (const item of items) {
-          const checked = item.checklist_progress?.some(cp => cp.checked) ? 'Yes' : 'No'
+          const checked = item.checklist_progress?.some((cp) => cp.checked) ? 'Yes' : 'No'
           rows.push([
             escapeCSV(opening.door_number),
             escapeCSV(opening.hw_set),
             escapeCSV(opening.hw_heading),
+            escapeCSV(floorCell),
             escapeCSV(opening.location),
             escapeCSV(opening.door_type),
             escapeCSV(opening.frame_type),
@@ -159,6 +177,7 @@ export async function GET(
             escapeCSV(item.manufacturer),
             escapeCSV(item.model),
             escapeCSV(item.finish),
+            escapeCSV(item.qty_source),
             escapeCSV(checked),
             escapeCSV(opening.notes),
           ].join(','))
@@ -166,7 +185,8 @@ export async function GET(
       }
     }
 
-    const csv = rows.join('\n')
+    // Prepend UTF-8 BOM so Excel correctly detects the encoding
+    const csv = '\uFEFF' + rows.join('\n')
     const projectName = project?.name?.replace(/[^a-zA-Z0-9]/g, '_') || 'project'
     const date = new Date().toISOString().split('T')[0]
     const filename = `${projectName}_hardware_export_${date}.csv`

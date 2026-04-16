@@ -3,6 +3,7 @@
 import { useState, useCallback, useEffect, useMemo } from "react";
 import {
   WizardStep,
+  JobWizardStep,
   WizardState,
   INITIAL_WIZARD_STATE,
   type ClassifyPagesResponse,
@@ -13,12 +14,18 @@ import {
   type HardwareSet,
 } from "./types";
 import StepUpload from "./StepUpload";
+import StepScanResults from "./StepScanResults";
 import StepMapColumns from "./StepMapColumns";
 import StepTriage from "./StepTriage";
 import StepReview from "./StepReview";
+import StepProducts from "./StepProducts";
 import StepConfirm from "./StepConfirm";
+import StepCompare from "./StepCompare";
+import StepQuestions from "./StepQuestions";
 import PunchAssistant from "./PunchAssistant";
 import { PunchHighlightProvider } from "./usePunchHighlight";
+import { useJobWizardEnabled } from "@/lib/feature-flags";
+import { useExtractionJob } from "@/hooks/useExtractionJob";
 import {
   classifyMessages,
   mapColumnsMessages,
@@ -31,43 +38,96 @@ import {
 
 // ─── Step indicator ───
 
-const STEP_LABELS = ["Upload", "Map Columns", "Triage", "Review", "Confirm"];
+// All steps with their enum values. Compare is conditionally shown for revisions.
+const ALL_STEPS: Array<{ label: string; step: WizardStep }> = [
+  { label: "Upload", step: WizardStep.Upload },
+  { label: "Scan Results", step: WizardStep.ScanResults },
+  { label: "Map Columns", step: WizardStep.MapColumns },
+  { label: "Triage", step: WizardStep.Triage },
+  { label: "Review", step: WizardStep.Review },
+  { label: "Products", step: WizardStep.Products },
+  { label: "Compare", step: WizardStep.Compare },
+  { label: "Confirm", step: WizardStep.Confirm },
+];
 
-function StepIndicator({ currentStep }: { currentStep: WizardStep }) {
+// Job wizard flow steps (simplified)
+const JOB_STEPS: Array<{ label: string; step: JobWizardStep }> = [
+  { label: "Upload", step: JobWizardStep.Upload },
+  { label: "Questions", step: JobWizardStep.Questions },
+  { label: "Review", step: JobWizardStep.Review },
+  { label: "Products", step: JobWizardStep.Products },
+  { label: "Compare", step: JobWizardStep.Compare },
+  { label: "Confirm", step: JobWizardStep.Confirm },
+];
+
+function StepIndicator({ currentStep, hasExistingData }: { currentStep: WizardStep; hasExistingData: boolean }) {
+  const visibleSteps = hasExistingData ? ALL_STEPS : ALL_STEPS.filter(s => s.step !== WizardStep.Compare);
+  // Mobile: show only current step name
+  const currentLabel = visibleSteps.find(s => s.step === currentStep)?.label ?? "";
+  const currentIdx = visibleSteps.findIndex(s => s.step === currentStep);
   return (
-    <div className="flex items-center gap-1">
-      {STEP_LABELS.map((label, i) => (
-        <div key={label} className="flex items-center gap-1">
-          <div
-            className={`flex items-center justify-center w-7 h-7 rounded-full text-xs font-bold transition-all ${
-              i < currentStep
-                ? "bg-[#30d158] text-white"
-                : i === currentStep
-                ? "bg-[#0a84ff] text-white ring-2 ring-[rgba(10,132,255,0.3)]"
-                : "bg-white/[0.06] text-[#6e6e73]"
-            }`}
-          >
-            {i < currentStep ? "\u2713" : i + 1}
-          </div>
-          <span
-            className={`text-xs hidden sm:inline ${
-              i === currentStep
-                ? "text-[#0a84ff] font-semibold"
-                : "text-[#6e6e73]"
-            }`}
-          >
-            {label}
-          </span>
-          {i < STEP_LABELS.length - 1 && (
-            <div
-              className={`w-4 h-px ${
-                i < currentStep ? "bg-[#30d158]" : "bg-white/[0.06]"
+    <>
+      {/* Desktop: breadcrumb stepper */}
+      <div className="hidden sm:flex items-center gap-1">
+        {visibleSteps.map(({ label, step }, i) => (
+          <div key={label} className="flex items-center gap-1">
+            <span
+              className={`text-xs transition-colors ${
+                step < currentStep
+                  ? "text-tertiary"
+                  : step === currentStep
+                  ? "text-accent font-semibold"
+                  : "text-tertiary/50"
               }`}
-            />
-          )}
-        </div>
-      ))}
-    </div>
+            >
+              {step < currentStep ? `\u2713 ${label}` : label}
+            </span>
+            {i < visibleSteps.length - 1 && (
+              <span className="text-tertiary/30 text-xs">→</span>
+            )}
+          </div>
+        ))}
+      </div>
+      {/* Mobile: current step only */}
+      <div className="flex sm:hidden items-center gap-2 text-xs">
+        <span className="text-tertiary">{currentIdx + 1}/{visibleSteps.length}</span>
+        <span className="text-accent font-semibold">{currentLabel}</span>
+      </div>
+    </>
+  );
+}
+
+function JobStepIndicator({ currentStep, hasExistingData }: { currentStep: JobWizardStep; hasExistingData: boolean }) {
+  const visibleSteps = hasExistingData ? JOB_STEPS : JOB_STEPS.filter(s => s.step !== JobWizardStep.Compare);
+  const currentLabel = visibleSteps.find(s => s.step === currentStep)?.label ?? "";
+  const currentIdx = visibleSteps.findIndex(s => s.step === currentStep);
+  return (
+    <>
+      <div className="hidden sm:flex items-center gap-1">
+        {visibleSteps.map(({ label, step }, i) => (
+          <div key={label} className="flex items-center gap-1">
+            <span
+              className={`text-xs transition-colors ${
+                step < currentStep
+                  ? "text-tertiary"
+                  : step === currentStep
+                  ? "text-accent font-semibold"
+                  : "text-tertiary/50"
+              }`}
+            >
+              {step < currentStep ? `\u2713 ${label}` : label}
+            </span>
+            {i < visibleSteps.length - 1 && (
+              <span className="text-tertiary/30 text-xs">→</span>
+            )}
+          </div>
+        ))}
+      </div>
+      <div className="flex sm:hidden items-center gap-2 text-xs">
+        <span className="text-tertiary">{currentIdx + 1}/{visibleSteps.length}</span>
+        <span className="text-accent font-semibold">{currentLabel}</span>
+      </div>
+    </>
   );
 }
 
@@ -86,11 +146,45 @@ export default function ImportWizard({
   onClose,
   onSuccess,
 }: ImportWizardProps) {
+  const useJobWizard = useJobWizardEnabled();
+  const job = useExtractionJob();
+
+  // ─── Job wizard step state (only used when feature flag is on) ───
+  const [jobStep, setJobStep] = useState<JobWizardStep>(JobWizardStep.Upload);
+
   const [state, setState] = useState<WizardState>(INITIAL_WIZARD_STATE);
   const [saveResult, setSaveResult] = useState<{
     openingsCount?: number;
     itemsCount?: number;
   } | null>(null);
+
+  // ─── Close confirmation ───
+  const [showCloseConfirm, setShowCloseConfirm] = useState(false);
+
+  // Determine whether closing should require confirmation:
+  // - Job wizard: past Upload step
+  // - Legacy wizard: past Upload step (i.e., user has loaded data)
+  const hasUnsavedProgress = useJobWizard
+    ? jobStep > JobWizardStep.Upload
+    : state.currentStep > WizardStep.Upload;
+
+  const handleCloseAttempt = useCallback(() => {
+    if (hasUnsavedProgress) {
+      setShowCloseConfirm(true);
+    } else {
+      onClose();
+    }
+  }, [hasUnsavedProgress, onClose]);
+
+  // Browser beforeunload warning when wizard has unsaved progress
+  useEffect(() => {
+    if (!hasUnsavedProgress) return;
+    const handler = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+    };
+    window.addEventListener("beforeunload", handler);
+    return () => window.removeEventListener("beforeunload", handler);
+  }, [hasUnsavedProgress]);
 
   // ─── Triage validation questions ───
   const [triageQuestions, setTriageQuestions] = useState<PunchQuestion[]>([]);
@@ -151,29 +245,45 @@ export default function ImportWizard({
   // Clear questions when leaving the triage step
   useEffect(() => {
     if (state.currentStep !== WizardStep.Triage) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- synchronous reset on step change
       setTriageQuestions([]);
       setDismissStreak(0);
       setQuestionsSuppressed(false);
     }
   }, [state.currentStep]);
 
+  // Cache PDF buffer once (for PDFPagePreview in StepReview + elsewhere)
+  useEffect(() => {
+    if (state.file && !state.pdfBuffer) {
+      state.file.arrayBuffer().then((buf) => {
+        setState((prev) => ({ ...prev, pdfBuffer: buf }));
+      }).catch((err) => {
+        console.warn("Failed to cache PDF buffer:", err);
+      });
+    }
+  }, [state.file, state.pdfBuffer]);
+
   // ─── Punch messages derived from wizard state ───
 
   const punchMessages: PunchMessage[] = useMemo(() => {
     switch (state.currentStep) {
       case WizardStep.Upload: {
+        return [];
+      }
+      case WizardStep.ScanResults: {
         if (!state.classifyResult) return [];
         const summary = state.classifyResult.summary;
         return classifyMessages({
           totalPages: summary.total_pages,
-          doorSchedulePages: summary.door_schedule_pages.length,
-          hardwareSetPages: summary.hardware_set_pages.length,
+          doorSchedulePages: (summary.door_schedule_pages ?? []).length,
+          hardwareSetPages: (summary.hardware_set_pages ?? []).length,
+          scannedPages: summary.scanned_pages ?? 0,
         });
       }
       case WizardStep.MapColumns: {
         if (!state.detectResult) return [];
         const scores: Record<string, number> = {};
-        for (const col of state.detectResult.columns) {
+        for (const col of state.detectResult.columns ?? []) {
           if (col.mapped_field) scores[col.mapped_field] = col.confidence;
         }
         return mapColumnsMessages({ confidenceScores: scores });
@@ -181,10 +291,10 @@ export default function ImportWizard({
       case WizardStep.Triage: {
         if (!state.triageResult) return [];
         return triageMessages({
-          extractedDoors: state.triageResult.doors_found,
-          extractedSets: state.hardwareSets.length,
-          byOthersCount: state.triageResult.by_others,
-          rejectedCount: state.triageResult.rejected,
+          extractedDoors: state.triageResult.doors_found ?? 0,
+          extractedSets: (state.hardwareSets ?? []).length,
+          byOthersCount: state.triageResult.by_others ?? 0,
+          rejectedCount: state.triageResult.rejected ?? 0,
         });
       }
       case WizardStep.Review: {
@@ -194,6 +304,18 @@ export default function ImportWizard({
             fieldConfidence: d.field_confidence,
           }))
         );
+      }
+      case WizardStep.Products: {
+        return [{
+          severity: 'info' as const,
+          text: 'Review product families grouped by manufacturer and series. Resolve any flagged typos.',
+        }];
+      }
+      case WizardStep.Compare: {
+        return [{
+          severity: 'info' as const,
+          text: 'Comparing your revised submittal against the existing project data. Review each category of changes before applying.',
+        }];
       }
       case WizardStep.Confirm: {
         if (saveResult) {
@@ -206,7 +328,7 @@ export default function ImportWizard({
           mode: state.hasExistingData ? "revision" : "fresh",
           doorCount: state.doors.length,
           hardwareItemCount: state.hardwareSets.reduce(
-            (sum, s) => sum + s.items.length,
+            (sum, s) => sum + (s.items ?? []).length,
             0
           ),
         });
@@ -234,23 +356,31 @@ export default function ImportWizard({
     []
   );
 
+  // Stable onError callback — prevents infinite re-render loops in StepCompare/StepTriage
+  const onError = useCallback(
+    (err: string) => patch({ error: err }),
+    [patch]
+  );
+
   const goToStep = useCallback(
     (step: WizardStep) => patch({ currentStep: step, error: null }),
     [patch]
   );
 
-  // ─── Step 1 complete: file classified ───
+  // ─── Step 1 complete: file classified → show scan results ───
   const onUploadComplete = useCallback(
     (
       file: File,
       classifyResult: ClassifyPagesResponse,
-      hasExistingData: boolean
+      hasExistingData: boolean,
+      pdfStoragePath: string | null,
     ) => {
       patch({
         file,
+        pdfStoragePath,
         classifyResult,
         hasExistingData,
-        currentStep: WizardStep.MapColumns,
+        currentStep: WizardStep.ScanResults,
       });
     },
     [patch]
@@ -288,16 +418,28 @@ export default function ImportWizard({
     [patch]
   );
 
-  // ─── Step 4 complete: review done ───
+  // ─── Step 4 complete: review done → Products ───
   const onReviewComplete = useCallback(
     (doors: DoorEntry[], hardwareSets: HardwareSet[]) => {
       patch({
         doors,
         hardwareSets,
-        currentStep: WizardStep.Confirm,
+        currentStep: WizardStep.Products,
       });
     },
     [patch]
+  );
+
+  // ─── Step 5 complete: products reviewed → Compare (revision) or Confirm (fresh) ───
+  const onProductsComplete = useCallback(
+    (hardwareSets: HardwareSet[]) => {
+      setState((prev) => ({
+        ...prev,
+        hardwareSets,
+        currentStep: prev.hasExistingData ? WizardStep.Compare : WizardStep.Confirm,
+      }));
+    },
+    [],
   );
 
   // ─── Step 5 complete: saved ───
@@ -306,20 +448,216 @@ export default function ImportWizard({
     onClose();
   }, [onSuccess, onClose]);
 
+  // ─── Job wizard callbacks (only used when feature flag is on) ───
+
+  /** After upload completes in job flow: create background job, go to Questions */
+  const onJobUploadComplete = useCallback(
+    async (
+      file: File,
+      classifyResult: ClassifyPagesResponse,
+      hasExistingData: boolean,
+      pdfStoragePath: string | null,
+    ) => {
+      // Store upload state for later steps (Review needs pdfBuffer, etc.)
+      patch({
+        file,
+        pdfStoragePath,
+        classifyResult,
+        hasExistingData,
+      });
+
+      try {
+        await job.createJob(projectId);
+        setJobStep(JobWizardStep.Questions);
+      } catch {
+        patch({ error: "Failed to start background extraction. Please try again." });
+      }
+    },
+    [patch, job, projectId],
+  );
+
+  /** After questions step: fetch results and go to Review */
+  const onJobQuestionsComplete = useCallback(async () => {
+    try {
+      patch({ loading: true, status: "Loading results..." });
+      const results = await job.fetchResults();
+
+      patch({
+        doors: results.doors,
+        hardwareSets: results.hardwareSets,
+        triageResult: results.triageResult,
+        classifyResult: results.classifyResult ?? state.classifyResult,
+        extractionRunId: results.extractionRunId,
+        loading: false,
+        error: null,
+      });
+
+      setJobStep(JobWizardStep.Review);
+    } catch (err) {
+      patch({
+        loading: false,
+        error: err instanceof Error ? err.message : "Failed to load results",
+      });
+    }
+  }, [job, patch, state.classifyResult]);
+
+  /** Review complete in job flow → Products */
+  const onJobReviewComplete = useCallback(
+    (doors: DoorEntry[], hardwareSets: HardwareSet[]) => {
+      patch({ doors, hardwareSets });
+      setJobStep(JobWizardStep.Products);
+    },
+    [patch],
+  );
+
+  /** Products complete in job flow → Compare or Confirm */
+  const onJobProductsComplete = useCallback(
+    (hardwareSets: HardwareSet[]) => {
+      patch({ hardwareSets });
+      setJobStep(state.hasExistingData ? JobWizardStep.Compare : JobWizardStep.Confirm);
+    },
+    [patch, state.hasExistingData],
+  );
+
   // ─── Render ───
 
+  // ─── Job wizard flow rendering ───
+  if (useJobWizard) {
+    return (
+      <div className="fixed inset-0 bg-black/80 backdrop-blur-lg flex flex-col z-50">
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border-dim-strong">
+          <h2 className="text-lg font-semibold text-primary">
+            Import Wizard
+          </h2>
+          <div className="flex items-center gap-4">
+            <JobStepIndicator currentStep={jobStep} hasExistingData={state.hasExistingData} />
+            <button
+              onClick={handleCloseAttempt}
+              className="text-tertiary hover:text-primary text-xl leading-none transition-colors ml-4"
+            >
+              &times;
+            </button>
+          </div>
+        </div>
+
+        {/* Error banner */}
+        {state.error && (
+          <div className="mx-6 mt-4 p-3 bg-danger-dim border border-danger rounded-md text-danger text-sm">
+            {state.error}
+          </div>
+        )}
+
+        <div className="flex-1 overflow-y-auto min-h-0 flex flex-col">
+          <div className="px-6 py-4 pb-6">
+            {jobStep === JobWizardStep.Upload && (
+              <StepUpload
+                projectId={projectId}
+                onComplete={onJobUploadComplete}
+                onError={onError}
+              />
+            )}
+
+            {jobStep === JobWizardStep.Questions && (
+              <StepQuestions
+                job={job}
+                file={state.file ?? null}
+                onComplete={onJobQuestionsComplete}
+                onBack={() => setJobStep(JobWizardStep.Upload)}
+                onError={onError}
+              />
+            )}
+
+            {jobStep === JobWizardStep.Review && (
+              <StepReview
+                projectId={projectId}
+                doors={state.doors}
+                hardwareSets={state.hardwareSets}
+                hasExistingData={state.hasExistingData}
+                classifyResult={state.classifyResult}
+                pdfBuffer={state.pdfBuffer}
+                onComplete={onJobReviewComplete}
+                onBack={() => setJobStep(JobWizardStep.Questions)}
+              />
+            )}
+
+            {jobStep === JobWizardStep.Products && (
+              <StepProducts
+                projectId={projectId}
+                hardwareSets={state.hardwareSets}
+                onComplete={onJobProductsComplete}
+                onBack={() => setJobStep(JobWizardStep.Review)}
+              />
+            )}
+
+            {jobStep === JobWizardStep.Compare && (
+              <StepCompare
+                projectId={projectId}
+                doors={state.doors}
+                hardwareSets={state.hardwareSets}
+                onComplete={onConfirmComplete}
+                onBack={() => setJobStep(JobWizardStep.Products)}
+                onError={onError}
+              />
+            )}
+
+            {jobStep === JobWizardStep.Confirm && (
+              <StepConfirm
+                projectId={projectId}
+                doors={state.doors}
+                hardwareSets={state.hardwareSets}
+                triageResult={state.triageResult}
+                onComplete={onConfirmComplete}
+                onBack={() => setJobStep(state.hasExistingData ? JobWizardStep.Compare : JobWizardStep.Products)}
+                onBackToReview={() => setJobStep(JobWizardStep.Review)}
+                onError={onError}
+              />
+            )}
+          </div>
+        </div>
+
+        {/* Close confirmation modal */}
+        {showCloseConfirm && (
+          <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+            <div className="panel w-full max-w-sm p-6 animate-fade-in-up">
+              <h2 className="text-primary font-semibold text-lg mb-3">Discard Import?</h2>
+              <p className="text-secondary text-sm mb-6">
+                You have an import in progress. Closing will discard all changes. Are you sure?
+              </p>
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setShowCloseConfirm(false)}
+                  className="glow-btn--ghost flex-1 min-h-11 rounded text-sm font-medium"
+                >
+                  Continue Editing
+                </button>
+                <button
+                  onClick={() => { setShowCloseConfirm(false); onClose(); }}
+                  className="glow-btn--danger flex-1 min-h-11 rounded text-sm font-semibold"
+                >
+                  Discard &amp; Close
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ─── Legacy wizard flow rendering (feature flag off) ───
   return (
     <div className="fixed inset-0 bg-black/80 backdrop-blur-lg flex flex-col z-50">
       {/* Header */}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-white/[0.08]">
-        <h2 className="text-lg font-semibold text-[#f5f5f7]">
+      <div className="flex items-center justify-between px-6 py-4 border-b border-border-dim-strong">
+        <h2 className="text-lg font-semibold text-primary">
           Import Wizard
         </h2>
         <div className="flex items-center gap-4">
-          <StepIndicator currentStep={state.currentStep} />
+          <StepIndicator currentStep={state.currentStep} hasExistingData={state.hasExistingData} />
           <button
-            onClick={onClose}
-            className="text-[#6e6e73] hover:text-[#f5f5f7] text-xl leading-none transition-colors ml-4"
+            onClick={handleCloseAttempt}
+            className="text-tertiary hover:text-primary text-xl leading-none transition-colors ml-4"
           >
             &times;
           </button>
@@ -328,21 +666,37 @@ export default function ImportWizard({
 
       {/* Error banner */}
       {state.error && (
-        <div className="mx-6 mt-4 p-3 bg-[rgba(255,69,58,0.1)] border border-[rgba(255,69,58,0.2)] rounded-xl text-[#ff6961] text-sm">
+        <div className="mx-6 mt-4 p-3 bg-danger-dim border border-danger rounded-md text-danger text-sm">
           {state.error}
         </div>
       )}
 
-      {/* Step content + Punch sidebar */}
-      <div className="flex-1 overflow-y-auto min-h-0 px-6 py-4 flex gap-4">
-        <PunchHighlightProvider activeKeys={activeKeys}>
-          {/* Main step area */}
-          <div className="flex-1 min-w-0">
+      {/* Step content — drawer is now INSIDE the scroller, anchored to top */}
+      <PunchHighlightProvider activeKeys={activeKeys}>
+        <div className="flex-1 overflow-y-auto min-h-0 flex flex-col">
+          {/* Darrin drawer sticks to top of content area during non-Triage steps */}
+          {state.currentStep !== WizardStep.Triage && (
+            <PunchAssistant
+              messages={punchMessages}
+              questions={triageQuestions}
+              onAnswer={handleQuestionAnswer}
+              onDismiss={handleQuestionDismiss}
+            />
+          )}
+          <div className="px-6 py-4 pb-6">
             {state.currentStep === WizardStep.Upload && (
               <StepUpload
                 projectId={projectId}
                 onComplete={onUploadComplete}
-                onError={(err) => patch({ error: err })}
+                onError={onError}
+              />
+            )}
+
+            {state.currentStep === WizardStep.ScanResults && state.classifyResult && (
+              <StepScanResults
+                classifyResult={state.classifyResult}
+                onNext={() => goToStep(WizardStep.MapColumns)}
+                onBack={() => goToStep(WizardStep.Upload)}
               />
             )}
 
@@ -351,8 +705,8 @@ export default function ImportWizard({
                 file={state.file!}
                 classifyResult={state.classifyResult!}
                 onComplete={onMapColumnsComplete}
-                onBack={() => goToStep(WizardStep.Upload)}
-                onError={(err) => patch({ error: err })}
+                onBack={() => goToStep(WizardStep.ScanResults)}
+                onError={onError}
               />
             )}
 
@@ -360,24 +714,48 @@ export default function ImportWizard({
               <StepTriage
                 projectId={projectId}
                 file={state.file!}
+                pdfStoragePath={state.pdfStoragePath}
                 columnMappings={state.columnMappings}
                 classifyResult={state.classifyResult!}
                 questionAnswers={questionAnswers}
                 onComplete={onTriageComplete}
                 onQuestionsGenerated={handleQuestionsGenerated}
                 onBack={() => goToStep(WizardStep.MapColumns)}
-                onError={(err) => patch({ error: err })}
+                onError={onError}
               />
             )}
 
             {state.currentStep === WizardStep.Review && (
               <StepReview
+                projectId={projectId}
                 doors={state.doors}
                 hardwareSets={state.hardwareSets}
                 hasExistingData={state.hasExistingData}
+                classifyResult={state.classifyResult}
+                pdfBuffer={state.pdfBuffer}
                 onComplete={onReviewComplete}
                 onBack={() => goToStep(WizardStep.Triage)}
                 onRemapColumns={() => goToStep(WizardStep.MapColumns)}
+              />
+            )}
+
+            {state.currentStep === WizardStep.Products && (
+              <StepProducts
+                projectId={projectId}
+                hardwareSets={state.hardwareSets}
+                onComplete={onProductsComplete}
+                onBack={() => goToStep(WizardStep.Review)}
+              />
+            )}
+
+            {state.currentStep === WizardStep.Compare && (
+              <StepCompare
+                projectId={projectId}
+                doors={state.doors}
+                hardwareSets={state.hardwareSets}
+                onComplete={onConfirmComplete}
+                onBack={() => goToStep(WizardStep.Products)}
+                onError={onError}
               />
             )}
 
@@ -388,21 +766,40 @@ export default function ImportWizard({
                 hardwareSets={state.hardwareSets}
                 triageResult={state.triageResult}
                 onComplete={onConfirmComplete}
-                onBack={() => goToStep(WizardStep.Review)}
-                onError={(err) => patch({ error: err })}
+                onBack={() => goToStep(state.hasExistingData ? WizardStep.Compare : WizardStep.Products)}
+                onBackToReview={() => goToStep(WizardStep.Review)}
+                onError={onError}
               />
             )}
           </div>
+        </div>
+      </PunchHighlightProvider>
 
-          {/* Punch assistant sidebar */}
-          <PunchAssistant
-            messages={punchMessages}
-            questions={triageQuestions}
-            onAnswer={handleQuestionAnswer}
-            onDismiss={handleQuestionDismiss}
-          />
-        </PunchHighlightProvider>
-      </div>
+      {/* Close confirmation modal */}
+      {showCloseConfirm && (
+        <div className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4">
+          <div className="panel w-full max-w-sm p-6 animate-fade-in-up">
+            <h2 className="text-primary font-semibold text-lg mb-3">Discard Import?</h2>
+            <p className="text-secondary text-sm mb-6">
+              You have an import in progress. Closing will discard all changes. Are you sure?
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={() => setShowCloseConfirm(false)}
+                className="glow-btn--ghost flex-1 min-h-11 rounded text-sm font-medium"
+              >
+                Continue Editing
+              </button>
+              <button
+                onClick={() => { setShowCloseConfirm(false); onClose(); }}
+                className="glow-btn--danger flex-1 min-h-11 rounded text-sm font-semibold"
+              >
+                Discard &amp; Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

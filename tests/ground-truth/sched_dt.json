@@ -1,0 +1,8 @@
+{
+  "pdf_name": "sched-DT.pdf",
+  "catalog_key": "SCHED_DT",
+  "format": "schedule",
+  "expected_door_count": 105,
+  "expected_set_count": 1,
+  "verified": false
+}

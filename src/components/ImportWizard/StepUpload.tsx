@@ -2,7 +2,9 @@
 
 import { useState, useRef, useCallback, type ChangeEvent, type DragEvent } from "react";
 import type { ClassifyPagesResponse } from "./types";
+import { transformClassifyResponse } from "./transforms";
 import { arrayBufferToBase64 } from "@/lib/pdf-utils";
+import WizardNav from "./WizardNav";
 
 const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50 MB
 
@@ -11,7 +13,8 @@ interface StepUploadProps {
   onComplete: (
     file: File,
     classifyResult: ClassifyPagesResponse,
-    hasExistingData: boolean
+    hasExistingData: boolean,
+    pdfStoragePath: string | null,
   ) => void;
   onError: (msg: string) => void;
 }
@@ -80,7 +83,9 @@ export default function StepUpload({
       setProgress(30);
       setStatus("Classifying pages...");
 
-      const resp = await fetch("/api/classify-pages", {
+      // Proxy route: enforces Supabase auth before forwarding to the
+      // public Python endpoint with the internal shared secret.
+      const resp = await fetch("/api/parse-pdf/classify-pages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ pdfBase64 }),
@@ -93,36 +98,8 @@ export default function StepUpload({
         );
       }
 
-      // Transform Python response to match ClassifyPagesResponse type.
-      // Python returns: { page_classifications: [{index, type, ...}], summary: {door_schedule_pages: count, ...} }
-      // TS expects:     { pages: [{page_number, page_type, confidence}], summary: {door_schedule_pages: number[], ...} }
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const raw: any = await resp.json();
-      const pageClassifications: Array<{ index: number; type: string; confidence?: number }> =
-        raw.page_classifications ?? [];
-
-      const result: ClassifyPagesResponse = {
-        pages: pageClassifications.map((p) => ({
-          page_number: p.index,
-          page_type: p.type as ClassifyPagesResponse["pages"][0]["page_type"],
-          confidence: p.confidence ?? 1,
-        })),
-        summary: {
-          total_pages: raw.total_pages ?? pageClassifications.length,
-          door_schedule_pages: pageClassifications
-            .filter((p) => p.type === "door_schedule")
-            .map((p) => p.index),
-          hardware_set_pages: pageClassifications
-            .filter((p) => p.type === "hardware_set")
-            .map((p) => p.index),
-          submittal_pages: pageClassifications
-            .filter((p) => p.type === "reference")
-            .map((p) => p.index),
-          other_pages: pageClassifications
-            .filter((p) => p.type === "other" || p.type === "cover")
-            .map((p) => p.index),
-        },
-      };
+      const raw = (await resp.json()) as Record<string, unknown>;
+      const result = transformClassifyResponse(raw);
       setClassifyResult(result);
       setProgress(70);
       setStatus("Classification complete.");
@@ -144,64 +121,54 @@ export default function StepUpload({
         // Treat as no existing data
       }
 
+      // Upload PDF to Supabase Storage for server-side access
+      setProgress(90);
+      setStatus("Saving PDF...");
+      let storagePath: string | null = null;
+      try {
+        const uploadForm = new FormData();
+        uploadForm.append("file", file);
+        uploadForm.append("pageCount", String(result.summary.total_pages));
+        const uploadResp = await fetch(`/api/projects/${projectId}/pdf`, {
+          method: "POST",
+          body: uploadForm,
+        });
+        if (uploadResp.ok) {
+          const uploadData = await uploadResp.json();
+          storagePath = uploadData.storagePath ?? null;
+        } else {
+          console.warn("PDF storage upload failed:", uploadResp.status);
+          setStatus("PDF saved locally (cloud backup unavailable).");
+        }
+      } catch (uploadErr) {
+        console.warn("PDF storage upload failed:", uploadErr);
+        setStatus("PDF saved locally (cloud backup unavailable).");
+      }
+
       setProgress(100);
       setStatus("Ready to proceed.");
       setLoading(false);
 
-      onComplete(file, result, hasExisting);
+      onComplete(file, result, hasExisting, storagePath);
     } catch (err) {
+      // Reset state so user can retry the upload from a clean slate
       setLoading(false);
       setProgress(0);
       setStatus("");
-      onError(err instanceof Error ? err.message : "Classification failed");
+      setClassifyResult(null);
+      onError(err instanceof Error ? err.message : "Classification failed. Please try again.");
     }
   };
 
-  // ─── Page type summary helper ───
-  const renderSummary = (result: ClassifyPagesResponse) => {
-    const { summary } = result;
-    return (
-      <div className="grid grid-cols-2 gap-2 mt-4">
-        <div className="bg-white/[0.04] border border-white/[0.06] rounded-xl p-3 text-center">
-          <div className="text-lg font-bold text-[#0a84ff]">
-            {summary.total_pages}
-          </div>
-          <div className="text-[9px] text-[#6e6e73] uppercase">
-            Total Pages
-          </div>
-        </div>
-        <div className="bg-white/[0.04] border border-white/[0.06] rounded-xl p-3 text-center">
-          <div className="text-lg font-bold text-[#30d158]">
-            {summary.door_schedule_pages.length}
-          </div>
-          <div className="text-[9px] text-[#6e6e73] uppercase">
-            Door Schedule
-          </div>
-        </div>
-        <div className="bg-white/[0.04] border border-white/[0.06] rounded-xl p-3 text-center">
-          <div className="text-lg font-bold text-[#ff9500]">
-            {summary.hardware_set_pages.length}
-          </div>
-          <div className="text-[9px] text-[#6e6e73] uppercase">
-            Hardware Sets
-          </div>
-        </div>
-        <div className="bg-white/[0.04] border border-white/[0.06] rounded-xl p-3 text-center">
-          <div className="text-lg font-bold text-[#6e6e73]">
-            {summary.other_pages.length}
-          </div>
-          <div className="text-[9px] text-[#6e6e73] uppercase">Other</div>
-        </div>
-      </div>
-    );
-  };
-
   return (
-    <div className="max-w-lg mx-auto">
-      <h3 className="text-[#f5f5f7] font-semibold mb-2">
-        Step 1: Upload PDF
+    <div className="max-w-2xl mx-auto">
+      <h3
+        className="text-[11px] font-semibold uppercase text-secondary tracking-wider"
+        style={{ fontFamily: "var(--font-display)" }}
+      >
+        Upload PDF
       </h3>
-      <p className="text-[#a1a1a6] text-sm mb-4">
+      <p className="text-sm text-tertiary mt-1 mb-4">
         Select a door hardware submittal PDF. We&apos;ll classify each page to
         find door schedules and hardware sets.
       </p>
@@ -212,12 +179,12 @@ export default function StepUpload({
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
         onClick={() => fileInputRef.current?.click()}
-        className={`border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-colors ${
+        className={`border-2 border-dashed rounded-md p-8 text-center cursor-pointer transition-colors ${
           dragOver
-            ? "border-[#0a84ff] bg-[rgba(10,132,255,0.05)]"
+            ? "border-accent bg-accent-dim"
             : file
-            ? "border-[#30d158]/30 bg-[rgba(48,209,88,0.03)]"
-            : "border-white/[0.12] hover:border-white/[0.2] bg-white/[0.02]"
+            ? "border-success/30 bg-success-dim"
+            : "border-border-dim hover:border-th-border-hover bg-tint"
         }`}
       >
         <input
@@ -231,54 +198,49 @@ export default function StepUpload({
 
         {file ? (
           <div>
-            <div className="text-[#30d158] text-2xl mb-2">&#x2713;</div>
-            <p className="text-[#f5f5f7] font-medium">{file.name}</p>
-            <p className="text-[#6e6e73] text-xs mt-1">
+            <div className="text-success text-2xl mb-2">&#x2713;</div>
+            <p className="text-primary font-medium">{file.name}</p>
+            <p className="text-tertiary text-xs mt-1">
               {(file.size / 1024 / 1024).toFixed(1)} MB
             </p>
           </div>
         ) : (
           <div>
-            <div className="text-[#6e6e73] text-3xl mb-2">&#x1F4C4;</div>
-            <p className="text-[#a1a1a6]">
+            <div className="text-tertiary text-3xl mb-2">&#x1F4C4;</div>
+            <p className="text-secondary">
               Drag &amp; drop a PDF here, or click to browse
             </p>
-            <p className="text-[#6e6e73] text-xs mt-1">
+            <p className="text-tertiary text-xs mt-1">
               Max 50 MB
             </p>
           </div>
         )}
       </div>
 
-      {/* Classification result summary */}
-      {classifyResult && renderSummary(classifyResult)}
+      {/* Classification summary moved to StepScanResults — no flash screen here */}
 
       {/* Progress */}
       {loading && (
         <div className="mt-4">
           <div className="flex justify-between text-sm mb-1">
-            <span className="text-[#a1a1a6]">{status}</span>
-            <span className="text-[#6e6e73]">{progress}%</span>
+            <span className="text-secondary">{status}</span>
+            <span className="text-tertiary">{progress}%</span>
           </div>
-          <div className="w-full bg-white/[0.06] rounded-full h-2 overflow-hidden">
+          <div className="w-full bg-tint rounded-full h-2 overflow-hidden">
             <div
-              className="h-full rounded-full transition-all duration-500 ease-out bg-[#0a84ff]"
+              className="h-full rounded-full transition-all duration-500 ease-out bg-accent"
               style={{ width: `${progress}%` }}
             />
           </div>
         </div>
       )}
 
-      {/* Next button */}
-      <div className="flex justify-end mt-6">
-        <button
-          onClick={handleClassify}
-          disabled={!file || loading}
-          className="px-6 py-2 bg-[#0a84ff] hover:bg-[#0975de] text-white rounded-lg transition-colors font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {loading ? "Processing..." : "Next"}
-        </button>
-      </div>
+      {/* Navigation */}
+      <WizardNav
+        onNext={handleClassify}
+        nextLabel={loading ? "Processing..." : "Next"}
+        nextDisabled={!file || loading}
+      />
     </div>
   );
 }

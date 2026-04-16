@@ -46,15 +46,96 @@ export interface HardwareCategory {
 
 export const HARDWARE_TAXONOMY: HardwareCategory[] = [
   // === HANGING ===
+  // ORDERING: specific hinge types MUST come before the generic 'hinges' catch-all.
+  // classifyItem() returns the first match, so 'continuous_hinge' must match before 'hinges'.
+  {
+    id: 'electric_hinge',
+    label: 'Electric / Conductor Hinge',
+    name_patterns: [
+      'hinge.*\\bCON\\b',
+      'hinge.*\\bTW\\d',
+      'hinge.*electr',
+      'hinge.*conduct',
+      'electr.*hinge',
+      'conductor.*hinge',
+      'power\\s*transfer\\s*hinge',
+      // Standalone pattern: matches "CON TW8" in model field when name is
+      // generic "Hinges". Real PDF data splits: name="Hinges", model="5BB1 HW
+      // 4 1/2 x 4 1/2 CON TW8". classifyItem() concatenates name+model, so
+      // this pattern catches the model-only identifier without requiring
+      // "hinge" adjacent to "CON TW".
+      '\\bCON\\s*TW\\d',
+    ],
+    universal: false,
+    exterior: true,
+    interior: false,
+    fire_rated: false,
+    pairs_only: false,
+    install_scope: 'per_opening',  // 1 per opening, replaces one NRP position
+    typical_qty_single: [1, 1],
+    typical_qty_pair: [1, 1],
+  },
+  {
+    id: 'continuous_hinge',
+    label: 'Continuous / Geared Hinge',
+    name_patterns: [
+      'continuous.*hinge',
+      'geared.*hinge',
+      'pin.*barrel',
+      'full.*length.*hinge',
+    ],
+    universal: false,
+    exterior: true,
+    interior: true,
+    fire_rated: true,
+    pairs_only: false,
+    install_scope: 'per_leaf',
+    typical_qty_single: [1, 1],
+    typical_qty_pair: [2, 2],
+  },
+  {
+    id: 'pivot_hinge',
+    label: 'Pivot Hinge',
+    name_patterns: [
+      'pivot',
+      'offset.*pivot',
+      'intermediate.*pivot',
+      'center.*pivot',
+      'floor.*pivot',
+    ],
+    universal: false,
+    exterior: true,
+    interior: true,
+    fire_rated: false,
+    pairs_only: false,
+    install_scope: 'per_opening',
+    typical_qty_single: [1, 2],
+    typical_qty_pair: [2, 4],
+  },
+  {
+    id: 'spring_hinge',
+    label: 'Spring Hinge',
+    name_patterns: [
+      'spring.*hinge',
+      'self.*clos.*hinge',
+    ],
+    universal: false,
+    exterior: true,
+    interior: true,
+    fire_rated: false,
+    pairs_only: false,
+    install_scope: 'per_leaf',
+    typical_qty_single: [2, 3],
+    typical_qty_pair: [4, 6],
+  },
   {
     id: 'hinges',
-    label: 'Hinges',
+    label: 'Hinges (Butt)',
     name_patterns: [
-      'hinge',
       'butt\\s*hinge',
-      'continuous\\s*hinge',
-      'pivot',
-      'spring\\s*hinge',
+      '\\b5BB',
+      '\\bBB1\\b',
+      'hinge',
     ],
     universal: true,
     exterior: true,
@@ -93,7 +174,7 @@ export const HARDWARE_TAXONOMY: HardwareCategory[] = [
     interior: true,
     fire_rated: true,
     pairs_only: false,
-    install_scope: 'per_opening',
+    install_scope: 'per_leaf',
     typical_qty_single: [1, 1],
     typical_qty_pair: [1, 2],
   },
@@ -130,7 +211,6 @@ export const HARDWARE_TAXONOMY: HardwareCategory[] = [
       'constant\\s*latching',
       'fb\\d',
       'surface\\s*bolt',
-      'dust\\s*proof\\s*strike',
     ],
     universal: false,
     exterior: true,
@@ -140,6 +220,22 @@ export const HARDWARE_TAXONOMY: HardwareCategory[] = [
     install_scope: 'per_pair',
     typical_qty_single: [0, 0],
     typical_qty_pair: [1, 2],
+  },
+  {
+    id: 'dust_proof_strike',
+    label: 'Dust Proof Strike',
+    name_patterns: [
+      'dust.*proof.*strike',
+      '\\bDPS\\b',
+    ],
+    universal: false,
+    exterior: true,
+    interior: false,
+    fire_rated: false,
+    pairs_only: true,
+    install_scope: 'per_pair',
+    typical_qty_single: [0, 0],
+    typical_qty_pair: [1, 1],
   },
   {
     id: 'strike',
@@ -177,7 +273,7 @@ export const HARDWARE_TAXONOMY: HardwareCategory[] = [
     interior: false,
     fire_rated: false,
     pairs_only: false,
-    install_scope: 'per_opening',
+    install_scope: 'per_leaf',
     typical_qty_single: [1, 1],
     typical_qty_pair: [1, 2],
   },
@@ -197,12 +293,30 @@ export const HARDWARE_TAXONOMY: HardwareCategory[] = [
     interior: false,
     fire_rated: false,
     pairs_only: false,
-    install_scope: 'per_leaf',
+    install_scope: 'per_opening',
     typical_qty_single: [1, 2],
     typical_qty_pair: [2, 4],
   },
 
   // === CLOSING ===
+  {
+    id: 'auto_operator',
+    label: 'Automatic Operator',
+    name_patterns: [
+      'auto.*operator',
+      'automatic\\s*operator',
+      'power\\s*operator',
+      'ada\\s*operator',
+    ],
+    universal: false,
+    exterior: true,
+    interior: false,
+    fire_rated: false,
+    pairs_only: false,
+    install_scope: 'per_opening',  // 1 per opening, typically replaces closer
+    typical_qty_single: [1, 1],
+    typical_qty_pair: [1, 2],
+  },
   {
     id: 'closer',
     label: 'Closer',
@@ -217,7 +331,7 @@ export const HARDWARE_TAXONOMY: HardwareCategory[] = [
     interior: true,
     fire_rated: true,
     pairs_only: false,
-    install_scope: 'per_leaf',
+    install_scope: 'per_opening',
     typical_qty_single: [1, 1],
     typical_qty_pair: [2, 2],
   },
@@ -251,7 +365,7 @@ export const HARDWARE_TAXONOMY: HardwareCategory[] = [
     interior: false,
     fire_rated: false,
     pairs_only: false,
-    install_scope: 'per_opening',
+    install_scope: 'per_leaf',
     typical_qty_single: [1, 1],
     typical_qty_pair: [1, 2],
   },
@@ -270,7 +384,7 @@ export const HARDWARE_TAXONOMY: HardwareCategory[] = [
     interior: true,
     fire_rated: false,
     pairs_only: false,
-    install_scope: 'per_opening',
+    install_scope: 'per_leaf',
     typical_qty_single: [1, 2],
     typical_qty_pair: [1, 2],
   },
@@ -305,13 +419,14 @@ export const HARDWARE_TAXONOMY: HardwareCategory[] = [
       'door\\s*stop',
       'holder',
       'hold\\s*open',
+      'magnetic\\s*hold',
     ],
     universal: false,
     exterior: false,
     interior: true,
     fire_rated: false,
     pairs_only: false,
-    install_scope: 'per_leaf',
+    install_scope: 'per_opening',
     typical_qty_single: [1, 1],
     typical_qty_pair: [2, 2],
   },
@@ -472,6 +587,22 @@ export const HARDWARE_TAXONOMY: HardwareCategory[] = [
     typical_qty_single: [0, 0],
     typical_qty_pair: [1, 1],
   },
+  {
+    id: 'mullion',
+    label: 'Mullion',
+    name_patterns: [
+      'mullion',
+      'removable\\s*mullion',
+    ],
+    universal: false,
+    exterior: false,
+    interior: false,
+    fire_rated: false,
+    pairs_only: true,
+    install_scope: 'per_pair',
+    typical_qty_single: [0, 0],
+    typical_qty_pair: [1, 1],
+  },
 
   // === SILENCERS ===
   {
@@ -490,6 +621,43 @@ export const HARDWARE_TAXONOMY: HardwareCategory[] = [
     install_scope: 'per_frame',
     typical_qty_single: [1, 3],
     typical_qty_pair: [1, 3],
+  },
+
+  // === SIGNAGE / VIEWERS ===
+  {
+    id: 'signage',
+    label: 'Signage',
+    name_patterns: [
+      'sign(?!al)',
+      'room\\s*number',
+      'signage',
+      'placard',
+    ],
+    universal: false,
+    exterior: false,
+    interior: true,
+    fire_rated: false,
+    pairs_only: false,
+    install_scope: 'per_opening',
+    typical_qty_single: [1, 1],
+    typical_qty_pair: [1, 1],
+  },
+  {
+    id: 'viewer',
+    label: 'Door Viewer',
+    name_patterns: [
+      'viewer',
+      'peephole',
+      'door\\s*viewer',
+    ],
+    universal: false,
+    exterior: true,
+    interior: false,
+    fire_rated: false,
+    pairs_only: false,
+    install_scope: 'per_leaf',
+    typical_qty_single: [1, 1],
+    typical_qty_pair: [1, 2],
   },
 
   // === BY OTHERS ===
@@ -549,16 +717,77 @@ export const MANUFACTURER_CATEGORY_MAP: Record<string, string> = {
   'zero': 'weatherstripping',
 }
 
+// ── Shared compiled regex cache ──────────────────────────────────────────────
+// Single source of truth for pre-compiled taxonomy regexes. Imported by
+// parse-pdf-helpers.ts (classifyItemScope) and quantity-propagation.ts
+// (classifyItemCategory) instead of each building its own cache.
+
+export const TAXONOMY_REGEX_CACHE: Array<{
+  id: string
+  install_scope: InstallScope
+  patterns: RegExp[]
+}> = HARDWARE_TAXONOMY.map(cat => ({
+  id: cat.id,
+  install_scope: cat.install_scope,
+  patterns: cat.name_patterns.map(p => new RegExp(p, 'i')),
+}))
+
+// ── Shared hinge helpers ─────────────────────────────────────────────────────
+
+/**
+ * Pre-scan a set of items for electric hinge quantity on pair doors.
+ *
+ * Replaces 3 identical pre-scans in normalizeQuantities(),
+ * buildPerOpeningItems(), and groupItemsByLeaf().
+ */
+export function scanElectricHinges(
+  items: Array<{ name: string; model?: string | null; qty?: number | null; leaf_side?: string | null }>,
+  isPair: boolean,
+): { totalElectricQty: number; hasElectricHinge: boolean } {
+  if (!isPair) return { totalElectricQty: 0, hasElectricHinge: false }
+  let total = 0
+  for (const item of items) {
+    if (!item.leaf_side && classifyItem(item.name, undefined, item.model ?? undefined) === 'electric_hinge') {
+      total += (item.qty || 0)
+    }
+  }
+  return { totalElectricQty: total, hasElectricHinge: total > 0 }
+}
+
+/**
+ * Detect whether a non-integer standard hinge division is explained by an
+ * asymmetric electric hinge split on a pair door.
+ *
+ * Deduplicates identical checks in PATH 1 and PATH 5 of normalizeQuantities().
+ */
+export function isAsymmetricHingeSplit(
+  standardQty: number,
+  electricQty: number,
+  divisor: number,
+): boolean {
+  return electricQty > 0 && Number.isInteger((standardQty + electricQty) / divisor)
+}
+
 /**
  * Classify an item name into a category. Returns the category ID or 'unknown'.
  * Optionally accepts a manufacturer for fallback classification when the
  * item name is a model number only (e.g., "Von Duprin 99").
+ *
+ * The `model` parameter handles real PDF data where extraction splits the
+ * data across fields: name="Hinges", model="5BB1 HW 4 1/2 x 4 1/2 CON TW8".
+ * When provided, patterns are tested against `name + " " + model` so that
+ * identifiers like "CON TW8" in the model field are matched.
  */
-export function classifyItem(itemName: string, manufacturer?: string): string {
-  const lower = itemName.toLowerCase().trim()
+export function classifyItem(itemName: string, manufacturer?: string, model?: string): string {
+  // Concatenate name + model for pattern matching. Real PDF data often has
+  // the category-distinguishing identifier (e.g., "CON TW8") in the model
+  // field while name is a generic "Hinges".
+  const combined = model
+    ? `${(itemName ?? '')} ${model}`.toLowerCase().trim()
+    : (itemName ?? '').toLowerCase().trim()
   for (const cat of HARDWARE_TAXONOMY) {
     for (const pattern of cat.name_patterns) {
-      if (new RegExp(pattern, 'i').test(lower)) {
+      if (new RegExp(pattern, 'i').test(combined)) {
         return cat.id
       }
     }
@@ -566,7 +795,7 @@ export function classifyItem(itemName: string, manufacturer?: string): string {
 
   // Fallback: check manufacturer prefix against known mappings
   if (manufacturer) {
-    const mfrLower = manufacturer.toLowerCase().trim()
+    const mfrLower = (manufacturer ?? '').toLowerCase().trim()
     for (const [prefix, category] of Object.entries(MANUFACTURER_CATEGORY_MAP)) {
       if (mfrLower.startsWith(prefix)) {
         return category
@@ -576,7 +805,7 @@ export function classifyItem(itemName: string, manufacturer?: string): string {
 
   // Also check if the item name itself starts with a known manufacturer
   for (const [prefix, category] of Object.entries(MANUFACTURER_CATEGORY_MAP)) {
-    if (lower.startsWith(prefix)) {
+    if (combined.startsWith(prefix)) {
       return category
     }
   }

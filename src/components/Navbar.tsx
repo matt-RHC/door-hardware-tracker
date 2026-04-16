@@ -14,21 +14,20 @@ export default function Navbar() {
   const supabase = createClient();
 
   useEffect(() => {
+    const getUser = async () => {
+      try {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        setEmail(user?.email || null);
+      } catch (err) {
+        console.error("Error getting user:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
     getUser();
-  }, []);
-
-  const getUser = async () => {
-    try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
-      setEmail(user?.email || null);
-    } catch (err) {
-      console.error("Error getting user:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, [supabase]);
 
   const handleSignOut = async () => {
     playClick();
@@ -42,13 +41,13 @@ export default function Navbar() {
   };
 
   return (
-    <nav className="relative bg-[var(--background)]/95 backdrop-blur-xl border-b border-[var(--border)]">
-      {/* Subtle bottom glow line */}
+    <nav className="relative bg-background/95 backdrop-blur-xl border-b border-th-border">
+      {/* Subtle bottom glow line — plateau from 30%→70%, fades to transparent at both ends */}
       <div
         className="absolute bottom-0 left-0 right-0 h-[1px]"
         style={{
           background:
-            "linear-gradient(90deg, transparent, rgba(10,132,255,0.2) 30%, rgba(10,132,255,0.3) 50%, rgba(10,132,255,0.2) 70%, transparent)",
+            "linear-gradient(90deg, transparent, var(--blue-dim) 30% 70%, transparent)",
         }}
       />
 
@@ -59,9 +58,9 @@ export default function Navbar() {
           className="flex items-center gap-2.5 group"
         >
           {/* Logo mark */}
-          <div className="relative w-8 h-8 rounded-md bg-[rgba(10,132,255,0.08)] border border-[rgba(10,132,255,0.2)] flex items-center justify-center group-hover:border-[rgba(10,132,255,0.4)] transition-all">
+          <div className="relative w-8 h-8 rounded-md bg-accent-dim border border-accent flex items-center justify-center group-hover:border-accent transition-all">
             <svg
-              className="w-4 h-4 text-[var(--blue)]"
+              className="w-4 h-4 text-accent"
               fill="none"
               stroke="currentColor"
               viewBox="0 0 24 24"
@@ -76,12 +75,12 @@ export default function Navbar() {
           </div>
           <div className="flex flex-col">
             <span
-              className="font-display text-[13px] font-semibold tracking-wider text-[var(--text-primary)] group-hover:text-[var(--blue)] transition-colors"
+              className="font-display text-[13px] font-semibold tracking-wider text-primary group-hover:text-accent transition-colors"
               style={{ fontFamily: "var(--font-display)" }}
             >
               RABBIT HOLE
             </span>
-            <span className="text-[10px] text-[var(--text-tertiary)] tracking-widest uppercase">
+            <span className="text-[10px] text-tertiary tracking-widest uppercase">
               Door Hardware
             </span>
           </div>
@@ -93,12 +92,12 @@ export default function Navbar() {
           <ThemeToggle />
           {!loading && email && (
             <>
-              <span className="hidden sm:inline text-[12px] text-[var(--text-tertiary)] tabular-nums">
+              <span className="hidden sm:inline text-[12px] text-tertiary tabular-nums">
                 {email}
               </span>
               <button
                 onClick={handleSignOut}
-                className="glow-btn--ghost px-3 py-1.5 text-[12px] rounded-md border border-[var(--border)] hover:border-[var(--border-hover)] transition-all"
+                className="glow-btn--ghost px-3 py-1.5 text-[12px] rounded-md border border-th-border hover:border-th-border-hover transition-all"
               >
                 Sign Out
               </button>

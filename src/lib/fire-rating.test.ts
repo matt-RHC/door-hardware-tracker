@@ -63,6 +63,34 @@ describe('extractFireRatings', () => {
     expect(doors[0].location).toBe('Floor 2')
   })
 
+  it('extracts "90 Mins" with plural s', () => {
+    const doors = [makeDoor({ hw_heading: 'Corridor 90 Mins' })]
+    extractFireRatings(doors)
+    expect(doors[0].fire_rating).toBe('90 Mins')
+    expect(doors[0].hw_heading).toBe('Corridor')
+  })
+
+  it('extracts "60 Minutes" full word', () => {
+    const doors = [makeDoor({ hw_heading: 'Stairwell 60 Minutes' })]
+    extractFireRatings(doors)
+    expect(doors[0].fire_rating).toBe('60 Minutes')
+    expect(doors[0].hw_heading).toBe('Stairwell')
+  })
+
+  it('extracts "1 Hour" full word', () => {
+    const doors = [makeDoor({ hw_heading: 'Fire Wall 1 Hour' })]
+    extractFireRatings(doors)
+    expect(doors[0].fire_rating).toBe('1 Hour')
+    expect(doors[0].hw_heading).toBe('Fire Wall')
+  })
+
+  it('extracts "3 Hours" plural', () => {
+    const doors = [makeDoor({ hw_heading: 'Vault 3 Hours' })]
+    extractFireRatings(doors)
+    expect(doors[0].fire_rating).toBe('3 Hours')
+    expect(doors[0].hw_heading).toBe('Vault')
+  })
+
   it('handles multiple doors in batch', () => {
     const doors = [
       makeDoor({ door_number: '101', hw_heading: 'Single 20Min' }),

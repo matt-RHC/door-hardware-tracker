@@ -48,7 +48,13 @@ export default function PDFPageBrowser({
     }
 
     loadPdf();
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+      if (pdfDocRef.current) {
+        pdfDocRef.current.destroy();
+        pdfDocRef.current = null;
+      }
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pdfBuffer]);
 
@@ -135,23 +141,23 @@ export default function PDFPageBrowser({
   return (
     <div className="space-y-6 animate-fade-in-up">
       <div>
-        <h2 className="font-display text-2xl font-bold text-white mb-2">
+        <h2 className="font-display text-2xl font-bold text-primary mb-2">
           SELECT YOUR DOOR SCHEDULE
         </h2>
-        <p className="text-sm text-[#a1a1a6] leading-relaxed">
+        <p className="text-sm text-secondary leading-relaxed">
           Find the page(s) with your opening list — the master table that lists every
           door in the project. We&apos;ll use it to extract:
         </p>
         <div className="flex flex-wrap gap-2 mt-3">
           {[
-            { label: "Door Number", color: "#0a84ff", required: true },
-            { label: "Hardware Heading", color: "#30d158" },
-            { label: "Hardware Subheading", color: "#bf5af2" },
-            { label: "Location", color: "#ff9f0a" },
-            { label: "Door Type", color: "#64d2ff" },
-            { label: "Frame Type", color: "#ff6482" },
-            { label: "Fire Rating", color: "#ff453a" },
-            { label: "Hand / Swing", color: "#ffd60a" },
+            { label: "Door Number", color: "var(--blue)", required: true },
+            { label: "Hardware Heading", color: "var(--green)" },
+            { label: "Hardware Subheading", color: "var(--purple)" },
+            { label: "Location", color: "var(--orange)" },
+            { label: "Door Type", color: "var(--blue)" },
+            { label: "Frame Type", color: "var(--red)" },
+            { label: "Fire Rating", color: "var(--red)" },
+            { label: "Hand / Swing", color: "var(--yellow)" },
           ].map(({ label, color, required }) => (
             <span
               key={label}
@@ -163,26 +169,26 @@ export default function PDFPageBrowser({
               }}
             >
               {label}
-              {required && <span className="text-[#ff453a]">*</span>}
+              {required && <span className="text-danger">*</span>}
             </span>
           ))}
         </div>
-        <p className="text-[11px] text-[#636366] mt-2">
-          <span className="text-[#ff453a]">*</span> Required — others are optional but improve tracking
+        <p className="text-[11px] text-tertiary mt-2">
+          <span className="text-danger">*</span> Required — others are optional but improve tracking
         </p>
         <div className="flex items-center gap-3 mt-3">
-          <p className="text-xs text-[#636366]">
+          <p className="text-xs text-tertiary">
             {pageCount} pages total
           </p>
           {selectedPages.size > 0 && (
-            <p className="text-xs text-[#5ac8fa] font-medium">
+            <p className="text-xs text-info font-medium">
               {selectedPages.size} page{selectedPages.size > 1 ? "s" : ""} selected
             </p>
           )}
         </div>
         {selectedPages.size > 1 && (
-          <div className="mt-2 p-2.5 rounded-lg bg-[rgba(90,200,250,0.06)] border border-[rgba(90,200,250,0.15)]">
-            <p className="text-xs text-[#5ac8fa]">
+          <div className="mt-2 p-2.5 rounded-lg bg-accent-dim border border-accent-dim">
+            <p className="text-xs text-info">
               We&apos;ll detect columns from your first selected page and read
               door data from all selected pages.
             </p>
@@ -222,12 +228,12 @@ export default function PDFPageBrowser({
               className="relative cursor-pointer rounded-lg overflow-hidden transition-all"
               style={{
                 border: isSelected
-                  ? "2px solid #5ac8fa"
-                  : "2px solid rgba(255,255,255,0.08)",
-                boxShadow: isSelected ? "0 0 16px rgba(90,200,250,0.3)" : "none",
+                  ? "2px solid var(--blue)"
+                  : "2px solid var(--tint-strong)",
+                boxShadow: isSelected ? "0 0 16px var(--blue-dim)" : "none",
                 opacity: loading ? 0.6 : 1,
                 aspectRatio: "8.5/11",
-                backgroundColor: "rgba(20,20,24,0.9)",
+                backgroundColor: "var(--background)",
               }}
             >
               {thumb ? (
@@ -240,7 +246,7 @@ export default function PDFPageBrowser({
                 />
               ) : (
                 <div className="w-full h-full flex items-center justify-center">
-                  <div className="w-5 h-5 border-2 border-[#5ac8fa] border-t-transparent rounded-full animate-spin" />
+                  <div className="w-5 h-5 border-2 border-info border-t-transparent rounded-full animate-spin" />
                 </div>
               )}
               {/* Page number overlay */}
@@ -256,7 +262,7 @@ export default function PDFPageBrowser({
               </div>
               {/* Selected checkmark */}
               {isSelected && (
-                <div className="absolute top-2 right-2 w-6 h-6 rounded-full bg-[#5ac8fa] flex items-center justify-center">
+                <div className="absolute top-2 right-2 w-6 h-6 rounded-full bg-info flex items-center justify-center">
                   <span className="text-black text-xs font-bold">&#10003;</span>
                 </div>
               )}
@@ -267,16 +273,16 @@ export default function PDFPageBrowser({
 
       {/* Loading indicator for re-detection */}
       {loading && (
-        <div className="p-3 rounded-lg bg-[rgba(90,200,250,0.08)] border border-[rgba(90,200,250,0.2)]">
-          <p className="text-sm text-[#5ac8fa] flex items-center gap-2">
-            <span className="w-4 h-4 border-2 border-[#5ac8fa] border-t-transparent rounded-full animate-spin" />
+        <div className="p-3 rounded-lg bg-accent-dim border border-accent-dim">
+          <p className="text-sm text-info flex items-center gap-2">
+            <span className="w-4 h-4 border-2 border-info border-t-transparent rounded-full animate-spin" />
             Scanning selected pages for a door schedule...
           </p>
         </div>
       )}
 
       {/* Actions */}
-      <div className="flex items-center justify-between pt-4 border-t border-[rgba(255,255,255,0.06)]">
+      <div className="flex items-center justify-between pt-4 border-t border-border-dim">
         <button onClick={onCancel} className="glow-btn glow-btn--ghost">
           Skip Column Mapping
         </button>

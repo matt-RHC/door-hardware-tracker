@@ -1,0 +1,8 @@
+{
+  "pdf_name": "sched-Kdot.pdf",
+  "catalog_key": "SCHED_KDOT",
+  "format": "schedule",
+  "expected_door_count": 0,
+  "expected_set_count": 0,
+  "verified": false
+}

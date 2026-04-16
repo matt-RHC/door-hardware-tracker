@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { OPENING_DETAIL_SELECT } from '@/lib/supabase-selects'
 
 export async function GET(
   request: NextRequest,
@@ -19,40 +20,7 @@ export async function GET(
     // Get opening with hardware items and checklist progress
     const { data: opening, error: openingError } = await supabase
       .from('openings')
-      .select(`
-        id,
-        project_id,
-        door_number,
-        hw_set,
-        hw_heading,
-        location,
-        door_type,
-        frame_type,
-        fire_rating,
-        hand,
-        notes,
-        created_at,
-        hardware_items(
-          id,
-          name,
-          qty,
-          manufacturer,
-          model,
-          finish,
-          options,
-          sort_order,
-          created_at
-        ),
-        checklist_progress(
-          id,
-          item_id,
-          checked,
-          checked_by,
-          checked_at,
-          notes,
-          created_at
-        )
-      `)
+      .select(OPENING_DETAIL_SELECT)
       .eq('id', openingId)
       .single()
 
