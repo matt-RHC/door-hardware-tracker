@@ -504,6 +504,7 @@ export type Database = {
           auto_triggered: boolean
           extraction_confidence: Json | null
           reconciliation_result: Json | null
+          phase_data: Json | null
           created_at: string
           updated_at: string
         }
@@ -532,6 +533,7 @@ export type Database = {
           auto_triggered?: boolean
           extraction_confidence?: Json | null
           reconciliation_result?: Json | null
+          phase_data?: Json | null
           created_at?: string
           updated_at?: string
         }
@@ -560,6 +562,7 @@ export type Database = {
           auto_triggered?: boolean
           extraction_confidence?: Json | null
           reconciliation_result?: Json | null
+          phase_data?: Json | null
           created_at?: string
           updated_at?: string
         }
@@ -1204,8 +1207,6 @@ export type Database = {
         }
         Relationships: []
       }
-      // NOTE: aliased — the physical Supabase table is still named
-      // `punchy_logs` until migration 035 renames it to `darrin_logs`.
       darrin_logs: {
         Row: {
           checkpoint: number
