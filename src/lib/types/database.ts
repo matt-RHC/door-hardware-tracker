@@ -1065,6 +1065,7 @@ export type Database = {
           hw_heading: string | null
           hw_set: string | null
           id: string
+          is_active: boolean
           leaf_count: number
           location: string | null
           notes: string | null
@@ -1083,6 +1084,7 @@ export type Database = {
           hw_heading?: string | null
           hw_set?: string | null
           id?: string
+          is_active?: boolean
           leaf_count?: number
           location?: string | null
           notes?: string | null
@@ -1101,6 +1103,7 @@ export type Database = {
           hw_heading?: string | null
           hw_set?: string | null
           id?: string
+          is_active?: boolean
           leaf_count?: number
           location?: string | null
           notes?: string | null

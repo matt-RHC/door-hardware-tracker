@@ -982,8 +982,6 @@ const VISION_WALL_CLOCK_LIMIT_MS = 180_000
  * token limits while providing enough cross-page context for multi-page sets.
  * Uses the Anthropic SDK's native PDF document support — no image conversion needed.
  */
-// Default: 3 minutes. Leaves budget for triage + staging after vision completes.
-const VISION_WALL_CLOCK_LIMIT_MS = 180_000
 
 export async function callVisionExtraction(
   client: Anthropic,
