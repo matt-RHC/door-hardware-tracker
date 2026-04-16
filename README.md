@@ -173,6 +173,21 @@ door-hardware-tracker/
    - `SUPABASE_SERVICE_ROLE_KEY`
 6. Click "Deploy"
 
+## Vercel build controls
+
+Preview builds are gated by `scripts/vercel-ignore-build.sh`, configured in
+Vercel → Project Settings → Git → "Ignored Build Step" as:
+
+    bash scripts/vercel-ignore-build.sh
+
+The script skips builds when:
+- The PR is marked as draft (requires `GITHUB_TOKEN` project env var).
+- The commit only touches `docs/`, `tests/`, `prompts/`, `scripts/`,
+  `.github/`, top-level `*.md`, or other build-irrelevant paths.
+
+Production builds on `main` always proceed. See the script header for the
+full rule list.
+
 ## Development
 
 ### Build
