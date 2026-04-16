@@ -71,6 +71,7 @@ export async function GET(
         )
       `)
       .eq('project_id', projectId)
+      .eq('is_active', true)
       .order('door_number', { ascending: true }) as { data: OpeningWithHardware[] | null; error: any }
 
     if (openingsError) {
