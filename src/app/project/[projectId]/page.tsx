@@ -65,8 +65,19 @@ export default function ProjectDetailPage() {
   const [filters, setFilters] = useState<Filters>(defaultFilters);
   const [showFilters, setShowFilters] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);
+  const [showCsvMenu, setShowCsvMenu] = useState(false);
   const [blockedMap, setBlockedMap] = useState<Record<string, OpeningBlocked[]>>({});
   const [qaFindingsCount, setQaFindingsCount] = useState(0);
+
+  const downloadCsv = useCallback(
+    (params?: Record<string, string>) => {
+      const search = new URLSearchParams(params ?? {}).toString();
+      const qs = search ? `?${search}` : "";
+      window.location.href = `/api/projects/${projectId}/export-csv${qs}`;
+      setShowCsvMenu(false);
+    },
+    [projectId],
+  );
 
   const handleViewPdfPage = useCallback(
     async (pageIndex: number) => {
@@ -310,15 +321,52 @@ export default function ProjectDetailPage() {
                 </span>
               )}
             </button>
-            <button
-              onClick={() => {
-                window.location.href = `/api/projects/${projectId}/export-csv`;
-              }}
-              className="shrink-0 glow-btn glow-btn--ghost text-[13px] rounded"
-              style={{ padding: "0.5rem 0.875rem" }}
-            >
-              CSV
-            </button>
+            <div className="shrink-0 relative">
+              <button
+                onClick={() => setShowCsvMenu((v) => !v)}
+                className="glow-btn glow-btn--ghost text-[13px] rounded inline-flex items-center gap-1"
+                style={{ padding: "0.5rem 0.875rem" }}
+                aria-haspopup="menu"
+                aria-expanded={showCsvMenu}
+              >
+                CSV
+                <span aria-hidden="true" className="text-[10px]">▾</span>
+              </button>
+              {showCsvMenu && (
+                <>
+                  <div
+                    className="fixed inset-0 z-40"
+                    onClick={() => setShowCsvMenu(false)}
+                  />
+                  <div
+                    role="menu"
+                    className="absolute right-0 top-full mt-1 z-50 min-w-[180px] rounded-md border border-border-dim bg-surface shadow-lg py-1"
+                  >
+                    <button
+                      role="menuitem"
+                      onClick={() => downloadCsv()}
+                      className="w-full text-left text-[12px] px-3 py-1.5 hover:bg-tint text-primary"
+                    >
+                      All doors
+                    </button>
+                    <button
+                      role="menuitem"
+                      onClick={() => downloadCsv({ fire_rated: "true" })}
+                      className="w-full text-left text-[12px] px-3 py-1.5 hover:bg-tint text-primary"
+                    >
+                      Fire-rated only
+                    </button>
+                    <button
+                      role="menuitem"
+                      onClick={() => downloadCsv({ issues_only: "true" })}
+                      className="w-full text-left text-[12px] px-3 py-1.5 hover:bg-tint text-primary"
+                    >
+                      Issues only (no items)
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
             <button
               onClick={() => setShowUploadModal(true)}
               className="shrink-0 glow-btn glow-btn--primary text-[13px] rounded"

@@ -1968,6 +1968,7 @@ export interface OpeningWithHardware {
   fire_rating: string | null
   hand: string | null
   notes: string | null
+  floor_number: number | null
   hardware_items: Array<{
     id: string
     name: string
@@ -1976,6 +1977,7 @@ export interface OpeningWithHardware {
     model: string | null
     finish: string | null
     sort_order: number
+    qty_source: string | null
     checklist_progress: Array<{ checked: boolean }>
   }>
 }
