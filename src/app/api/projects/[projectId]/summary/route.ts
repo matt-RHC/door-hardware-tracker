@@ -47,6 +47,7 @@ export async function GET(
         attachments(id, category)
       `)
       .eq('project_id', projectId)
+      .eq('is_active', true)
 
     const openings = openingsRaw as Array<{
       id: string;
