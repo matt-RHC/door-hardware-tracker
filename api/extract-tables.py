@@ -2134,9 +2134,12 @@ def extract_heading_door_numbers(section_text: str) -> list[str]:
 
 # Hand codes that appear at the end of hardware-schedule heading door lines.
 # Supports LH / RH / LHR / RHR / LHA / RHA / LHRA / RHRA, optionally preceded
-# by a swing-degree indicator like "90° LH" or "180° RHR".
+# by a swing-degree indicator like "90° LH" or "180° RHR". Pair doors
+# sometimes record one hand per leaf with a backslash separator — e.g.
+# "LHR\RHR" or "RH\LH" — so the trailing token may contain such a pair.
+_HAND_CODE = r"(?:LHRA|RHRA|LHR|RHR|LHA|RHA|LH|RH)"
 _HEADING_DOOR_HAND_RE = re.compile(
-    r"(?:\d{1,3}°\s+)?(LHRA|RHRA|LHR|RHR|LHA|RHA|LH|RH)\s*$",
+    r"(?:\d{1,3}°\s+)?(" + _HAND_CODE + r"(?:\\" + _HAND_CODE + r")?)\s*$",
     re.IGNORECASE,
 )
 
@@ -2233,6 +2236,35 @@ def extract_doors_from_set_headings(pdf) -> list[DoorEntry]:
     return doors
 
 
+# Patterns used to tell a location-continuation line apart from structural
+# lines (another door, a new heading, the Opening Description, an item,
+# a bare size / door-type row that some PDFs print without the "Opening
+# Description:" prefix). Documented as a group so the decision rules sit
+# next to each other — if a new real PDF turns up a missed blocker,
+# extend this pattern + add a test case.
+_CONTINUATION_BLOCKER_RE = re.compile(
+    r"(?i)^\s*(?:"
+    r"heading\b"                            # new heading starts here
+    r"|opening\s+description\b"             # fire-rating / size line
+    r"|\d+\s+(?:pair|single)\s+doors?\b"    # another door line
+    r"|\d+\s+[A-Za-z]"                      # qty + word = item line ("12 Hinges …")
+    r"|\d+(?:\s*[-–]\s*\d+)?\s*['\"\u2032\u2033]"  # bare dimensions ("3' 0\"" / "2 - 3' 0\"")
+    r"|note[s]?\s*[:]"                      # note line
+    r"|phase\s*[:]|project\s*id\s*[:]"      # ESC/SpecWorks header
+    r")"
+)
+
+
+def _is_location_continuation_line(line: str) -> bool:
+    """True if ``line`` is text that continues the previous door's
+    location (the PDF wrapped on column width). A continuation line has
+    content but doesn't start a new structural block."""
+    stripped = (line or "").strip()
+    if not stripped:
+        return False
+    return _CONTINUATION_BLOCKER_RE.match(stripped) is None
+
+
 def build_heading_page_map(pdf) -> dict[str, DoorEntry]:
     """Step B of the Opening List ↔ Heading Page join.
 
@@ -2243,36 +2275,44 @@ def build_heading_page_map(pdf) -> dict[str, DoorEntry]:
     Returns a ``{door_number: DoorEntry}`` map with location, hand,
     hw_set, hw_heading, and fire_rating populated.
 
-    Design note: we group doors by heading BUT return a flat map because
-    the caller (join) only needs per-door lookups. The grouping stays
-    local so heading-level metadata (fire rating) can be propagated
-    before the doors leak out.
+    Design notes:
+      - Doors are grouped by heading internally so heading-level
+        metadata (fire rating) can propagate before the doors escape
+        into the flat map.
+      - Narrow-column submittals (e.g. Lyft/Waymo) wrap per-door
+        lines:
+
+            1 Single Door #E102 RECEPTION 101 to LARGE RH
+            CONF. ROOM 102
+
+        The hand sits at the end of line 1; the tail of the location
+        sits on the next non-structural line. This parser stitches
+        such continuation lines back onto the most recently added
+        door's location before moving on.
     """
     heading_map: dict[str, DoorEntry] = {}
 
     for page in pdf.pages:
         text = page.extract_text() or ""
+        lines = text.split("\n")
         current_set_id = ""
-        # Doors collected for the CURRENT heading on this page, pending
-        # an Opening Description line that may stamp a fire rating onto
-        # them. When a new heading starts we flush the previous batch
-        # (any rating is already stamped) and begin a fresh list.
         current_batch: list[DoorEntry] = []
+        # The most-recently created door that can still absorb a
+        # location-continuation line. Reset on any structural line.
+        pending_door: DoorEntry | None = None
 
-        def _flush_batch() -> None:
-            """Copy any fire rating already stamped is a no-op — this just
-            releases ownership of the batch back to the shared map."""
-            # Kept as a named no-op for readability at heading boundaries.
-            return
+        i = 0
+        while i < len(lines):
+            line = lines[i]
 
-        for line in text.split("\n"):
             heading_match = _HEADING_LINE_PATTERN.match(line.strip())
             if heading_match:
-                _flush_batch()
                 current_set_id = next(
                     (g for g in heading_match.groups() if g), ""
                 )
                 current_batch = []
+                pending_door = None
+                i += 1
                 continue
 
             door_match = HEADING_DOOR_WITH_NUMBER.search(line)
@@ -2294,18 +2334,47 @@ def build_heading_page_map(pdf) -> dict[str, DoorEntry]:
                     )
                     heading_map[door_num] = entry
                     current_batch.append(entry)
+                    pending_door = entry
+                else:
+                    pending_door = None
+                i += 1
                 continue
 
-            # Fire rating on the Opening Description line is shared by
-            # every door under this heading. Stamp in-place so callers
-            # see the rating on every door they look up.
+            # Opening Description: stamp fire rating onto every door
+            # batched so far under this heading.
             rating = parse_opening_description_fire_rating(line)
             if rating and current_batch:
                 for d in current_batch:
                     if not (d.fire_rating or "").strip():
                         d.fire_rating = rating
+                pending_door = None
+                i += 1
+                continue
 
-        _flush_batch()
+            # Location continuation: a line with text that isn't a new
+            # structural block. Stitch onto the most recent door's
+            # location (if any), then yield the pending slot so the next
+            # continuation-shaped line can't leak past another blocker.
+            if pending_door is not None and _is_location_continuation_line(line):
+                extra = line.strip()
+                if extra:
+                    if pending_door.location:
+                        pending_door.location = (
+                            f"{pending_door.location} {extra}".strip()
+                        )
+                    else:
+                        pending_door.location = extra
+                # Only one continuation per door is supported — this is
+                # the observed format in real submittals and keeps the
+                # parser from swallowing unrelated paragraphs below.
+                pending_door = None
+                i += 1
+                continue
+
+            # Any other line resets the pending slot so a later blank-
+            # ish line doesn't accidentally get appended.
+            pending_door = None
+            i += 1
 
     return heading_map
 
