@@ -365,32 +365,41 @@ COMMENT ON TABLE public.tracking_items IS
 
 -- ─────────────────────────────────────────────────────────────────────────────
 -- Indexes for unindexed foreign keys flagged by Supabase advisor (finding #16)
--- Using CONCURRENTLY to avoid locking in production
+--
+-- Originally `CREATE INDEX CONCURRENTLY` to avoid locking in production. The
+-- keyword was removed because `supabase start` (used by the local dev stack
+-- and the rls-tenancy CI job) applies migrations through a pipeline that
+-- forbids CONCURRENTLY (SQLSTATE 25001). Production already has these
+-- indexes from the original CONCURRENTLY apply, and `IF NOT EXISTS` keeps
+-- the rewrite a no-op there.
+--
+-- Do NOT re-add CONCURRENTLY without first switching CI to a non-pipelined
+-- migration apply path. See docs/sso-bootstrap.md "CI notes".
 -- ─────────────────────────────────────────────────────────────────────────────
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_project_members_user_id
+CREATE INDEX IF NOT EXISTS idx_project_members_user_id
   ON public.project_members(user_id);
 
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_projects_created_by
+CREATE INDEX IF NOT EXISTS idx_projects_created_by
   ON public.projects(created_by);
 
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_extraction_runs_created_by
+CREATE INDEX IF NOT EXISTS idx_extraction_runs_created_by
   ON public.extraction_runs(created_by);
 
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_extraction_runs_promoted_by
+CREATE INDEX IF NOT EXISTS idx_extraction_runs_promoted_by
   ON public.extraction_runs(promoted_by);
 
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_extraction_decisions_created_by
+CREATE INDEX IF NOT EXISTS idx_extraction_decisions_created_by
   ON public.extraction_decisions(created_by);
 
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_extraction_corrections_project_id
+CREATE INDEX IF NOT EXISTS idx_extraction_corrections_project_id
   ON public.extraction_corrections(project_id);
 
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_extraction_corrections_corrected_by
+CREATE INDEX IF NOT EXISTS idx_extraction_corrections_corrected_by
   ON public.extraction_corrections(corrected_by);
 
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_attachments_uploaded_by
+CREATE INDEX IF NOT EXISTS idx_attachments_uploaded_by
   ON public.attachments(uploaded_by);
 
-CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_issues_hardware_item_id
+CREATE INDEX IF NOT EXISTS idx_issues_hardware_item_id
   ON public.issues(hardware_item_id);
 

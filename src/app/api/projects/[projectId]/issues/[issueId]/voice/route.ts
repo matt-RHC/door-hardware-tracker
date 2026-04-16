@@ -78,7 +78,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     const fileId = uuidv4()
     const timestamp = Date.now()
-    const storagePath = `issue-evidence/${projectId}/${issueId}/voice-${timestamp}-${fileId}.${ext}`
+    // Path layout: <project_id>/<issue_id>/voice-<ts>-<id>.<ext>
+    // Segment 1 must be the project UUID so storage RLS in 043 can cast
+    // (storage.foldername(name))[1]::uuid and join through to companies.
+    const storagePath = `${projectId}/${issueId}/voice-${timestamp}-${fileId}.${ext}`
 
     // Upload to Supabase Storage
     const buffer = await file.arrayBuffer()

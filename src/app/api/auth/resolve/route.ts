@@ -70,11 +70,16 @@ function extractDomain(email: string): string | null {
 
 /**
  * Map a company's registered provider preference. v1 doesn't track this
- * per-company yet, so we apply a simple heuristic: Microsoft-owned corp
- * domains default to 'azure', everything else to 'google'. Customers can
- * override at the client by using the fallback OAuth buttons.
+ * per-company, so we apply a deliberately tiny heuristic: only the
+ * literal `*.onmicrosoft.com` tenant domains route to Azure; everything
+ * else defaults to Google.
  *
- * Future: add `company_domains.preferred_provider` column.
+ * Known limitation: an Azure AD tenant with a vanity domain (e.g.
+ * dpr.com) gets routed to Google by this heuristic. Those customers
+ * should fall through to the fallback OAuth pills under the divider, or
+ * be served by the v2 `company_domains.preferred_provider` column.
+ *
+ * TODO(v2): add `company_domains.preferred_provider` and read it here.
  */
 function providerForDomain(domain: string): 'google' | 'azure' {
   const microsoftFirst = /\.onmicrosoft\.com$/i
@@ -137,22 +142,23 @@ export async function POST(request: NextRequest): Promise<NextResponse<ResolveRe
     } as const)
   }
 
-  // Domain is NOT registered. Check whether a password user exists with
-  // this email. If yes → password flow. Otherwise → unknown.
+  // Domain is NOT registered. Check whether the email has a *password*
+  // identity in `auth.identities`. We deliberately do not just check
+  // for an existing user: an OAuth-only user (no password row) should
+  // never see the password slot.
   //
-  // We use the admin API's listUsers() email filter. For the single
-  // existing user (per §0 of the plan) this is negligible load. In a
-  // larger tenancy we'd replace this with a custom indexed lookup.
+  // The supabase-js admin SDK has no `filter` parameter on listUsers —
+  // earlier code passed one and it was silently ignored, so this branch
+  // mostly fell through to `unknown` even for legit password users.
+  // Migration 043 ships `public.has_password_identity(text)`
+  // SECURITY DEFINER, called via the service role.
   try {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: userLookup } = await (admin.auth.admin as any).listUsers({
-      page: 1,
-      perPage: 1,
-      filter: `email.eq.${email}`,
-    })
-
-    const users = (userLookup?.users ?? []) as Array<{ email?: string }>
-    if (users.some((u) => (u.email ?? '').toLowerCase() === email)) {
+    const { data: hasPassword, error: rpcErr } = await (admin as any).rpc(
+      'has_password_identity',
+      { p_email: email },
+    )
+    if (!rpcErr && hasPassword === true) {
       return NextResponse.json({ kind: 'password' } as const)
     }
   } catch {

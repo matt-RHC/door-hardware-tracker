@@ -117,11 +117,14 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'No file provided' }, { status: 400 })
     }
 
-    // Generate unique storage path
+    // Generate unique storage path.
+    // Layout: <project_id>/<issue_id>/<ts>-<id>.<ext>
+    // Segment 1 must be the project UUID so storage RLS in 043 can cast
+    // (storage.foldername(name))[1]::uuid and join through to companies.
     const fileId = uuidv4()
     const fileExtension = file.name.split('.').pop()
     const timestamp = Date.now()
-    const storagePath = `issues/${projectId}/${issueId}/${timestamp}-${fileId}.${fileExtension}`
+    const storagePath = `${projectId}/${issueId}/${timestamp}-${fileId}.${fileExtension}`
 
     // Upload to Supabase Storage
     const buffer = await file.arrayBuffer()

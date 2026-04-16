@@ -212,4 +212,23 @@ describeOrSkip('company isolation RLS', () => {
 
     await admin.storage.from('attachments').remove([path])
   })
+
+  // Regression fence for blockers #2 + #3 from the PR #277 review:
+  // issue-evidence had no RLS, and old uploads put a literal string in
+  // segment 1 of the path. Migration 043 fixed both; this test holds
+  // the line by mirroring the attachments cross-tenant denial against
+  // the new layout.
+  it('cross-tenant issue-evidence download is denied', async () => {
+    const fakeIssueId = '00000000-0000-0000-0000-000000000001'
+    const path = `${initech.projectId}/${fakeIssueId}/rls-test-${Date.now()}.txt`
+    const buf = new TextEncoder().encode('secret')
+    const { error: upErr } = await admin.storage.from('issue-evidence').upload(path, buf)
+    expect(upErr).toBeNull()
+
+    const { data, error } = await acme.client.storage.from('issue-evidence').download(path)
+    expect(data).toBeNull()
+    expect(error).not.toBeNull()
+
+    await admin.storage.from('issue-evidence').remove([path])
+  })
 })

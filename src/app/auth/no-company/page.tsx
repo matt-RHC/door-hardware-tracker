@@ -19,6 +19,39 @@ export default function NoCompanyPage() {
     typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
   const domain = searchParams?.get("d") ?? "";
 
+  // Rescue attempt: if an admin registered the user's domain after the
+  // initial OAuth exchange, try_domain_auto_join will insert the
+  // company_members row + stamp app_metadata.company_id. We then refresh
+  // the session so the new claim is on the JWT before /dashboard loads,
+  // and bounce. Idempotent and short-circuits when membership already
+  // exists. Runs in its own effect so a Sentry failure doesn't suppress
+  // the rescue and vice versa.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const sb = createClient();
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data: companyId } = await (sb as any).rpc("try_domain_auto_join");
+        if (cancelled || !companyId) return;
+        // Best-effort JWT refresh. If it fails, redirect anyway — the
+        // middleware DB-fallback path will catch the membership at the
+        // cost of one extra round-trip, never a lockout.
+        try {
+          await sb.auth.refreshSession();
+        } catch {
+          // swallow
+        }
+        window.location.replace("/dashboard");
+      } catch {
+        // Silent — fall through to the dead-end UI.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   useEffect(() => {
     // Log domain only — never email or user_id. Correlation ID goes
     // into the mailto so support can link the lead to the Sentry event.

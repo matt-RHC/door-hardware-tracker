@@ -192,9 +192,37 @@ ones you can't skip:
 - [ ] Sign in with a non-matching account → lands on `/auth/no-company`.
 - [ ] From the DPR session, fetch a project PDF URL in another company →
       403 from `assertProjectInUserCompany`.
-- [ ] `storage.buckets.public` is false for both `attachments` and
-      `submittals`.
+- [ ] `storage.buckets.public` is false for `attachments`, `submittals`,
+      AND `issue-evidence`.
+- [ ] All `issue-evidence` storage objects have a UUID as their first
+      path segment (the new `<project_id>/<issue_id>/<file>` layout):
+      `SELECT count(*) FROM storage.objects WHERE bucket_id =
+      'issue-evidence' AND (storage.foldername(name))[1] !~*
+      '^[0-9a-f-]{36}$';` should return 0. If non-zero, run
+      `node scripts/migrate-issue-evidence-paths.mjs --dry-run` first,
+      then without the flag.
 
 If anything fails, revert to the last known-good migration by temporarily
 disabling RLS on the affected tables, investigate, and redeploy — do
 **not** ship a hotfix that bypasses tenancy.
+
+## 8. CI notes
+
+- **Do not re-add `CREATE INDEX CONCURRENTLY`** to migration 016 (or any
+  other migration that the local Supabase stack must apply from scratch).
+  `supabase start` and `supabase db push` apply migrations through a
+  pipeline that disallows `CONCURRENTLY` (Postgres errors with SQLSTATE
+  `25001`). The keyword was removed from migration 016 so the
+  `rls-tenancy` CI job can boot a clean database; production already
+  has the indexes from the original out-of-band apply, and the
+  `IF NOT EXISTS` guards keep the rewrite a true no-op there. If a
+  future migration legitimately needs `CONCURRENTLY` to avoid locking
+  a large table, isolate it in its own file and gate it behind an
+  environment check (or accept a separate non-pipelined apply path
+  for that one statement).
+- The `rls-tenancy` job stands up the full local Supabase stack
+  (Postgres + GoTrue + Storage), applies every migration in
+  `supabase/migrations/`, and runs `tests/rls/company-isolation.test.ts`
+  against it. Any new tenant-scoped table or storage bucket should get
+  a regression test there before merge.
+
