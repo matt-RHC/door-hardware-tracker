@@ -34,11 +34,14 @@ export function getSyncState(): SyncState {
  */
 export async function triggerSync(): Promise<void> {
   if (syncInProgress) return
+  syncInProgress = true
 
   const pending = await getPendingCount()
-  if (pending === 0) return
+  if (pending === 0) {
+    syncInProgress = false
+    return
+  }
 
-  syncInProgress = true
   notify('syncing')
 
   try {

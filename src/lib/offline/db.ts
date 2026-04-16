@@ -101,14 +101,6 @@ export async function saveCheckOffline(check: Omit<OfflineCheck, 'synced'>) {
   })
 }
 
-export async function saveCheckOfflineV2(check: Omit<OfflineCheck, 'synced'>) {
-  const database = await getOfflineDB()
-  await database.put('pendingChecksV2', {
-    ...check,
-    synced: false,
-  })
-}
-
 export async function syncPendingChecks() {
   const database = await getOfflineDB()
   const allPendingChecks = await database.getAll('pendingChecksV2')

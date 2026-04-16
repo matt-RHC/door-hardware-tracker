@@ -99,7 +99,7 @@ export async function createExtractionRun(
     .select('id')
     .single()
 
-  if (error) throw new Error(`Failed to create extraction run: ${error.message}`)
+  if (error || !data) throw new Error(`Failed to create extraction run: ${error?.message ?? 'no data returned'}`)
   return data.id
 }
 

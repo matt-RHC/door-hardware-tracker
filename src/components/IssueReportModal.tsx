@@ -111,7 +111,7 @@ export default function IssueReportModal({
             </label>
             <select
               value={severity}
-              onChange={(e) => setSeverity(e.target.value as any)}
+              onChange={(e) => setSeverity(e.target.value as typeof severity)}
               className="w-full px-3 py-2 bg-surface border border-th-border rounded text-primary focus:outline-none focus:ring-2 focus:ring-accent"
             >
               <option value="low">Low</option>
