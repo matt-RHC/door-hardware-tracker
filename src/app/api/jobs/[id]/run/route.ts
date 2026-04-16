@@ -957,8 +957,27 @@ export async function POST(
     }
     const doorToSetMap = buildDoorToSetMap(extractedSets)
 
+    // Filter orphan doors — doors with hw_set "N/A" (or empty) that resolve
+    // to no hardware set with items. Matching save/route.ts logic.
+    const filteredDoors = acceptedDoors.filter(d => {
+      const hwSetVal = (d.hw_set ?? '').trim()
+      if (hwSetVal !== '' && hwSetVal !== 'N/A') return true
+      const doorKey = normalizeDoorNumber(d.door_number)
+      const resolvedSet = doorToSetMap.get(doorKey) ?? setMap.get(hwSetVal)
+      return resolvedSet != null && resolvedSet.items.length > 0
+    })
+    if (filteredDoors.length < acceptedDoors.length) {
+      const orphanCount = acceptedDoors.length - filteredDoors.length
+      const orphanNumbers = acceptedDoors
+        .filter(d => !filteredDoors.includes(d))
+        .map(d => d.door_number)
+      console.log(
+        `[job-orchestrator] Job ${jobId}: filtered ${orphanCount} orphan door(s) with no hardware set/items: ${orphanNumbers.join(', ')}`
+      )
+    }
+
     const doorInfoMap = new Map<string, { door_type: string; frame_type: string }>()
-    for (const d of acceptedDoors) {
+    for (const d of filteredDoors) {
       doorInfoMap.set(d.door_number, {
         door_type: d.door_type || '',
         frame_type: d.frame_type || '',
@@ -968,7 +987,7 @@ export async function POST(
     // Convert accepted doors to StagingOpening format.
     // Compute leaf_count via detectIsPair (matching save/route.ts) so pair
     // detection uses heading_leaf_count, opening size, and keyword signals.
-    const stagingOpenings: StagingOpening[] = acceptedDoors.map(d => {
+    const stagingOpenings: StagingOpening[] = filteredDoors.map(d => {
       const doorKey = normalizeDoorNumber(d.door_number)
       const hwSet = doorToSetMap.get(doorKey) ?? setMap.get(d.hw_set ?? '')
       const doorInfo = doorInfoMap.get(d.door_number)
