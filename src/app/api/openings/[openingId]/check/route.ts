@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { createAdminSupabaseClient } from '@/lib/supabase/admin'
-import { v4 as uuidv4 } from 'uuid'
 import { logActivity, type ActivityAction } from '@/lib/activity-log'
 
 type WorkflowStep = 'received' | 'pre_install' | 'installed' | 'qa_qc' | 'checked'
@@ -144,14 +143,14 @@ export async function POST(
     }
 
     // Upsert checklist progress
+    // Note: do NOT include `id` in the payload — it has a DB default
+    // (gen_random_uuid). Including a new UUID would overwrite the existing
+    // row's primary key on conflict, breaking foreign-key references.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: result, error: upsertError } = await (adminSupabase as any)
       .from('checklist_progress')
       .upsert(
-        [{
-          id: uuidv4(),
-          ...updatePayload,
-        }],
+        [updatePayload],
         {
           onConflict: 'opening_id,item_id,leaf_index',
         }
