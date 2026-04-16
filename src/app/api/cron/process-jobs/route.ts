@@ -6,7 +6,7 @@ export const maxDuration = 30
 /**
  * GET /api/cron/process-jobs — Cron handler to pick up stale queued jobs.
  *
- * Finds extraction_jobs stuck in 'queued' status for more than 30 seconds
+ * Finds extraction_jobs stuck in 'queued' status for more than 10 seconds
  * (fire-and-forget from POST /api/jobs may have failed) and re-dispatches
  * them by calling /api/jobs/:id/run.
  *
@@ -27,14 +27,15 @@ export async function GET(request: NextRequest) {
   try {
     const adminSupabase = createAdminSupabaseClient()
 
-    // Find jobs that have been queued for more than 30 seconds
-    const thirtySecondsAgo = new Date(Date.now() - 30_000).toISOString()
+    // Reduced from 30s to 10s — if fire-and-forget dispatch failed,
+    // detect it faster so the cron can re-dispatch sooner.
+    const tenSecondsAgo = new Date(Date.now() - 10_000).toISOString()
 
     const { data: staleJobs, error } = await adminSupabase
       .from('extraction_jobs')
       .select('id')
       .eq('status', 'queued')
-      .lt('created_at', thirtySecondsAgo)
+      .lt('created_at', tenSecondsAgo)
       .order('created_at', { ascending: true })
       .limit(5) // process at most 5 per cron tick
 
