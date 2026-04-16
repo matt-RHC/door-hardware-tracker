@@ -50,21 +50,25 @@ export default function OpeningIssuesFeed({ openingId }: { openingId: string }) 
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    const controller = new AbortController()
     const fetchIssues = async () => {
       try {
         const res = await fetch(
-          `/api/projects/${projectId}/issues?opening_id=${openingId}&limit=10`
+          `/api/projects/${projectId}/issues?opening_id=${openingId}&limit=10`,
+          { signal: controller.signal }
         )
         if (!res.ok) return
         const data = await res.json()
         setIssues(data.data ?? [])
-      } catch {
+      } catch (err) {
+        if (err instanceof DOMException && err.name === 'AbortError') return
         // Non-critical
       } finally {
-        setLoading(false)
+        if (!controller.signal.aborted) setLoading(false)
       }
     }
     fetchIssues()
+    return () => controller.abort()
   }, [projectId, openingId])
 
   if (loading) {

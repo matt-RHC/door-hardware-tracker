@@ -75,6 +75,7 @@ export async function replayQueue(): Promise<{ synced: number; failed: number; c
   let synced = 0
   let failed = 0
   let conflicts = 0
+  const syncedIds = new Set<string>()
 
   for (const entry of pending) {
     // Skip entries that have exceeded max retries
@@ -99,10 +100,12 @@ export async function replayQueue(): Promise<{ synced: number; failed: number; c
 
       if (response.ok) {
         await db.put('pendingChecksV2', { ...entry, synced: true })
+        syncedIds.add(entry.id)
         synced++
       } else if (response.status === 409) {
         // LWW conflict — server wins, mark as synced
         await db.put('pendingChecksV2', { ...entry, synced: true })
+        syncedIds.add(entry.id)
         conflicts++
         synced++ // Still counts as resolved
       } else if (response.status === 401) {
@@ -134,7 +137,6 @@ export async function replayQueue(): Promise<{ synced: number; failed: number; c
   // Clean up localStorage backup for synced entries
   try {
     const backup: QueueEntry[] = JSON.parse(localStorage.getItem(LOCALSTORAGE_KEY) || '[]')
-    const syncedIds = new Set(pending.filter((p) => p.synced).map((p) => p.id))
     const remaining = backup.filter((e) => !syncedIds.has(e.id))
     localStorage.setItem(LOCALSTORAGE_KEY, JSON.stringify(remaining))
   } catch {

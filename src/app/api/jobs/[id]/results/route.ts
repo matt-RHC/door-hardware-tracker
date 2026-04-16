@@ -89,6 +89,7 @@ export async function GET(
     for (const item of (stagingItems ?? [])) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const openingId = (item as any).staging_opening_id
+      if (!openingId) continue
       if (!itemsByOpening.has(openingId)) {
         itemsByOpening.set(openingId, [])
       }
