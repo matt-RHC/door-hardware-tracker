@@ -196,6 +196,11 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: 'Access denied' }, { status: 403 })
     }
 
+    // Only project admins can hard-delete issues
+    if ((membership as { role: string }).role !== 'admin') {
+      return NextResponse.json({ error: 'Only project admins can delete issues' }, { status: 403 })
+    }
+
     // Hard delete — consistent with existing patterns in the codebase
     const { error } = await (supabase as any)
       .from('issues')

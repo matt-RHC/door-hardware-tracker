@@ -26,7 +26,7 @@ const W_COMPLETENESS = 0.25
 const FIELD_PATTERNS: Record<string, RegExp> = {
   door_number: /^\d{2,4}[A-Za-z]?(-\d{1,3}[A-Za-z]?)?$/,
   hw_set: /^(DH|HW|HS|SET)\s?\d{1,4}[A-Za-z]?$/i,
-  fire_rating: /^(20|45|60|90|180)\s*MIN(UTE)?S?$|^N\/?R$|^(1|1\.5|2|3)\s*HR$/i,
+  fire_rating: /^(20|45|60|90|180)\s*MIN(UTE)?S?$|^N\/?R$|^(1|1\.5|2|3)\s*H(?:OU)?RS?$/i,
   hand: /^(LH|RH|LHR|RHR|LHRA|RHRA|N\/A)$/i,
   door_type: /^(WD|HM|AL|GL|FRP|PR|PAIR|SGL|DBL)$/i,
   frame_type: /^(WD|HM|AL|KD|WELD|DRYWALL)$/i,
