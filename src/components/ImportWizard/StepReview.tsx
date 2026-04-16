@@ -159,7 +159,7 @@ export default function StepReview({
   onBack,
   onRemapColumns,
 }: StepReviewProps) {
-  // Local copy of hardware sets to support Punchy revert without modifying parent state
+  // Local copy of hardware sets to support Darrin revert without modifying parent state
   const [hardwareSets, setHardwareSets] = useState(initialHardwareSets);
   const { registerRef } = usePunchHighlight();
   const { showToast } = useToast();

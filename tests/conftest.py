@@ -322,12 +322,12 @@ def pytest_collection_modifyitems(config, items):
 
 
 @pytest.fixture(scope="session")
-def punchy_reviewer():
-    """Session-scoped lazy Anthropic client wrapper for Punchy review.
+def darrin_reviewer():
+    """Session-scoped lazy Anthropic client wrapper for Darrin review.
 
-    Returns the punchy_review module. Skips if ANTHROPIC_API_KEY is not set.
+    Returns the darrin_review module. Skips if ANTHROPIC_API_KEY is not set.
     """
     if not os.environ.get("ANTHROPIC_API_KEY"):
         pytest.skip("ANTHROPIC_API_KEY not set — skipping LLM review tests")
-    from tests.punchy_review import review_extraction, apply_corrections
+    from tests.darrin_review import review_extraction, apply_corrections
     return {"review": review_extraction, "apply": apply_corrections}

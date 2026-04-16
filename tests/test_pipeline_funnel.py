@@ -1,5 +1,5 @@
 """
-Pipeline funnel tests — runs pdfplumber -> Punchy LLM review -> merge
+Pipeline funnel tests — runs pdfplumber -> Darrin LLM review -> merge
 for each golden PDF that has ground truth, and prints a funnel table.
 
 Usage:
@@ -20,7 +20,7 @@ GRID_PDFS = ["SMALL", "MEDIUM", "LARGE", "RPL10", "CAA"]
 
 
 def _extraction_to_dict(hw_sets, openings, confirmed, flagged):
-    """Convert extraction pipeline objects to plain dicts for Punchy review."""
+    """Convert extraction pipeline objects to plain dicts for Darrin review."""
     sets_list = []
     for s in hw_sets:
         items = []
@@ -103,11 +103,11 @@ class TestPdfplumberFunnel:
 
 
 @pytest.mark.llm_review
-class TestPunchyFunnel:
-    """Stage 2: Punchy LLM review + merge accuracy vs ground truth."""
+class TestDarrinFunnel:
+    """Stage 2: Darrin LLM review + merge accuracy vs ground truth."""
 
     @pytest.mark.parametrize("pdf_key", GRID_PDFS)
-    def test_review_returns_valid_json(self, pdf_key, pipeline_results, pdf_catalog, punchy_reviewer):
+    def test_review_returns_valid_json(self, pdf_key, pipeline_results, pdf_catalog, darrin_reviewer):
         pdf_path = pdf_catalog.get(pdf_key)
         if pdf_path is None:
             pytest.skip(f"PDF not available: {pdf_key}")
@@ -119,13 +119,13 @@ class TestPunchyFunnel:
         hw_sets, openings, confirmed, flagged, refs, tf = result
         extraction_dict = _extraction_to_dict(hw_sets, openings, confirmed, flagged)
 
-        review = punchy_reviewer["review"](pdf_path, extraction_dict)
+        review = darrin_reviewer["review"](pdf_path, extraction_dict)
         assert "corrections" in review
         assert "confidence" in review
         assert isinstance(review["confidence"], (int, float))
 
     @pytest.mark.parametrize("pdf_key", GRID_PDFS)
-    def test_merge_preserves_door_count(self, pdf_key, pipeline_results, pdf_catalog, ground_truth, punchy_reviewer):
+    def test_merge_preserves_door_count(self, pdf_key, pipeline_results, pdf_catalog, ground_truth, darrin_reviewer):
         truth = ground_truth.get(pdf_key)
         if truth is None:
             pytest.skip(f"No ground truth for {pdf_key}")
@@ -141,8 +141,8 @@ class TestPunchyFunnel:
         hw_sets, openings, confirmed, flagged, refs, tf = result
         extraction_dict = _extraction_to_dict(hw_sets, openings, confirmed, flagged)
 
-        review = punchy_reviewer["review"](pdf_path, extraction_dict)
-        merged = punchy_reviewer["apply"](
+        review = darrin_reviewer["review"](pdf_path, extraction_dict)
+        merged = darrin_reviewer["apply"](
             extraction_dict["hardware_sets"],
             extraction_dict["openings"],
             review["corrections"],
@@ -156,7 +156,7 @@ class TestPunchyFunnel:
         )
 
     @pytest.mark.parametrize("pdf_key", GRID_PDFS)
-    def test_merge_preserves_set_count(self, pdf_key, pipeline_results, pdf_catalog, ground_truth, punchy_reviewer):
+    def test_merge_preserves_set_count(self, pdf_key, pipeline_results, pdf_catalog, ground_truth, darrin_reviewer):
         truth = ground_truth.get(pdf_key)
         if truth is None:
             pytest.skip(f"No ground truth for {pdf_key}")
@@ -172,8 +172,8 @@ class TestPunchyFunnel:
         hw_sets, openings, confirmed, flagged, refs, tf = result
         extraction_dict = _extraction_to_dict(hw_sets, openings, confirmed, flagged)
 
-        review = punchy_reviewer["review"](pdf_path, extraction_dict)
-        merged = punchy_reviewer["apply"](
+        review = darrin_reviewer["review"](pdf_path, extraction_dict)
+        merged = darrin_reviewer["apply"](
             extraction_dict["hardware_sets"],
             extraction_dict["openings"],
             review["corrections"],

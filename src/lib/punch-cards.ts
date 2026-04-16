@@ -1,6 +1,6 @@
 /**
  * PunchCard generator — turns extraction results into an ordered list of
- * review cards for the Punchy card UI.
+ * review cards for the Darrin card UI.
  *
  * Each card represents one finding, one decision, one screen.
  */
@@ -8,7 +8,7 @@
 import type {
   DoorEntry,
   HardwareSet,
-  PunchyQuantityCheck,
+  DarrinQuantityCheck,
   PageClassification,
 } from '@/lib/types'
 import { normalizeDoorNumber } from '@/lib/parse-pdf-helpers'
@@ -85,7 +85,7 @@ export interface ExtractionHealth {
     door?: DoorEntry
     /** 0-based PDF page index for the set's definition, or null. Used
      *  by the calibration card to render a PDF preview so the user can
-     *  verify Punchy's extraction against the source document. */
+     *  verify Darrin's extraction against the source document. */
     pdf_page?: number | null
   } | null
 }
@@ -176,7 +176,7 @@ export function computeExtractionHealth(
 export function generatePunchCards(input: {
   doors: DoorEntry[]
   hardwareSets: HardwareSet[]
-  qtyCheck: PunchyQuantityCheck | null
+  qtyCheck: DarrinQuantityCheck | null
   pages: PageClassification[]
 }): PunchCardData[] {
   const { doors, hardwareSets, qtyCheck, pages } = input

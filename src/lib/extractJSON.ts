@@ -77,7 +77,7 @@ function* iterateBalancedCandidates(text: string): Generator<string> {
  * matched from the first `{` to the last `}` in the text. When the model
  * emitted prose-then-JSON-then-more-prose-then-more-JSON, the whole
  * middle collapsed into one un-parseable string and extractJSON returned
- * null — dropping every correction in a Punchy checkpoint. This version
+ * null — dropping every correction in a Darrin checkpoint. This version
  * walks candidates one at a time and tries each independently.
  */
 export function extractJSON(raw: string): object | null {

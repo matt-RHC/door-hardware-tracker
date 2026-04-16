@@ -11,9 +11,9 @@ import {
 } from '@/lib/extraction-staging'
 import {
   callPdfplumber,
-  callPunchyColumnReview,
-  callPunchyPostExtraction,
-  callPunchyQuantityCheck,
+  callDarrinColumnReview,
+  callDarrinPostExtraction,
+  callDarrinQuantityCheck,
   applyCorrections,
   normalizeQuantities,
   calculateExtractionConfidence,
@@ -42,7 +42,7 @@ import {
 import type {
   DoorEntry,
   HardwareSet,
-  PunchyQuantityCheck,
+  DarrinQuantityCheck,
   PageClassification,
 } from '@/lib/types'
 import type Anthropic from '@anthropic-ai/sdk'
@@ -520,8 +520,8 @@ export async function POST(
     const requestOrigin = getPythonApiBaseUrl()
     let extractedDoors: DoorEntry[]
     let extractedSets: HardwareSet[]
-    const allQtyFlags: NonNullable<PunchyQuantityCheck['flags']> = []
-    const allQtyComplianceIssues: NonNullable<PunchyQuantityCheck['compliance_issues']> = []
+    const allQtyFlags: NonNullable<DarrinQuantityCheck['flags']> = []
+    const allQtyComplianceIssues: NonNullable<DarrinQuantityCheck['compliance_issues']> = []
     let failedChunks: Array<{ index: number; error: string }> = []
     let extractionConfidence: ExtractionConfidence | null = null
 
@@ -578,9 +578,9 @@ export async function POST(
           allDoors.push(...chunkResult.doors)
           allSets.push(...chunkResult.hardwareSets)
 
-          if (chunkResult.punchyQuantityCheck) {
-            allQtyFlags.push(...(chunkResult.punchyQuantityCheck.flags ?? []))
-            allQtyComplianceIssues.push(...(chunkResult.punchyQuantityCheck.compliance_issues ?? []))
+          if (chunkResult.darrinQuantityCheck) {
+            allQtyFlags.push(...(chunkResult.darrinQuantityCheck.flags ?? []))
+            allQtyComplianceIssues.push(...(chunkResult.darrinQuantityCheck.compliance_issues ?? []))
           }
 
           // Keep worst confidence across chunks
@@ -613,9 +613,9 @@ export async function POST(
       extractedSets = singleResult.hardwareSets
       extractionConfidence = singleResult.confidence
 
-      if (singleResult.punchyQuantityCheck) {
-        allQtyFlags.push(...(singleResult.punchyQuantityCheck.flags ?? []))
-        allQtyComplianceIssues.push(...(singleResult.punchyQuantityCheck.compliance_issues ?? []))
+      if (singleResult.darrinQuantityCheck) {
+        allQtyFlags.push(...(singleResult.darrinQuantityCheck.flags ?? []))
+        allQtyComplianceIssues.push(...(singleResult.darrinQuantityCheck.compliance_issues ?? []))
       }
     }
 
@@ -1132,7 +1132,7 @@ async function processChunk(
 ): Promise<{
   doors: DoorEntry[]
   hardwareSets: HardwareSet[]
-  punchyQuantityCheck: PunchyQuantityCheck | null
+  darrinQuantityCheck: DarrinQuantityCheck | null
   confidence: ExtractionConfidence
 }> {
   // Step 1: Pdfplumber extraction
@@ -1173,17 +1173,17 @@ async function processChunk(
 
   let doors: DoorEntry[] = pdfplumberResult?.openings || []
 
-  // Step 2: Punchy CP1 — Column Mapping Review (first chunk only)
+  // Step 2: Darrin CP1 — Column Mapping Review (first chunk only)
   if (chunkIndex === 0 && userColumnMapping) {
     try {
-      await callPunchyColumnReview(client, chunkBase64, userColumnMapping, { projectId })
+      await callDarrinColumnReview(client, chunkBase64, userColumnMapping, { projectId })
     } catch (err) {
-      console.error('[job] Punchy column review error:', err instanceof Error ? err.message : String(err))
+      console.error('[job] Darrin column review error:', err instanceof Error ? err.message : String(err))
     }
   }
 
-  // Step 3: Punchy CP2 — Post-Extraction Review
-  const corrections = await callPunchyPostExtraction(client, chunkBase64, pdfplumberResult ?? {
+  // Step 3: Darrin CP2 — Post-Extraction Review
+  const corrections = await callDarrinPostExtraction(client, chunkBase64, pdfplumberResult ?? {
     success: false,
     openings: [],
     hardware_sets: [],
@@ -1201,22 +1201,22 @@ async function processChunk(
   hardwareSets = corrected.hardwareSets
   doors = corrected.doors
 
-  // Post-Punchy quantity normalization
+  // Post-Darrin quantity normalization
   normalizeQuantities(hardwareSets, doors)
 
   // Extract fire ratings
   extractFireRatings(doors)
 
-  // Step 4: Punchy CP3 — Quantity Sanity Check
-  let quantityCheck: PunchyQuantityCheck | null = null
+  // Step 4: Darrin CP3 — Quantity Sanity Check
+  let quantityCheck: DarrinQuantityCheck | null = null
   try {
-    quantityCheck = await callPunchyQuantityCheck(client, chunkBase64, hardwareSets, doors, null, { projectId })
+    quantityCheck = await callDarrinQuantityCheck(client, chunkBase64, hardwareSets, doors, null, { projectId })
   } catch (err) {
-    console.error('[job] Punchy quantity check error:', err instanceof Error ? err.message : String(err))
+    console.error('[job] Darrin quantity check error:', err instanceof Error ? err.message : String(err))
   }
 
   // Step 5: Confidence Scoring
   const confidence = calculateExtractionConfidence(hardwareSets, doors, corrections)
 
-  return { doors, hardwareSets, punchyQuantityCheck: quantityCheck, confidence }
+  return { doors, hardwareSets, darrinQuantityCheck: quantityCheck, confidence }
 }

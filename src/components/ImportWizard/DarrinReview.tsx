@@ -4,7 +4,7 @@ import { useState, useCallback, useMemo, useEffect, useRef } from "react";
 import type {
   DoorEntry,
   HardwareSet,
-  PunchyQuantityCheck,
+  DarrinQuantityCheck,
   PageClassification,
 } from "@/lib/types";
 import type { PunchQuestion } from "@/lib/punch-messages";
@@ -23,10 +23,10 @@ import PDFPagePreview from "./PDFPagePreview";
 
 // ── Props ──
 
-interface PunchyReviewProps {
+interface DarrinReviewProps {
   doors: DoorEntry[];
   hardwareSets: HardwareSet[];
-  qtyCheck: PunchyQuantityCheck | null;
+  qtyCheck: DarrinQuantityCheck | null;
   pages: PageClassification[];
   pdfBuffer: ArrayBuffer | null;
   projectId: string;
@@ -41,7 +41,7 @@ interface PunchyReviewProps {
    * Called to trigger deep extract for empty sets.
    * - With no opts: extract all currently-empty sets (the bulk button).
    * - With `targetSetIds`: limit to those set IDs (per-row retry).
-   * - With `userHint`: forward the hint to Punchy.
+   * - With `userHint`: forward the hint to Darrin.
    */
   onDeepExtract: (opts?: { userHint?: string; targetSetIds?: string[] }) => void;
   /** Remove a phantom set entirely and clear `hw_set` on referencing doors. */
@@ -51,7 +51,7 @@ interface PunchyReviewProps {
   deepExtracting: boolean;
   /**
    * Set of set_ids that the user has already run batch deep-extract on
-   * and Punchy returned zero items for. When every currently-empty set
+   * and Darrin returned zero items for. When every currently-empty set
    * is in this set, the "Extract with AI" batch button is disabled and
    * relabeled to push the user toward the per-set resolution options
    * (Add manually / Remove / Try with hint). Prevents the user from
@@ -70,7 +70,7 @@ interface PunchyReviewProps {
 
 // ── Component ──
 
-export default function PunchyReview({
+export default function DarrinReview({
   doors,
   hardwareSets: initialSets,
   qtyCheck,
@@ -85,7 +85,7 @@ export default function PunchyReview({
   emptySetsAttempted,
   onComplete,
   onBack,
-}: PunchyReviewProps) {
+}: DarrinReviewProps) {
   const [currentIdx, setCurrentIdx] = useState(0);
   const [hardwareSets, setHardwareSets] = useState(initialSets);
   const [correctionsApplied, setCorrectionsApplied] = useState(false);
@@ -160,7 +160,7 @@ export default function PunchyReview({
     setHardwareSets(prev =>
       prev.map(set => {
         // Match by exact set_id, falling back to generic_set_id so that
-        // Punchy corrections targeting a generic group (e.g. "DH4A") still
+        // Darrin corrections targeting a generic group (e.g. "DH4A") still
         // land on their sub-variants ("DH4A.0", "DH4A.1"). Without this,
         // every auto-correction on a multi-heading set was silently ignored.
         const setCorrs = corrections.filter(
@@ -667,7 +667,7 @@ function renderCard(card: PunchCardData, ctx: RenderContext) {
                       {wasTried && (
                         <span
                           className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-warning-dim text-warning border border-warning uppercase tracking-wide"
-                          title="Punchy already tried to extract items for this set and returned nothing"
+                          title="Darrin already tried to extract items for this set and returned nothing"
                         >
                           tried
                         </span>
@@ -741,7 +741,7 @@ function renderCard(card: PunchCardData, ctx: RenderContext) {
             {busy && (
               <div className="flex items-center gap-2 py-2">
                 <div className="w-4 h-4 border-2 border-accent border-t-transparent rounded-full animate-spin" />
-                <span className="text-accent text-xs">Punchy is reading the PDF and extracting items...</span>
+                <span className="text-accent text-xs">Darrin is reading the PDF and extracting items...</span>
               </div>
             )}
           </div>
@@ -814,7 +814,7 @@ function renderCard(card: PunchCardData, ctx: RenderContext) {
 
     // ── Auto-Correction Card ──
     case "auto_correction": {
-      const corrections = (card.payload as { corrections: NonNullable<PunchyQuantityCheck["auto_corrections"]> }).corrections ?? [];
+      const corrections = (card.payload as { corrections: NonNullable<DarrinQuantityCheck["auto_corrections"]> }).corrections ?? [];
       return (
         <PunchCard
           type="auto_correction"
@@ -830,7 +830,7 @@ function renderCard(card: PunchCardData, ctx: RenderContext) {
         >
           <div className="space-y-2">
             <p className="text-primary text-sm">
-              Punchy is confident about these fixes:
+              Darrin is confident about these fixes:
             </p>
             {corrections.map((c, i) => (
               <div key={`ac-${i}`} className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-success-dim text-xs">
@@ -1071,7 +1071,7 @@ function renderCard(card: PunchCardData, ctx: RenderContext) {
 
     // ── Compliance Card (batched) ──
     case "compliance": {
-      const issues = (card.payload.issues ?? [card.payload.issue].filter(Boolean)) as NonNullable<PunchyQuantityCheck["compliance_issues"]>;
+      const issues = (card.payload.issues ?? [card.payload.issue].filter(Boolean)) as NonNullable<DarrinQuantityCheck["compliance_issues"]>;
       return (
         <PunchCard
           type="compliance"
@@ -1104,7 +1104,7 @@ function renderCard(card: PunchCardData, ctx: RenderContext) {
 
     // ── Flags Card ──
     case "flag": {
-      const flags = (card.payload.flags ?? []) as NonNullable<PunchyQuantityCheck["flags"]>;
+      const flags = (card.payload.flags ?? []) as NonNullable<DarrinQuantityCheck["flags"]>;
       return (
         <PunchCard
           type="flag"

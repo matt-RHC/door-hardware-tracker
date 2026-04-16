@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { getDeepExtractionPrompt } from './punchy-prompts'
+import { getDeepExtractionPrompt } from './darrin-prompts'
 
 describe('getDeepExtractionPrompt', () => {
   it('omits the USER GUIDANCE block when no hint is provided', () => {

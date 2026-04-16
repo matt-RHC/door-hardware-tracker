@@ -29,16 +29,16 @@ import {
   getPostExtractionReviewPrompt,
   getQuantityCheckPrompt,
   getDeepExtractionPrompt,
-} from '@/lib/punchy-prompts'
+} from '@/lib/darrin-prompts'
 import type {
   DoorEntry,
   ExtractedHardwareItem,
   HardwareSet,
   PageClassification,
   PdfplumberFlaggedDoor,
-  PunchyColumnReview,
-  PunchyCorrections,
-  PunchyQuantityCheck,
+  DarrinColumnReview,
+  DarrinCorrections,
+  DarrinQuantityCheck,
 } from '@/lib/types'
 import type {
   ConfidenceLevel,
@@ -50,13 +50,13 @@ import { extractJSON } from '@/lib/extractJSON'
 import { TAXONOMY_REGEX_CACHE, classifyItem, scanElectricHinges, isAsymmetricHingeSplit, type InstallScope } from '@/lib/hardware-taxonomy'
 import { createAdminSupabaseClient } from '@/lib/supabase/admin'
 
-// --- Punchy observation logging (fire-and-forget) ---
+// --- Darrin observation logging (fire-and-forget) ---
 
 /**
- * Log a Punchy checkpoint call to the `punchy_logs` table for observability.
+ * Log a Darrin checkpoint call to the `darrin_logs` table for observability.
  * Fire-and-forget — never awaited, never throws, never blocks the parse flow.
  */
-function logPunchyCall(opts: {
+function logDarrinCall(opts: {
   projectId?: string
   extractionRunId?: string
   checkpoint: 1 | 2 | 3
@@ -69,12 +69,16 @@ function logPunchyCall(opts: {
 }): void {
   try {
     const supabase = createAdminSupabaseClient()
-    // `punchy_logs` was added by migration 014 (PR #135) but the generated
+    // `darrin_logs` was added by migration 014 (PR #135) but the generated
     // Database type in `src/lib/types/database.ts` has not been regenerated,
     // so the typed client rejects the insert. Cast through `any` until the
     // types can be regenerated against the live Supabase schema.
+    //
+    // NOTE: the physical Supabase table is still named `punchy_logs` during
+    // the Punchy → Darrin rename rollout. TypeScript references `darrin_logs`
+    // as the aliased name; migration 035 renames the actual table.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const insertPromise = (supabase.from('punchy_logs') as any)
+    const insertPromise = (supabase.from('darrin_logs') as any)
       .insert({
         project_id: opts.projectId ?? null,
         extraction_run_id: opts.extractionRunId ?? null,
@@ -88,14 +92,14 @@ function logPunchyCall(opts: {
       }) as Promise<{ error: { message: string } | null }>
     insertPromise
       .then(({ error }) => {
-        if (error) console.warn('Punchy log insert failed:', error.message)
+        if (error) console.warn('Darrin log insert failed:', error.message)
       })
       .catch((err: unknown) => {
-        console.warn('Punchy log insert error:', err instanceof Error ? err.message : String(err))
+        console.warn('Darrin log insert error:', err instanceof Error ? err.message : String(err))
       })
   } catch (err) {
     // createAdminSupabaseClient can fail if env vars are missing (e.g. in tests)
-    console.warn('Punchy log skipped (no admin client):', err instanceof Error ? err.message : String(err))
+    console.warn('Darrin log skipped (no admin client):', err instanceof Error ? err.message : String(err))
   }
 }
 
@@ -130,10 +134,10 @@ export function classifyItemScope(name: string, model?: string): InstallScope | 
  *
  *   - 'divided' / 'flagged' / 'capped' — produced by a prior normalization
  *     pass. Re-dividing would compound the division.
- *   - 'llm_override' — Punchy explicitly corrected the qty. Punchy's prompt
- *     at punchy-prompts.ts:187 tells it the values it sees are already
+ *   - 'llm_override' — Darrin explicitly corrected the qty. Darrin's prompt
+ *     at darrin-prompts.ts:187 tells it the values it sees are already
  *     per-opening, so its returned values are final.
- *   - 'auto_corrected' — PunchyReview.tsx auto-applied a Punchy correction.
+ *   - 'auto_corrected' — DarrinReview.tsx auto-applied a Darrin correction.
  *     Same rationale as 'llm_override'.
  *   - 'deep_extract' / 'region_extract' — pulled from a targeted region of
  *     the PDF with Claude's vision model. Returned values are per-opening.
@@ -317,12 +321,12 @@ export async function callPdfplumber(
   }
 }
 
-export async function callPunchyColumnReview(
+export async function callDarrinColumnReview(
   client: Anthropic,
   base64: string,
   columnMapping: Record<string, number> | null | undefined,
   opts?: { projectId?: string; extractionRunId?: string },
-): Promise<PunchyColumnReview> {
+): Promise<DarrinColumnReview> {
   const systemPrompt = getColumnMappingReviewPrompt()
 
   const mappingSummary = columnMapping
@@ -356,19 +360,19 @@ export async function callPunchyColumnReview(
 
     const textBlock = response.content.find((b: { type: string }) => b.type === 'text')
     if (!textBlock || textBlock.type !== 'text') {
-      logPunchyCall({
+      logDarrinCall({
         projectId: opts?.projectId, extractionRunId: opts?.extractionRunId,
         checkpoint: 1, inputSnapshot: { columnMapping }, response: null,
         parseOk: false, inputTokens: response.usage?.input_tokens,
         outputTokens: response.usage?.output_tokens, latencyMs,
       })
-      return { unmapped_fields: [], mapping_issues: [], notes: 'Punchy returned no text' }
+      return { unmapped_fields: [], mapping_issues: [], notes: 'Darrin returned no text' }
     }
 
     const text = textBlock.text.trim()
     const parsed = extractJSON(text)
 
-    logPunchyCall({
+    logDarrinCall({
       projectId: opts?.projectId, extractionRunId: opts?.extractionRunId,
       checkpoint: 1, inputSnapshot: { columnMapping },
       response: parsed ?? { raw_text: text.substring(0, 2000) },
@@ -377,26 +381,26 @@ export async function callPunchyColumnReview(
     })
 
     if (!parsed) {
-      console.warn('Punchy column review returned unparseable response:', text.substring(0, 300))
-      return { unmapped_fields: [], mapping_issues: [], notes: 'Punchy returned unparseable response' }
+      console.warn('Darrin column review returned unparseable response:', text.substring(0, 300))
+      return { unmapped_fields: [], mapping_issues: [], notes: 'Darrin returned unparseable response' }
     }
 
-    return parsed as PunchyColumnReview
+    return parsed as DarrinColumnReview
   } catch (err) {
-    logPunchyCall({
+    logDarrinCall({
       projectId: opts?.projectId, extractionRunId: opts?.extractionRunId,
       checkpoint: 1, inputSnapshot: { columnMapping }, response: { error: err instanceof Error ? err.message : String(err) },
       parseOk: false, latencyMs: Date.now() - startMs,
     })
-    console.error('Punchy column review failed:', err instanceof Error ? err.message : String(err))
-    return { unmapped_fields: [], mapping_issues: [], notes: `Punchy column review failed: ${err instanceof Error ? err.message : String(err)}` }
+    console.error('Darrin column review failed:', err instanceof Error ? err.message : String(err))
+    return { unmapped_fields: [], mapping_issues: [], notes: `Darrin column review failed: ${err instanceof Error ? err.message : String(err)}` }
   }
 }
 
-// ── Representative door sampling for Punchy checkpoints ──────────────
+// ── Representative door sampling for Darrin checkpoints ──────────────
 
 /**
- * Select a representative subset of doors that maximises coverage for Punchy review.
+ * Select a representative subset of doors that maximises coverage for Darrin review.
  *
  * Strategy (in priority order):
  *   1. One door per unique hardware set — ensures every set gets reviewed.
@@ -503,7 +507,7 @@ export function selectRepresentativeSample(
   return selected
 }
 
-export async function callPunchyPostExtraction(
+export async function callDarrinPostExtraction(
   client: Anthropic,
   base64: string,
   pdfplumberResult: PdfplumberResult,
@@ -516,7 +520,7 @@ export async function callPunchyPostExtraction(
       items: Array<{ qty: number; name: string; manufacturer?: string; model?: string; finish?: string }>
     }
   },
-): Promise<PunchyCorrections> {
+): Promise<DarrinCorrections> {
   const systemPrompt = getPostExtractionReviewPrompt(opts?.goldenSample)
 
   const allOpenings = pdfplumberResult?.openings ?? []
@@ -528,7 +532,7 @@ export async function callPunchyPostExtraction(
       heading_leaf_count: s.heading_leaf_count ?? null,
       qty_convention: s.qty_convention ?? 'unknown',
       item_count: s.items?.length ?? 0,
-      // Pass full annotation context to Punchy CP2 so it sees RAW PDF quantities.
+      // Pass full annotation context to Darrin CP2 so it sees RAW PDF quantities.
       //
       // ARCHITECTURE NOTE (2026-04-13 overhaul):
       // Python no longer mutates item.qty. It sets:
@@ -537,11 +541,11 @@ export async function callPunchyPostExtraction(
       //   qty_door_count = recommended divisor (how many doors/leaves Python thinks this total covers)
       //   qty_source = 'needs_division' | 'needs_cap' | 'needs_review' | 'rhr_lhr_pair' | 'parsed'
       //
-      // Punchy CP2 runs HERE, BEFORE normalizeQuantities divides anything.
-      // This means Punchy sees the raw totals from the PDF and can apply
+      // Darrin CP2 runs HERE, BEFORE normalizeQuantities divides anything.
+      // This means Darrin sees the raw totals from the PDF and can apply
       // domain expertise: "42 hinges for 6 pair doors (12 leaves) should be
-      // 3-4 per leaf, not 7" — that's an insight Punchy can have but a
-      // simple divider cannot. If Punchy changes a qty, it sets qty_source='llm_override',
+      // 3-4 per leaf, not 7" — that's an insight Darrin can have but a
+      // simple divider cannot. If Darrin changes a qty, it sets qty_source='llm_override',
       // which is in NEVER_RENORMALIZE and will not be divided again.
       items: (s.items ?? []).map(item => ({
         qty: item.qty,
@@ -555,7 +559,7 @@ export async function callPunchyPostExtraction(
       })),
     })),
     // Compact full door list: every door_number + hw_set (~2KB for 200 doors)
-    // so Punchy can detect missing doors and wrong assignments across the full project.
+    // so Darrin can detect missing doors and wrong assignments across the full project.
     all_doors: allOpenings.map(d => ({
       door_number: d.door_number,
       hw_set: d.hw_set,
@@ -604,19 +608,19 @@ export async function callPunchyPostExtraction(
 
     const textBlock = response.content.find((b: { type: string }) => b.type === 'text')
     if (!textBlock || textBlock.type !== 'text') {
-      logPunchyCall({
+      logDarrinCall({
         projectId: opts?.projectId, extractionRunId: opts?.extractionRunId,
         checkpoint: 2, inputSnapshot, response: null,
         parseOk: false, inputTokens: response.usage?.input_tokens,
         outputTokens: response.usage?.output_tokens, latencyMs,
       })
-      return { notes: 'Punchy returned no text' }
+      return { notes: 'Darrin returned no text' }
     }
 
     const text = textBlock.text.trim()
     const parsed = extractJSON(text)
 
-    logPunchyCall({
+    logDarrinCall({
       projectId: opts?.projectId, extractionRunId: opts?.extractionRunId,
       checkpoint: 2, inputSnapshot,
       response: parsed ?? { raw_text: text.substring(0, 2000) },
@@ -625,23 +629,23 @@ export async function callPunchyPostExtraction(
     })
 
     if (!parsed) {
-      console.warn('Punchy post-extraction review returned unparseable response:', text.substring(0, 300))
-      return { notes: 'Punchy returned unparseable response' }
+      console.warn('Darrin post-extraction review returned unparseable response:', text.substring(0, 300))
+      return { notes: 'Darrin returned unparseable response' }
     }
 
-    return parsed as PunchyCorrections
+    return parsed as DarrinCorrections
   } catch (err) {
-    logPunchyCall({
+    logDarrinCall({
       projectId: opts?.projectId, extractionRunId: opts?.extractionRunId,
       checkpoint: 2, inputSnapshot, response: { error: err instanceof Error ? err.message : String(err) },
       parseOk: false, latencyMs: Date.now() - startMs,
     })
-    console.error('Punchy post-extraction review failed:', err instanceof Error ? err.message : String(err))
-    return { notes: `Punchy review failed: ${err instanceof Error ? err.message : String(err)}` }
+    console.error('Darrin post-extraction review failed:', err instanceof Error ? err.message : String(err))
+    return { notes: `Darrin review failed: ${err instanceof Error ? err.message : String(err)}` }
   }
 }
 
-export async function callPunchyQuantityCheck(
+export async function callDarrinQuantityCheck(
   client: Anthropic,
   base64: string,
   hardwareSets: HardwareSet[],
@@ -651,7 +655,7 @@ export async function callPunchyQuantityCheck(
     items: Array<{ qty: number; name: string; manufacturer?: string; model?: string; finish?: string }>
   } | null,
   opts?: { projectId?: string; extractionRunId?: string },
-): Promise<PunchyQuantityCheck> {
+): Promise<DarrinQuantityCheck> {
   const systemPrompt = getQuantityCheckPrompt(goldenSample ?? undefined)
 
   const dataSummary = JSON.stringify({
@@ -723,19 +727,19 @@ export async function callPunchyQuantityCheck(
 
     const textBlock = response.content.find((b: { type: string }) => b.type === 'text')
     if (!textBlock || textBlock.type !== 'text') {
-      logPunchyCall({
+      logDarrinCall({
         projectId: opts?.projectId, extractionRunId: opts?.extractionRunId,
         checkpoint: 3, inputSnapshot, response: null,
         parseOk: false, inputTokens: response.usage?.input_tokens,
         outputTokens: response.usage?.output_tokens, latencyMs,
       })
-      return { flags: [], compliance_issues: [], notes: 'Punchy returned no text' }
+      return { flags: [], compliance_issues: [], notes: 'Darrin returned no text' }
     }
 
     const text = textBlock.text.trim()
     const parsed = extractJSON(text)
 
-    logPunchyCall({
+    logDarrinCall({
       projectId: opts?.projectId, extractionRunId: opts?.extractionRunId,
       checkpoint: 3, inputSnapshot,
       response: parsed ?? { raw_text: text.substring(0, 2000) },
@@ -744,12 +748,12 @@ export async function callPunchyQuantityCheck(
     })
 
     if (!parsed) {
-      console.warn('Punchy quantity check returned unparseable response:', text.substring(0, 300))
-      return { flags: [], compliance_issues: [], notes: 'Punchy returned unparseable response' }
+      console.warn('Darrin quantity check returned unparseable response:', text.substring(0, 300))
+      return { flags: [], compliance_issues: [], notes: 'Darrin returned unparseable response' }
     }
 
     // Ensure backward compat: default missing arrays
-    const typed = parsed as PunchyQuantityCheck
+    const typed = parsed as DarrinQuantityCheck
     return {
       auto_corrections: typed.auto_corrections ?? [],
       questions: typed.questions ?? [],
@@ -758,13 +762,13 @@ export async function callPunchyQuantityCheck(
       notes: typed.notes,
     }
   } catch (err) {
-    logPunchyCall({
+    logDarrinCall({
       projectId: opts?.projectId, extractionRunId: opts?.extractionRunId,
       checkpoint: 3, inputSnapshot, response: { error: err instanceof Error ? err.message : String(err) },
       parseOk: false, latencyMs: Date.now() - startMs,
     })
-    console.error('Punchy quantity check failed:', err instanceof Error ? err.message : String(err))
-    return { flags: [], compliance_issues: [], notes: `Punchy quantity check failed: ${err instanceof Error ? err.message : String(err)}` }
+    console.error('Darrin quantity check failed:', err instanceof Error ? err.message : String(err))
+    return { flags: [], compliance_issues: [], notes: `Darrin quantity check failed: ${err instanceof Error ? err.message : String(err)}` }
   }
 }
 
@@ -1263,7 +1267,7 @@ function tokenJaccard(a: string, b: string): number {
 }
 
 /**
- * Name matcher used when applying Punchy corrections to extracted items.
+ * Name matcher used when applying Darrin corrections to extracted items.
  *
  * Matching tiers (first hit wins):
  *   1. Exact string match
@@ -1283,7 +1287,7 @@ export function findItemFuzzy(
   // 1. Exact match
   const exact = items.find(i => i.name === name)
   if (exact) {
-    console.debug(`Punchy correction match (exact): "${name}" [${context}]`)
+    console.debug(`Darrin correction match (exact): "${name}" [${context}]`)
     return exact
   }
 
@@ -1291,7 +1295,7 @@ export function findItemFuzzy(
   const lower = (name ?? '').toLowerCase()
   const ci = items.find(i => (i.name ?? '').toLowerCase() === lower)
   if (ci) {
-    console.debug(`Punchy correction fuzzy match (case): "${name}" → "${ci.name}" [${context}]`)
+    console.debug(`Darrin correction fuzzy match (case): "${name}" → "${ci.name}" [${context}]`)
     return ci
   }
 
@@ -1310,7 +1314,7 @@ export function findItemFuzzy(
     categoryCompatible(i.name) && normalizeName(i.name) === normName,
   )
   if (normMatches.length === 1) {
-    console.debug(`Punchy correction fuzzy match (normalized): "${name}" → "${normMatches[0].name}" [${context}]`)
+    console.debug(`Darrin correction fuzzy match (normalized): "${name}" → "${normMatches[0].name}" [${context}]`)
     return normMatches[0]
   }
   if (normMatches.length > 1) {
@@ -1318,10 +1322,10 @@ export function findItemFuzzy(
     const scored = normMatches.map(i => ({ item: i, score: tokenJaccard(name, i.name) }))
     scored.sort((a, b) => b.score - a.score)
     if (scored[0].score > scored[1].score) {
-      console.debug(`Punchy correction fuzzy match (normalized+scored): "${name}" → "${scored[0].item.name}" [${context}]`)
+      console.debug(`Darrin correction fuzzy match (normalized+scored): "${name}" → "${scored[0].item.name}" [${context}]`)
       return scored[0].item
     }
-    console.warn(`Punchy correction ambiguous normalized match for "${name}" (${scored.length} tied candidates) [${context}]`)
+    console.warn(`Darrin correction ambiguous normalized match for "${name}" (${scored.length} tied candidates) [${context}]`)
     return undefined
   }
 
@@ -1340,7 +1344,7 @@ export function findItemFuzzy(
       return shorter / longer >= 0.5
     })
     if (substringMatches.length === 1) {
-      console.debug(`Punchy correction fuzzy match (substring): "${name}" → "${substringMatches[0].name}" [${context}]`)
+      console.debug(`Darrin correction fuzzy match (substring): "${name}" → "${substringMatches[0].name}" [${context}]`)
       return substringMatches[0]
     }
     if (substringMatches.length > 1) {
@@ -1348,10 +1352,10 @@ export function findItemFuzzy(
       const scored = substringMatches.map(i => ({ item: i, score: tokenJaccard(name, i.name) }))
       scored.sort((a, b) => b.score - a.score)
       if (scored[0].score > scored[1].score) {
-        console.debug(`Punchy correction fuzzy match (substring+scored): "${name}" → "${scored[0].item.name}" [${context}]`)
+        console.debug(`Darrin correction fuzzy match (substring+scored): "${name}" → "${scored[0].item.name}" [${context}]`)
         return scored[0].item
       }
-      console.warn(`Punchy correction ambiguous substring match for "${name}" (${scored.length} tied candidates) [${context}]`)
+      console.warn(`Darrin correction ambiguous substring match for "${name}" (${scored.length} tied candidates) [${context}]`)
       return undefined
     }
   }
@@ -1364,25 +1368,25 @@ export function findItemFuzzy(
     .filter(s => s.score > JACCARD_THRESHOLD)
   allScored.sort((a, b) => b.score - a.score)
   if (allScored.length >= 2 && allScored[0].score === allScored[1].score) {
-    console.warn(`Punchy correction ambiguous Jaccard match for "${name}" (${allScored.length} tied candidates) [${context}]`)
+    console.warn(`Darrin correction ambiguous Jaccard match for "${name}" (${allScored.length} tied candidates) [${context}]`)
     return undefined
   }
   if (allScored.length >= 1) {
-    console.debug(`Punchy correction fuzzy match (jaccard=${allScored[0].score.toFixed(2)}): "${name}" → "${allScored[0].item.name}" [${context}]`)
+    console.debug(`Darrin correction fuzzy match (jaccard=${allScored[0].score.toFixed(2)}): "${name}" → "${allScored[0].item.name}" [${context}]`)
     return allScored[0].item
   }
 
-  console.warn(`Punchy correction could not match item "${name}" [${context}]`)
+  console.warn(`Darrin correction could not match item "${name}" [${context}]`)
   return undefined
 }
 
 /**
- * Resolve a Punchy-supplied set_id to the concrete `HardwareSet` objects it
+ * Resolve a Darrin-supplied set_id to the concrete `HardwareSet` objects it
  * should apply to.
  *
  *   - Prefer an exact `set_id` hit (one target).
  *   - Otherwise treat the id as a `generic_set_id` and apply to every
- *     sub-variant (e.g., Punchy says "DH4A" when the extraction has
+ *     sub-variant (e.g., Darrin says "DH4A" when the extraction has
  *     "DH4A.0" and "DH4A.1").
  *   - Empty result → correction is dropped and we log a warning so the
  *     miss is observable.
@@ -1398,21 +1402,21 @@ function resolveSetsForCorrection(
   const byGeneric = hardwareSets.filter(s => s.generic_set_id === correctionSetId)
   if (byGeneric.length > 0) {
     console.debug(
-      `Punchy correction resolved via generic_set_id: "${correctionSetId}" → ${byGeneric
+      `Darrin correction resolved via generic_set_id: "${correctionSetId}" → ${byGeneric
         .map(s => s.set_id)
         .join(', ')} [${context}]`,
     )
     return byGeneric
   }
 
-  console.warn(`Punchy correction could not match set_id "${correctionSetId}" [${context}]`)
+  console.warn(`Darrin correction could not match set_id "${correctionSetId}" [${context}]`)
   return []
 }
 
 export function applyCorrections(
   hardwareSets: HardwareSet[],
   doors: DoorEntry[],
-  corrections: PunchyCorrections
+  corrections: DarrinCorrections
 ): { hardwareSets: HardwareSet[]; doors: DoorEntry[] } {
   // Apply hardware set corrections
   if (corrections.hardware_sets_corrections) {
@@ -1444,12 +1448,12 @@ export function applyCorrections(
               if (fix.field === 'qty') {
                 const parsed = parseInt(val, 10)
                 if (Number.isNaN(parsed) || parsed < 0) {
-                  console.warn(`[punchy] Skipping invalid qty value "${val}" for item "${fix.name}" in set ${set.set_id}`)
+                  console.warn(`[darrin] Skipping invalid qty value "${val}" for item "${fix.name}" in set ${set.set_id}`)
                   continue
                 }
                 (item as any)[fix.field] = parsed || 1
                 // Mark as llm_override so downstream normalization (NEVER_RENORMALIZE)
-                // preserves Punchy's correction — Punchy sees per-opening values and
+                // preserves Darrin's correction — Darrin sees per-opening values and
                 // returns per-opening values; re-dividing would clobber the fix.
                 ;(item as any).qty_source = 'llm_override'
               } else {
@@ -1469,9 +1473,9 @@ export function applyCorrections(
             )
             if (!existing) {
               if (!set.items) set.items = []
-              // Mark Punchy-injected items as llm_override so the save route's
+              // Mark Darrin-injected items as llm_override so the save route's
               // normalizeQuantities safety net doesn't re-divide a qty that
-              // Punchy deliberately set. Mirrors items_to_fix handling above.
+              // Darrin deliberately set. Mirrors items_to_fix handling above.
               set.items.push({ ...newItem, qty_source: 'llm_override' })
             }
           }
@@ -1481,7 +1485,7 @@ export function applyCorrections(
   }
 
   // Add missing sets — also check generic_set_id to avoid duplicating a set
-  // when Punchy suggests the generic ID (e.g., "DH4A") while we already have
+  // when Darrin suggests the generic ID (e.g., "DH4A") while we already have
   // its sub-headings (DH4A.0, DH4A.1) extracted.
   if (corrections.missing_sets) {
     for (const newSet of corrections.missing_sets) {
@@ -1505,17 +1509,17 @@ export function applyCorrections(
           heading_leaf_count: newSet.heading_leaf_count ?? 0,
           qty_convention: newSet.qty_convention,
           heading_doors: [],
-          // Use the item's explicit qty_source if Punchy set one (e.g. 'llm_override'
-          // when Punchy has already verified the qty as per-opening), otherwise
+          // Use the item's explicit qty_source if Darrin set one (e.g. 'llm_override'
+          // when Darrin has already verified the qty as per-opening), otherwise
           // fall back to 'parsed' so normalizeQuantities PATH 5 can divide these
           // items by the heading counts we just forwarded above.
           //
           // WHY NOT 'llm_override' by default (changed 2026-04-13):
-          // Punchy CP2 sees RAW PDF totals and uses missing_sets to inject sets
+          // Darrin CP2 sees RAW PDF totals and uses missing_sets to inject sets
           // it found in the PDF but pdfplumber missed. Those raw PDF totals need
           // division just like any other set's items. Blanket-marking them
           // 'llm_override' was blocking the normalizeQuantities PATH 5 division
-          // for every Punchy-discovered set. Now only items where Punchy
+          // for every Darrin-discovered set. Now only items where Darrin
           // explicitly sets qty_source='llm_override' are protected.
           items: (newSet.items ?? []).map(item => ({
             ...item,
@@ -1529,17 +1533,17 @@ export function applyCorrections(
   // Apply door corrections.
   //
   // Match by normalized door_number (uppercase + whitespace-collapsed) so
-  // Punchy's raw-PDF door numbers (e.g. "110 02A") match our canonical
+  // Darrin's raw-PDF door numbers (e.g. "110 02A") match our canonical
   // storage form ("11002A"). Exact-string matching used to silently drop
   // every correction where formatting drifted between pdfplumber's extraction
-  // and the PDF text Punchy reads.
+  // and the PDF text Darrin reads.
   if (corrections.doors_corrections) {
     for (const corr of corrections.doors_corrections) {
       const target = normalizeDoorNumber(corr.door_number)
       const door = doors.find(d => normalizeDoorNumber(d.door_number) === target)
       if (!door) {
         console.warn(
-          `Punchy doors_corrections could not match door_number "${corr.door_number}"`,
+          `Darrin doors_corrections could not match door_number "${corr.door_number}"`,
         )
         continue
       }
@@ -1576,7 +1580,7 @@ export function applyCorrections(
  *      classified by either Python's or TS's pattern matchers, so they
  *      defaulted to the wrong divisor silently.
  *
- *   2. Punchy CP2 received already-divided values but was told they were
+ *   2. Darrin CP2 received already-divided values but was told they were
  *      raw PDF values. Its domain expertise was effectively disabled because
  *      it couldn't distinguish a faithful extraction from an approximation.
  *
@@ -1595,14 +1599,14 @@ export function applyCorrections(
  *     - Leave item.qty UNCHANGED (raw PDF value)
  *     - Always set qty_total = raw PDF value
  *
- *   This function's job (runs ONCE, after Punchy CP2):
+ *   This function's job (runs ONCE, after Darrin CP2):
  *     - Read Python's annotations ('needs_division', 'needs_cap', etc.)
  *     - Perform the actual division using Python's recommended divisor
  *     - Fall back to TS taxonomy when Python couldn't classify the item
  *     - Set qty_source to 'divided', 'flagged', or 'capped' after acting
  *     - NEVER touch items whose qty_source is in NEVER_RENORMALIZE
  *
- *   Punchy CP2's job (runs before this function, sees raw PDF qtys):
+ *   Darrin CP2's job (runs before this function, sees raw PDF qtys):
  *     - Review the raw PDF quantities against the PDF itself
  *     - Apply domain expertise: "42 hinges for 6 pair doors is ~3-4 per leaf"
  *     - Correct obvious extraction errors (wrong set IDs, missing items, etc.)
@@ -1612,7 +1616,7 @@ export function applyCorrections(
  *
  * ─── CALL SITES ──────────────────────────────────────────────────────────────
  *
- *   chunk/route.ts  : called ONCE, after applyCorrections (Punchy CP2 output)
+ *   chunk/route.ts  : called ONCE, after applyCorrections (Darrin CP2 output)
  *   parse-pdf/route.ts: same, once after applyCorrections
  *   save/route.ts   : NOT called — removed in this overhaul. The save route
  *                     receives data from the wizard client which already went
@@ -1629,11 +1633,11 @@ export function applyCorrections(
  *      set where qty is implausibly high — likely an aggregate with no count).
  *
  *   3. If Python set needs_review or rhr_lhr_pair: apply RHR/LHR rule or
- *      leave for Punchy CP3 and the user.
+ *      leave for Darrin CP3 and the user.
  *
  *   4. If qty_source is 'parsed' or unset (Python couldn't classify):
  *      fall through to TS taxonomy-based division as a best-effort.
- *      This handles items that arrived from Punchy CP2 additions or sets
+ *      This handles items that arrived from Darrin CP2 additions or sets
  *      that Python didn't see (e.g., empty sets filled by deep_extract).
  *
  * ─── TAXONOMY SCOPE → DIVISOR MAPPING ───────────────────────────────────────
@@ -1733,7 +1737,7 @@ export function normalizeQuantities(
     for (const item of set.items ?? []) {
       // ── GUARD: terminal states are never re-normalized ──────────────────────
       // See NEVER_RENORMALIZE definition above for the full list and rationale.
-      // The key invariant: any qty that was explicitly set by Punchy, the user,
+      // The key invariant: any qty that was explicitly set by Darrin, the user,
       // or a prior authoritative division must not be changed here.
       if (NEVER_RENORMALIZE.has(item.qty_source ?? '')) {
         continue
@@ -1746,7 +1750,7 @@ export function normalizeQuantities(
       // mutating item.qty. We trust that divisor and perform the division here.
       //
       // This path handles both cleanly-divisible and non-integer cases. For
-      // non-integer results we round and mark 'flagged' so Punchy CP3 and the
+      // non-integer results we round and mark 'flagged' so Darrin CP3 and the
       // UI both surface it for user review. We do NOT silently discard the
       // fractional part as was done previously.
       //
@@ -1828,7 +1832,7 @@ export function normalizeQuantities(
       //
       // Python detected both a RH and LH variant of the same item in this set.
       // Each door gets exactly ONE variant based on its hand, so qty=1 per variant.
-      // We set qty=1 here. Punchy CP3 will see this and can question if wrong.
+      // We set qty=1 here. Darrin CP3 will see this and can question if wrong.
       if (item.qty_source === 'rhr_lhr_pair') {
         item.qty_total = item.qty
         item.qty = 1
@@ -1841,7 +1845,7 @@ export function normalizeQuantities(
 
       // ── PATH 4: needs_review (auto-operator + closer conflict) ───────────────
       //
-      // Leave qty unchanged but mark as 'flagged' so Punchy CP3 and the UI
+      // Leave qty unchanged but mark as 'flagged' so Darrin CP3 and the UI
       // surface it. We don't attempt division because the conflict itself is
       // the signal — a closer alongside an auto-operator may be redundant.
       if (item.qty_source === 'needs_review') {
@@ -1854,7 +1858,7 @@ export function normalizeQuantities(
       // Python marked this item 'parsed' meaning either:
       //   a) Python thinks qty is already per-opening (smaller than divisor)
       //   b) Python couldn't determine a divisor (unclassified item name)
-      //   c) This item was added by Punchy CP2 and has no Python annotation
+      //   c) This item was added by Darrin CP2 and has no Python annotation
       //
       // We attempt TS taxonomy-based division as a best-effort. This path uses
       // the same NEVER_RENORMALIZE guard but does NOT rely on Python's divisor.
@@ -1895,7 +1899,7 @@ export function normalizeQuantities(
             item.qty = perOpening
             item.qty_source = 'divided'
           }
-          // Non-integer: don't round. Leave for Punchy CP3 to assess.
+          // Non-integer: don't round. Leave for Darrin CP3 to assess.
         }
         continue
       }
@@ -1976,7 +1980,7 @@ export function normalizeQuantities(
         }
       }
       // If neither divided cleanly, leave qty as-is (raw PDF value).
-      // Punchy CP3 will see the raw value and can flag or correct it.
+      // Darrin CP3 will see the raw value and can flag or correct it.
     }
 
     // ── Post-division sub-heading sanity ───────────────────────────────────────
@@ -2064,7 +2068,7 @@ function itemHasCategory(name: string, category: string): boolean {
 
 /**
  * Score a single field's confidence based on whether it's populated and
- * whether the item was corrected by Punchy.
+ * whether the item was corrected by Darrin.
  */
 function scoreItemFieldConfidence(
   value: string,
@@ -2076,7 +2080,7 @@ function scoreItemFieldConfidence(
   // Quantity field uses qty_source as the primary signal
   if (fieldName === 'qty') {
     if (qtySource === 'llm_override' || qtySource === 'auto_corrected') {
-      return { level: 'medium', reason: 'Punchy corrected this quantity' }
+      return { level: 'medium', reason: 'Darrin corrected this quantity' }
     }
     if (qtySource === 'deep_extract' || qtySource === 'region_extract') {
       return { level: 'medium', reason: 'Extracted via Claude vision from PDF region' }
@@ -2092,10 +2096,10 @@ function scoreItemFieldConfidence(
 
   // Other fields: check correction status first
   if (fuzzyCorrectedFields.has(fieldName)) {
-    return { level: 'medium', reason: 'Punchy corrected via fuzzy match' }
+    return { level: 'medium', reason: 'Darrin corrected via fuzzy match' }
   }
   if (correctedFields.has(fieldName)) {
-    return { level: 'medium', reason: 'Punchy corrected this value' }
+    return { level: 'medium', reason: 'Darrin corrected this value' }
   }
 
   // Empty field
@@ -2108,7 +2112,7 @@ function scoreItemFieldConfidence(
 
 /**
  * Calculate field-level and extraction-level confidence after the full
- * pipeline (extraction + Punchy review + normalization) completes.
+ * pipeline (extraction + Darrin review + normalization) completes.
  *
  * This function is designed to be lightweight (<50ms) — no LLM calls,
  * no PDF re-reading, just analysis of the data already in memory.
@@ -2116,14 +2120,14 @@ function scoreItemFieldConfidence(
 export function calculateExtractionConfidence(
   hardwareSets: HardwareSet[],
   doors: DoorEntry[],
-  corrections: PunchyCorrections,
+  corrections: DarrinCorrections,
 ): ExtractionConfidence {
   const signals: string[] = []
   const itemConfidenceMap: Record<string, ItemConfidence> = {}
   const deepExtractionReasons: string[] = []
 
   // ── Build correction tracking maps ──
-  // Track which set+item+field combinations were corrected by Punchy
+  // Track which set+item+field combinations were corrected by Darrin
   const correctedItemFields = new Map<string, Set<string>>()
   const fuzzyCorrectedItemFields = new Map<string, Set<string>>()
 
@@ -2134,7 +2138,7 @@ export function calculateExtractionConfidence(
           const key = `${corr.set_id}:${fix.name}`
           if (!correctedItemFields.has(key)) correctedItemFields.set(key, new Set())
           correctedItemFields.get(key)!.add(fix.field)
-          // Low-confidence Punchy corrections (fuzzy match tier 3+)
+          // Low-confidence Darrin corrections (fuzzy match tier 3+)
           if (fix.confidence === 'low' || fix.confidence === 'medium') {
             if (!fuzzyCorrectedItemFields.has(key)) fuzzyCorrectedItemFields.set(key, new Set())
             fuzzyCorrectedItemFields.get(key)!.add(fix.field)
@@ -2252,11 +2256,11 @@ export function calculateExtractionConfidence(
     signals.push(`${doorsWithoutSets} door(s) assigned to undefined hardware sets`)
   }
 
-  // ── Punchy correction signals ──
+  // ── Darrin correction signals ──
   if (totalCorrections === 0) {
-    signals.push('Punchy reviewed and made no corrections')
+    signals.push('Darrin reviewed and made no corrections')
   } else {
-    signals.push(`Punchy made ${totalCorrections} correction(s)`)
+    signals.push(`Darrin made ${totalCorrections} correction(s)`)
   }
   if (fuzzyCorrections > 0) {
     signals.push(`${fuzzyCorrections} correction(s) used fuzzy matching`)
@@ -2287,15 +2291,15 @@ export function calculateExtractionConfidence(
   }
   if (totalCorrections > 0 && fuzzyCorrections / totalCorrections > 0.5) {
     deepExtractionReasons.push(
-      `${Math.round((fuzzyCorrections / totalCorrections) * 100)}% of Punchy corrections used fuzzy matching (threshold: 50%)`
+      `${Math.round((fuzzyCorrections / totalCorrections) * 100)}% of Darrin corrections used fuzzy matching (threshold: 50%)`
     )
   }
 
-  // Punchy flagged >20% of items (items_to_fix + items_to_add as proxy for "flagged")
-  const punchyFlaggedCount = totalCorrections
-  if (totalItems > 0 && punchyFlaggedCount / totalItems > 0.2) {
+  // Darrin flagged >20% of items (items_to_fix + items_to_add as proxy for "flagged")
+  const darrinFlaggedCount = totalCorrections
+  if (totalItems > 0 && darrinFlaggedCount / totalItems > 0.2) {
     deepExtractionReasons.push(
-      `Punchy flagged ${Math.round((punchyFlaggedCount / totalItems) * 100)}% of items (threshold: 20%)`
+      `Darrin flagged ${Math.round((darrinFlaggedCount / totalItems) * 100)}% of items (threshold: 20%)`
     )
   }
 
@@ -2308,7 +2312,7 @@ export function calculateExtractionConfidence(
     score -= Math.round(emptyFieldRatio * 30) // up to -30 for all items having empty fields
   }
 
-  // Negative: Punchy corrections
+  // Negative: Darrin corrections
   if (totalItems > 0) {
     const correctionRatio = totalCorrections / totalItems
     score -= Math.min(20, Math.round(correctionRatio * 20)) // up to -20
@@ -2338,7 +2342,7 @@ export function calculateExtractionConfidence(
     score -= Math.round((emptySets / hardwareSets.length) * 15) // up to -15
   }
 
-  // Positive: Punchy made no corrections
+  // Positive: Darrin made no corrections
   if (totalCorrections === 0) {
     score = Math.min(100, score + 5)
   }

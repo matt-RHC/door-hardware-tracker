@@ -32,7 +32,7 @@ This app runs across four services. When diagnosing issues, know where to look:
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase project URL | Client + Server |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase public API key | Client + Server |
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase admin access (bypasses RLS) | Server only |
-| `ANTHROPIC_API_KEY` | LLM calls for extraction + Punchy | Server only |
+| `ANTHROPIC_API_KEY` | LLM calls for extraction + Darrin | Server only |
 | `PYTHON_INTERNAL_SECRET` | Auth token for Next.js → Python endpoint calls | Server only |
 | `NEXT_PUBLIC_SENTRY_DSN` | Sentry error reporting endpoint | Client + Server |
 | `SENTRY_AUTH_TOKEN` | Source map uploads to Sentry (build-time only) | Build only |
@@ -60,16 +60,16 @@ Extraction jobs are rate-limited to 5 per project per hour (`src/lib/extraction-
 - **No placeholder code.** Every feature must work end-to-end before moving on. No TODOs in production code.
 - **Test against golden PDFs.** Any change to the extraction pipeline must be tested against the 15 benchmark PDFs in `test-pdfs/training/` (grid, schedule, kinship, mixed formats).
 
-## Punchy AI Review Architecture
+## Darrin AI Review Architecture
 
-The extraction pipeline uses a multi-pass AI review system called **Punchy** — a senior DFH consultant persona that reviews extraction results at 3 checkpoints. See CLAUDE.md "Punchy AI Review Layer" section for full details.
+The extraction pipeline uses a multi-pass AI review system called **Darrin** — a senior DFH consultant persona that reviews extraction results at 3 checkpoints. See CLAUDE.md "Darrin AI Review Layer" section for full details.
 
 When modifying extraction pipeline code:
-- **Punchy prompts** live in `src/lib/punchy-prompts.ts` — update these when adding new domain knowledge or changing extraction behavior
-- **Checkpoint functions** are in `chunk/route.ts` and `route.ts` — `callPunchyPostExtraction()`, `callPunchyColumnReview()`, `callPunchyQuantityCheck()`
-- **Types** in `src/lib/types/index.ts` — `PunchyObservation`, `PunchyCorrections`, `PunchyColumnReview`, `PunchyQuantityCheck`
-- **Confidence scoring** — every Punchy observation must include high/medium/low confidence
-- **API responses** now include `punchyObservations` and `punchyQuantityCheck` fields
+- **Darrin prompts** live in `src/lib/darrin-prompts.ts` — update these when adding new domain knowledge or changing extraction behavior
+- **Checkpoint functions** are in `chunk/route.ts` and `route.ts` — `callDarrinPostExtraction()`, `callDarrinColumnReview()`, `callDarrinQuantityCheck()`
+- **Types** in `src/lib/types/index.ts` — `DarrinObservation`, `DarrinCorrections`, `DarrinColumnReview`, `DarrinQuantityCheck`
+- **Confidence scoring** — every Darrin observation must include high/medium/low confidence
+- **API responses** now include `darrinObservations` and `darrinQuantityCheck` fields
 
 ## User Interaction
 

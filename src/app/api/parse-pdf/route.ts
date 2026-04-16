@@ -5,16 +5,16 @@ import { fetchProjectPdfBase64 } from '@/lib/pdf-storage'
 import type {
   DoorEntry,
   HardwareSet,
-  PunchyCorrections,
-  PunchyQuantityCheck,
-  PunchyObservation,
+  DarrinCorrections,
+  DarrinQuantityCheck,
+  DarrinObservation,
 } from '@/lib/types'
-import { toPunchyConfidence } from '@/lib/types'
+import { toDarrinConfidence } from '@/lib/types'
 import {
   callPdfplumber,
-  callPunchyColumnReview,
-  callPunchyPostExtraction,
-  callPunchyQuantityCheck,
+  callDarrinColumnReview,
+  callDarrinPostExtraction,
+  callDarrinQuantityCheck,
   applyCorrections,
   normalizeQuantities,
   calculateExtractionConfidence,
@@ -33,7 +33,7 @@ export const maxDuration = 800
 
 /**
  * Shape of the optional user-confirmed golden sample threaded through to
- * Punchy's post-extraction review (CP2) and quantity check (CP3) so the
+ * Darrin's post-extraction review (CP2) and quantity check (CP3) so the
  * LLM can treat that sample as the naming / quantity baseline for the
  * submittal. Matches the shape accepted by the deep-extract route.
  */
@@ -58,9 +58,9 @@ async function extractFromPDF(
 ): Promise<{
   hardwareSets: HardwareSet[]
   doors: DoorEntry[]
-  corrections: PunchyCorrections
-  punchyObservations: PunchyObservation[]
-  punchyQuantityCheck: PunchyQuantityCheck | null
+  corrections: DarrinCorrections
+  darrinObservations: DarrinObservation[]
+  darrinQuantityCheck: DarrinQuantityCheck | null
   confidence: ExtractionConfidence
   stats: { tables_found: number; hw_sets_found: number; method: string }
 }> {
@@ -108,19 +108,19 @@ async function extractFromPDF(
   let allDoors: DoorEntry[] = pdfplumberResult?.openings || []
 
   const client = createAnthropicClient()
-  const punchyObservations: PunchyObservation[] = []
+  const darrinObservations: DarrinObservation[] = []
 
-  // Use filtered PDF for Punchy review if available (fewer pages = cheaper + faster)
+  // Use filtered PDF for Darrin review if available (fewer pages = cheaper + faster)
   const reviewPdf = filteredPdfBase64 ?? base64
 
   // ==========================================
-  // Punchy Checkpoint 1: Column Mapping Review
+  // Darrin Checkpoint 1: Column Mapping Review
   // ==========================================
   if (userColumnMapping) {
     try {
-      const columnReview = await callPunchyColumnReview(client, reviewPdf, userColumnMapping, { projectId })
+      const columnReview = await callDarrinColumnReview(client, reviewPdf, userColumnMapping, { projectId })
       if ((columnReview.unmapped_fields?.length ?? 0) > 0 || (columnReview.mapping_issues?.length ?? 0) > 0) {
-        punchyObservations.push({
+        darrinObservations.push({
           checkpoint: 'column_mapping',
           message: columnReview.notes ?? 'Column mapping review complete',
           confidence: (columnReview.unmapped_fields?.length ?? 0) > 0 ? 'medium' : 'high',
@@ -131,19 +131,19 @@ async function extractFromPDF(
           })),
         })
       }
-      console.debug(`Punchy column review: ${columnReview.unmapped_fields?.length ?? 0} unmapped fields, ${columnReview.mapping_issues?.length ?? 0} issues`)
+      console.debug(`Darrin column review: ${columnReview.unmapped_fields?.length ?? 0} unmapped fields, ${columnReview.mapping_issues?.length ?? 0} issues`)
     } catch (err) {
-      console.error('Punchy column review error:', err instanceof Error ? err.message : String(err))
+      console.error('Darrin column review error:', err instanceof Error ? err.message : String(err))
     }
   }
 
   // ==========================================
-  // Punchy Checkpoint 2: Post-Extraction Review
+  // Darrin Checkpoint 2: Post-Extraction Review
   // ==========================================
-  // Pass extracted set IDs so Punchy knows the full set context (mirrors chunk route)
+  // Pass extracted set IDs so Darrin knows the full set context (mirrors chunk route)
   const knownSetIds = (pdfplumberResult?.hardware_sets ?? []).map(s => s.set_id)
 
-  const corrections = await callPunchyPostExtraction(client, reviewPdf, pdfplumberResult ?? {
+  const corrections = await callDarrinPostExtraction(client, reviewPdf, pdfplumberResult ?? {
     success: false,
     openings: [],
     hardware_sets: [],
@@ -157,10 +157,10 @@ async function extractFromPDF(
   }, knownSetIds, { projectId, goldenSample: goldenSample ?? undefined })
 
   if (corrections.notes) {
-    punchyObservations.push({
+    darrinObservations.push({
       checkpoint: 'post_extraction',
       message: corrections.notes,
-      confidence: toPunchyConfidence(corrections.overall_confidence),
+      confidence: toDarrinConfidence(corrections.overall_confidence),
     })
   }
 
@@ -168,27 +168,27 @@ async function extractFromPDF(
   hardwareSets = corrected.hardwareSets
   allDoors = corrected.doors
 
-  // Post-Punchy qty re-normalization
+  // Post-Darrin qty re-normalization
   normalizeQuantities(hardwareSets, allDoors)
 
   // Extract fire ratings embedded in hw_heading/location fields
   extractFireRatings(allDoors)
 
   // ==========================================
-  // Punchy Checkpoint 3: Quantity Sanity Check
+  // Darrin Checkpoint 3: Quantity Sanity Check
   // ==========================================
-  let punchyQuantityCheck: PunchyQuantityCheck | null = null
+  let darrinQuantityCheck: DarrinQuantityCheck | null = null
   try {
-    punchyQuantityCheck = await callPunchyQuantityCheck(client, reviewPdf, hardwareSets, allDoors, goldenSample ?? undefined, { projectId })
-    if ((punchyQuantityCheck.flags?.length ?? 0) > 0 || (punchyQuantityCheck.compliance_issues?.length ?? 0) > 0) {
-      punchyObservations.push({
+    darrinQuantityCheck = await callDarrinQuantityCheck(client, reviewPdf, hardwareSets, allDoors, goldenSample ?? undefined, { projectId })
+    if ((darrinQuantityCheck.flags?.length ?? 0) > 0 || (darrinQuantityCheck.compliance_issues?.length ?? 0) > 0) {
+      darrinObservations.push({
         checkpoint: 'quantity_check',
-        message: punchyQuantityCheck.notes ?? 'Quantity check complete',
-        confidence: (punchyQuantityCheck.compliance_issues?.length ?? 0) > 0 ? 'medium' : 'high',
+        message: darrinQuantityCheck.notes ?? 'Quantity check complete',
+        confidence: (darrinQuantityCheck.compliance_issues?.length ?? 0) > 0 ? 'medium' : 'high',
       })
     }
   } catch (err) {
-    console.error('Punchy quantity check error:', err instanceof Error ? err.message : String(err))
+    console.error('Darrin quantity check error:', err instanceof Error ? err.message : String(err))
   }
 
   // ==========================================
@@ -200,8 +200,8 @@ async function extractFromPDF(
     hardwareSets,
     doors: allDoors,
     corrections,
-    punchyObservations,
-    punchyQuantityCheck,
+    darrinObservations,
+    darrinQuantityCheck,
     confidence,
     stats: {
       tables_found: pdfplumberResult?.tables_found ?? 0,
@@ -260,12 +260,12 @@ export async function POST(request: NextRequest) {
 
     const userColumnMapping = body.userColumnMapping ?? null
     const projectId: string | undefined = body.projectId ?? undefined
-    // Optional user-confirmed golden sample — threaded to Punchy CP2/CP3
+    // Optional user-confirmed golden sample — threaded to Darrin CP2/CP3
     // so naming + quantity conventions are treated as the baseline for
     // the submittal. Matches the shape already accepted by deep-extract.
     const goldenSample: GoldenSampleInput = body.goldenSample ?? undefined
     const requestOrigin = new URL(request.url).origin
-    const { hardwareSets, doors, corrections, punchyObservations, punchyQuantityCheck, confidence, stats } = await extractFromPDF(base64, filteredPdfBase64, userColumnMapping, projectId, goldenSample, requestOrigin)
+    const { hardwareSets, doors, corrections, darrinObservations, darrinQuantityCheck, confidence, stats } = await extractFromPDF(base64, filteredPdfBase64, userColumnMapping, projectId, goldenSample, requestOrigin)
 
     // ── Auto-queue deep extraction job if confidence is low ──
     const suggestDeep = shouldAutoTriggerDeepExtraction(confidence)
@@ -341,8 +341,8 @@ export async function POST(request: NextRequest) {
       flaggedDoors: [],
       stats,
       reviewNotes: corrections.notes,
-      punchyObservations,
-      punchyQuantityCheck,
+      darrinObservations,
+      darrinQuantityCheck,
       confidence,
       suggest_deep_extraction: suggestDeep,
       extraction_confidence: {

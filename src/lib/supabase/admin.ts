@@ -16,7 +16,7 @@ import { Database } from '@/lib/types/database'
  *
  * Use only for trusted server-side operations:
  *   - project creation (chicken-and-egg with RLS)
- *   - fire-and-forget logging (punchy_logs)
+ *   - fire-and-forget logging (darrin_logs)
  *   - admin/tracking endpoints
  *   - cron cleanup jobs
  * Per CLAUDE.md, never hand an admin client to user-facing read/write paths.

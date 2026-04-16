@@ -11,14 +11,14 @@ A feature that lets users select a rectangular region of a PDF page in the impor
 Currently when extraction gets a hardware set wrong, the only options are:
 1. Re-run the entire extraction (slow, may break things that were correct)
 2. Manually edit every field (tedious)
-3. Use Punchy deep-extract (LLM-based, expensive, sometimes hallucinates)
+3. Use Darrin deep-extract (LLM-based, expensive, sometimes hallucinates)
 
 PDF area selection gives a middle ground: targeted pdfplumber re-extraction of a specific region, which is fast, deterministic, and free.
 
 ## Architecture
 
 ### Frontend Flow
-1. User is in StepReview or PunchyReview and sees incorrect data for a hardware set
+1. User is in StepReview or DarrinReview and sees incorrect data for a hardware set
 2. User clicks "Re-scan from PDF" button on the set header (next to "View PDF page")
 3. A modal opens showing the PDF page with a draggable selection rectangle
 4. User draws a rectangle around the table they want re-scanned
@@ -51,10 +51,10 @@ PDF area selection gives a middle ground: targeted pdfplumber re-extraction of a
 **StepReview.tsx** (`src/components/ImportWizard/StepReview.tsx`):
 - Add a "Re-scan region" button next to each set's "View PDF page" link
 - Button opens the PDFRegionSelector modal
-- On extract completion, update the set's items in local state (same pattern as the existing Punchy revert — `setHardwareSets` is already available as local state)
+- On extract completion, update the set's items in local state (same pattern as the existing Darrin revert — `setHardwareSets` is already available as local state)
 
-**PunchyReview.tsx** (`src/components/ImportWizard/PunchyReview.tsx`):
-- Similar integration for sets that Punchy flags as problematic
+**DarrinReview.tsx** (`src/components/ImportWizard/DarrinReview.tsx`):
+- Similar integration for sets that Darrin flags as problematic
 
 ### Existing Code to Study
 

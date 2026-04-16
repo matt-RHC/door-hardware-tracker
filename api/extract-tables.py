@@ -3911,7 +3911,7 @@ def normalize_quantities(
     #        That guard relies on Python having set qty_source correctly, which
     #        failed for unclassified items (source stayed 'parsed', not 'divided').
     #
-    #     4. Punchy CP2 was told "quantities are already per-opening — don't change
+    #     4. Darrin CP2 was told "quantities are already per-opening — don't change
     #        them" but was looking at Python-divided values. It had no way to
     #        distinguish a faithfully-extracted per-opening qty from a rounded
     #        approximation, so its domain expertise was effectively disabled.
@@ -3922,7 +3922,7 @@ def normalize_quantities(
     #   intention in metadata fields, but leave item.qty as the raw PDF number.
     #
     #   The single authoritative division pass lives in TS normalizeQuantities()
-    #   in src/lib/parse-pdf-helpers.ts. It runs ONCE, after Punchy CP2 has seen
+    #   in src/lib/parse-pdf-helpers.ts. It runs ONCE, after Darrin CP2 has seen
     #   the raw PDF values, and uses Python's annotations as hints.
     #
     #   qty_source values set here:
@@ -4124,7 +4124,7 @@ def normalize_quantities(
         # Doing the math here silently produces wrong results for those items.
         # The TS taxonomy has the same limitation, but by deferring the division
         # to TS we at least ensure:
-        #   1. Punchy CP2 sees the raw PDF qty and can apply domain knowledge
+        #   1. Darrin CP2 sees the raw PDF qty and can apply domain knowledge
         #      (e.g. "42 hinges for 6 pair doors is 3-4 per leaf")
         #   2. The division happens exactly once
         #   3. The raw value is preserved in qty_total for audit/display
@@ -4184,7 +4184,7 @@ def normalize_quantities(
             else:
                 # No divisor determined (counts unavailable or item is
                 # unclassified with raw qty that doesn't fit any pattern).
-                # Leave qty_source as 'parsed' and let TS/Punchy flag it.
+                # Leave qty_source as 'parsed' and let TS/Darrin flag it.
                 item.qty_source = "parsed"
                 item.qty_door_count = None
                 logger.warning(
@@ -4266,7 +4266,7 @@ def normalize_quantities(
                     )
                     # Don't auto-remove — flag for user review.
                     # If division was recommended, change to 'needs_review'
-                    # so the TS layer and Punchy both see this as ambiguous.
+                    # so the TS layer and Darrin both see this as ambiguous.
                     if item.qty_source == "needs_division":
                         item.qty_source = "needs_review"
 

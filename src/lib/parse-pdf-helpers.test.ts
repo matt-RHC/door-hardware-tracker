@@ -16,7 +16,7 @@ import {
   selectRepresentativeSample,
   calculateExtractionConfidence,
 } from './parse-pdf-helpers'
-import type { HardwareSet, DoorEntry, PunchyCorrections } from '@/lib/types'
+import type { HardwareSet, DoorEntry, DarrinCorrections } from '@/lib/types'
 import { groupItemsByLeaf } from './classify-leaf-items'
 
 /**
@@ -120,7 +120,7 @@ describe('normalizeQuantities — category-aware division', () => {
     expect(sets[0].items[0].qty).toBe(4)
     expect(sets[0].items[0].qty_total).toBe(42)
     expect(sets[0].items[0].qty_door_count).toBe(12)
-    // Flagged so Punchy + the UI know this is a non-clean division.
+    // Flagged so Darrin + the UI know this is a non-clean division.
     expect(sets[0].items[0].qty_source).toBe('flagged')
   })
 
@@ -302,7 +302,7 @@ describe('normalizeQuantities — category-aware division', () => {
     expect(sets[0].items[1].qty).toBe(4)
   })
 
-  it('does not re-normalize Punchy-corrected or user-authored qty_sources', () => {
+  it('does not re-normalize Darrin-corrected or user-authored qty_sources', () => {
     // Regression test for the P0 bug where normalizeQuantities divided qty
     // values that were already final (per-opening) because the skip list
     // only covered 'divided' / 'flagged' / 'capped'. Every terminal
@@ -517,7 +517,7 @@ describe('normalizeQuantities — category-aware division', () => {
 
   it('PATH 4: needs_review items become flagged without qty change', () => {
     // Python flagged a closer alongside an auto-operator — possibly redundant.
-    // TS promotes it to 'flagged' for Punchy CP3 and the user.
+    // TS promotes it to 'flagged' for Darrin CP3 and the user.
     const sets = [makeSet('DH_REVIEW', [
       { name: 'Closer', qty: 6, qty_source: 'needs_review' },
     ], { heading_door_count: 3 })]
@@ -1596,7 +1596,7 @@ describe('normalizeName', () => {
   })
 })
 
-// ─── applyCorrections — Punchy correction ingestion ───
+// ─── applyCorrections — Darrin correction ingestion ───
 
 describe('applyCorrections', () => {
   function makeHardwareItem(name: string, qty: number) {
@@ -1620,7 +1620,7 @@ describe('applyCorrections', () => {
       { set_id: 'DH1', heading: 'Set DH1', items: [makeHardwareItem('Hinges', 6)] },
     ]
     const doors: DoorEntry[] = []
-    const corrections: PunchyCorrections = {
+    const corrections: DarrinCorrections = {
       hardware_sets_corrections: [
         {
           set_id: 'DH1',
@@ -1656,7 +1656,7 @@ describe('applyCorrections', () => {
         items: [makeHardwareItem('Closer', 2)],
       },
     ]
-    const corrections: PunchyCorrections = {
+    const corrections: DarrinCorrections = {
       hardware_sets_corrections: [
         {
           set_id: 'DH4A', // generic — should land on both DH4A.0 and DH4A.1
@@ -1676,7 +1676,7 @@ describe('applyCorrections', () => {
     const sets: HardwareSet[] = [
       { set_id: 'DH1', generic_set_id: 'DH1', heading: 'Set DH1', items: [makeHardwareItem('Hinges', 3)] },
     ]
-    const corrections: PunchyCorrections = {
+    const corrections: DarrinCorrections = {
       hardware_sets_corrections: [
         {
           set_id: 'DH99',
@@ -1690,12 +1690,12 @@ describe('applyCorrections', () => {
     expect(sets[0].items?.[0].qty).toBe(3) // unchanged
   })
 
-  it('normalizes door_number when applying doors_corrections (Punchy raw-PDF vs extracted)', () => {
+  it('normalizes door_number when applying doors_corrections (Darrin raw-PDF vs extracted)', () => {
     const doors: DoorEntry[] = [makeDoorEntry('11002A', 'DH1')]
-    const corrections: PunchyCorrections = {
+    const corrections: DarrinCorrections = {
       doors_corrections: [
         {
-          door_number: '110 02A', // Punchy's form, with internal space
+          door_number: '110 02A', // Darrin's form, with internal space
           field: 'hw_set',
           old_value: 'DH1',
           new_value: 'DH2',
@@ -1708,7 +1708,7 @@ describe('applyCorrections', () => {
 
   it('de-duplicates missing_doors using normalized door_number', () => {
     const doors: DoorEntry[] = [makeDoorEntry('11002A', 'DH1')]
-    const corrections: PunchyCorrections = {
+    const corrections: DarrinCorrections = {
       missing_doors: [
         // Same door with spaces + lowercase — should NOT be appended
         makeDoorEntry('  110 02a  ', 'DH1'),
@@ -1722,7 +1722,7 @@ describe('applyCorrections', () => {
 
   it('forwards heading metadata when pushing missing_sets', () => {
     const sets: HardwareSet[] = []
-    const corrections: PunchyCorrections = {
+    const corrections: DarrinCorrections = {
       missing_sets: [
         {
           set_id: 'DH9.0',
@@ -1753,7 +1753,7 @@ describe('applyCorrections', () => {
         items: [makeHardwareItem('Closer', 1)],
       },
     ]
-    const corrections: PunchyCorrections = {
+    const corrections: DarrinCorrections = {
       missing_sets: [
         {
           set_id: 'DH4A', // generic already represented by DH4A.0 above
@@ -1777,7 +1777,7 @@ describe('applyCorrections', () => {
         ],
       },
     ]
-    const corrections: PunchyCorrections = {
+    const corrections: DarrinCorrections = {
       hardware_sets_corrections: [
         {
           set_id: 'DH1',
@@ -1793,11 +1793,11 @@ describe('applyCorrections', () => {
 // ─── createAnthropicClient — retry + timeout config ───
 
 describe('createAnthropicClient', () => {
-  it('configures maxRetries=4 and timeout=290000', () => {
+  it('configures maxRetries=2 and timeout=290000', () => {
     // We can\'t send a live request in tests, but the SDK exposes the
     // resolved config on the client so we can confirm our tuning stuck.
     const client = createAnthropicClient()
-    expect(client.maxRetries).toBe(4)
+    expect(client.maxRetries).toBe(2)
     expect(client.timeout).toBe(290_000)
   })
 })
@@ -1942,7 +1942,7 @@ describe('calculateExtractionConfidence', () => {
     }
   }
 
-  const emptyCorrections: PunchyCorrections = {
+  const emptyCorrections: DarrinCorrections = {
     hardware_sets_corrections: [],
     doors_corrections: [],
     missing_doors: [],
@@ -1998,7 +1998,7 @@ describe('calculateExtractionConfidence', () => {
     expect(conf.qty.level).toBe('high')
   })
 
-  it('test_confidence_punchy_corrected — item that Punchy corrected → medium', () => {
+  it('test_confidence_darrin_corrected — item that Darrin corrected → medium', () => {
     const sets: HardwareSet[] = [
       makeFullSet('DH1', [
         makeItem('Butt Hinge', { manufacturer: 'Hager', model: '5BB1', finish: '626' }),
@@ -2006,7 +2006,7 @@ describe('calculateExtractionConfidence', () => {
     ]
     const doors = [makeDoor('101', 'DH1')]
 
-    const corrections: PunchyCorrections = {
+    const corrections: DarrinCorrections = {
       hardware_sets_corrections: [{
         set_id: 'DH1',
         items_to_fix: [{
@@ -2024,7 +2024,7 @@ describe('calculateExtractionConfidence', () => {
     const conf = result.item_confidence['DH1:Butt Hinge']
     expect(conf).toBeDefined()
     expect(conf.manufacturer.level).toBe('medium')
-    expect(conf.manufacturer.reason).toContain('Punchy corrected')
+    expect(conf.manufacturer.reason).toContain('Darrin corrected')
     // Other fields should be high
     expect(conf.name.level).toBe('high')
     expect(conf.model.level).toBe('high')
@@ -2046,7 +2046,7 @@ describe('calculateExtractionConfidence', () => {
     const conf = result.item_confidence['DH1:Closer']
     expect(conf).toBeDefined()
     expect(conf.qty.level).toBe('medium')
-    expect(conf.qty.reason).toContain('Punchy corrected')
+    expect(conf.qty.reason).toContain('Darrin corrected')
   })
 
   it('test_confidence_overall_score — verify the 0-100 score calculation', () => {
@@ -2200,7 +2200,7 @@ describe('calculateExtractionConfidence', () => {
     expect(conf.qty.reason).toContain('non-integer')
   })
 
-  it('fuzzy-matched Punchy corrections → medium on corrected fields', () => {
+  it('fuzzy-matched Darrin corrections → medium on corrected fields', () => {
     const sets: HardwareSet[] = [
       makeFullSet('DH1', [
         makeItem('Butt Hinge'),
@@ -2208,7 +2208,7 @@ describe('calculateExtractionConfidence', () => {
     ]
     const doors = [makeDoor('101', 'DH1')]
 
-    const corrections: PunchyCorrections = {
+    const corrections: DarrinCorrections = {
       hardware_sets_corrections: [{
         set_id: 'DH1',
         items_to_fix: [{

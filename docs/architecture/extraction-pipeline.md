@@ -80,9 +80,9 @@ flowchart LR
     A["Browser Upload"] --> B["parse-pdf/route.ts"]
     B --> C["callPdfplumber()"]
     C --> D["Python extract-tables.py<br/>normalize_quantities()"]
-    D --> E["Punchy CP2<br/>(LLM column review)"]
+    D --> E["Darrin CP2<br/>(LLM column review)"]
     E --> F["TS normalizeQuantities()<br/>parse-pdf-helpers.ts:171"]
-    F --> G["Punchy CP3<br/>(LLM qty check)"]
+    F --> G["Darrin CP3<br/>(LLM qty check)"]
     G --> H["Return to Browser"]
     H --> I["User Reviews in Wizard"]
     I --> J["save/route.ts"]
@@ -115,7 +115,7 @@ flowchart LR
     B --> C2["chunk/route.ts<br/>Chunk 2"]
     B --> CN["chunk/route.ts<br/>Chunk N"]
     
-    C1 --> D1["callPdfplumber → Py normalize_quantities<br/>→ Punchy CP2 → TS normalizeQuantities<br/>→ Punchy CP3"]
+    C1 --> D1["callPdfplumber → Py normalize_quantities<br/>→ Darrin CP2 → TS normalizeQuantities<br/>→ Darrin CP3"]
     C2 --> D2["Same pipeline per chunk"]
     CN --> DN["Same pipeline per chunk"]
     
@@ -223,9 +223,9 @@ flowchart TB
     
     E --> E1["processChunk() per chunk"]
     E1 --> E2["callPdfplumber()<br/>Python normalize_quantities"]
-    E2 --> E3["Punchy CP2"]
+    E2 --> E3["Darrin CP2"]
     E3 --> E4["TS normalizeQuantities()<br/>line 1059"]
-    E4 --> E5["Punchy CP3"]
+    E4 --> E5["Darrin CP3"]
     
     E5 --> F{"Phase 4b:<br/>Empty sets?"}
     F -->|Yes| G["Vision Extract<br/>(Strategy B)"]

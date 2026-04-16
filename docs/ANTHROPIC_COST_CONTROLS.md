@@ -18,7 +18,7 @@ Navigate to **Settings → Usage → Spending Limit** and set a hard cap:
 
 ### 3. Review Model Usage
 The app currently uses:
-- **claude-haiku-4-5** — Punchy CP1, CP2, CP3 (4 calls per extraction)
+- **claude-haiku-4-5** — Darrin CP1, CP2, CP3 (4 calls per extraction)
 - **claude-sonnet-4** — triage route, deep extraction job runs
 - **claude_vision** — Python classify-pages (page-by-page for deep extraction)
 
@@ -45,8 +45,8 @@ Fields to track:
     "classify_output": 340,
     "extract_input": 8500,
     "extract_output": 2100,
-    "punchy_cp1_input": 3000,
-    "punchy_cp1_output": 800,
+    "darrin_cp1_input": 3000,
+    "darrin_cp1_output": 800,
     "total_input": 12700,
     "total_output": 3240
   }

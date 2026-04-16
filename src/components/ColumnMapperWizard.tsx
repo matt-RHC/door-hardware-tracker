@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useCallback } from "react";
 import PDFPageBrowser from "./PDFPageBrowser";
-import type { PunchyObservation } from "@/lib/types";
+import type { DarrinObservation } from "@/lib/types";
 
 // ─── Types ───
 
@@ -31,7 +31,7 @@ interface ColumnMapperWizardProps {
   data: DetectMappingResponse;
   pdfBuffer?: ArrayBuffer;
   pageCount?: number;
-  punchyObservations?: PunchyObservation[];
+  darrinObservations?: DarrinObservation[];
   onConfirm: (mapping: ColumnMapping) => void;
   onSkip: () => void;
   onRedetect?: (pageIndex: number) => Promise<DetectMappingResponse | null>;
@@ -76,14 +76,14 @@ const FIELD_COLORS: Record<string, string> = {
   hand: "var(--yellow)",
 };
 
-// ─── Punchy Column Suggestions ───
+// ─── Darrin Column Suggestions ───
 
-function PunchySuggestions({
+function DarrinSuggestions({
   observations,
   onAccept,
   onDismiss,
 }: {
-  observations: PunchyObservation[];
+  observations: DarrinObservation[];
   onAccept: (field: string) => void;
   onDismiss: (idx: number) => void;
 }) {
@@ -113,7 +113,7 @@ function PunchySuggestions({
           <span className="text-lg shrink-0">🤖</span>
           <div className="flex-1 min-w-0">
             <p className="text-sm text-info font-medium" style={{ fontFamily: "'Orbitron', sans-serif" }}>
-              Punchy found unmapped fields
+              Darrin found unmapped fields
             </p>
             <div className="mt-1.5 space-y-1">
               {(obs.field_suggestions ?? []).map((sug, si) => (
@@ -326,7 +326,7 @@ function Step2MapColumns({
   fieldLabels,
   skippedFields,
   onToggleSkip,
-  punchyObservations,
+  darrinObservations,
 }: {
   data: DetectMappingResponse;
   mapping: ColumnMapping;
@@ -339,7 +339,7 @@ function Step2MapColumns({
   fieldLabels: Record<string, string>;
   skippedFields: Set<string>;
   onToggleSkip: (field: string) => void;
-  punchyObservations?: PunchyObservation[];
+  darrinObservations?: DarrinObservation[];
 }) {
   // Reverse mapping: column index → field name
   const reverseMapping = useMemo(() => {
@@ -392,10 +392,10 @@ function Step2MapColumns({
         </div>
       </div>
 
-      {/* Punchy suggestions for unmapped fields */}
-      {(punchyObservations?.length ?? 0) > 0 && (
-        <PunchySuggestions
-          observations={punchyObservations ?? []}
+      {/* Darrin suggestions for unmapped fields */}
+      {(darrinObservations?.length ?? 0) > 0 && (
+        <DarrinSuggestions
+          observations={darrinObservations ?? []}
           onAccept={(field) => {
             // Select the field for mapping
             if (ALL_FIELDS.includes(field)) {
@@ -789,7 +789,7 @@ export default function ColumnMapperWizard({
   data,
   pdfBuffer,
   pageCount: pageCountProp,
-  punchyObservations,
+  darrinObservations,
   onConfirm: onConfirmProp,
   onSkip: onSkipProp,
   onRedetect,
@@ -950,7 +950,7 @@ export default function ColumnMapperWizard({
               fieldLabels={fieldLabels}
               skippedFields={skippedFields}
               onToggleSkip={handleToggleSkip}
-              punchyObservations={punchyObservations}
+              darrinObservations={darrinObservations}
             />
           )}
           {phase === "step3" && (
