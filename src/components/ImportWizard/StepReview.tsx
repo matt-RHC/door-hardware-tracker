@@ -9,6 +9,7 @@ import WizardNav from "./WizardNav";
 import ReviewSummary from "./review/ReviewSummary";
 import ReviewFilters from "./review/ReviewFilters";
 import SetView from "./review/SetView";
+import DoorView from "./review/DoorView";
 import InlineRescan from "./review/InlineRescan";
 import { isOrphanDoor, getDoorIssues, getConfidence } from "./review/utils";
 import type {
@@ -18,6 +19,21 @@ import type {
   FilterLevel,
   SortDir,
 } from "./review/types";
+
+type ViewMode = 'door' | 'set';
+
+const VIEW_MODE_STORAGE_KEY = 'review.viewMode';
+
+function loadInitialViewMode(): ViewMode {
+  if (typeof window === 'undefined') return 'door';
+  try {
+    const stored = window.localStorage.getItem(VIEW_MODE_STORAGE_KEY);
+    if (stored === 'door' || stored === 'set') return stored;
+  } catch {
+    // localStorage may be unavailable (private browsing, etc.) — fall through
+  }
+  return 'door';
+}
 
 interface StepReviewProps {
   projectId: string;
@@ -65,6 +81,27 @@ export default function StepReview({
 
   const [editingCell, setEditingCell] = useState<EditingCell | null>(null);
   const [editValue, setEditValue] = useState("");
+
+  // ─── View mode (door-centric vs set-centric) ───
+  const [viewMode, setViewMode] = useState<ViewMode>(loadInitialViewMode);
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(VIEW_MODE_STORAGE_KEY, viewMode);
+    } catch {
+      // localStorage may be unavailable — view mode still works per session
+    }
+  }, [viewMode]);
+
+  // ─── Door expansion (door view only) ───
+  const [expandedDoors, setExpandedDoors] = useState<Set<string>>(new Set());
+  const toggleDoor = useCallback((key: string) => {
+    setExpandedDoors((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  }, []);
 
   // ─── Search & filter ───
   const [search, setSearch] = useState("");
@@ -339,6 +376,8 @@ export default function StepReview({
         orphanDoors={orphanDoors}
         orphanNoticeDismissed={orphanNoticeDismissed}
         onDismissOrphanNotice={() => setOrphanNoticeDismissed(true)}
+        viewMode={viewMode}
+        onViewModeChange={setViewMode}
       >
         <ReviewFilters
           filterLevel={filterLevel}
@@ -349,33 +388,54 @@ export default function StepReview({
       </ReviewSummary>
 
       <div className="flex-1 overflow-y-auto min-h-0">
-        <SetView
-          groups={groups}
-          hardwareSets={hardwareSets}
-          classifyResult={classifyResult}
-          pdfBuffer={pdfBuffer}
-          collapsedGroups={collapsedGroups}
-          onToggleGroup={toggleGroup}
-          previewOpen={previewOpen}
-          onTogglePreview={togglePreview}
-          onRequestRescan={handleRequestRescan}
-          reconciledSetMap={reconciledSetMap}
-          auditTrailOpen={auditTrailOpen}
-          onToggleAuditTrail={toggleAuditTrail}
-          collapsedLeafSections={collapsedLeafSections}
-          onToggleLeafSection={toggleLeafSection}
-          onRevert={handleRevert}
-          sortField={sortField}
-          sortDir={sortDir}
-          onSort={handleSort}
-          editingCell={editingCell}
-          editValue={editValue}
-          onStartEdit={startEdit}
-          onEditValueChange={setEditValue}
-          onCommitEdit={commitEdit}
-          onCancelEdit={cancelEdit}
-          registerRef={registerRef}
-        />
+        {viewMode === 'door' ? (
+          <DoorView
+            doors={sortedDoors}
+            hardwareSets={hardwareSets}
+            doorToSetMap={doorToSetMap}
+            setMap={setMap}
+            classifyResult={classifyResult}
+            pdfBuffer={pdfBuffer}
+            reconciledSetMap={reconciledSetMap}
+            expandedDoors={expandedDoors}
+            onToggleDoor={toggleDoor}
+            onRequestRescan={handleRequestRescan}
+            onRevert={handleRevert}
+            collapsedLeafSections={collapsedLeafSections}
+            onToggleLeafSection={toggleLeafSection}
+            auditTrailOpen={auditTrailOpen}
+            onToggleAuditTrail={toggleAuditTrail}
+            registerRef={registerRef}
+          />
+        ) : (
+          <SetView
+            groups={groups}
+            hardwareSets={hardwareSets}
+            classifyResult={classifyResult}
+            pdfBuffer={pdfBuffer}
+            collapsedGroups={collapsedGroups}
+            onToggleGroup={toggleGroup}
+            previewOpen={previewOpen}
+            onTogglePreview={togglePreview}
+            onRequestRescan={handleRequestRescan}
+            reconciledSetMap={reconciledSetMap}
+            auditTrailOpen={auditTrailOpen}
+            onToggleAuditTrail={toggleAuditTrail}
+            collapsedLeafSections={collapsedLeafSections}
+            onToggleLeafSection={toggleLeafSection}
+            onRevert={handleRevert}
+            sortField={sortField}
+            sortDir={sortDir}
+            onSort={handleSort}
+            editingCell={editingCell}
+            editValue={editValue}
+            onStartEdit={startEdit}
+            onEditValueChange={setEditValue}
+            onCommitEdit={commitEdit}
+            onCancelEdit={cancelEdit}
+            registerRef={registerRef}
+          />
+        )}
       </div>
 
       <WizardNav
