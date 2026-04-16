@@ -55,6 +55,19 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Missing projectId or doors' }, { status: 400 })
     }
 
+    // Project membership check: verify the authenticated user is a member of
+    // projectId before reading any project data. Auth alone is not sufficient —
+    // an authenticated user could supply any projectId they know.
+    const { data: membership, error: memberError } = await supabase
+      .from('project_members')
+      .select('role')
+      .eq('project_id', projectId)
+      .eq('user_id', user.id)
+      .single()
+    if (memberError || !membership) {
+      return NextResponse.json({ error: 'Access denied' }, { status: 403 })
+    }
+
     // Fetch existing openings with hardware items and progress
     const { data: existing, error: fetchError } = await (supabase as any)
       .from('openings')
