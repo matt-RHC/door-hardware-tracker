@@ -289,7 +289,7 @@ export async function POST(request: NextRequest) {
             .from('extraction_jobs')
             .insert({
               project_id: projectId,
-              created_by: (await (await createServerSupabaseClient()).auth.getUser()).data.user?.id ?? '',
+              created_by: authedUserId ?? '',
               status: 'queued',
               status_message: 'Auto-queued: low confidence extraction',
               pdf_storage_path: projectRow.pdf_storage_path,

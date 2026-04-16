@@ -54,6 +54,7 @@ export function useExtractionJob(): UseExtractionJobReturn {
 
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const jobIdRef = useRef<string | null>(null)
+  const mountedRef = useRef(true)
 
   // Keep ref in sync for use inside interval callbacks
   useEffect(() => {
@@ -108,7 +109,11 @@ export function useExtractionJob(): UseExtractionJobReturn {
 
   // Clean up on unmount
   useEffect(() => {
-    return () => stopPolling()
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+      stopPolling()
+    }
   }, [stopPolling])
 
   // ─── Actions ───
@@ -137,8 +142,10 @@ export function useExtractionJob(): UseExtractionJobReturn {
       setJobId(newJobId)
       jobIdRef.current = newJobId
 
-      // Start polling immediately
-      startPolling()
+      // Start polling only if still mounted
+      if (mountedRef.current) {
+        startPolling()
+      }
 
       return newJobId
     },
@@ -189,7 +196,7 @@ export function useExtractionJob(): UseExtractionJobReturn {
     progress,
     statusMessage,
     error,
-    isRunning: !TERMINAL_STATUSES.has(status),
+    isRunning: jobId !== null && !TERMINAL_STATUSES.has(status),
     isComplete: status === 'completed',
     isFailed: status === 'failed',
     createJob,

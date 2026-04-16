@@ -41,9 +41,8 @@ from pydantic import BaseModel
 # To prevent anonymous PDF uploads, the Next.js layer forwards a shared
 # secret in the X-Internal-Token header. This helper validates that header.
 #
-# Backward-compat window: if PYTHON_INTERNAL_SECRET is unset, auth is
-# skipped and a warning is logged. Once the env var is configured in
-# Vercel, enforcement takes effect on the next cold start. Keep this
+# If PYTHON_INTERNAL_SECRET is unset, the request is rejected with 401
+# to prevent unauthenticated access. Keep this
 # helper in sync across all api/*.py files (Vercel bundles them
 # separately, so duplication is intentional).
 

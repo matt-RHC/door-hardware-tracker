@@ -135,7 +135,8 @@ export function scoreExtraction(
 
   for (const door of doors) {
     const scores = scoreDoor(door, knownFormat)
-    perDoor.set(door.door_number, scores)
+    const key = door.door_number ?? `__unknown_${totalFields}`
+    perDoor.set(key, scores)
 
     for (const s of Object.values(scores)) {
       totalScore += s

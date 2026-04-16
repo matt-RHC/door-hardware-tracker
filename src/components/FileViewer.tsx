@@ -162,6 +162,16 @@ export default function FileViewer({ attachment, onClose }: FileViewerProps) {
     }
   }, [pageCache, computeFitScale, renderPage, pdfTotalPages]);
 
+  // ── Destroy PDF document on unmount to release Web Worker ──
+  useEffect(() => {
+    return () => {
+      if (pdfDocRef.current) {
+        pdfDocRef.current.destroy();
+        pdfDocRef.current = null;
+      }
+    };
+  }, []);
+
   // ── Load PDF on mount/page change ──
   useEffect(() => {
     if (isPdf) {
