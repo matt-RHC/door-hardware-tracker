@@ -2643,6 +2643,53 @@ export function buildDoorToSetMap(
   return map
 }
 
+/**
+ * Build the hw_set → HardwareSet lookup used throughout save/compare/apply paths.
+ *
+ * Registered under BOTH `set_id` and `generic_set_id` because doors may be
+ * assigned to either. See save/route.ts for the original inline logic that
+ * this helper replaces; StepConfirm now calls it too for a client-side
+ * pre-flight orphan check that stays in lockstep with the server.
+ */
+export function buildSetLookupMap(
+  hardwareSets: HardwareSet[],
+): Map<string, HardwareSet> {
+  const map = new Map<string, HardwareSet>()
+  for (const set of hardwareSets) {
+    map.set(set.set_id, set)
+    if (set.generic_set_id && set.generic_set_id !== set.set_id) {
+      map.set(set.generic_set_id, set)
+    }
+  }
+  return map
+}
+
+/**
+ * True when `buildPerOpeningItems` would emit zero rows for this door — i.e.
+ * no resolved hardware set with items AND no door_type/frame_type to generate
+ * a Door or Frame row. Such a door, if allowed to reach staging, causes
+ * `merge_extraction` to reject the entire run with
+ *   "Extraction run has openings with no hardware items."
+ *
+ * Resolution order mirrors `buildPerOpeningItems` exactly (doorToSetMap →
+ * setMap). Keep the two in lockstep — a divergence would silently re-introduce
+ * the promotion bug. An alternative considered was inspecting
+ * buildPerOpeningItems' output post-hoc, but that requires the staging IDs
+ * which only exist after the DB write.
+ */
+export function wouldProduceZeroItems(
+  door: Pick<DoorEntry, 'door_number' | 'hw_set' | 'door_type' | 'frame_type'>,
+  setMap: Map<string, HardwareSet>,
+  doorToSetMap: Map<string, HardwareSet>,
+): boolean {
+  const doorKey = normalizeDoorNumber(door.door_number)
+  const resolved = doorToSetMap.get(doorKey) ?? setMap.get((door.hw_set ?? '').trim())
+  const hasSetItems = (resolved?.items?.length ?? 0) > 0
+  const hasDoorModel = !!door.door_type?.trim()
+  const hasFrameModel = !!door.frame_type?.trim()
+  return !hasSetItems && !hasDoorModel && !hasFrameModel
+}
+
 // --- Hardware item builder (Phase 3) ---
 
 /**
