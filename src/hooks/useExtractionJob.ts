@@ -171,7 +171,9 @@ export function useExtractionJob(): UseExtractionJobReturn {
 
       if (!resp.ok) {
         const body = await resp.json().catch(() => ({}))
-        console.error('Failed to submit answers:', body.error)
+        const msg = body.error ?? `Failed to submit answers (${resp.status})`
+        setError(msg)
+        throw new Error(msg)
       }
     },
     [],

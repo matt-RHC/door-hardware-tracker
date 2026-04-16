@@ -41,8 +41,10 @@ export async function GET(
     const openingId = url.searchParams.get('opening_id')
     const category = url.searchParams.get('category')
     const issueType = url.searchParams.get('issue_type')
-    const page = Math.max(1, parseInt(url.searchParams.get('page') || '1', 10))
-    const limit = Math.min(100, Math.max(1, parseInt(url.searchParams.get('limit') || '25', 10)))
+    const rawPage = parseInt(url.searchParams.get('page') || '1', 10)
+    const rawLimit = parseInt(url.searchParams.get('limit') || '25', 10)
+    const page = Math.max(1, Number.isNaN(rawPage) ? 1 : rawPage)
+    const limit = Math.min(100, Math.max(1, Number.isNaN(rawLimit) ? 25 : rawLimit))
     const offset = (page - 1) * limit
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any

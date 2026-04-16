@@ -58,7 +58,7 @@ export async function GET(
   } catch (error) {
     console.error('GET /api/jobs/[id] error:', error)
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed to get job' },
+      { error: 'Internal server error' },
       { status: 500 }
     )
   }
