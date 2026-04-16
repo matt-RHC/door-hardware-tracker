@@ -1,0 +1,10 @@
+Replace these with actual Darrin PNG assets.
+
+Expected files (96x96 PNG):
+- darrin_scanning.png  (blue, "?")
+- darrin_excited.png   (green, "✓")
+- darrin_concerned.png (yellow, "!")
+- darrin_success.png   (green, "★")
+
+Until the PNGs are dropped in here, any DarrinMessage component
+should fall back to a hard-hat / construction-worker emoji.

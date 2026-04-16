@@ -15,6 +15,7 @@ interface StepConfirmProps {
   triageResult: TriageResult | null;
   onComplete: () => void;
   onBack: () => void;
+  onBackToReview: () => void;
   onError: (msg: string) => void;
 }
 
@@ -25,6 +26,7 @@ export default function StepConfirm({
   triageResult,
   onComplete,
   onBack,
+  onBackToReview,
   onError,
 }: StepConfirmProps) {
   const [loading, setLoading] = useState(false);
@@ -32,6 +34,8 @@ export default function StepConfirm({
   const [saveComplete, setSaveComplete] = useState(false);
   const [overrideUnmatched, setOverrideUnmatched] = useState(false);
   const [promoteFailed, setPromoteFailed] = useState(false);
+  const [retrying, setRetrying] = useState(false);
+  const [retryError, setRetryError] = useState<string | null>(null);
   const [saveResult, setSaveResult] = useState<{
     openingsCount: number;
     itemsCount: number;
@@ -152,6 +156,77 @@ export default function StepConfirm({
     }
   };
 
+  // ─── Retry promotion after a previous failure ───
+  // Re-runs the same save endpoint. If promotion succeeds, we drop into
+  // the normal success view; if it fails again we surface the API error
+  // inline so the user can decide to back up or exit.
+  const handleRetryPromotion = async () => {
+    setRetrying(true);
+    setRetryError(null);
+
+    try {
+      const saveResp = await fetch("/api/parse-pdf/save", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          projectId,
+          hardwareSets,
+          doors,
+        }),
+      });
+
+      const result = await saveResp.json().catch(() => ({}));
+
+      if (!saveResp.ok) {
+        setRetryError(result?.error || `Retry failed (${saveResp.status})`);
+        return;
+      }
+
+      // Promotion still failing — keep the failed view, show the new error.
+      if (!result.success && result.stagingSuccess) {
+        setSaveResult({
+          openingsCount: result.openingsCount,
+          itemsCount: result.itemsCount,
+          expectedItemsCount: result.expectedItemsCount,
+          unmatchedSets: result.unmatchedSets,
+          partial: result.partial,
+          failedChunks: result.failedChunks,
+        });
+        setRetryError(result.error || "Promotion failed again.");
+        return;
+      }
+
+      if (!result.success) {
+        setRetryError(result.error || "Retry failed.");
+        return;
+      }
+
+      // Success — flip into the normal post-save view.
+      setSaveResult({
+        openingsCount: result.openingsCount,
+        itemsCount: result.itemsCount,
+        expectedItemsCount: result.expectedItemsCount,
+        unmatchedSets: result.unmatchedSets,
+        partial: result.partial,
+        failedChunks: result.failedChunks,
+      });
+      setPromoteFailed(false);
+    } catch (err) {
+      setRetryError(err instanceof Error ? err.message : "Retry failed.");
+    } finally {
+      setRetrying(false);
+    }
+  };
+
+  // ─── "Back to Review": drop the failed state and let the wizard rewind. ───
+  const handleBackToReview = () => {
+    setPromoteFailed(false);
+    setSaveComplete(false);
+    setRetryError(null);
+    setSaveResult(null);
+    onBackToReview();
+  };
+
   // ─── Promote-failed state: staging OK but production write failed ───
   if (saveComplete && saveResult && promoteFailed) {
     return (
@@ -161,8 +236,7 @@ export default function StepConfirm({
           Promotion Failed
         </h3>
         <p className="text-secondary text-sm mb-4">
-          Data saved to staging but final promotion failed. Your data is safe
-          &mdash; contact support or retry.
+          Data saved to staging but final promotion failed.
         </p>
 
         <div className="grid grid-cols-2 gap-3 max-w-sm mx-auto text-sm mb-6">
@@ -184,12 +258,40 @@ export default function StepConfirm({
           </div>
         </div>
 
-        <button
-          onClick={onComplete}
-          className="px-8 py-2.5 bg-warning hover:bg-warning/80 text-white rounded-lg transition-colors font-semibold"
-        >
-          Done
-        </button>
+        {retryError && (
+          <div className="mb-4 p-3 bg-danger-dim border border-danger rounded-md text-danger text-xs text-left">
+            {retryError}
+          </div>
+        )}
+
+        <div className="flex flex-col items-center gap-3">
+          <div className="flex flex-wrap items-center justify-center gap-3">
+            <button
+              onClick={handleRetryPromotion}
+              disabled={retrying}
+              className="px-6 py-2.5 bg-accent hover:bg-accent/80 disabled:opacity-50 disabled:cursor-not-allowed text-white rounded-lg transition-colors font-semibold inline-flex items-center gap-2"
+            >
+              {retrying && (
+                <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              )}
+              {retrying ? "Retrying..." : "Retry Promotion"}
+            </button>
+            <button
+              onClick={handleBackToReview}
+              disabled={retrying}
+              className="px-6 py-2.5 bg-tint hover:bg-tint/70 disabled:opacity-50 disabled:cursor-not-allowed text-primary border border-border-dim rounded-lg transition-colors font-semibold"
+            >
+              &larr; Back to Review
+            </button>
+          </div>
+          <button
+            onClick={onComplete}
+            disabled={retrying}
+            className="text-tertiary hover:text-secondary disabled:opacity-50 disabled:cursor-not-allowed text-xs underline transition-colors"
+          >
+            Exit
+          </button>
+        </div>
       </div>
     );
   }
