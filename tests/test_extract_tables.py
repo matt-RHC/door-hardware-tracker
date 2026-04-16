@@ -1194,6 +1194,99 @@ class TestOpeningListHeadingJoinIntegration:
             assert d.hand.strip(), f"door {d.door_number} missing hand"
         # Heading with a rating propagates it to every door under it
         assert by_num["120"].fire_rating == "90Min"
-        # Heading without a rating leaves fire_rating blank (genuine absence)
-        assert by_num["110.1"].fire_rating == ""
-        assert by_num["113"].fire_rating == ""
+        # Heading without a rating gets backfilled to "NR" (Not Rated) —
+        # the absence of a fire rating means non-rated, not missing data.
+        assert by_num["110.1"].fire_rating == "NR"
+        assert by_num["113"].fire_rating == "NR"
+
+
+class TestNRBackfill:
+    """Doors with no fire rating get 'NR' after the join."""
+
+    def test_blank_fire_rating_becomes_nr(self, extract_tables):
+        """A door with blank fire_rating gets NR after join."""
+        DoorEntry = extract_tables.DoorEntry
+        openings = [DoorEntry(door_number="101", hw_set="H01", fire_rating="")]
+        heading_doors = [DoorEntry(door_number="101", hw_set="H01", hand="RH", location="ROOM 101")]
+        extract_tables.join_opening_list_with_heading_pages(openings, heading_doors)
+        assert openings[0].fire_rating == "NR"
+
+    def test_explicit_fire_rating_preserved(self, extract_tables):
+        """A door with an explicit fire rating is NOT overwritten with NR."""
+        DoorEntry = extract_tables.DoorEntry
+        openings = [DoorEntry(door_number="101", hw_set="H01", fire_rating="90Min")]
+        heading_doors = [DoorEntry(door_number="101", hw_set="H01", hand="RH")]
+        extract_tables.join_opening_list_with_heading_pages(openings, heading_doors)
+        assert openings[0].fire_rating == "90Min"
+
+    def test_heading_fire_rating_not_overwritten_by_nr(self, extract_tables):
+        """Fire rating from heading page is preserved, not overwritten with NR."""
+        DoorEntry = extract_tables.DoorEntry
+        openings = [DoorEntry(door_number="101", hw_set="H01", fire_rating="")]
+        heading_doors = [DoorEntry(door_number="101", hw_set="H01", fire_rating="1 Hr")]
+        extract_tables.join_opening_list_with_heading_pages(openings, heading_doors)
+        assert openings[0].fire_rating == "1 Hr"
+
+
+class TestFalseDoorFiltering:
+    """Post-join filter removes catalog numbers mistakenly extracted as doors."""
+
+    def test_removes_no_metadata_no_heading_match(self, extract_tables):
+        """A door with no heading match and no metadata is filtered out."""
+        DoorEntry = extract_tables.DoorEntry
+        openings = [
+            DoorEntry(door_number="101", hw_set="H01"),  # real door
+            DoorEntry(door_number="4040XP", hw_set="", location="", hand=""),  # false positive
+        ]
+        heading_doors = [DoorEntry(door_number="101", hw_set="H01", hand="RH")]
+        extract_tables.join_opening_list_with_heading_pages(openings, heading_doors)
+        door_numbers = [d.door_number for d in openings]
+        assert "101" in door_numbers
+        assert "4040XP" not in door_numbers
+
+    def test_keeps_door_with_hw_set_even_without_heading(self, extract_tables):
+        """A door with hw_set but no heading match is kept (could be real)."""
+        DoorEntry = extract_tables.DoorEntry
+        openings = [
+            DoorEntry(door_number="101", hw_set="H01"),
+            DoorEntry(door_number="999", hw_set="H99"),  # has hw_set, keep it
+        ]
+        heading_doors = [DoorEntry(door_number="101", hw_set="H01", hand="RH")]
+        extract_tables.join_opening_list_with_heading_pages(openings, heading_doors)
+        door_numbers = [d.door_number for d in openings]
+        assert "999" in door_numbers
+
+    def test_no_filtering_without_heading_data(self, extract_tables):
+        """When no heading pages exist, don't filter anything."""
+        DoorEntry = extract_tables.DoorEntry
+        openings = [DoorEntry(door_number="4040XP", hw_set="", location="", hand="")]
+        heading_doors = []
+        extract_tables.join_opening_list_with_heading_pages(openings, heading_doors)
+        assert len(openings) == 1  # kept because no heading data to compare
+
+
+class TestIsValidDoorNumberNewRejections:
+    """New rejection patterns for catalog numbers and option codes."""
+
+    def test_rejects_trailing_colon(self, extract_tables):
+        assert not extract_tables.is_valid_door_number("10A:")
+        assert not extract_tables.is_valid_door_number("11A:")
+
+    def test_rejects_leading_zero_dash_catalog(self, extract_tables):
+        assert not extract_tables.is_valid_door_number("14-010")
+        assert not extract_tables.is_valid_door_number("13-247")
+        assert not extract_tables.is_valid_door_number("14-028")
+
+    def test_rejects_closer_model_numbers(self, extract_tables):
+        assert not extract_tables.is_valid_door_number("4040XP")
+        assert not extract_tables.is_valid_door_number("4040XP-3077")
+        assert not extract_tables.is_valid_door_number("4040XP-3077SCNS")
+
+    def test_still_accepts_valid_door_numbers(self, extract_tables):
+        """Ensure the new rules don't reject real doors."""
+        assert extract_tables.is_valid_door_number("101")
+        assert extract_tables.is_valid_door_number("1-101")
+        assert extract_tables.is_valid_door_number("A101")
+        assert extract_tables.is_valid_door_number("110.1")
+        assert extract_tables.is_valid_door_number("E102")
+        assert extract_tables.is_valid_door_number("ST-100")

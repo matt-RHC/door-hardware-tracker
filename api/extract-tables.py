@@ -1763,8 +1763,25 @@ def is_valid_door_number(val: str, log_rejections: bool = False) -> bool:
             print(f"[DOOR_VALIDATION] Rejected '{val}': no digits")
         return False
 
+    # Reject option-list codes with trailing colons (e.g. "10A:", "11A:")
+    if clean.endswith(":"):
+        return False
+
     # Reject trailing dash (project/document IDs like MCA1-2-)
     if clean.endswith("-"):
+        return False
+
+    # Reject hardware catalog patterns: NN-0NN or NN-NNN (e.g. "14-010",
+    # "13-247", "14-048"). These are strike/hardware catalog numbers, not
+    # door numbers. Real door numbers with dashes typically have a longer
+    # prefix or an alpha component (e.g. "1-101", "ST-100").
+    if re.match(r'^\d{2}-0\d{2,3}$', clean) or re.match(r'^\d{2}-\d{3}$', clean):
+        return False
+
+    # Reject closer/hardware model numbers with product-line suffixes.
+    # Common patterns: 4040XP, 4040XP-3077, 4040XP-3077SCNS, etc.
+    # Requires 2+ alpha chars to avoid rejecting real doors like "2100A".
+    if re.match(r'^\d{4}[A-Z]{2,3}(?:-\d{3,4}[A-Z]*)?$', clean):
         return False
 
     # Reject phone number patterns and multi-dash numeric strings
@@ -2447,6 +2464,40 @@ def join_opening_list_with_heading_pages(
             ol_by_num[hd.door_number] = hd
             added += 1
             heading_only_numbers.append(hd.door_number)
+
+    # ── Filter out likely false-positive "doors" from the Opening List.
+    # These are catalog numbers, finish codes, and model numbers that
+    # the word-position fallback mistakenly extracted as door entries.
+    # The strongest signal: they appear in the Opening List but have NO
+    # counterpart on any heading page. Real doors appear in both.
+    #
+    # We only filter when there IS heading page data to compare against
+    # (heading_doors is non-empty) AND the door has no location, no hand,
+    # and no hw_set — meaning it has zero useful metadata from either source.
+    if heading_doors:
+        before_filter = len(openings)
+        openings[:] = [
+            d for d in openings
+            if d.door_number in head_by_num        # matched a heading page
+            or (d.location or "").strip()           # has location from OL
+            or (d.hand or "").strip()               # has hand from OL
+            or (d.hw_set or "").strip()             # has hw_set from OL
+        ]
+        filtered_count = before_filter - len(openings)
+        if filtered_count > 0:
+            logger.info(
+                f"[extract-tables] OL↔Heading join: filtered {filtered_count} "
+                f"likely false-positive door entries (no heading match, no metadata)"
+            )
+
+    # ── Backfill "NR" (Not Rated) for doors with no fire rating after the
+    # join.  In door-hardware submittals the absence of a fire rating means
+    # the door is non-rated — it is NOT missing data.  Without this backfill
+    # the review UI counts every non-rated door as "Missing fire rating",
+    # inflating error counts dramatically.
+    for door in openings:
+        if not (door.fire_rating or "").strip():
+            door.fire_rating = "NR"
 
     # Opening-List-only doors: present in the OL table but no heading
     # page parsed them. Usually a heading-page classifier miss.
