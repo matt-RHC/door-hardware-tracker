@@ -981,6 +981,9 @@ const VISION_SCHEDULE_PAGE_TYPES = new Set([
  * token limits while providing enough cross-page context for multi-page sets.
  * Uses the Anthropic SDK's native PDF document support — no image conversion needed.
  */
+// Default: 3 minutes. Leaves budget for triage + staging after vision completes.
+const VISION_WALL_CLOCK_LIMIT_MS = 180_000
+
 export async function callVisionExtraction(
   client: Anthropic,
   pdfBase64: string,
@@ -991,6 +994,7 @@ export async function callVisionExtraction(
     expectedFormat?: string
   },
   batchSize = 5,
+  wallClockLimitMs = VISION_WALL_CLOCK_LIMIT_MS,
 ): Promise<VisionExtractionResult> {
   const MODEL = 'claude-sonnet-4-20250514'
   const allSets: VisionHardwareSet[] = []
@@ -1005,6 +1009,27 @@ export async function callVisionExtraction(
   }
 
   for (const batch of batches) {
+    // Wall-clock guard: stop sending new batches if we've exceeded the time budget.
+    // Already-completed batches are kept — we return partial results.
+    const elapsed = Date.now() - totalStart
+    if (elapsed > wallClockLimitMs) {
+      const skippedPages = batches.slice(batches.indexOf(batch)).flat()
+      console.warn(
+        `[vision-extract] Wall-clock limit reached (${Math.round(elapsed / 1000)}s > ${Math.round(wallClockLimitMs / 1000)}s). ` +
+        `Skipping ${skippedPages.length} remaining pages: ${skippedPages.join(', ')}`,
+      )
+      // Record skipped pages in results
+      for (const p of skippedPages) {
+        pageResults.push({
+          pageNumber: p,
+          page_type: 'skipped_timeout',
+          sets_found: 0,
+          processing_time_ms: 0,
+        })
+      }
+      break
+    }
+
     const batchStart = Date.now()
 
     let contextHint = ''
@@ -1156,13 +1181,14 @@ export async function callVisionExtraction(
     }
   }
 
+  const pagesSkipped = pageResults.filter(r => r.page_type === 'skipped_timeout').length
   return {
     hardware_sets: allSets,
     page_results: pageResults,
     total_processing_time_ms: Date.now() - totalStart,
     model_used: MODEL,
     pages_processed: pagesProcessed,
-    pages_skipped: 0,
+    pages_skipped: pagesSkipped,
   }
 }
 
