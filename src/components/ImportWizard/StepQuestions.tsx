@@ -4,6 +4,16 @@ import { useState, useCallback, useRef, useEffect, useMemo } from "react"
 import type { UseExtractionJobReturn } from "@/hooks/useExtractionJob"
 import WizardNav from "./WizardNav"
 import DarrinMessage, { DarrinAction } from "./DarrinMessage"
+import ClassifyCorrectionPanel from "./questions/ClassifyCorrectionPanel"
+import {
+  runClassifyHeuristics,
+  summarizeHardwareSetIds,
+} from "./questions/classify-heuristics"
+import type {
+  ClassifyOverride,
+  ClassifyPageDetail,
+  ClassifyPhaseData,
+} from "@/lib/schemas/classify"
 
 // ─── Auto-save debounce ───
 const DEBOUNCE_MS = 1500
@@ -63,11 +73,47 @@ export default function StepQuestions({
   const [pdfOpen, setPdfOpen] = useState(false)
   const [doorCountInput, setDoorCountInput] = useState("")
   const [manufacturerInput, setManufacturerInput] = useState("")
+  const [correctionOpen, setCorrectionOpen] = useState(false)
+  const [correctionSaving, setCorrectionSaving] = useState(false)
+  const [correctionError, setCorrectionError] = useState<string | null>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const lastSavedRef = useRef<string>("")
 
   const phaseData = job.phaseData
   const { classify, extraction, triage } = phaseData
+
+  // Derive the enriched classify shape for helpers that expect it.
+  // The orchestrator writes every field, but a stale job written
+  // before Prompt 4 may lack the new arrays — default defensively.
+  const classifyFull = useMemo<ClassifyPhaseData | null>(() => {
+    if (!classify) return null
+    const c = classify as Partial<ClassifyPhaseData> & {
+      total_pages: number
+      schedule_pages: number[]
+      hardware_pages: number[]
+      skipped_pages: number[]
+    }
+    return {
+      total_pages: c.total_pages,
+      schedule_pages: c.schedule_pages,
+      hardware_pages: c.hardware_pages,
+      reference_pages: c.reference_pages ?? [],
+      cover_pages: c.cover_pages ?? [],
+      skipped_pages: c.skipped_pages,
+      page_details: c.page_details ?? [],
+      user_overrides: c.user_overrides,
+    }
+  }, [classify])
+
+  const heuristicFlags = useMemo(() => {
+    if (!classifyFull) return []
+    return runClassifyHeuristics(classifyFull)
+  }, [classifyFull])
+
+  const hardwareSetIdsSummary = useMemo(() => {
+    if (!classifyFull) return ""
+    return summarizeHardwareSetIds(classifyFull.page_details ?? [])
+  }, [classifyFull])
 
   // Create a stable blob URL for the PDF file
   const pdfUrl = useMemo(() => {
@@ -123,6 +169,43 @@ export default function StepQuestions({
       })
     },
     [debouncedSave],
+  )
+
+  // ─── Classify overrides ───
+  const handleSaveOverrides = useCallback(
+    async (overrides: ClassifyOverride[]) => {
+      if (!job.jobId) return
+      setCorrectionSaving(true)
+      setCorrectionError(null)
+      try {
+        const resp = await fetch(
+          `/api/jobs/${job.jobId}/classify-overrides`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ overrides }),
+          },
+        )
+        if (!resp.ok) {
+          const body = await resp.json().catch(() => ({}))
+          throw new Error(
+            body.error ?? `Failed to save corrections (${resp.status})`,
+          )
+        }
+        // Stamp a "classify_check=corrected" answer so the constraint
+        // table records the user intervened — pairs with the other
+        // classifyCheck values ("ok"/"off").
+        updateAnswer(QUESTION_KEYS.classifyCheck, "corrected")
+        setCorrectionOpen(false)
+      } catch (err) {
+        setCorrectionError(
+          err instanceof Error ? err.message : "Failed to save corrections",
+        )
+      } finally {
+        setCorrectionSaving(false)
+      }
+    },
+    [job.jobId, updateAnswer],
   )
 
   // ─── Continue ───
@@ -270,33 +353,121 @@ export default function StepQuestions({
         />
 
         {/* Message 2 — classify */}
-        {classify && (
-          <DarrinMessage
-            avatar="scanning"
-            message={
-              <>
-                Alright, {classify.total_pages} pages total. I&apos;m seeing door
-                schedule data on pages{" "}
-                <span className="text-accent">{formatPageList(classify.schedule_pages)}</span>{" "}
-                and hardware sets on pages{" "}
-                <span className="text-accent">{formatPageList(classify.hardware_pages)}</span>.
-                Sound right?
-              </>
-            }
-          >
-            <DarrinAction
-              selected={answers[QUESTION_KEYS.classifyCheck] === "ok"}
-              onClick={() => updateAnswer(QUESTION_KEYS.classifyCheck, "ok")}
+        {classify && classifyFull && (
+          <>
+            <DarrinMessage
+              avatar={
+                heuristicFlags.some((f) => f.severity === "warning")
+                  ? "concerned"
+                  : "scanning"
+              }
+              message={
+                <>
+                  {classify.total_pages} pages total. I found the{" "}
+                  <span className="text-accent">door schedule</span> on
+                  page{classifyFull.schedule_pages.length === 1 ? "" : "s"}{" "}
+                  <span className="text-accent">
+                    {formatPageList(classifyFull.schedule_pages)}
+                  </span>
+                  ,{" "}
+                  <span className="text-accent">hardware headings</span> on
+                  page{classifyFull.hardware_pages.length === 1 ? "" : "s"}{" "}
+                  <span className="text-accent">
+                    {formatPageList(classifyFull.hardware_pages)}
+                  </span>
+                  {hardwareSetIdsSummary && (
+                    <>
+                      {" "}(
+                      <span className="text-accent/80">
+                        {hardwareSetIdsSummary}
+                      </span>
+                      )
+                    </>
+                  )}
+                  {classifyFull.reference_pages.length > 0 && (
+                    <>
+                      , and{" "}
+                      <span className="text-secondary">reference tables</span> on
+                      page{classifyFull.reference_pages.length === 1 ? "" : "s"}{" "}
+                      <span className="text-accent">
+                        {formatPageList(classifyFull.reference_pages)}
+                      </span>
+                    </>
+                  )}
+                  .{" "}
+                  {classifyFull.cover_pages.length > 0 && (
+                    <>
+                      Page{classifyFull.cover_pages.length === 1 ? "" : "s"}{" "}
+                      <span className="text-tertiary">
+                        {formatPageList(classifyFull.cover_pages)}
+                      </span>{" "}
+                      look
+                      {classifyFull.cover_pages.length === 1 ? "s" : ""} like
+                      cover page{classifyFull.cover_pages.length === 1 ? "" : "s"}{" "}
+                      &mdash; I&apos;ll skip{" "}
+                      {classifyFull.cover_pages.length === 1 ? "it" : "them"}.{" "}
+                    </>
+                  )}
+                  {heuristicFlags.length === 0
+                    ? "Sound right?"
+                    : "A couple things caught my eye:"}
+                </>
+              }
             >
-              Looks right &#10003;
-            </DarrinAction>
-            <DarrinAction
-              selected={answers[QUESTION_KEYS.classifyCheck] === "off"}
-              onClick={() => updateAnswer(QUESTION_KEYS.classifyCheck, "off")}
-            >
-              Something&apos;s off &mdash; let me check
-            </DarrinAction>
-          </DarrinMessage>
+              <DarrinAction
+                selected={answers[QUESTION_KEYS.classifyCheck] === "ok"}
+                onClick={() => updateAnswer(QUESTION_KEYS.classifyCheck, "ok")}
+              >
+                Looks right &#10003;
+              </DarrinAction>
+              <DarrinAction
+                selected={
+                  answers[QUESTION_KEYS.classifyCheck] === "off" ||
+                  correctionOpen
+                }
+                onClick={() => {
+                  updateAnswer(QUESTION_KEYS.classifyCheck, "off")
+                  setCorrectionOpen(true)
+                }}
+              >
+                Something&apos;s off &mdash; let me check
+              </DarrinAction>
+            </DarrinMessage>
+
+            {/* Heuristic flags — rendered as a bullet list under Darrin's message. */}
+            {heuristicFlags.length > 0 && (
+              <ul className="ml-[60px] space-y-1 text-xs text-secondary list-disc list-inside">
+                {heuristicFlags.map((flag) => (
+                  <li
+                    key={flag.code}
+                    className={
+                      flag.severity === "warning" ? "text-warning" : "text-tertiary"
+                    }
+                  >
+                    {flag.message}
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {/* Correction panel — expanded when user clicks "Something's off" */}
+            {correctionOpen && (classifyFull.page_details?.length ?? 0) > 0 && (
+              <div className="ml-[60px]">
+                <ClassifyCorrectionPanel
+                  pages={classifyFull.page_details as ClassifyPageDetail[]}
+                  initialOverrides={classifyFull.user_overrides ?? []}
+                  onSave={handleSaveOverrides}
+                  onCancel={() => setCorrectionOpen(false)}
+                  saving={correctionSaving}
+                />
+                {correctionError && (
+                  <p className="text-[11px] text-danger mt-2">
+                    {correctionError}
+                  </p>
+                )}
+              </div>
+            )}
+          </>
         )}
 
         {/* Message 3 — extraction */}
