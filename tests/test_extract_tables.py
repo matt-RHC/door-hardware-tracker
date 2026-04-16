@@ -665,3 +665,436 @@ class TestJoinSplitRows:
         items = [HardwareItem(name="Hinges", model="5BB1", finish="626")]
         result = extract_tables._join_split_rows(items)
         assert len(result) == 1
+
+
+# ── Heading door metadata parsing (Prompt 2 cross-reference) ──
+
+class TestHeadingDoorMetadata:
+    """
+    Heading blocks in hardware schedule pages carry per-door location + hand
+    on the same line as the door number. Prompt 2 requires capturing those
+    fields (previously only location was captured; hand was dropped).
+    """
+
+    def test_parse_location_and_hand(self, extract_tables):
+        """Per-door heading line yields both location and hand."""
+        loc, hand = extract_tables.parse_heading_door_metadata(
+            " RECEPTION 101 to LARGE CONF. ROOM 102 LH"
+        )
+        assert loc == "RECEPTION 101 to LARGE CONF. ROOM 102"
+        assert hand == "LH"
+
+    def test_parse_rhr_hand(self, extract_tables):
+        loc, hand = extract_tables.parse_heading_door_metadata(
+            " RECEPTION 101 from CORRIDOR 110 RHR"
+        )
+        assert loc == "RECEPTION 101 from CORRIDOR 110"
+        assert hand == "RHR"
+
+    def test_parse_rhra_hand(self, extract_tables):
+        """RHRA / LHRA are the pair-door active/inactive hand codes."""
+        loc, hand = extract_tables.parse_heading_door_metadata(
+            " CORR. to ENTRANCE RHRA"
+        )
+        assert loc == "CORR. to ENTRANCE"
+        assert hand == "RHRA"
+
+    def test_parse_degree_prefixed_hand(self, extract_tables):
+        """Degree-prefixed hand (e.g. '90° LH') is captured, location is stripped."""
+        loc, hand = extract_tables.parse_heading_door_metadata(
+            " CORR 10-90 to STOR 10-01 90° LH"
+        )
+        assert loc == "CORR 10-90 to STOR 10-01"
+        assert hand == "LH"
+
+    def test_parse_location_only(self, extract_tables):
+        """Location without hand: hand is empty, location fully captured."""
+        loc, hand = extract_tables.parse_heading_door_metadata(
+            " SOCIAL HUB 09-13 from 9TH FLOOR"
+        )
+        assert loc == "SOCIAL HUB 09-13 from 9TH FLOOR"
+        assert hand == ""
+
+    def test_parse_empty(self, extract_tables):
+        loc, hand = extract_tables.parse_heading_door_metadata("")
+        assert loc == ""
+        assert hand == ""
+
+
+class TestExtractDoorsFromSetHeadings:
+    """
+    Integration of parse_heading_door_metadata into the heading-block extractor.
+    A DoorEntry built from a hardware-schedule heading line must carry both
+    location AND hand (prior behavior captured only location).
+    """
+
+    def test_extract_doors_populates_hand(self, extract_tables, tmp_path):
+        """The DoorEntry.hand field is populated from heading door lines."""
+
+        class _FakePage:
+            def __init__(self, text):
+                self._text = text
+
+            def extract_text(self):
+                return self._text
+
+        class _FakePdf:
+            def __init__(self, pages):
+                self.pages = pages
+
+        pdf = _FakePdf([
+            _FakePage(
+                "Heading #H01 (Set #H01)\n"
+                "1 Single Door #E102 RECEPTION 101 to LARGE CONF. ROOM 102 LH\n"
+                "1 Single Door #113 OFFICE (B) 114 to SM. CONF. ROOM 113 RH\n"
+                "Opening Description: 3' 0\" x 7' 0\" Type AL-SF Type AL-SF\n"
+                "12 Hinges 5BB1 4 1/2 x 4 1/2 652 IV\n"
+            )
+        ])
+
+        doors = extract_tables.extract_doors_from_set_headings(pdf)
+        by_num = {d.door_number: d for d in doors}
+
+        assert "E102" in by_num
+        assert by_num["E102"].location == "RECEPTION 101 to LARGE CONF. ROOM 102"
+        assert by_num["E102"].hand == "LH"
+        assert by_num["E102"].hw_set == "H01"
+
+        assert "113" in by_num
+        assert by_num["113"].location == "OFFICE (B) 114 to SM. CONF. ROOM 113"
+        assert by_num["113"].hand == "RH"
+
+
+class TestEnrichOpeningsFromHeadings:
+    """
+    Prompt 2: When the Opening List table has already produced DoorEntry rows
+    with missing location/hand, the heading-block cross-reference must fill
+    those fields in place rather than skipping the door.
+    """
+
+    def test_enriches_missing_hand_and_location(self, extract_tables):
+        DoorEntry = extract_tables.DoorEntry
+        openings = [
+            DoorEntry(door_number="101", hw_set="H01", location="", hand=""),
+            DoorEntry(door_number="102", hw_set="H02", location="LOBBY", hand="RH"),
+        ]
+        heading_doors = [
+            DoorEntry(door_number="101", hw_set="H01",
+                      location="RECEPTION 101 from CORRIDOR 110", hand="RHR"),
+            DoorEntry(door_number="103", hw_set="H01",
+                      location="OFFICE 103", hand="LH"),
+        ]
+        added, enriched = extract_tables.merge_heading_doors_into_openings(
+            openings, heading_doors
+        )
+        assert added == 1
+        assert enriched == 1
+
+        by_num = {d.door_number: d for d in openings}
+        assert by_num["101"].location == "RECEPTION 101 from CORRIDOR 110"
+        assert by_num["101"].hand == "RHR"
+        # Existing non-empty values must not be overwritten
+        assert by_num["102"].location == "LOBBY"
+        assert by_num["102"].hand == "RH"
+        # New door is appended
+        assert by_num["103"].location == "OFFICE 103"
+        assert by_num["103"].hand == "LH"
+
+    def test_preserves_opening_list_values_when_heading_empty(self, extract_tables):
+        """Opening List is canonical — heading data never overwrites populated fields."""
+        DoorEntry = extract_tables.DoorEntry
+        openings = [
+            DoorEntry(door_number="101", hw_set="H01",
+                      location="RECEPTION", hand="LH"),
+        ]
+        heading_doors = [
+            DoorEntry(door_number="101", hw_set="H01", location="", hand=""),
+        ]
+        added, enriched = extract_tables.merge_heading_doors_into_openings(
+            openings, heading_doors
+        )
+        assert added == 0
+        assert enriched == 0
+        assert openings[0].location == "RECEPTION"
+        assert openings[0].hand == "LH"
+
+
+# ── Opening Description fire rating (Prompt 2 revised) ──
+
+class TestParseOpeningDescriptionFireRating:
+    """The 'Opening Description:' line under a heading sometimes carries a
+    fire rating (e.g. '90Min') that applies to every door under that
+    heading. The pipeline must extract and propagate it."""
+
+    def test_no_rating_returns_empty(self, extract_tables):
+        result = extract_tables.parse_opening_description_fire_rating(
+            "Opening Description: 3' 0\" x 7' 0\" Type AL-SF Type AL-SF"
+        )
+        assert result == ""
+
+    def test_extracts_90min(self, extract_tables):
+        result = extract_tables.parse_opening_description_fire_rating(
+            "Opening Description: 90Min 3' 0\" x 7' 0\" Type HMD Type HMF"
+        )
+        assert result == "90Min"
+
+    def test_extracts_45_min_with_space(self, extract_tables):
+        result = extract_tables.parse_opening_description_fire_rating(
+            "Opening Description: 45 Min 3' 0\" x 7' 0\" Type HMD Type HMF"
+        )
+        assert result == "45 Min"
+
+    def test_extracts_1_hr(self, extract_tables):
+        result = extract_tables.parse_opening_description_fire_rating(
+            "Opening Description: 1 Hr 3' 0\" x 7' 0\" Type HMD Type HMF"
+        )
+        assert result == "1 Hr"
+
+    def test_extracts_3_hours_plural(self, extract_tables):
+        result = extract_tables.parse_opening_description_fire_rating(
+            "Opening Description: 3 Hours 3' 0\" x 7' 0\" Type HMD Type HMF"
+        )
+        assert result == "3 Hours"
+
+    def test_non_description_line_returns_empty(self, extract_tables):
+        """The parser should only fire on lines starting with 'Opening Description'."""
+        result = extract_tables.parse_opening_description_fire_rating(
+            "1 Single Door #101 CORRIDOR 110 90Min LH"
+        )
+        assert result == ""
+
+
+class _FakePage:
+    """Minimal pdfplumber-shaped page used by the join tests below."""
+
+    def __init__(self, text, page_number=1):
+        self._text = text
+        self.page_number = page_number
+
+    def extract_text(self):
+        return self._text
+
+
+class _FakePdf:
+    def __init__(self, pages):
+        self.pages = pages
+
+
+class TestBuildHeadingPageMap:
+    """Step B of the join: walk heading pages, emit per-door map with
+    fire_rating stamped from the Opening Description line of each heading."""
+
+    def test_stamps_fire_rating_from_opening_description(self, extract_tables):
+        page_text = (
+            "Heading #H07A (Set #H07A)\n"
+            "1 Single Door #120 STAIR 201 from CORRIDOR 110 RHR\n"
+            "1 Single Door #121 STAIR 201 to ROOF LH\n"
+            "Opening Description: 90Min 3' 0\" x 7' 0\" Type HMD Type HMF\n"
+            "6 Hinges 5BB1 4 1/2 x 4 1/2 652 IV\n"
+        )
+        pdf = _FakePdf([_FakePage(page_text)])
+        heading_map = extract_tables.build_heading_page_map(pdf)
+
+        assert "120" in heading_map
+        assert heading_map["120"].fire_rating == "90Min"
+        assert heading_map["120"].location == "STAIR 201 from CORRIDOR 110"
+        assert heading_map["120"].hand == "RHR"
+
+        assert "121" in heading_map
+        assert heading_map["121"].fire_rating == "90Min"
+        assert heading_map["121"].hand == "LH"
+
+    def test_heading_without_rating_leaves_empty(self, extract_tables):
+        page_text = (
+            "Heading #H01 (Set #H01)\n"
+            "1 Single Door #110.1 RECEPTION 101 from CORRIDOR 110 RHR\n"
+            "Opening Description: 3' 0\" x 7' 0\" Type AL-SF Type AL-SF\n"
+            "12 Hinges 5BB1 4 1/2 x 4 1/2 652 IV\n"
+        )
+        pdf = _FakePdf([_FakePage(page_text)])
+        heading_map = extract_tables.build_heading_page_map(pdf)
+
+        assert "110.1" in heading_map
+        assert heading_map["110.1"].fire_rating == ""
+        assert heading_map["110.1"].location == "RECEPTION 101 from CORRIDOR 110"
+        assert heading_map["110.1"].hand == "RHR"
+
+    def test_rating_does_not_leak_across_headings(self, extract_tables):
+        """A rating on heading H07A must not pollute H01 doors."""
+        page_text = (
+            "Heading #H01 (Set #H01)\n"
+            "1 Single Door #110.1 RECEPTION 101 from CORRIDOR 110 RHR\n"
+            "Opening Description: 3' 0\" x 7' 0\" Type AL-SF Type AL-SF\n"
+            "12 Hinges 5BB1 4 1/2 x 4 1/2 652 IV\n"
+            "Heading #H07A (Set #H07A)\n"
+            "1 Single Door #120 STAIR 201 from CORRIDOR 110 RHR\n"
+            "Opening Description: 90Min 3' 0\" x 7' 0\" Type HMD Type HMF\n"
+            "6 Hinges 5BB1 4 1/2 x 4 1/2 652 IV\n"
+        )
+        pdf = _FakePdf([_FakePage(page_text)])
+        heading_map = extract_tables.build_heading_page_map(pdf)
+
+        assert heading_map["110.1"].fire_rating == ""
+        assert heading_map["120"].fire_rating == "90Min"
+
+    def test_populates_hw_heading(self, extract_tables):
+        """Heading-extracted doors should carry the heading ID in hw_heading
+        so confidence scoring + the UI can render the heading context."""
+        page_text = (
+            "Heading #H01 (Set #H01)\n"
+            "1 Single Door #110.1 RECEPTION 101 from CORRIDOR 110 RHR\n"
+        )
+        pdf = _FakePdf([_FakePage(page_text)])
+        heading_map = extract_tables.build_heading_page_map(pdf)
+        assert heading_map["110.1"].hw_heading == "H01"
+
+
+class TestJoinOpeningListWithHeadingPages:
+    """Step C: non-destructive fill + append + anomaly counting."""
+
+    def test_fills_missing_fields_from_heading(self, extract_tables):
+        DoorEntry = extract_tables.DoorEntry
+        openings = [
+            DoorEntry(door_number="110.1", hw_set="H01",
+                      door_type="AL-SF", frame_type="AL-SF"),
+        ]
+        heading_doors = [
+            DoorEntry(door_number="110.1", hw_set="H01", hw_heading="H01",
+                      location="RECEPTION 101 from CORRIDOR 110",
+                      hand="RHR", fire_rating=""),
+        ]
+        stats = extract_tables.join_opening_list_with_heading_pages(
+            openings, heading_doors
+        )
+        assert openings[0].location == "RECEPTION 101 from CORRIDOR 110"
+        assert openings[0].hand == "RHR"
+        assert stats["enriched"] == 1
+        assert stats["added"] == 0
+        assert stats["opening_list_only"] == 0
+        assert stats["heading_only"] == 0
+
+    def test_propagates_heading_fire_rating_to_ol_door(self, extract_tables):
+        """Opening List row with blank fire_rating + heading map rating
+        → OL row gets filled with the heading's rating."""
+        DoorEntry = extract_tables.DoorEntry
+        openings = [
+            DoorEntry(door_number="120", hw_set="H07A",
+                      door_type="HMD", frame_type="HMF"),
+            DoorEntry(door_number="121", hw_set="H07A"),
+        ]
+        heading_doors = [
+            DoorEntry(door_number="120", hw_set="H07A",
+                      location="STAIR 201 from CORRIDOR 110",
+                      hand="RHR", fire_rating="90Min"),
+            DoorEntry(door_number="121", hw_set="H07A",
+                      location="STAIR 201 to ROOF",
+                      hand="LH", fire_rating="90Min"),
+        ]
+        extract_tables.join_opening_list_with_heading_pages(
+            openings, heading_doors
+        )
+        by_num = {d.door_number: d for d in openings}
+        assert by_num["120"].fire_rating == "90Min"
+        assert by_num["121"].fire_rating == "90Min"
+
+    def test_appends_heading_only_doors(self, extract_tables):
+        """Heading-only doors (not in the Opening List) are appended and
+        counted in stats.heading_only."""
+        DoorEntry = extract_tables.DoorEntry
+        openings = [
+            DoorEntry(door_number="101", hw_set="H01", location="FOYER", hand="LH"),
+        ]
+        heading_doors = [
+            DoorEntry(door_number="101", hw_set="H01",
+                      location="DIFFERENT", hand="RH"),
+            DoorEntry(door_number="999", hw_set="H01",
+                      location="UTILITY", hand="RH"),
+        ]
+        stats = extract_tables.join_opening_list_with_heading_pages(
+            openings, heading_doors
+        )
+        assert len(openings) == 2
+        assert stats["added"] == 1
+        assert stats["heading_only"] == 1
+        # Existing values on door 101 are NOT overwritten
+        by_num = {d.door_number: d for d in openings}
+        assert by_num["101"].location == "FOYER"
+        assert by_num["101"].hand == "LH"
+
+    def test_counts_opening_list_only_anomaly(self, extract_tables):
+        """Doors in the Opening List with no heading-page counterpart are
+        counted — this is a real anomaly the user should see."""
+        DoorEntry = extract_tables.DoorEntry
+        openings = [
+            DoorEntry(door_number="101", hw_set="H01"),
+            DoorEntry(door_number="102", hw_set="H01"),
+        ]
+        heading_doors = [
+            DoorEntry(door_number="101", hw_set="H01",
+                      location="FOYER", hand="LH"),
+        ]
+        stats = extract_tables.join_opening_list_with_heading_pages(
+            openings, heading_doors
+        )
+        assert stats["opening_list_only"] == 1
+        assert stats["opening_list_only_numbers"] == ["102"]
+
+
+class TestOpeningListHeadingJoinIntegration:
+    """End-to-end: a simulated two-map join produces doors with every
+    field populated (the Lyft/Waymo-shaped happy path). Mirrors the
+    review/utils.ts predicates so we catch UI-visible regressions."""
+
+    def test_all_doors_have_location_hand_and_rating_when_present(self, extract_tables):
+        """After the join, every door has location+hand; doors under a
+        rated heading also have fire_rating populated. No door triggers
+        the review/utils.ts missing_* predicates."""
+        DoorEntry = extract_tables.DoorEntry
+
+        # Opening List rows — door_type/frame_type from the OL table,
+        # location/hand/fire_rating left blank (typical real PDF).
+        openings = [
+            DoorEntry(door_number="110.1", hw_set="H01",
+                      door_type="AL-SF", frame_type="AL-SF"),
+            DoorEntry(door_number="113", hw_set="H01",
+                      door_type="AL-SF", frame_type="AL-SF"),
+            DoorEntry(door_number="120", hw_set="H07A",
+                      door_type="HMD", frame_type="HMF"),
+        ]
+
+        # Heading pages produce location/hand and a fire rating on H07A.
+        pdf = _FakePdf([
+            _FakePage(
+                "Heading #H01 (Set #H01)\n"
+                "1 Single Door #110.1 RECEPTION 101 from CORRIDOR 110 RHR\n"
+                "1 Single Door #113 OFFICE (B) 114 to SM. CONF. ROOM 113 RH\n"
+                "Opening Description: 3' 0\" x 7' 0\" Type AL-SF Type AL-SF\n"
+                "12 Hinges 5BB1 4 1/2 x 4 1/2 652 IV\n"
+            ),
+            _FakePage(
+                "Heading #H07A (Set #H07A)\n"
+                "1 Single Door #120 STAIR 201 from CORRIDOR 110 RHR\n"
+                "Opening Description: 90Min 3' 0\" x 7' 0\" Type HMD Type HMF\n"
+                "6 Hinges 5BB1 4 1/2 x 4 1/2 652 IV\n"
+            ),
+        ])
+
+        heading_doors = list(extract_tables.build_heading_page_map(pdf).values())
+        stats = extract_tables.join_opening_list_with_heading_pages(
+            openings, heading_doors
+        )
+
+        assert stats["heading_only"] == 0
+        assert stats["opening_list_only"] == 0
+        assert stats["enriched"] == 3
+
+        by_num = {d.door_number: d for d in openings}
+        # Every door has location + hand (UI "Missing hand/location" → 0)
+        for d in openings:
+            assert d.location.strip(), f"door {d.door_number} missing location"
+            assert d.hand.strip(), f"door {d.door_number} missing hand"
+        # Heading with a rating propagates it to every door under it
+        assert by_num["120"].fire_rating == "90Min"
+        # Heading without a rating leaves fire_rating blank (genuine absence)
+        assert by_num["110.1"].fire_rating == ""
+        assert by_num["113"].fire_rating == ""

@@ -2132,57 +2132,286 @@ def extract_heading_door_numbers(section_text: str) -> list[str]:
     return doors
 
 
+# Hand codes that appear at the end of hardware-schedule heading door lines.
+# Supports LH / RH / LHR / RHR / LHA / RHA / LHRA / RHRA, optionally preceded
+# by a swing-degree indicator like "90° LH" or "180° RHR".
+_HEADING_DOOR_HAND_RE = re.compile(
+    r"(?:\d{1,3}°\s+)?(LHRA|RHRA|LHR|RHR|LHA|RHA|LH|RH)\s*$",
+    re.IGNORECASE,
+)
+
+# Trailing degree-only suffix (e.g. "90°") without a hand code.
+_TRAILING_DEGREE_RE = re.compile(r"\s+\d{1,3}°\s*$")
+
+
+def parse_heading_door_metadata(after_door_text: str) -> tuple[str, str]:
+    """Parse (location, hand) from the trailing portion of a heading door line.
+
+    The caller passes the text that appears AFTER the door number on a line
+    like ``"1 Single Door #E102 RECEPTION 101 to LARGE CONF. ROOM 102 LH"``.
+
+    Returns a ``(location, hand)`` tuple. Either value may be the empty
+    string when not present on the line.
+
+    Decision: we parse hand as a suffix and treat everything preceding it
+    as the location rather than using the previous single-regex approach
+    that only captured location. That approach silently dropped RHRA/LHRA
+    because its trailing lookahead ``\\s+[LR]H[RA]?\\s*$`` only matches one
+    of the two reverse/active letters. Doing the split explicitly keeps
+    both fields and supports the full DFH hand set documented in Prompt 2.
+    """
+    text = (after_door_text or "").strip()
+    if not text:
+        return ("", "")
+
+    hand = ""
+    location = text
+
+    hand_match = _HEADING_DOOR_HAND_RE.search(text)
+    if hand_match:
+        hand = hand_match.group(1).upper()
+        location = text[: hand_match.start()].rstrip()
+
+    # Strip a bare trailing degree suffix when no hand followed it.
+    location = _TRAILING_DEGREE_RE.sub("", location).strip()
+
+    return (location, hand)
+
+
+# Fire-rating pattern ported from src/lib/fire-rating.ts:13 so the Python and
+# TypeScript layers recognise the same shapes ("90Min", "45 Min", "1 Hr",
+# "3 Hours"). Anchored with a leading word boundary so "PR3" etc. don't match.
+_FIRE_RATING_RE = re.compile(
+    r"\b(\d{1,3}\s*[Mm]in(?:ute)?s?|[123](?:\.5)?\s*[Hh](?:ou)?rs?)\b"
+)
+
+# The line prefix that marks a door-spec row inside a heading block.
+# Real PDFs sometimes pad with extra spaces or a tab; keep it permissive.
+_OPENING_DESCRIPTION_PREFIX_RE = re.compile(
+    r"(?i)^\s*opening\s+description\s*[:\-]",
+)
+
+
+def parse_opening_description_fire_rating(line: str) -> str:
+    """Extract a fire rating from an ``Opening Description:`` line.
+
+    The line format in hardware-schedule heading blocks is::
+
+        Opening Description: [<rating>] 3' 0" x 7' 0" Type <door> Type <frame>
+
+    The rating, when present, precedes the size dimensions (sometimes the
+    two ``Type`` tokens appear after the size). This helper only fires on
+    lines that actually begin with ``Opening Description`` so door lines
+    with embedded ``90Min`` tokens don't produce false positives.
+
+    Returns the rating verbatim (e.g. ``"90Min"`` or ``"1 Hr"``) or an
+    empty string when no rating is present.
+    """
+    if not line or not _OPENING_DESCRIPTION_PREFIX_RE.match(line):
+        return ""
+    match = _FIRE_RATING_RE.search(line)
+    return match.group(1) if match else ""
+
+
 def extract_doors_from_set_headings(pdf) -> list[DoorEntry]:
     """
     BUG-25: Extract door numbers from hardware schedule heading blocks as a
     fallback when the opening list table extraction fails or returns
     incomplete results.
 
-    Parses lines like:
-      "1 Single Door #10-12B CORR 10-90 to STOR 10-01 90° LH"
-      "1 Pair Doors #09-15AREV1 SOCIAL HUB 09-13 from 9TH FLOOR"
-
-    Returns DoorEntry objects with door_number and hw_set populated.
-    The hw_set is taken from the current heading context.
+    Thin wrapper around :func:`build_heading_page_map`; kept for
+    backward compatibility with callers that just want a flat list.
+    The returned DoorEntry objects carry door_number, hw_set, hw_heading,
+    location, hand, and (when an "Opening Description" line under the
+    heading supplied one) fire_rating.
     """
-    doors: list[DoorEntry] = []
-    seen: set[str] = set()
-
-    for page in pdf.pages:
-        text = page.extract_text() or ""
-        current_set_id = ""
-        for line in text.split("\n"):
-            heading_match = _HEADING_LINE_PATTERN.match(line.strip())
-            if heading_match:
-                current_set_id = next(
-                    (g for g in heading_match.groups() if g), ""
-                )
-
-            door_match = HEADING_DOOR_WITH_NUMBER.search(line)
-            if door_match:
-                door_num = door_match.group(3).strip().rstrip(",;:")
-                if door_num and door_num not in seen and is_valid_door_number(door_num):
-                    seen.add(door_num)
-                    loc = ""
-                    after_door = line[door_match.end(3):]
-                    loc_match = re.match(
-                        r"\s+(.+?)(?:\s+\d+°|\s+[LR]H[RA]?\s*$|\s*$)",
-                        after_door,
-                    )
-                    if loc_match:
-                        loc = loc_match.group(1).strip()
-
-                    doors.append(DoorEntry(
-                        door_number=door_num,
-                        hw_set=current_set_id,
-                        location=loc,
-                    ))
-
+    doors = list(build_heading_page_map(pdf).values())
     logger.info(
         f"[extract-tables] extract_doors_from_set_headings: "
         f"{len(doors)} doors from hardware schedule headings"
     )
     return doors
+
+
+def build_heading_page_map(pdf) -> dict[str, DoorEntry]:
+    """Step B of the Opening List ↔ Heading Page join.
+
+    Walks the hardware-schedule pages, collects the per-door lines under
+    each heading, and stamps the heading's Opening-Description fire
+    rating (when any) onto every door that belongs to that heading.
+
+    Returns a ``{door_number: DoorEntry}`` map with location, hand,
+    hw_set, hw_heading, and fire_rating populated.
+
+    Design note: we group doors by heading BUT return a flat map because
+    the caller (join) only needs per-door lookups. The grouping stays
+    local so heading-level metadata (fire rating) can be propagated
+    before the doors leak out.
+    """
+    heading_map: dict[str, DoorEntry] = {}
+
+    for page in pdf.pages:
+        text = page.extract_text() or ""
+        current_set_id = ""
+        # Doors collected for the CURRENT heading on this page, pending
+        # an Opening Description line that may stamp a fire rating onto
+        # them. When a new heading starts we flush the previous batch
+        # (any rating is already stamped) and begin a fresh list.
+        current_batch: list[DoorEntry] = []
+
+        def _flush_batch() -> None:
+            """Copy any fire rating already stamped is a no-op — this just
+            releases ownership of the batch back to the shared map."""
+            # Kept as a named no-op for readability at heading boundaries.
+            return
+
+        for line in text.split("\n"):
+            heading_match = _HEADING_LINE_PATTERN.match(line.strip())
+            if heading_match:
+                _flush_batch()
+                current_set_id = next(
+                    (g for g in heading_match.groups() if g), ""
+                )
+                current_batch = []
+                continue
+
+            door_match = HEADING_DOOR_WITH_NUMBER.search(line)
+            if door_match:
+                door_num = door_match.group(3).strip().rstrip(",;:")
+                if (
+                    door_num
+                    and door_num not in heading_map
+                    and is_valid_door_number(door_num)
+                ):
+                    after_door = line[door_match.end(3):]
+                    loc, hand = parse_heading_door_metadata(after_door)
+                    entry = DoorEntry(
+                        door_number=door_num,
+                        hw_set=current_set_id,
+                        hw_heading=current_set_id,
+                        location=loc,
+                        hand=hand,
+                    )
+                    heading_map[door_num] = entry
+                    current_batch.append(entry)
+                continue
+
+            # Fire rating on the Opening Description line is shared by
+            # every door under this heading. Stamp in-place so callers
+            # see the rating on every door they look up.
+            rating = parse_opening_description_fire_rating(line)
+            if rating and current_batch:
+                for d in current_batch:
+                    if not (d.fire_rating or "").strip():
+                        d.fire_rating = rating
+
+        _flush_batch()
+
+    return heading_map
+
+
+def join_opening_list_with_heading_pages(
+    openings: list[DoorEntry],
+    heading_doors: list[DoorEntry],
+) -> dict[str, object]:
+    """Step C of the Opening List ↔ Heading Page join.
+
+    The Opening List table (page 2 of a typical submittal) is the
+    canonical source of truth for door metadata, but it often leaves
+    ``location``, ``hand``, and ``fire_rating`` blank. The per-door
+    lines under each hardware-set heading (pages 4-9) carry those
+    fields; :func:`build_heading_page_map` has already stamped any
+    heading-level fire rating onto them.
+
+    Semantics (non-destructive):
+      - Every Opening-List row whose ``location`` / ``hand`` /
+        ``fire_rating`` / ``hw_heading`` is blank gets filled from its
+        heading-map counterpart.
+      - Heading-only doors (not in the Opening List) are appended.
+      - Opening-List-only doors (no heading-page counterpart) stay
+        unchanged but are counted + logged as an anomaly — they usually
+        mean the heading page was mis-classified or the Opening List
+        row is stale.
+
+    Mutates ``openings`` in place. Returns a stats dict with keys
+    ``added``, ``enriched``, ``opening_list_only``, ``heading_only``,
+    plus up-to-five-sample lists ``opening_list_only_numbers`` and
+    ``heading_only_numbers`` for anomaly logging.
+
+    Total counts are always present so Darrin CP2 sees the true
+    magnitude even when only the first five door numbers are named.
+    """
+    head_by_num: dict[str, DoorEntry] = {d.door_number: d for d in heading_doors}
+    ol_by_num: dict[str, DoorEntry] = {d.door_number: d for d in openings}
+
+    enriched = 0
+    for door in openings:
+        hd = head_by_num.get(door.door_number)
+        if hd is None:
+            continue
+        changed = False
+        # Fill each field only when the Opening List left it blank.
+        if not (door.location or "").strip() and (hd.location or "").strip():
+            door.location = hd.location
+            changed = True
+        if not (door.hand or "").strip() and (hd.hand or "").strip():
+            door.hand = hd.hand
+            changed = True
+        if not (door.fire_rating or "").strip() and (hd.fire_rating or "").strip():
+            door.fire_rating = hd.fire_rating
+            changed = True
+        if not (door.hw_set or "").strip() and (hd.hw_set or "").strip():
+            door.hw_set = hd.hw_set
+            changed = True
+        if not (door.hw_heading or "").strip() and (hd.hw_heading or "").strip():
+            door.hw_heading = hd.hw_heading
+            changed = True
+        if changed:
+            enriched += 1
+
+    # Appended: heading doors that have no Opening-List counterpart.
+    added = 0
+    heading_only_numbers: list[str] = []
+    for hd in heading_doors:
+        if hd.door_number not in ol_by_num:
+            openings.append(hd)
+            ol_by_num[hd.door_number] = hd
+            added += 1
+            heading_only_numbers.append(hd.door_number)
+
+    # Opening-List-only doors: present in the OL table but no heading
+    # page parsed them. Usually a heading-page classifier miss.
+    opening_list_only_numbers = [
+        d.door_number for d in openings if d.door_number not in head_by_num
+    ]
+    # ``added`` doors were just inserted by this function; they are in
+    # head_by_num (they came from heading_doors), so they are already
+    # excluded from opening_list_only_numbers above.
+
+    return {
+        "added": added,
+        "enriched": enriched,
+        "opening_list_only": len(opening_list_only_numbers),
+        "heading_only": len(heading_only_numbers),
+        # Truncated samples for log readability. Totals above carry the
+        # real magnitude so Darrin's context isn't misled by the cap.
+        "opening_list_only_numbers": opening_list_only_numbers[:5],
+        "heading_only_numbers": heading_only_numbers[:5],
+    }
+
+
+def merge_heading_doors_into_openings(
+    openings: list[DoorEntry],
+    heading_doors: list[DoorEntry],
+) -> tuple[int, int]:
+    """Legacy wrapper around :func:`join_opening_list_with_heading_pages`.
+
+    Preserved so the existing unit tests that target ``(added, enriched)``
+    semantics continue to pass. New call sites should use the join
+    function directly and consume the full stats dict.
+    """
+    stats = join_opening_list_with_heading_pages(openings, heading_doors)
+    return (int(stats["added"]), int(stats["enriched"]))
 
 
 # Patterns for extracting door numbers from heading block text.
@@ -4340,20 +4569,42 @@ class handler(BaseHTTPRequestHandler):
                         openings = inline_doors
                         logger.info(f"[extract-tables] Inline door extraction found {len(openings)} doors")
 
-                # Phase 2.6: BUG-25 — Merge doors from "N Single/Pair Door #XXX" lines
-                # in hardware schedule headings. Complements Phase 2.5 by catching
-                # doors listed in heading blocks that inline extraction missed.
-                heading_doors = extract_doors_from_set_headings(pdf)
+                # Phase 2.6: Prompt 2 — explicit Opening List ↔ Heading Page join.
+                # The Opening List table is the canonical source for the
+                # door → hw_set mapping but frequently leaves location,
+                # hand, and fire_rating blank. Heading pages carry those
+                # fields on per-door lines (plus a shared heading-level
+                # fire rating on the "Opening Description:" line). The
+                # join fills those blanks BEFORE triage/Darrin run so the
+                # Review step doesn't report data as "missing" when the
+                # PDF actually contained it.
+                heading_map = build_heading_page_map(pdf)
+                heading_doors = list(heading_map.values())
+                join_stats: dict[str, object] | None = None
                 if heading_doors:
-                    existing_nums = {d.door_number for d in openings}
-                    added = 0
-                    for hd in heading_doors:
-                        if hd.door_number not in existing_nums:
-                            openings.append(hd)
-                            existing_nums.add(hd.door_number)
-                            added += 1
-                    if added:
-                        logger.info(f"[extract-tables] Merged {added} doors from heading blocks (total now {len(openings)})")
+                    join_stats = join_opening_list_with_heading_pages(
+                        openings, heading_doors
+                    )
+                    logger.info(
+                        f"[extract-tables] OL↔Heading join: "
+                        f"+{join_stats['added']} new, "
+                        f"+{join_stats['enriched']} enriched, "
+                        f"{join_stats['opening_list_only']} opening-list-only, "
+                        f"{join_stats['heading_only']} heading-only "
+                        f"(total now {len(openings)})"
+                    )
+                    ol_sample = join_stats["opening_list_only_numbers"]
+                    hd_sample = join_stats["heading_only_numbers"]
+                    if ol_sample:
+                        logger.info(
+                            f"[extract-tables] OL↔Heading join: "
+                            f"opening-list-only samples: {ol_sample}"
+                        )
+                    if hd_sample:
+                        logger.info(
+                            f"[extract-tables] OL↔Heading join: "
+                            f"heading-only samples: {hd_sample}"
+                        )
 
                 # Phase 3: Extract reference tables
                 reference_codes = extract_reference_tables(pdf)
@@ -4386,6 +4637,38 @@ class handler(BaseHTTPRequestHandler):
                 elif tables_found == 0:
                     confidence = "medium"
                     notes.append("No structured tables detected — data extracted via text position analysis.")
+
+                # Prompt 2: surface OL↔Heading anomaly totals so Darrin CP2
+                # and the UI reviewer see the true magnitude of each bucket.
+                # Only append when non-zero — the common case is zero and
+                # there's no need to pollute notes. Total counts (not just
+                # the truncated samples) are included so e.g. "47 heading-
+                # only doors" doesn't look like 5 in the prompt context.
+                if join_stats is not None:
+                    ol_only = int(join_stats["opening_list_only"])
+                    hd_only = int(join_stats["heading_only"])
+                    if ol_only:
+                        sample = join_stats["opening_list_only_numbers"]
+                        sample_str = (
+                            f" (first: {', '.join(sample)})" if sample else ""
+                        )
+                        notes.append(
+                            f"{ol_only} door(s) appear in the Opening List but "
+                            f"have no matching heading-page entry — likely a "
+                            f"missed heading page or stale Opening List row."
+                            f"{sample_str}"
+                        )
+                    if hd_only:
+                        sample = join_stats["heading_only_numbers"]
+                        sample_str = (
+                            f" (first: {', '.join(sample)})" if sample else ""
+                        )
+                        notes.append(
+                            f"{hd_only} door(s) appear only on heading pages "
+                            f"with no Opening List row — likely a gap in the "
+                            f"Opening List table extraction."
+                            f"{sample_str}"
+                        )
 
                 result = ExtractionResult(
                     success=len(confirmed_doors) > 0 or len(hardware_sets) > 0,
