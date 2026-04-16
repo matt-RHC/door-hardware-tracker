@@ -561,6 +561,7 @@ export default function ImportWizard({
             {jobStep === JobWizardStep.Questions && (
               <StepQuestions
                 job={job}
+                file={state.file ?? null}
                 onComplete={onJobQuestionsComplete}
                 onBack={() => setJobStep(JobWizardStep.Upload)}
                 onError={onError}

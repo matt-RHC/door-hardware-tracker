@@ -267,7 +267,8 @@ ${candidateSummary}`
           text = text.replace(/^```(?:json)?\s*\n?/, '').replace(/\n?```\s*$/, '')
         }
         const parsed = JSON.parse(text)
-        classifications = Array.isArray(parsed) ? parsed : (parsed?.classifications ?? [])
+        const raw = Array.isArray(parsed) ? parsed : parsed?.classifications
+        classifications = Array.isArray(raw) ? raw : []
       }
 
       lastError = null
@@ -438,7 +439,38 @@ export async function POST(
     checkDeadline('classifying')
     console.log(`[job-orchestrator] Job ${jobId}: classifying pages`)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const classifyResult: any = await callClassifyPages(pdfBase64)
+    const classifyRaw: any = await callClassifyPages(pdfBase64)
+
+    // Transform Python response to match the ClassifyPagesResponse shape.
+    // Python returns: { page_classifications: [{index, type, ...}], summary: {door_schedule_pages: count, ...} }
+    // Downstream code expects: { pages: [{page_number, page_type, confidence}], summary: {door_schedule_pages: number[], ...} }
+    // Without this transform, summary fields are counts (numbers) instead of
+    // page-index arrays, which causes "0 is not iterable" when spread.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const rawPages: Array<{ index: number; type: string; confidence?: number; section_labels?: string[]; hw_set_ids?: string[]; has_door_numbers?: boolean; is_scanned?: boolean }> =
+      classifyRaw?.page_classifications ?? []
+    const classifyResult = {
+      pages: rawPages.map(p => ({
+        page_number: p.index,
+        page_type: p.type as PageClassification['page_type'],
+        confidence: p.confidence ?? 1,
+        section_labels: p.section_labels ?? [],
+        hw_set_ids: p.hw_set_ids ?? [],
+        has_door_numbers: p.has_door_numbers ?? false,
+        is_scanned: p.is_scanned ?? false,
+      })),
+      summary: {
+        total_pages: classifyRaw?.total_pages ?? rawPages.length,
+        door_schedule_pages: rawPages.filter(p => p.type === 'door_schedule').map(p => p.index),
+        hardware_set_pages: rawPages.filter(p => p.type === 'hardware_set').map(p => p.index),
+        submittal_pages: rawPages.filter(p => p.type === 'reference').map(p => p.index),
+        cover_pages: rawPages.filter(p => p.type === 'cover').map(p => p.index),
+        other_pages: rawPages.filter(p => p.type === 'other').map(p => p.index),
+        scanned_pages: classifyRaw?.summary?.scanned_pages ?? 0,
+      },
+      profile: classifyRaw?.profile ?? undefined,
+      extraction_strategy: classifyRaw?.extraction_strategy ?? undefined,
+    }
 
     await updateJob(adminSupabase, jobId, {
       status: 'detecting_columns',

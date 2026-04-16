@@ -85,6 +85,7 @@ const DEBOUNCE_MS = 1500
 
 interface StepQuestionsProps {
   job: UseExtractionJobReturn
+  file: File | null
   onComplete: () => void
   onBack: () => void
   onError: (msg: string) => void
@@ -92,14 +93,29 @@ interface StepQuestionsProps {
 
 export default function StepQuestions({
   job,
+  file,
   onComplete,
   onBack,
   onError,
 }: StepQuestionsProps) {
   const [answers, setAnswers] = useState<Record<string, unknown>>({})
   const [saving, setSaving] = useState(false)
+  const [pdfOpen, setPdfOpen] = useState(false)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const lastSavedRef = useRef<string>("")
+
+  // Create a stable blob URL for the PDF file
+  const pdfUrl = useMemo(() => {
+    if (!file) return null
+    return URL.createObjectURL(file)
+  }, [file])
+
+  // Revoke blob URL on unmount
+  useEffect(() => {
+    return () => {
+      if (pdfUrl) URL.revokeObjectURL(pdfUrl)
+    }
+  }, [pdfUrl])
 
   // ─── Auto-save answers (debounced) ───
   const saveAnswers = useCallback(
@@ -252,6 +268,30 @@ export default function StepQuestions({
           </p>
         )}
       </div>
+
+      {/* ─── PDF Preview ─── */}
+      {pdfUrl && (
+        <div className="mb-6">
+          <button
+            type="button"
+            onClick={() => setPdfOpen((v) => !v)}
+            className="flex items-center gap-2 text-sm text-accent hover:text-accent/80 font-medium transition-colors"
+          >
+            <span className="text-xs">{pdfOpen ? "\u25BC" : "\u25B6"}</span>
+            {pdfOpen ? "Hide PDF" : "View Uploaded PDF"}
+          </button>
+          {pdfOpen && (
+            <div className="mt-2 border border-border-dim rounded-lg overflow-hidden">
+              <iframe
+                src={pdfUrl}
+                title="Uploaded PDF preview"
+                className="w-full bg-white"
+                style={{ height: "500px" }}
+              />
+            </div>
+          )}
+        </div>
+      )}
 
       {/* ─── Error state ─── */}
       {job.isFailed && (
