@@ -45,6 +45,13 @@ import type {
   DarrinQuantityCheck,
   PageClassification,
 } from '@/lib/types'
+import {
+  applyClassifyOverrides,
+  ClassifyUserOverridesSchema,
+  type ClassifyPageDetail,
+  type ClassifyPageType,
+  type ClassifyUserOverrides,
+} from '@/lib/schemas/classify'
 import type Anthropic from '@anthropic-ai/sdk'
 
 export const maxDuration = 800
@@ -377,6 +384,43 @@ async function mergePhaseData(
   }
 }
 
+/**
+ * Read user-submitted classify corrections from phase_data.
+ * Returns [] when absent or malformed — a corrupt override payload
+ * should never block extraction, and Zod validation here is enough to
+ * drop invalid entries defensively.
+ */
+async function readClassifyOverrides(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
+  jobId: string,
+): Promise<ClassifyUserOverrides> {
+  const { data, error } = await supabase
+    .from('extraction_jobs')
+    .select('phase_data')
+    .eq('id', jobId)
+    .single()
+
+  if (error) {
+    console.error(`[job-orchestrator] readClassifyOverrides failed for ${jobId}:`, error.message)
+    return []
+  }
+
+  const phaseData = data?.phase_data
+  if (!phaseData || typeof phaseData !== 'object') return []
+  const classify = (phaseData as Record<string, unknown>).classify
+  if (!classify || typeof classify !== 'object') return []
+  const raw = (classify as Record<string, unknown>).user_overrides
+  if (!Array.isArray(raw)) return []
+
+  const parsed = ClassifyUserOverridesSchema.safeParse(raw)
+  if (!parsed.success) {
+    console.warn(`[job-orchestrator] Job ${jobId} has invalid classify overrides; ignoring.`)
+    return []
+  }
+  return parsed.data
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 async function updateJob(supabase: any, jobId: string, updates: {
   status?: JobStatus
@@ -517,16 +561,30 @@ export async function POST(
       classify_result: classifyResult,
     })
 
-    // Publish classify findings for the conversational wizard
+    // Publish classify findings for the conversational wizard.
+    // Prompt 4: pass the full per-page detail through so StepQuestions
+    // can render the correction panel without re-fetching classify_result.
+    // `skipped_pages` is now ONLY `other` pages — cover pages are
+    // surfaced in their own bucket. The old meaning (cover + other)
+    // was ambiguous; downstream code now reads the specific bucket
+    // it cares about.
+    const classifyPageDetails: ClassifyPageDetail[] = classifyResult.pages.map(p => ({
+      page: p.page_number,
+      // `hardware_sets` (plural) legacy label collapses to `hardware_set`.
+      type: (p.page_type === 'hardware_sets' ? 'hardware_set' : p.page_type) as ClassifyPageType,
+      confidence: p.confidence,
+      labels: p.section_labels ?? [],
+      hw_set_ids: p.hw_set_ids ?? [],
+    }))
     await mergePhaseData(adminSupabase, jobId, {
       classify: {
         total_pages: classifyResult.summary.total_pages,
         schedule_pages: classifyResult.summary.door_schedule_pages,
         hardware_pages: classifyResult.summary.hardware_set_pages,
-        skipped_pages: [
-          ...classifyResult.summary.cover_pages,
-          ...classifyResult.summary.other_pages,
-        ],
+        reference_pages: classifyResult.summary.submittal_pages,
+        cover_pages: classifyResult.summary.cover_pages,
+        skipped_pages: classifyResult.summary.other_pages,
+        page_details: classifyPageDetails,
       },
     })
 
@@ -560,6 +618,52 @@ export async function POST(
     })
 
     // ══════════════════════════════════════════════════════════════
+    // Phase 3.5: Apply user classify overrides (if any)
+    // ══════════════════════════════════════════════════════════════
+    //
+    // The user may have corrected the classifier from StepQuestions
+    // (the "Something's off" correction panel). Overrides land in
+    // phase_data.classify.user_overrides via POST
+    // /api/jobs/[id]/classify-overrides. We re-read fresh here because
+    // the classify publication above raced with any user interaction.
+    //
+    // Applying overrides rewrites the summary arrays so the chunked
+    // extraction path below sees the corrected page lists. It also
+    // rewrites phase_data.classify so later UI reads (poll cycles)
+    // reflect the corrected state.
+    const overrides = await readClassifyOverrides(adminSupabase, jobId)
+    const effectiveSummary = { ...classifyResult.summary }
+    if (overrides.length > 0) {
+      const corrected = applyClassifyOverrides(classifyPageDetails, overrides)
+      effectiveSummary.door_schedule_pages = corrected.schedule_pages
+      effectiveSummary.hardware_set_pages = corrected.hardware_pages
+      effectiveSummary.submittal_pages = corrected.reference_pages
+      effectiveSummary.cover_pages = corrected.cover_pages
+      effectiveSummary.other_pages = corrected.skipped_pages
+
+      // Propagate the corrected state so polling clients don't revert
+      // the user's edits. Keep user_overrides stored so a retried
+      // orchestrator run applies the same corrections deterministically.
+      await mergePhaseData(adminSupabase, jobId, {
+        classify: {
+          total_pages: classifyResult.summary.total_pages,
+          schedule_pages: corrected.schedule_pages,
+          hardware_pages: corrected.hardware_pages,
+          reference_pages: corrected.reference_pages,
+          cover_pages: corrected.cover_pages,
+          skipped_pages: corrected.skipped_pages,
+          page_details: corrected.pageDetails,
+          user_overrides: overrides,
+        },
+      })
+
+      console.log(
+        `[job-orchestrator] Job ${jobId}: applied ${overrides.length} classify override(s), ` +
+          `excluded ${corrected.excluded_pages.length} page(s)`,
+      )
+    }
+
+    // ══════════════════════════════════════════════════════════════
     // Phase 4: Extract tables (chunked or single-shot)
     // Replicates StepTriage.tsx extraction flow
     // ══════════════════════════════════════════════════════════════
@@ -580,7 +684,7 @@ export async function POST(
 
     if (pdfByteLength > CHUNK_SIZE_THRESHOLD) {
       // ── Chunked extraction ──
-      const summary = classifyResult?.summary ?? {}
+      const summary = effectiveSummary
       const schedulePages: number[] = summary.door_schedule_pages ?? []
       const hwPages: number[] = summary.hardware_set_pages ?? []
       const allContentPages = [...schedulePages, ...hwPages].sort((a, b) => a - b)

@@ -8,8 +8,13 @@ import type {
   FlaggedDoor,
   PageClassification,
 } from '@/lib/types';
+import type {
+  ClassifyPageDetail,
+  ClassifyOverride,
+} from '@/lib/schemas/classify';
 
 export type { DoorEntry, ExtractedHardwareItem, HardwareSet, FlaggedDoor, PageClassification };
+export type { ClassifyPageDetail, ClassifyOverride };
 
 /** The steps the wizard progresses through. Compare is only shown for revisions. */
 export enum WizardStep {
@@ -59,7 +64,31 @@ export interface PhaseData {
     total_pages: number
     schedule_pages: number[]
     hardware_pages: number[]
+    /**
+     * `reference_pages` (cut sheets, legends, manufacturer lists) and
+     * `cover_pages` (title / TOC / project info) are surfaced
+     * separately from `skipped_pages` since Prompt 4 — StepQuestions
+     * renders each bucket in Darrin's classification message. Older
+     * jobs written before this change may omit these arrays; the UI
+     * defaults them to [] when missing.
+     */
+    reference_pages?: number[]
+    cover_pages?: number[]
+    /** Pages classified as `other`. Pre-Prompt-4 this also included cover pages. */
     skipped_pages: number[]
+    /**
+     * Per-page classification detail (page number, type, confidence,
+     * labels, hw_set_ids). Drives the correction panel and the
+     * heuristic checks. Absent on jobs written before Prompt 4.
+     */
+    page_details?: ClassifyPageDetail[]
+    /**
+     * User-provided corrections that the orchestrator re-applies
+     * before extraction starts. Writing an override also rewrites the
+     * derived arrays above, so downstream readers see the corrected
+     * classification without needing to re-apply.
+     */
+    user_overrides?: ClassifyOverride[]
   }
   extraction?: {
     door_count: number
