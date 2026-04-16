@@ -43,8 +43,54 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    if (!staleJobs || staleJobs.length === 0) {
-      return NextResponse.json({ dispatched: 0 })
+    // ── Recover jobs stuck in intermediate states ──
+    // If a Vercel function crashes or times out after leaving 'queued',
+    // the job is permanently stuck. Mark it failed after 15 minutes.
+    const fifteenMinutesAgo = new Date(Date.now() - 15 * 60_000).toISOString()
+
+    const INTERMEDIATE_STATUSES = [
+      'classifying',
+      'detecting_columns',
+      'extracting',
+      'triaging',
+      'validating',
+      'writing_staging',
+    ] as const
+
+    const { data: stuckJobs, error: stuckError } = await adminSupabase
+      .from('extraction_jobs')
+      .select('id, status')
+      .in('status', [...INTERMEDIATE_STATUSES])
+      .lt('updated_at', fifteenMinutesAgo)
+      .limit(5)
+
+    if (stuckError) {
+      console.error('[process-jobs] Failed to query stuck jobs:', stuckError.message)
+    }
+
+    let recovered = 0
+    for (const job of stuckJobs ?? []) {
+      const { error: updateError } = await adminSupabase
+        .from('extraction_jobs')
+        .update({
+          status: 'failed',
+          error_message: `Job stuck in '${job.status}' for >15 minutes — likely Vercel timeout or crash. Please retry.`,
+          error_phase: job.status,
+          completed_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', job.id)
+
+      if (!updateError) {
+        recovered++
+        console.log(`[process-jobs] Recovered stuck job ${job.id} (was '${job.status}')`)
+      } else {
+        console.error(`[process-jobs] Failed to recover job ${job.id}:`, updateError.message)
+      }
+    }
+
+    if ((!staleJobs || staleJobs.length === 0) && recovered === 0) {
+      return NextResponse.json({ dispatched: 0, recovered: 0 })
     }
 
     // Derive base URL for dispatching run calls
@@ -71,8 +117,8 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    console.log(`[process-jobs] Dispatched ${dispatched} stale job(s)`)
-    return NextResponse.json({ dispatched })
+    console.log(`[process-jobs] Dispatched ${dispatched} stale job(s), recovered ${recovered} stuck job(s)`)
+    return NextResponse.json({ dispatched, recovered })
   } catch (error) {
     console.error('[process-jobs] Error:', error)
     return NextResponse.json(
