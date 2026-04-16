@@ -5,7 +5,10 @@ import type { DoorEntry, HardwareSet, TriageResult } from "./types";
 import WizardNav from "./WizardNav";
 import {
   buildDefinedSetIds,
+  buildDoorToSetMap,
+  buildSetLookupMap,
   findDoorsWithUnmatchedSets,
+  wouldProduceZeroItems,
 } from "@/lib/parse-pdf-helpers";
 
 interface StepConfirmProps {
@@ -33,6 +36,7 @@ export default function StepConfirm({
   const [status, setStatus] = useState("");
   const [saveComplete, setSaveComplete] = useState(false);
   const [overrideUnmatched, setOverrideUnmatched] = useState(false);
+  const [acknowledgeOrphans, setAcknowledgeOrphans] = useState(false);
   const [promoteFailed, setPromoteFailed] = useState(false);
   const [retrying, setRetrying] = useState(false);
   const [retryError, setRetryError] = useState<string | null>(null);
@@ -86,9 +90,23 @@ export default function StepConfirm({
 
   // Count doors that reference non-existent sets (blocks save unless overridden)
   const doorsWithUnmatchedSets = findDoorsWithUnmatchedSets(doors, definedSetIds);
+
+  // Pre-flight orphan detection: mirror the server's wouldProduceZeroItems
+  // filter so the user is warned BEFORE /save is called. Doors here would be
+  // silently dropped by the server, which is usually fine (e.g. inactive leaf
+  // pairs) but surprising if the door was supposed to have hardware. Catches
+  // the class of promotion failures that prompted the fix/promotion-orphan-items
+  // branch — see merge_extraction validation in migration 034.
+  const clientSetMap = buildSetLookupMap(hardwareSets);
+  const clientDoorToSetMap = buildDoorToSetMap(hardwareSets);
+  const orphanDoors = doors.filter((d) =>
+    wouldProduceZeroItems(d, clientSetMap, clientDoorToSetMap),
+  );
+
   const saveBlocked =
     doors.length === 0 ||
-    (doorsWithUnmatchedSets.length > 0 && !overrideUnmatched);
+    (doorsWithUnmatchedSets.length > 0 && !overrideUnmatched) ||
+    (orphanDoors.length > 0 && !acknowledgeOrphans);
 
   // ─── Save flow: createExtractionRun + writeStagingData + promoteExtraction ───
   const handleSave = async () => {
@@ -408,6 +426,36 @@ export default function StepConfirm({
               Save anyway (power user override)
             </button>
           )}
+        </div>
+      )}
+
+      {/* Orphan doors pre-flight: these will be filtered server-side because
+          they would produce zero hardware items (no matching set + no door
+          or frame type). Block save until the user explicitly acknowledges. */}
+      {orphanDoors.length > 0 && (
+        <div className="mb-4 p-3 bg-warning-dim border border-warning rounded-md">
+          <p className="text-warning text-sm font-semibold mb-1">
+            {orphanDoors.length} door(s) will be excluded (no hardware will be
+            saved for them):
+          </p>
+          <p className="text-secondary text-xs font-mono mb-2">
+            {orphanDoors.map((d) => d.door_number).join(", ")}
+          </p>
+          <p className="text-secondary text-xs mb-2">
+            These doors either reference a hardware set that wasn&apos;t
+            extracted, or have no door/frame type — saving them would block
+            promotion. Go back and fix them, or acknowledge to proceed without
+            them.
+          </p>
+          <label className="flex items-center gap-2 text-xs text-warning cursor-pointer">
+            <input
+              type="checkbox"
+              checked={acknowledgeOrphans}
+              onChange={(e) => setAcknowledgeOrphans(e.target.checked)}
+              className="rounded"
+            />
+            Save without these doors
+          </label>
         </div>
       )}
 

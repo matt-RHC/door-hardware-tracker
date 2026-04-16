@@ -3,7 +3,14 @@ import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { createExtractionRun, updateExtractionRun, writeStagingData, promoteExtraction } from '@/lib/extraction-staging'
 import type { StagingOpening } from '@/lib/extraction-staging'
 import type { DoorEntry, HardwareSet } from '@/lib/types'
-import { buildPerOpeningItems, buildDoorToSetMap, detectIsPair, normalizeDoorNumber } from '@/lib/parse-pdf-helpers'
+import {
+  buildPerOpeningItems,
+  buildDoorToSetMap,
+  buildSetLookupMap,
+  detectIsPair,
+  normalizeDoorNumber,
+  wouldProduceZeroItems,
+} from '@/lib/parse-pdf-helpers'
 import { logActivity } from '@/lib/activity-log'
 import { validateJson, errorResponse } from '@/lib/api-helpers/validate'
 import { ParsePdfSaveRequestSchema } from '@/lib/schemas/parse-pdf'
@@ -63,13 +70,7 @@ export async function POST(request: NextRequest) {
 
     // Build set lookup map — register under BOTH set_id and generic_set_id
     // because doors may be assigned to either (e.g., heading "DH1.01" vs set "DH1-10")
-    const setMap = new Map<string, HardwareSet>()
-    for (const set of hardwareSets) {
-      setMap.set(set.set_id, set)
-      if (set.generic_set_id && set.generic_set_id !== set.set_id) {
-        setMap.set(set.generic_set_id, set)
-      }
-    }
+    const setMap = buildSetLookupMap(hardwareSets)
     // Door-number → specific sub-set map (handles multi-heading sub-sets
     // like DH4A.0 vs DH4A.1 that share a generic_set_id)
     const doorToSetMap = buildDoorToSetMap(hardwareSets)
@@ -103,25 +104,35 @@ export async function POST(request: NextRequest) {
     // third division pass — the value of having a SINGLE authoritative pass
     // is that bugs are visible and traceable.
     //
-    // 0. Filter orphan doors — doors with hw_set "N/A" (or empty) that resolve
-    // to no hardware set, or whose set has zero items. These are typically
-    // inactive leaf pairs (suffixes B, C, D, F) that the extractor picks up
-    // as separate doors but can't match to any hardware. Keeping them causes
-    // merge_extraction() to reject promotion ("openings with no hardware items").
-    const isOrphanDoor = (d: DoorEntry): boolean => {
-      const hwSetVal = (d.hw_set ?? '').trim()
-      if (hwSetVal !== '' && hwSetVal !== 'N/A') return false
-      // Check if door resolves to a set with items via door-number lookup
-      const doorKey = normalizeDoorNumber(d.door_number)
-      const resolvedSet = doorToSetMap.get(doorKey) ?? setMap.get(hwSetVal)
-      if (resolvedSet && resolvedSet.items.length > 0) return false
-      return true
-    }
-    const orphanDoors = doors.filter(isOrphanDoor)
-    const activeDoors = doors.filter(d => !isOrphanDoor(d))
+    // 0. Filter orphan doors — any door that buildPerOpeningItems would emit
+    // zero rows for. That happens when NONE of these produce a row:
+    //   - hw_set resolves (via doorToSetMap or setMap) to a set with items
+    //   - door_type is present (emits a Door row)
+    //   - frame_type is present (emits a Frame row)
+    //
+    // Previously this only caught hw_set values of "" or "N/A". But a door
+    // with hw_set "H07" that matches no set AND has empty door/frame types
+    // still produces an empty staging_opening — which merge_extraction
+    // rejects with the generic "openings with no hardware items" error.
+    //
+    // See `wouldProduceZeroItems` in parse-pdf-helpers.ts for the shared
+    // predicate; StepConfirm runs the same check client-side as a pre-flight.
+    const isOrphan = (d: DoorEntry) => wouldProduceZeroItems(d, setMap, doorToSetMap)
+    const orphanDoors = doors.filter(isOrphan)
+    const activeDoors = doors.filter(d => !isOrphan(d))
     if (orphanDoors.length > 0) {
       console.log(
-        `[save] Filtered ${orphanDoors.length} orphan door(s) with no hardware set/items: ${orphanDoors.map(d => d.door_number).join(', ')}`
+        `[save] Filtered ${orphanDoors.length} orphan door(s) that would produce zero hardware items:`,
+        orphanDoors.map(d => ({
+          door_number: d.door_number,
+          hw_set: d.hw_set ?? null,
+          door_type: d.door_type ?? null,
+          frame_type: d.frame_type ?? null,
+          resolvedSet:
+            doorToSetMap.get(normalizeDoorNumber(d.door_number))?.set_id
+            ?? setMap.get((d.hw_set ?? '').trim())?.set_id
+            ?? null,
+        })),
       )
     }
 
@@ -188,6 +199,30 @@ export async function POST(request: NextRequest) {
       { extraction_run_id: runId },
     )
 
+    // Defensive diagnostic: if any staging opening got zero rows, the orphan
+    // filter is out of sync with buildPerOpeningItems. That's a code bug —
+    // surface it loudly instead of letting merge_extraction reject with the
+    // generic error. Should be unreachable after the wouldProduceZeroItems fix.
+    const openingsWithItems = new Set<string>()
+    for (const row of allItems) {
+      const id = row['staging_opening_id']
+      if (typeof id === 'string') openingsWithItems.add(id)
+    }
+    const zeroItemOpenings = (stagingOpeningRows ?? []).filter(
+      (o: { id: string; door_number: string }) => !openingsWithItems.has(o.id),
+    )
+    if (zeroItemOpenings.length > 0) {
+      console.error(
+        `[save] BUG: ${zeroItemOpenings.length} staging opening(s) have zero generated items despite orphan filter:`,
+        zeroItemOpenings.map((o: { door_number: string }) => o.door_number),
+      )
+      return NextResponse.json({
+        success: false,
+        error: `Internal error: doors ${zeroItemOpenings.map((o: { door_number: string }) => o.door_number).join(', ')} would produce zero hardware items. Please contact support.`,
+        zeroItemDoors: zeroItemOpenings.map((o: { door_number: string }) => o.door_number),
+      }, { status: 500 })
+    }
+
     // 6. Chunk-insert staging hardware items (with single retry on failure)
     let itemsInserted = 0
     const failedItemChunks: Array<{ offset: number; count: number; error: string }> = []
@@ -252,7 +287,9 @@ export async function POST(request: NextRequest) {
     const promoteResult = await promoteExtraction(supabase, runId, user.id)
 
     if (!promoteResult.success) {
-      console.error('Auto-promote failed:', promoteResult.error)
+      console.error('Auto-promote failed:', promoteResult.error, {
+        orphanDoors: promoteResult.orphanDoors,
+      })
       return NextResponse.json({
         success: false,
         partial: isPartialSave,
@@ -265,6 +302,7 @@ export async function POST(request: NextRequest) {
         unmatchedSets: unmatchedSets.length > 0 ? unmatchedSets : undefined,
         failedChunks: isPartialSave ? failedItemChunks : undefined,
         extraction_run_id: runId,
+        orphanDoors: promoteResult.orphanDoors,
       })
     }
 

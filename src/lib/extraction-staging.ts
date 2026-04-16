@@ -236,6 +236,9 @@ export async function promoteExtraction(
   unchanged?: number
   deactivated?: number
   error?: string
+  // Populated when merge_extraction rejects the run because some staging
+  // openings had zero joined hardware items. See migration 037.
+  orphanDoors?: string[]
 }> {
   const { data, error } = await supabase.rpc('merge_extraction', {
     p_extraction_run_id: runId,
@@ -245,6 +248,13 @@ export async function promoteExtraction(
   if (error) {
     return { success: false, error: error.message }
   }
+
+  // migration 037 returns `orphan_doors` as a JSON array of door_number
+  // strings when the pre-flight rejects the run. Keep the cast narrow.
+  const rawOrphans = (data as { orphan_doors?: unknown }).orphan_doors
+  const orphanDoors = Array.isArray(rawOrphans)
+    ? rawOrphans.filter((x): x is string => typeof x === 'string')
+    : undefined
 
   return {
     success: data.success,
@@ -256,6 +266,7 @@ export async function promoteExtraction(
     unchanged: data.unchanged,
     deactivated: data.deactivated,
     error: data.error,
+    orphanDoors,
   }
 }
 
