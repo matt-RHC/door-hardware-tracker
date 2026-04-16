@@ -720,9 +720,9 @@ class handler(BaseHTTPRequestHandler):
             })
 
     def _send_json(self, status: int, data: dict):
-        body = json.dumps(data)
+        body = json.dumps(data).encode()
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
-        self.wfile.write(body.encode())
+        self.wfile.write(body)

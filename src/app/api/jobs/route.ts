@@ -89,7 +89,7 @@ export async function POST(request: NextRequest) {
     if (insertError || !job) {
       console.error('Failed to create extraction job:', insertError)
       return NextResponse.json(
-        { error: `Failed to create job: ${insertError?.message ?? 'unknown'}` },
+        { error: 'Failed to create extraction job' },
         { status: 500 }
       )
     }
@@ -129,7 +129,7 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('POST /api/jobs error:', error)
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : 'Failed to create job' },
+      { error: 'Internal server error' },
       { status: 500 }
     )
   }

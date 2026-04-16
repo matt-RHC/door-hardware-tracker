@@ -71,7 +71,7 @@ export async function GET(
     if (signError || !signed?.signedUrl) {
       console.error('Failed to sign PDF URL:', signError)
       return NextResponse.json(
-        { error: signError?.message ?? 'Failed to create signed URL' },
+        { error: 'Failed to create signed URL' },
         { status: 500 },
       )
     }

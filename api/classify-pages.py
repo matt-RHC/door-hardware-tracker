@@ -817,17 +817,21 @@ class handler(BaseHTTPRequestHandler):
                 },
             }
 
+            response_body = json.dumps(response).encode()
             self.send_response(200)
             self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(response_body)))
             self.end_headers()
-            self.wfile.write(json.dumps(response).encode())
+            self.wfile.write(response_body)
 
         except Exception as e:
-            self.send_response(500)
-            self.send_header("Content-Type", "application/json")
-            self.end_headers()
-            self.wfile.write(json.dumps({
+            traceback.print_exc()
+            error_body = json.dumps({
                 "success": False,
                 "error": str(e),
-                "traceback": traceback.format_exc(),
-            }).encode())
+            }).encode()
+            self.send_response(500)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(error_body)))
+            self.end_headers()
+            self.wfile.write(error_body)
