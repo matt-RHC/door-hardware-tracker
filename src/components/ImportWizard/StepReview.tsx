@@ -3,133 +3,21 @@
 import { useState, useCallback, useEffect, useMemo } from "react";
 import { usePunchHighlight } from "./usePunchHighlight";
 import type { DoorEntry, HardwareSet, ClassifyPagesResponse } from "./types";
-import type { ItemConfidence, ConfidenceLevel } from "@/lib/types/confidence";
 import type { ReconciliationResult, ReconciledHardwareSet } from "@/lib/types/reconciliation";
-import PDFPagePreview from "./PDFPagePreview";
-import PDFRegionSelector from "./PDFRegionSelector";
-import ConfidenceBadge from "./ConfidenceBadge";
-import { findPageForSet } from "@/lib/punch-cards";
-import { buildDoorToSetMap, normalizeDoorNumber, detectIsPair } from "@/lib/parse-pdf-helpers";
-import { groupItemsByLeaf, getLeafDisplayQty } from "@/lib/classify-leaf-items";
-import { useToast } from "@/components/ToastProvider";
+import { buildDoorToSetMap, normalizeDoorNumber } from "@/lib/parse-pdf-helpers";
 import WizardNav from "./WizardNav";
-
-// ─── Confidence scoring ───
-
-/** Orphan door: N/A or empty hw_set and unlikely to have hardware items. */
-function isOrphanDoor(door: DoorEntry): boolean {
-  const hwSet = (door.hw_set ?? '').trim();
-  return hwSet === '' || hwSet === 'N/A';
-}
-
-/** Identifies the specific issue(s) with a door, if any. */
-function getDoorIssues(door: DoorEntry): string[] {
-  const issues: string[] = [];
-  if (!door.door_number) issues.push('missing_door_number');
-  if (!door.hw_set || door.hw_set.trim() === '' || door.hw_set.trim() === 'N/A') issues.push('missing_hw_set');
-  if (!door.location?.trim()) issues.push('missing_location');
-  if (!door.fire_rating?.trim()) issues.push('missing_fire_rating');
-  if (!door.hand?.trim()) issues.push('missing_hand');
-  if (!door.door_type?.trim()) issues.push('missing_door_type');
-  if (!door.frame_type?.trim()) issues.push('missing_frame_type');
-
-  // Check field_confidence for low-confidence values
-  if (door.field_confidence) {
-    for (const [field, score] of Object.entries(door.field_confidence)) {
-      if (typeof score === 'number' && score < 0.6) {
-        const issueKey = `low_confidence_${field}`;
-        if (!issues.includes(issueKey)) issues.push(issueKey);
-      }
-    }
-  }
-  return issues;
-}
-
-/**
- * Categorize a door for review. Default is "ready" unless there's a specific
- * reason it needs attention. This prevents the old pattern of marking
- * everything as "needs review" and forcing manual verification of every door.
- */
-function getConfidence(door: DoorEntry): "high" | "medium" | "low" {
-  if (isOrphanDoor(door)) return "low";
-  const issues = getDoorIssues(door);
-  // Required fields missing → missing data
-  const requiredMissing = issues.some(i => i === 'missing_door_number' || i === 'missing_hw_set');
-  if (requiredMissing) return "low";
-  // Any low-confidence fields or 3+ missing optional fields → needs attention
-  const hasLowConfidence = issues.some(i => i.startsWith('low_confidence_'));
-  const missingOptionalCount = issues.filter(i =>
-    i === 'missing_location' || i === 'missing_fire_rating' ||
-    i === 'missing_hand' || i === 'missing_door_type' || i === 'missing_frame_type'
-  ).length;
-  if (hasLowConfidence || missingOptionalCount >= 3) return "medium";
-  // Everything else is ready — including doors with 1-2 missing optional fields
-  return "high";
-}
-
-/** Map issue keys to human-readable issue group labels. */
-const ISSUE_LABELS: Record<string, string> = {
-  missing_location: 'Missing location',
-  missing_fire_rating: 'Uncertain fire rating',
-  missing_hand: 'Missing hand',
-  missing_door_type: 'Missing door type',
-  missing_frame_type: 'Missing frame type',
-  missing_hw_set: 'Missing hardware set',
-  missing_door_number: 'Missing door number',
-  low_confidence_location: 'Uncertain location',
-  low_confidence_fire_rating: 'Uncertain fire rating',
-  low_confidence_hand: 'Uncertain hand',
-  low_confidence_door_type: 'Uncertain door type',
-  low_confidence_frame_type: 'Uncertain frame type',
-  low_confidence_hw_set: 'Uncertain hardware set',
-  low_confidence_manufacturer: 'Unknown manufacturer',
-};
-
-// ─── Types ───
-
-type DoorStringField =
-  | "door_number"
-  | "hw_set"
-  | "location"
-  | "door_type"
-  | "frame_type"
-  | "fire_rating"
-  | "hand";
-
-type SortDir = "asc" | "desc";
-
-const FIELD_KEYS: DoorStringField[] = [
-  "door_number",
-  "hw_set",
-  "location",
-  "door_type",
-  "frame_type",
-  "fire_rating",
-  "hand",
-];
-
-const FIELD_LABELS: Record<DoorStringField, string> = {
-  door_number: "Door #",
-  hw_set: "HW Set",
-  location: "Location",
-  door_type: "Door Type",
-  frame_type: "Frame Type",
-  fire_rating: "Fire Rating",
-  hand: "Hand",
-};
-
-// ─── Grouped door type ───
-
-interface DoorGroup {
-  setId: string;
-  heading: string;
-  doors: Array<{ door: DoorEntry; originalIndex: number }>;
-  highCount: number;
-  medCount: number;
-  lowCount: number;
-}
-
-// ─── Props ───
+import ReviewSummary from "./review/ReviewSummary";
+import ReviewFilters from "./review/ReviewFilters";
+import SetView from "./review/SetView";
+import InlineRescan from "./review/InlineRescan";
+import { isOrphanDoor, getDoorIssues, getConfidence } from "./review/utils";
+import type {
+  DoorGroup,
+  DoorStringField,
+  EditingCell,
+  FilterLevel,
+  SortDir,
+} from "./review/types";
 
 interface StepReviewProps {
   projectId: string;
@@ -147,6 +35,10 @@ interface StepReviewProps {
   onRemapColumns?: () => void;
 }
 
+// Max simultaneous PDF previews — protects mobile memory. On very large
+// projects (35+ sets), rendering all canvases at once can crash the tab.
+const MAX_OPEN_PREVIEWS = 3;
+
 export default function StepReview({
   projectId,
   doors: initialDoors,
@@ -162,45 +54,43 @@ export default function StepReview({
   // Local copy of hardware sets to support Darrin revert without modifying parent state
   const [hardwareSets, setHardwareSets] = useState(initialHardwareSets);
   const { registerRef } = usePunchHighlight();
-  const { showToast } = useToast();
   const [doors, setDoors] = useState<DoorEntry[]>(initialDoors);
+
   // Which set groups have their PDF preview open (lazy-mounted when expanded)
   const [previewOpen, setPreviewOpen] = useState<Set<string>>(new Set());
+
   // Region extract modal state
   const [regionExtractSetId, setRegionExtractSetId] = useState<string | null>(null);
   const [regionExtractPageIdx, setRegionExtractPageIdx] = useState<number | null>(null);
-  const [regionExtracting, setRegionExtracting] = useState(false);
-  const [editingCell, setEditingCell] = useState<{
-    row: number;
-    field: DoorStringField;
-  } | null>(null);
+
+  const [editingCell, setEditingCell] = useState<EditingCell | null>(null);
   const [editValue, setEditValue] = useState("");
 
   // ─── Search & filter ───
   const [search, setSearch] = useState("");
-  const [filterLevel, setFilterLevel] = useState<
-    "all" | "high" | "medium" | "low"
-  >("all");
-  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(
-    new Set()
-  );
+  const [filterLevel, setFilterLevel] = useState<FilterLevel>("all");
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   // Per-set collapsed leaf sections: key = "setId:shared|leaf1|leaf2"
   const [collapsedLeafSections, setCollapsedLeafSections] = useState<Set<string>>(new Set());
-  const toggleLeafSection = useCallback((setId: string, section: 'shared' | 'leaf1' | 'leaf2') => {
-    const key = `${setId}:${section}`;
-    setCollapsedLeafSections(prev => {
-      const next = new Set(prev);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
-      return next;
-    });
-  }, []);
+  const toggleLeafSection = useCallback(
+    (setId: string, section: 'shared' | 'leaf1' | 'leaf2') => {
+      const key = `${setId}:${section}`;
+      setCollapsedLeafSections((prev) => {
+        const next = new Set(prev);
+        if (next.has(key)) next.delete(key);
+        else next.add(key);
+        return next;
+      });
+    },
+    [],
+  );
   const [sortField, setSortField] = useState<DoorStringField>("door_number");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
+
   // Audit trail expander state (per set_id)
   const [auditTrailOpen, setAuditTrailOpen] = useState<Set<string>>(new Set());
   const toggleAuditTrail = useCallback((setId: string) => {
-    setAuditTrailOpen(prev => {
+    setAuditTrailOpen((prev) => {
       const next = new Set(prev);
       if (next.has(setId)) next.delete(setId);
       else next.add(setId);
@@ -218,9 +108,9 @@ export default function StepReview({
     return m;
   }, [reconciliationResult]);
 
-  // Lookup maps for resolving door → hardware set.
-  // Registered under BOTH set_id and generic_set_id — doors may be
-  // assigned to either depending on heading format (e.g., "DH1.01" vs "DH1-10").
+  // Lookup maps for resolving door → hardware set. Registered under BOTH
+  // set_id and generic_set_id — doors may be assigned to either depending on
+  // heading format (e.g., "DH1.01" vs "DH1-10").
   const setMap = useMemo(() => {
     const m = new Map<string, HardwareSet>();
     for (const set of hardwareSets) {
@@ -231,8 +121,8 @@ export default function StepReview({
     }
     return m;
   }, [hardwareSets]);
-  // Door-number → specific sub-set lookup. Handles multi-heading cases
-  // like DH4A.0 vs DH4A.1 that share a generic_set_id but have different items.
+  // Door-number → specific sub-set lookup. Handles multi-heading cases like
+  // DH4A.0 vs DH4A.1 that share a generic_set_id but have different items.
   const doorToSetMap = useMemo(() => buildDoorToSetMap(hardwareSets), [hardwareSets]);
 
   // ─── Inline editing ───
@@ -241,7 +131,7 @@ export default function StepReview({
       setEditingCell({ row: originalIndex, field });
       setEditValue(doors[originalIndex]?.[field] ?? "");
     },
-    [doors]
+    [doors],
   );
 
   const commitEdit = useCallback(() => {
@@ -266,8 +156,7 @@ export default function StepReview({
   // ─── Orphan detection (auto-removed) ───
   const orphanDoors = useMemo(() => doors.filter(isOrphanDoor), [doors]);
   const [orphanNoticeDismissed, setOrphanNoticeDismissed] = useState(false);
-  // Active doors for stats and display (exclude orphans from counts)
-  const activeDoors = useMemo(() => doors.filter(d => !isOrphanDoor(d)), [doors]);
+  const activeDoors = useMemo(() => doors.filter((d) => !isOrphanDoor(d)), [doors]);
 
   // ─── Stats ───
   const highCount = activeDoors.filter((d) => getConfidence(d) === "high").length;
@@ -291,27 +180,26 @@ export default function StepReview({
   // ─── Filter + search ───
   const filteredDoors = useMemo(() => {
     const lowerSearch = (search ?? '').toLowerCase().trim();
-    return doors.map((door, idx) => ({ door, originalIndex: idx })).filter(({ door }) => {
-      // Exclude orphan doors from the main list
-      if (isOrphanDoor(door)) return false;
-      // Confidence filter
-      if (filterLevel !== "all" && getConfidence(door) !== filterLevel) return false;
-      // Search
-      if (lowerSearch) {
-        const searchable = [
-          door.door_number,
-          door.hw_set,
-          door.location,
-          door.door_type,
-          door.fire_rating,
-        ]
-          .filter(Boolean)
-          .join(" ")
-          .toLowerCase();
-        if (!searchable.includes(lowerSearch)) return false;
-      }
-      return true;
-    });
+    return doors
+      .map((door, idx) => ({ door, originalIndex: idx }))
+      .filter(({ door }) => {
+        if (isOrphanDoor(door)) return false;
+        if (filterLevel !== "all" && getConfidence(door) !== filterLevel) return false;
+        if (lowerSearch) {
+          const searchable = [
+            door.door_number,
+            door.hw_set,
+            door.location,
+            door.door_type,
+            door.fire_rating,
+          ]
+            .filter(Boolean)
+            .join(" ")
+            .toLowerCase();
+          if (!searchable.includes(lowerSearch)) return false;
+        }
+        return true;
+      });
   }, [doors, search, filterLevel]);
 
   // ─── Sort ───
@@ -327,14 +215,9 @@ export default function StepReview({
   }, [filteredDoors, sortField, sortDir]);
 
   // ─── Group by hardware set ───
-  // Reuses the outer `setMap` and `doorToSetMap` memos rather than
-  // rebuilding them on every render (previously shadowed here).
   const groups: DoorGroup[] = useMemo(() => {
     const groupMap = new Map<string, DoorGroup>();
     for (const item of sortedDoors) {
-      // Resolve the specific sub-set via door_number lookup first.
-      // This splits DH4A into DH4A.0 and DH4A.1 visually when the PDF has
-      // multiple headings under the same generic set ID.
       const doorKey = normalizeDoorNumber(item.door.door_number);
       const specificSet = doorToSetMap.get(doorKey);
       const setId = specificSet?.set_id ?? item.door.hw_set ?? "(unassigned)";
@@ -356,22 +239,17 @@ export default function StepReview({
       else if (conf === "medium") group.medCount++;
       else group.lowCount++;
     }
-
     return Array.from(groupMap.values());
   }, [sortedDoors, setMap, doorToSetMap]);
 
-  // Auto-collapse all-green groups on first render. Runs as an effect so
-  // the setState happens after commit, not inside the memo's body — which
-  // React Strict Mode / React Compiler may drop if the memo is bailed out.
+  // Auto-collapse all-green groups on first render. Runs as an effect so the
+  // setState happens after commit, not inside the memo's body — which React
+  // Strict Mode / React Compiler may drop if the memo is bailed out.
   useEffect(() => {
     if (collapsedGroups.size > 0) return;
     const autoCollapsed = new Set<string>();
     for (const group of groups) {
-      if (
-        group.doors.length > 0 &&
-        group.medCount === 0 &&
-        group.lowCount === 0
-      ) {
+      if (group.doors.length > 0 && group.medCount === 0 && group.lowCount === 0) {
         autoCollapsed.add(group.setId);
       }
     }
@@ -390,17 +268,12 @@ export default function StepReview({
     });
   }, []);
 
-  // Max simultaneous PDF previews — protects mobile memory. On very large
-  // projects (35+ sets), rendering all canvases at once can crash the tab.
-  const MAX_OPEN_PREVIEWS = 3;
-
   const togglePreview = useCallback((setId: string) => {
     setPreviewOpen((prev) => {
       const next = new Set(prev);
       if (next.has(setId)) {
         next.delete(setId);
       } else {
-        // If already at max, close the oldest (first inserted) preview
         if (next.size >= MAX_OPEN_PREVIEWS) {
           const oldest = next.values().next().value;
           if (oldest !== undefined) next.delete(oldest);
@@ -411,105 +284,6 @@ export default function StepReview({
     });
   }, []);
 
-  // ─── Region extract handler ───
-
-  /** Token-based name matching: split into words, count shared tokens, divide by max token count. */
-  function tokenMatchScore(a: string, b: string): number {
-    const tokensA = a.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim().split(/\s+/).filter(Boolean);
-    const tokensB = b.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim().split(/\s+/).filter(Boolean);
-    if (tokensA.length === 0 || tokensB.length === 0) return 0;
-    const setB = new Set(tokensB);
-    const shared = tokensA.filter(t => setB.has(t)).length;
-    return shared / Math.max(tokensA.length, tokensB.length);
-  }
-
-  const handleRegionExtract = useCallback(async (bbox: { x0: number; y0: number; x1: number; y1: number }) => {
-    if (!regionExtractSetId || regionExtractPageIdx == null) return;
-    setRegionExtracting(true);
-    try {
-      const resp = await fetch("/api/parse-pdf/region-extract", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          projectId,
-          page: regionExtractPageIdx,
-          bbox,
-          setId: regionExtractSetId,
-        }),
-      });
-      if (!resp.ok) {
-        const errBody = await resp.text().catch(() => "");
-        console.error("[region-extract] API error:", resp.status, errBody.slice(0, 300));
-        showToast("error", "Region scan failed \u2014 try selecting a larger area");
-        return;
-      }
-      const result = await resp.json();
-      const extractedItems = result.items ?? [];
-      if (extractedItems.length === 0) {
-        showToast("error", "No items found in selected region \u2014 try a different area");
-        setRegionExtractSetId(null);
-        setRegionExtractPageIdx(null);
-        return;
-      }
-
-      // Merge strategy: match extracted items to existing items, update matched, append new
-      setHardwareSets(prev => prev.map(s => {
-        if (s.set_id !== regionExtractSetId) return s;
-        const existing = [...s.items];
-        const matched = new Set<number>();
-        let updatedCount = 0;
-        let addedCount = 0;
-
-        for (const ext of extractedItems) {
-          const extName = ext?.name || '';
-          let bestIdx = -1;
-          let bestScore = 0;
-          for (let i = 0; i < existing.length; i++) {
-            if (matched.has(i)) continue;
-            const score = tokenMatchScore(extName, existing[i]?.name || '');
-            if (score > bestScore || (score === bestScore && bestIdx >= 0 && (existing[i]?.name || '').length < (existing[bestIdx]?.name || '').length)) {
-              bestScore = score;
-              bestIdx = i;
-            }
-          }
-
-          if (bestIdx >= 0 && bestScore > 0) {
-            // Update matched item fields only if new value is non-empty
-            matched.add(bestIdx);
-            const merged = { ...existing[bestIdx] };
-            const mergeFields = ['qty', 'manufacturer', 'model', 'finish'] as const;
-            for (const f of mergeFields) {
-              if (ext[f] != null && ext[f] !== '') {
-                (merged as Record<string, unknown>)[f] = ext[f];
-              }
-            }
-            existing[bestIdx] = merged;
-            updatedCount++;
-          } else {
-            // Append as new item
-            existing.push(ext);
-            addedCount++;
-          }
-        }
-
-        const parts: string[] = [];
-        if (updatedCount > 0) parts.push(`Updated ${updatedCount} item${updatedCount !== 1 ? 's' : ''}`);
-        if (addedCount > 0) parts.push(`added ${addedCount} new item${addedCount !== 1 ? 's' : ''}`);
-        if (parts.length > 0) showToast("success", parts.join(', '));
-
-        return { ...s, items: existing };
-      }));
-
-      setRegionExtractSetId(null);
-      setRegionExtractPageIdx(null);
-    } catch (err) {
-      console.error("[region-extract] Failed:", err);
-      showToast("error", "Region scan failed \u2014 try selecting a larger area");
-    } finally {
-      setRegionExtracting(false);
-    }
-  }, [regionExtractSetId, regionExtractPageIdx, projectId, showToast]);
-
   const handleSort = useCallback(
     (field: DoorStringField) => {
       if (sortField === field) {
@@ -519,538 +293,112 @@ export default function StepReview({
         setSortDir("asc");
       }
     },
-    [sortField]
+    [sortField],
   );
 
-  // ─── Confidence border color ───
-  const confBorder = (door: DoorEntry) => {
-    const c = getConfidence(door);
-    if (c === "high") return "row-accent-green";
-    if (c === "medium") return "row-accent-amber";
-    return "row-accent-red";
-  };
+  const handleRevert = useCallback(
+    (setId: string, itemIdx: number, originalQty: number) => {
+      setHardwareSets((prev) =>
+        prev.map((s) => {
+          if (s.set_id !== setId) return s;
+          const updatedItems = (s.items ?? []).map((it, i) => {
+            if (i !== itemIdx) return it;
+            return {
+              ...it,
+              qty: originalQty,
+              qty_source: 'reverted',
+              qty_before_correction: undefined,
+            };
+          });
+          return { ...s, items: updatedItems };
+        }),
+      );
+    },
+    [],
+  );
+
+  const handleRequestRescan = useCallback((setId: string, pageIdx: number) => {
+    setRegionExtractSetId(setId);
+    setRegionExtractPageIdx(pageIdx);
+  }, []);
+
+  const handleRescanClose = useCallback(() => {
+    setRegionExtractSetId(null);
+    setRegionExtractPageIdx(null);
+  }, []);
 
   return (
     <div className="flex flex-col h-full max-w-5xl mx-auto">
-      {/* ── Auto-removed orphan notice ── */}
-      {orphanDoors.length > 0 && !orphanNoticeDismissed && (
-        <div className="mb-3 p-3 bg-tint border border-border-dim rounded-md flex items-start gap-2">
-          <span className="text-tertiary text-xs mt-0.5 shrink-0">&#9432;</span>
-          <div className="flex-1 text-xs text-secondary">
-            <span className="font-medium">{orphanDoors.length} incomplete door{orphanDoors.length !== 1 ? 's were' : ' was'} automatically excluded</span>
-            <span className="text-tertiary ml-1">
-              ({orphanDoors.slice(0, 8).map(d => d.door_number).join(', ')}{orphanDoors.length > 8 ? `, +${orphanDoors.length - 8} more` : ''})
-            </span>
-            <span className="text-tertiary ml-1">
-              — no hardware set or items found
-            </span>
-          </div>
-          <button
-            onClick={() => setOrphanNoticeDismissed(true)}
-            className="text-tertiary hover:text-secondary text-xs shrink-0 ml-2"
-            aria-label="Dismiss"
-          >
-            &times;
-          </button>
-        </div>
-      )}
+      <ReviewSummary
+        totalDoors={totalDoors}
+        highCount={highCount}
+        medCount={medCount}
+        lowCount={lowCount}
+        hasExistingData={hasExistingData}
+        issueGroups={issueGroups}
+        orphanDoors={orphanDoors}
+        orphanNoticeDismissed={orphanNoticeDismissed}
+        onDismissOrphanNotice={() => setOrphanNoticeDismissed(true)}
+      >
+        <ReviewFilters
+          filterLevel={filterLevel}
+          onFilterLevelChange={setFilterLevel}
+          search={search}
+          onSearchChange={setSearch}
+        />
+      </ReviewSummary>
 
-      {/* ── Summary Stats Bar ── */}
-      <div className="mb-4 p-3 bg-tint border border-border-dim rounded-md">
-        <div className="flex items-center justify-between mb-2">
-          <span className="text-sm text-primary font-medium">
-            {totalDoors} doors extracted
-          </span>
-          {hasExistingData && (
-            <span className="text-xs bg-warning-dim text-warning px-2 py-0.5 rounded-full">
-              Revision
-            </span>
-          )}
-        </div>
-
-        {/* Confidence bar */}
-        <div className="confidence-bar mb-2">
-          {highCount > 0 && (
-            <div
-              className="confidence-bar__segment confidence-bar__segment--high"
-              style={{ width: `${(highCount / totalDoors) * 100}%` }}
-            />
-          )}
-          {medCount > 0 && (
-            <div
-              className="confidence-bar__segment confidence-bar__segment--med"
-              style={{ width: `${(medCount / totalDoors) * 100}%` }}
-            />
-          )}
-          {lowCount > 0 && (
-            <div
-              className="confidence-bar__segment confidence-bar__segment--low"
-              style={{ width: `${(lowCount / totalDoors) * 100}%` }}
-            />
-          )}
-        </div>
-
-        {/* Human labels */}
-        <div className="flex items-center gap-4 text-xs mb-3">
-          <span className="text-success">{highCount} ready</span>
-          <span className="text-warning">{medCount} need{medCount === 1 ? 's' : ''} attention</span>
-          <span className="text-danger">{lowCount} missing data</span>
-        </div>
-
-        {/* Issue-type summary (only when there are attention/missing items) */}
-        {(medCount > 0 || lowCount > 0) && (
-          <div className="flex flex-wrap gap-2 mb-3">
-            {Array.from(issueGroups.entries())
-              .filter(([key]) => !key.startsWith('missing_door_number') && !key.startsWith('missing_hw_set'))
-              .sort((a, b) => b[1].length - a[1].length)
-              .slice(0, 5)
-              .map(([issueKey, doorNumbers]) => (
-                <span key={issueKey} className="text-[11px] px-2 py-0.5 rounded bg-warning-dim text-warning border border-warning/20">
-                  {doorNumbers.length} door{doorNumbers.length !== 1 ? 's' : ''}: {ISSUE_LABELS[issueKey] ?? issueKey.replace(/_/g, ' ')}
-                </span>
-              ))}
-          </div>
-        )}
-
-        {/* Filter chips + search */}
-        <div className="flex items-center gap-2 flex-wrap">
-          {(
-            [
-              ["all", "All"],
-              ["medium", "Needs Attention"],
-              ["low", "Missing Data"],
-            ] as const
-          ).map(([level, label]) => (
-            <button
-              key={level}
-              onClick={() => setFilterLevel(level)}
-              className={`text-xs px-3 py-1 rounded-full transition-colors ${
-                filterLevel === level
-                  ? "bg-accent text-white"
-                  : "bg-tint border border-border-dim-strong text-secondary hover:bg-tint-strong"
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-          <input
-            type="text"
-            placeholder="Search doors..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="ml-auto text-xs px-3 py-1.5 bg-tint border border-border-dim-strong rounded-lg text-primary placeholder-tertiary focus:border-accent focus:outline-none w-48"
-          />
-        </div>
-      </div>
-
-      {/* ── Grouped Table ── */}
       <div className="flex-1 overflow-y-auto min-h-0">
-        {groups.length === 0 && (
-          <p className="text-tertiary text-sm text-center py-8">
-            No doors match your filters.
-          </p>
-        )}
-
-        {groups.map((group) => {
-          const isCollapsed = collapsedGroups.has(group.setId);
-          const isPreviewOpen = previewOpen.has(group.setId);
-          // Find the PDF page that contains this set's definition
-          const pdfPageIdx =
-            classifyResult?.pages && pdfBuffer
-              ? (findPageForSet(group.setId, classifyResult.pages) ??
-                 // Fall back: look by the underlying HardwareSet.generic_set_id
-                 (() => {
-                   const set = hardwareSets.find(
-                     (s) => s.set_id === group.setId || s.generic_set_id === group.setId,
-                   );
-                   const altId = set?.generic_set_id ?? set?.set_id;
-                   return altId ? findPageForSet(altId, classifyResult.pages) : null;
-                 })())
-              : null;
-          return (
-            <div key={group.setId} className="mb-3">
-              {/* Group header */}
-              <button
-                onClick={() => toggleGroup(group.setId)}
-                className="group-header w-full mb-0.5"
-              >
-                <span className="text-tertiary text-xs transition-transform inline-block" style={{ transform: isCollapsed ? "rotate(-90deg)" : "rotate(0deg)" }}>
-                  ▾
-                </span>
-                <span className="text-accent font-mono text-sm font-medium">
-                  {group.setId}
-                </span>
-                {group.heading && (
-                  <span className="text-tertiary text-xs truncate">
-                    {group.heading}
-                  </span>
-                )}
-                <span className="ml-auto text-tertiary text-xs">
-                  {group.doors.length} doors
-                </span>
-                {/* Mini confidence dots */}
-                <span className="flex items-center gap-1 ml-2">
-                  {group.highCount > 0 && (
-                    <span className="w-2 h-2 rounded-full bg-success" title={`${group.highCount} ready`} />
-                  )}
-                  {group.medCount > 0 && (
-                    <span className="w-2 h-2 rounded-full bg-warning" title={`${group.medCount} need attention`} />
-                  )}
-                  {group.lowCount > 0 && (
-                    <span className="w-2 h-2 rounded-full bg-danger" title={`${group.lowCount} missing data`} />
-                  )}
-                </span>
-              </button>
-
-              {/* PDF preview toggle + region re-scan — only when we have PDF data and a valid page */}
-              {pdfBuffer && pdfPageIdx != null && (
-                <div className="mb-1 flex items-center gap-2 flex-wrap">
-                  <button
-                    onClick={() => togglePreview(group.setId)}
-                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-accent-dim border border-accent text-accent text-[11px] font-medium hover:bg-tint-strong transition-colors min-h-9 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
-                    aria-label={isPreviewOpen ? "Hide PDF page" : "View PDF page"}
-                  >
-                    <span aria-hidden="true">{isPreviewOpen ? "\u25BE" : "\u25B8"}</span>
-                    <span>{isPreviewOpen ? "Hide" : "View"} PDF page {pdfPageIdx + 1}</span>
-                  </button>
-                  <button
-                    onClick={() => {
-                      setRegionExtractSetId(group.setId);
-                      setRegionExtractPageIdx(pdfPageIdx);
-                    }}
-                    className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-tint border border-border-dim text-secondary text-[11px] font-medium hover:bg-tint-strong transition-colors min-h-9"
-                  >
-                    Re-scan region
-                  </button>
-                </div>
-              )}
-
-              {/* PDF page preview (lazy-mounted to save memory) */}
-              {isPreviewOpen && pdfBuffer && pdfPageIdx != null && (
-                <div className="mb-2 max-w-full md:max-w-2xl">
-                  <PDFPagePreview
-                    pdfBuffer={pdfBuffer}
-                    pageIndex={pdfPageIdx}
-                    label={`${group.setId} — Hardware set definition`}
-                  />
-                </div>
-              )}
-
-              {/* Per-set hardware summary */}
-              {!isCollapsed && (() => {
-                const hwSet = hardwareSets.find(s => s.set_id === group.setId || s.generic_set_id === group.setId);
-                if (!hwSet || (hwSet.items?.length ?? 0) === 0) return null;
-                const firstDoor = group.doors[0]?.door;
-                const doorInfo = firstDoor ? { door_type: firstDoor.door_type, location: firstDoor.location } : undefined;
-                const isPairSet = detectIsPair(hwSet, doorInfo);
-                const lc = isPairSet ? 2 : 1;
-                const items = (hwSet.items ?? []).map((item, idx) => ({
-                  id: `${hwSet.set_id}-${idx}`,
-                  name: item.name,
-                  qty: item.qty ?? 1,
-                  manufacturer: item.manufacturer ?? null,
-                  model: item.model ?? null,
-                  finish: item.finish ?? null,
-                  qty_source: item.qty_source ?? null,
-                  qty_before_correction: item.qty_before_correction ?? null,
-                  confidence: item.confidence as ItemConfidence | undefined ?? null,
-                  _setId: hwSet.set_id,
-                  _itemIdx: idx,
-                }));
-                const grouped = groupItemsByLeaf(items, lc);
-                const handleRevert = (setId: string, itemIdx: number, originalQty: number) => {
-                  setHardwareSets(prev => prev.map(s => {
-                    if (s.set_id !== setId) return s;
-                    const updatedItems = (s.items ?? []).map((it, i) => {
-                      if (i !== itemIdx) return it;
-                      return { ...it, qty: originalQty, qty_source: 'reverted', qty_before_correction: undefined };
-                    });
-                    return { ...s, items: updatedItems };
-                  }));
-                };
-                const hasAnyLowConfidence = items.some(i => i.confidence?.overall === 'low');
-                const renderItems = (arr: typeof items, leafIdx: number) => arr.map(item => {
-                  const dq = getLeafDisplayQty(item);
-                  const isCorrected = item.qty_source === 'auto_corrected' && item.qty_before_correction != null;
-                  const conf = item.confidence;
-                  return (
-                    <div key={`${item.id}-l${leafIdx}`} className={`flex items-center gap-3 py-1 text-[12px] ${isCorrected ? 'bg-accent-dim rounded px-1 -mx-1' : ''}`}>
-                      <span className="text-primary font-medium truncate inline-flex items-center">
-                        {item.name}
-                        {conf && <ConfidenceBadge level={conf.name.level} tooltip={conf.name.reason} />}
-                      </span>
-                      <span className={`text-[11px] shrink-0 inline-flex items-center ${isCorrected ? 'text-info font-bold' : 'text-accent'}`}>
-                        qty {dq}
-                        {conf && <ConfidenceBadge level={conf.qty.level} tooltip={conf.qty.reason} />}
-                        {isCorrected && (
-                          <span className="text-tertiary font-normal ml-1">(was {item.qty_before_correction})</span>
-                        )}
-                      </span>
-                      {isCorrected && (
-                        <button
-                          onClick={() => handleRevert(item._setId, item._itemIdx, item.qty_before_correction!)}
-                          className="text-[10px] text-warning hover:text-danger shrink-0 underline"
-                        >
-                          revert
-                        </button>
-                      )}
-                      {item.model && (
-                        <span className="text-tertiary truncate inline-flex items-center">
-                          {item.model}
-                          {conf && <ConfidenceBadge level={conf.model.level} tooltip={conf.model.reason} />}
-                        </span>
-                      )}
-                      {item.finish && (
-                        <span className="text-tertiary truncate inline-flex items-center">
-                          {item.finish}
-                          {conf && <ConfidenceBadge level={conf.finish.level} tooltip={conf.finish.reason} />}
-                        </span>
-                      )}
-                    </div>
-                  );
-                });
-                return (
-                  <div className="bg-tint border border-border-dim rounded-lg p-3 mb-2">
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className="text-[11px] font-semibold uppercase text-secondary" style={{ fontFamily: "var(--font-display)", letterSpacing: "0.06em" }}>
-                        Hardware Items
-                      </span>
-                      <span className="text-[10px] text-tertiary">({grouped.shared.length + grouped.leaf1.length + grouped.leaf2.length} items)</span>
-                      {(() => {
-                        const correctedCount = items.filter(i => i.qty_source === 'auto_corrected' && i.qty_before_correction != null).length;
-                        return correctedCount > 0 ? (
-                          <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-accent-dim text-info border border-info">
-                            {correctedCount} corrected
-                          </span>
-                        ) : null;
-                      })()}
-                      {isPairSet && (
-                        <span className="text-[9px] font-semibold uppercase px-1.5 py-0.5 rounded bg-accent-dim text-accent border border-accent ml-auto">
-                          PAIR
-                        </span>
-                      )}
-                      {hasAnyLowConfidence && (
-                        <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-danger-dim text-danger border border-danger">
-                          low confidence
-                        </span>
-                      )}
-                    </div>
-                    {isPairSet ? (
-                      <div className="space-y-2">
-                        {grouped.shared.length > 0 && (
-                          <div>
-                            <button
-                              onClick={() => toggleLeafSection(group.setId, 'shared')}
-                              className="flex items-center gap-1 text-[10px] font-semibold uppercase text-tertiary tracking-wider mb-0.5 hover:text-secondary transition-colors"
-                              style={{ fontFamily: "var(--font-display)" }}
-                            >
-                              <span className="text-[8px]">{collapsedLeafSections.has(`${group.setId}:shared`) ? '\u25B8' : '\u25BE'}</span>
-                              Shared ({grouped.shared.length})
-                            </button>
-                            {!collapsedLeafSections.has(`${group.setId}:shared`) && renderItems(grouped.shared, 1)}
-                          </div>
-                        )}
-                        {grouped.leaf1.length > 0 && (
-                          <div>
-                            <button
-                              onClick={() => toggleLeafSection(group.setId, 'leaf1')}
-                              className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider mb-0.5 hover:text-secondary transition-colors"
-                              style={{ fontFamily: "var(--font-display)", color: "var(--blue)" }}
-                            >
-                              <span className="text-[8px]">{collapsedLeafSections.has(`${group.setId}:leaf1`) ? '\u25B8' : '\u25BE'}</span>
-                              Leaf 1 - Active ({grouped.leaf1.length})
-                            </button>
-                            {!collapsedLeafSections.has(`${group.setId}:leaf1`) && renderItems(grouped.leaf1, 1)}
-                          </div>
-                        )}
-                        {grouped.leaf2.length > 0 && (
-                          <div>
-                            <button
-                              onClick={() => toggleLeafSection(group.setId, 'leaf2')}
-                              className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider mb-0.5 hover:text-secondary transition-colors"
-                              style={{ fontFamily: "var(--font-display)", color: "var(--purple)" }}
-                            >
-                              <span className="text-[8px]">{collapsedLeafSections.has(`${group.setId}:leaf2`) ? '\u25B8' : '\u25BE'}</span>
-                              Leaf 2 - Inactive ({grouped.leaf2.length})
-                            </button>
-                            {!collapsedLeafSections.has(`${group.setId}:leaf2`) && renderItems(grouped.leaf2, 2)}
-                          </div>
-                        )}
-                      </div>
-                    ) : (
-                      <div>{renderItems(items, 1)}</div>
-                    )}
-
-                    {/* Audit trail expander — shown when reconciliation data exists for this set */}
-                    {(() => {
-                      const reconciledSet = reconciledSetMap.get(hwSet.set_id);
-                      if (!reconciledSet) return null;
-                      const isOpen = auditTrailOpen.has(hwSet.set_id);
-                      const reconciledItems = reconciledSet.items ?? [];
-                      const fullCount = reconciledItems.filter(i => i.overall_confidence === 'full').length;
-                      const conflictCount = reconciledItems.filter(i => i.overall_confidence === 'conflict').length;
-                      const singleCount = reconciledItems.filter(i => i.overall_confidence === 'single_source').length;
-                      return (
-                        <div className="mt-2 pt-2 border-t border-border-dim">
-                          <button
-                            onClick={() => toggleAuditTrail(hwSet.set_id)}
-                            className="flex items-center gap-1.5 text-[10px] text-tertiary hover:text-secondary transition-colors"
-                          >
-                            <span className="text-[8px]">{isOpen ? '\u25BE' : '\u25B8'}</span>
-                            <span className="font-medium">Audit Trail</span>
-                            <span className="text-[9px]">
-                              {fullCount} agreed, {conflictCount} conflicts, {singleCount} single-source
-                            </span>
-                          </button>
-                          {isOpen && (
-                            <div className="mt-1.5 space-y-1 text-[10px]">
-                              {(reconciledSet.items ?? []).map((ri, riIdx) => {
-                                if (ri.overall_confidence === 'full') return null;
-                                const fields = (['name', 'qty', 'manufacturer', 'model', 'finish'] as const)
-                                  .filter(f => ri[f].confidence !== 'full');
-                                if (fields.length === 0) return null;
-                                return (
-                                  <div key={riIdx} className="pl-3 py-1 border-l-2 border-border-dim">
-                                    <span className="font-medium text-primary">{String(ri.name.value)}</span>
-                                    {fields.map(f => (
-                                      <div key={f} className="text-tertiary ml-2">
-                                        <span className="text-secondary">{f}:</span>{' '}
-                                        {ri[f].sources.strategy_a != null && (
-                                          <span>pdfplumber said <span className="text-primary">{String(ri[f].sources.strategy_a)}</span></span>
-                                        )}
-                                        {ri[f].sources.strategy_a != null && ri[f].sources.strategy_b != null && ', '}
-                                        {ri[f].sources.strategy_b != null && (
-                                          <span>vision said <span className="text-primary">{String(ri[f].sources.strategy_b)}</span></span>
-                                        )}
-                                        {' \u2014 '}
-                                        <span className="text-secondary">{ri[f].reason}</span>
-                                      </div>
-                                    ))}
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })()}
-                  </div>
-                );
-              })()}
-
-              {/* Group table */}
-              {!isCollapsed && (
-                <div className="overflow-x-auto border border-border-dim rounded-lg">
-                  <table className="w-full">
-                    <thead>
-                      <tr className="bg-tint sticky top-0 z-10 shadow-[0_1px_0_var(--border-dim)]">
-                        {FIELD_KEYS.map((field) => (
-                          <th
-                            key={field}
-                            onClick={() => handleSort(field)}
-                            className="px-3 py-2 text-left text-[11px] text-tertiary uppercase font-semibold cursor-pointer hover:text-secondary select-none"
-                          >
-                            {FIELD_LABELS[field]}
-                            {sortField === field && (
-                              <span className="ml-1 text-accent">
-                                {sortDir === "asc" ? "▲" : "▼"}
-                              </span>
-                            )}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {group.doors.map(({ door, originalIndex }, i) => (
-                          <tr
-                            key={`${door.door_number}-${originalIndex}`}
-                            ref={(el) => {
-                              if (door.door_number)
-                                registerRef(door.door_number, el);
-                            }}
-                            className={`${confBorder(door)} border-t border-border-dim hover:bg-tint transition-colors duration-150 ${
-                              i % 2 === 1 ? "bg-tint" : ""
-                            }`}
-                            style={{ minHeight: "40px" }}
-                          >
-                            {FIELD_KEYS.map((field) => {
-                              const isEditing =
-                                editingCell?.row === originalIndex &&
-                                editingCell?.field === field;
-                              return (
-                                <td
-                                  key={field}
-                                  className="px-3 py-2"
-                                >
-                                  {isEditing ? (
-                                    <input
-                                      autoFocus
-                                      type="text"
-                                      value={editValue}
-                                      onChange={(e) =>
-                                        setEditValue(e.target.value)
-                                      }
-                                      onBlur={commitEdit}
-                                      onKeyDown={(e) => {
-                                        if (e.key === "Enter") commitEdit();
-                                        if (e.key === "Escape") cancelEdit();
-                                      }}
-                                      className="w-full bg-tint-strong border border-accent rounded px-2 py-1 text-primary text-[13px] focus:outline-none"
-                                    />
-                                  ) : (
-                                    <span
-                                      onClick={() =>
-                                        startEdit(originalIndex, field)
-                                      }
-                                      className={`cursor-pointer text-[13px] font-mono ${
-                                        door[field]
-                                          ? "text-primary"
-                                          : "text-tertiary border-b border-dashed border-tertiary/30"
-                                      }`}
-                                    >
-                                      {door[field] || "\u00A0"}
-                                    </span>
-                                  )}
-                                </td>
-                              );
-                            })}
-                          </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-            </div>
-          );
-        })}
+        <SetView
+          groups={groups}
+          hardwareSets={hardwareSets}
+          classifyResult={classifyResult}
+          pdfBuffer={pdfBuffer}
+          collapsedGroups={collapsedGroups}
+          onToggleGroup={toggleGroup}
+          previewOpen={previewOpen}
+          onTogglePreview={togglePreview}
+          onRequestRescan={handleRequestRescan}
+          reconciledSetMap={reconciledSetMap}
+          auditTrailOpen={auditTrailOpen}
+          onToggleAuditTrail={toggleAuditTrail}
+          collapsedLeafSections={collapsedLeafSections}
+          onToggleLeafSection={toggleLeafSection}
+          onRevert={handleRevert}
+          sortField={sortField}
+          sortDir={sortDir}
+          onSort={handleSort}
+          editingCell={editingCell}
+          editValue={editValue}
+          onStartEdit={startEdit}
+          onEditValueChange={setEditValue}
+          onCommitEdit={commitEdit}
+          onCancelEdit={cancelEdit}
+          registerRef={registerRef}
+        />
       </div>
 
-      {/* ── Navigation ── */}
       <WizardNav
         onBack={onBack}
-        onNext={() => onComplete(doors.filter(d => !isOrphanDoor(d)), hardwareSets)}
+        onNext={() => onComplete(doors.filter((d) => !isOrphanDoor(d)), hardwareSets)}
         nextLabel="Next"
-        secondaryAction={onRemapColumns ? { label: "Remap Columns", onClick: onRemapColumns, variant: "warning" } : undefined}
+        secondaryAction={
+          onRemapColumns
+            ? { label: "Remap Columns", onClick: onRemapColumns, variant: "warning" }
+            : undefined
+        }
       />
 
-      {/* ── Region extract modal ── */}
       {regionExtractSetId != null && regionExtractPageIdx != null && pdfBuffer && (
-        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-surface border border-th-border rounded-md p-5 w-full max-w-3xl max-h-[90vh] overflow-y-auto shadow-2xl">
-            <PDFRegionSelector
-              pdfBuffer={pdfBuffer}
-              pageIndex={regionExtractPageIdx}
-              loading={regionExtracting}
-              onSelect={handleRegionExtract}
-              onCancel={() => {
-                setRegionExtractSetId(null);
-                setRegionExtractPageIdx(null);
-              }}
-              onPageChange={setRegionExtractPageIdx}
-              onError={(msg) => showToast("error", msg)}
-            />
-          </div>
-        </div>
+        <InlineRescan
+          projectId={projectId}
+          pdfBuffer={pdfBuffer}
+          setId={regionExtractSetId}
+          pageIndex={regionExtractPageIdx}
+          onClose={handleRescanClose}
+          onPageChange={setRegionExtractPageIdx}
+          onItemsMerged={setHardwareSets}
+        />
       )}
     </div>
   );
