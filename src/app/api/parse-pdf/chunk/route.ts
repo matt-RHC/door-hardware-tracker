@@ -32,9 +32,10 @@ export async function POST(request: NextRequest) {
     // Auth check (service role bypass for testing scripts)
     const serviceRoleHeader = request.headers.get('x-service-role')
     const isServiceRole = serviceRoleHeader && serviceRoleHeader === process.env.SUPABASE_SERVICE_ROLE_KEY
+    let userSupabase: Awaited<ReturnType<typeof createServerSupabaseClient>> | null = null
     if (!isServiceRole) {
-      const supabase = await createServerSupabaseClient()
-      const { data: { user }, error: authError } = await supabase.auth.getUser()
+      userSupabase = await createServerSupabaseClient()
+      const { data: { user }, error: authError } = await userSupabase.auth.getUser()
       if (authError || !user) {
         return NextResponse.json({ error: 'You must be signed in' }, { status: 401 })
       }
@@ -72,6 +73,26 @@ export async function POST(request: NextRequest) {
 
     if (!chunkBase64) {
       return NextResponse.json({ error: 'Missing chunkBase64' }, { status: 400 })
+    }
+
+    // Cross-tenant guard: if a projectId was passed and we have a user
+    // session, require it to live in the caller's company. Service-role
+    // callers skip this.
+    if (userSupabase && projectId) {
+      try {
+        const { assertProjectInUserCompany, CompanyAccessError } = await import('@/lib/companies')
+        try {
+          await assertProjectInUserCompany(userSupabase, projectId)
+        } catch (err) {
+          if (err instanceof CompanyAccessError) {
+            return NextResponse.json({ error: err.message }, { status: err.status })
+          }
+          throw err
+        }
+      } catch (err) {
+        console.error('chunk company assert failed:', err)
+        return NextResponse.json({ error: 'Access denied' }, { status: 403 })
+      }
     }
 
     // ==========================================

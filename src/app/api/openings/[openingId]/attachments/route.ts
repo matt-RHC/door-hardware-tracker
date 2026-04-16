@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { v4 as uuidv4 } from 'uuid'
+import { assertProjectInUserCompany, CompanyAccessError } from '@/lib/companies'
 
-// Signed URL expiry: 1 hour. The client fetches this route each time it
-// renders attachments, so short-lived URLs are acceptable and preferred
-// over long-lived ones since the bucket is now private (finding #8).
-const SIGNED_URL_EXPIRES_IN = 3600
+// Signed URL expiry: 10 minutes. Mobile playback and image display on
+// slow connections need room; RLS + the per-request company assertion
+// still gate access, so a short TTL is cheap defense-in-depth.
+const SIGNED_URL_EXPIRES_IN = 600
 
 /**
  * Derive the storage path from a file_url value.
@@ -58,19 +59,16 @@ export async function GET(
       )
     }
 
-    // Verify user has access to project
-    const { data: projectMember, error: memberError } = await supabase
-      .from('project_members')
-      .select('role')
-      .eq('project_id', (opening as any).project_id)
-      .eq('user_id', user.id)
-      .single()
-
-    if (memberError || !projectMember) {
-      return NextResponse.json(
-        { error: 'Access denied' },
-        { status: 403 }
-      )
+    // Strict company + project membership check. This replaces the
+    // previous project_members-only check and is load-bearing on any
+    // future route that signs URLs (RLS + the assertion together).
+    try {
+      await assertProjectInUserCompany(supabase, (opening as any).project_id)
+    } catch (err) {
+      if (err instanceof CompanyAccessError) {
+        return NextResponse.json({ error: err.message }, { status: err.status })
+      }
+      throw err
     }
 
     // Get attachments (raw rows — file_url may be a storage path or legacy public URL)
@@ -147,19 +145,13 @@ export async function POST(
       )
     }
 
-    // Verify user has access to project
-    const { data: projectMember, error: memberError } = await supabase
-      .from('project_members')
-      .select('role')
-      .eq('project_id', (opening as any).project_id)
-      .eq('user_id', user.id)
-      .single()
-
-    if (memberError || !projectMember) {
-      return NextResponse.json(
-        { error: 'Access denied' },
-        { status: 403 }
-      )
+    try {
+      await assertProjectInUserCompany(supabase, (opening as any).project_id)
+    } catch (err) {
+      if (err instanceof CompanyAccessError) {
+        return NextResponse.json({ error: err.message }, { status: err.status })
+      }
+      throw err
     }
 
     // Parse form data

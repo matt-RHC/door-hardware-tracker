@@ -1,19 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { createAdminSupabaseClient } from '@/lib/supabase/admin'
+import { assertProjectInUserCompany, CompanyAccessError } from '@/lib/companies'
 
 const BUCKET = 'submittals'
-const SIGNED_URL_TTL_SECONDS = 60 * 10 // 10 minutes
+const SIGNED_URL_TTL_SECONDS = 300 // 5 minutes; company isolation plan §2.
 
 /**
  * GET /api/projects/[projectId]/pdf-url
  *
- * Returns a short-lived signed URL for the project's submittal PDF so the
- * client can open it directly in a browser tab. Callers may append a
- * "#page=N" (1-based) fragment on the returned URL to jump to a specific
- * page in the browser's built-in PDF viewer.
+ * Returns a short-lived signed URL for the project's submittal PDF so
+ * the client can open it in a new tab. Callers may append `#page=N` on
+ * the returned URL.
  *
- * Requires the caller to be a project member.
+ * The submittals bucket is private, so the user-scoped Supabase client
+ * cannot sign URLs — we fall through to the admin client after a strict
+ * assertProjectInUserCompany check. Without this explicit assertion, a
+ * caller in company A could request the PDF URL for company B's project
+ * and get back a valid link (the admin client bypasses RLS).
  */
 export async function GET(
   request: NextRequest,
@@ -21,30 +25,17 @@ export async function GET(
 ) {
   try {
     const supabase = await createServerSupabaseClient()
-
-    const { data: { user }, error: authError } = await supabase.auth.getUser()
-    if (authError || !user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
-
     const { projectId } = await params
 
-    // Verify project membership via RLS-friendly select
-    const { data: projectMember, error: memberError } = await supabase
-      .from('project_members')
-      .select('role')
-      .eq('project_id', projectId)
-      .eq('user_id', user.id)
-      .single()
-
-    if (memberError || !projectMember) {
-      return NextResponse.json(
-        { error: 'Access denied to this project' },
-        { status: 403 },
-      )
+    try {
+      await assertProjectInUserCompany(supabase, projectId)
+    } catch (err) {
+      if (err instanceof CompanyAccessError) {
+        return NextResponse.json({ error: err.message }, { status: err.status })
+      }
+      throw err
     }
 
-    // Look up the project's PDF storage path
     const { data: projectRow, error: projectError } = await supabase
       .from('projects')
       .select('pdf_storage_path, pdf_page_count')
@@ -61,8 +52,6 @@ export async function GET(
       )
     }
 
-    // Issue a signed URL via the admin client (the submittals bucket is
-    // private, so the user-scoped client cannot sign it directly).
     const admin = createAdminSupabaseClient()
     const { data: signed, error: signError } = await admin.storage
       .from(BUCKET)
@@ -70,10 +59,7 @@ export async function GET(
 
     if (signError || !signed?.signedUrl) {
       console.error('Failed to sign PDF URL:', signError)
-      return NextResponse.json(
-        { error: 'Failed to create signed URL' },
-        { status: 500 },
-      )
+      return NextResponse.json({ error: 'Failed to create signed URL' }, { status: 500 })
     }
 
     return NextResponse.json({

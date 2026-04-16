@@ -25,6 +25,7 @@ import { shouldAutoTriggerDeepExtraction } from '@/lib/types/confidence'
 import type { ExtractionConfidence } from '@/lib/types/confidence'
 import { createAdminSupabaseClient } from '@/lib/supabase/admin'
 import { assertProjectMember } from '@/lib/auth-helpers'
+import { assertProjectInUserCompany, CompanyAccessError } from '@/lib/companies'
 import { validateJson, errorResponse } from '@/lib/api-helpers/validate'
 import { ParsePdfRequestSchema } from '@/lib/schemas/parse-pdf'
 
@@ -235,15 +236,23 @@ export async function POST(request: NextRequest) {
     if (!parsed.ok) return parsed.response
     const body = parsed.data
 
-    // Enforce project membership when a projectId is provided (IDOR prevention).
-    // Skipped for service-role callers (testing scripts).
+    // Enforce project + company membership when a projectId is provided
+    // (IDOR + cross-tenant prevention). Skipped for service-role callers
+    // (testing scripts). assertProjectInUserCompany re-checks project_members
+    // internally, so we drop the redundant assertProjectMember call here.
     if (userSupabase && authedUserId && body.projectId) {
       try {
-        await assertProjectMember(userSupabase, authedUserId, body.projectId)
-      } catch {
+        await assertProjectInUserCompany(userSupabase, body.projectId)
+      } catch (err) {
+        if (err instanceof CompanyAccessError) {
+          return errorResponse('ACCESS_DENIED', err.message)
+        }
         return errorResponse('ACCESS_DENIED', 'Access denied to this project')
       }
     }
+    // Keep assertProjectMember imported for other paths/tests that still
+    // rely on the project-only assertion.
+    void assertProjectMember
 
     // Resolve PDF: prefer server-side storage fetch via projectId, fallback to base64 in body
     let base64: string = body.pdfBase64 ?? ''

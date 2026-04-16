@@ -1,8 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { v4 as uuidv4 } from 'uuid'
+import { assertProjectInUserCompany, CompanyAccessError } from '@/lib/companies'
 
-const SIGNED_URL_EXPIRES_IN = 3600
+// 10-minute signed URL TTL — mobile playback + image rendering on slow
+// site Wi-Fi needs headroom; RLS + the route-level company assertion
+// still gate access.
+const SIGNED_URL_EXPIRES_IN = 600
 
 type RouteParams = { params: Promise<{ projectId: string; issueId: string }> }
 
@@ -16,15 +20,13 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
     const { projectId, issueId } = await params
 
-    const { data: membership } = await supabase
-      .from('project_members')
-      .select('role')
-      .eq('project_id', projectId)
-      .eq('user_id', user.id)
-      .single()
-
-    if (!membership) {
-      return NextResponse.json({ error: 'Access denied' }, { status: 403 })
+    try {
+      await assertProjectInUserCompany(supabase, projectId)
+    } catch (err) {
+      if (err instanceof CompanyAccessError) {
+        return NextResponse.json({ error: err.message }, { status: err.status })
+      }
+      throw err
     }
 
     // Verify issue belongs to project
@@ -84,15 +86,13 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     const { projectId, issueId } = await params
 
-    const { data: membership } = await supabase
-      .from('project_members')
-      .select('role')
-      .eq('project_id', projectId)
-      .eq('user_id', user.id)
-      .single()
-
-    if (!membership) {
-      return NextResponse.json({ error: 'Access denied' }, { status: 403 })
+    try {
+      await assertProjectInUserCompany(supabase, projectId)
+    } catch (err) {
+      if (err instanceof CompanyAccessError) {
+        return NextResponse.json({ error: err.message }, { status: err.status })
+      }
+      throw err
     }
 
     // Verify issue belongs to project
