@@ -74,9 +74,6 @@ function logDarrinCall(opts: {
     // so the typed client rejects the insert. Cast through `any` until the
     // types can be regenerated against the live Supabase schema.
     //
-    // NOTE: the physical Supabase table is still named `punchy_logs` during
-    // the Punchy → Darrin rename rollout. TypeScript references `darrin_logs`
-    // as the aliased name; migration 035 renames the actual table.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const insertPromise = (supabase.from('darrin_logs') as any)
       .insert({
