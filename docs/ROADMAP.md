@@ -1,164 +1,125 @@
 # Roadmap — Door Hardware Tracker
 
-> **The bar: every project must finish at 100% accuracy. Extraction gets us close, Darrin closes the gap. That is the product promise.**
+> **Guiding principle:** Hardware counts coming out of PDFs must be accurate before we build features on top of them. Scope is DFH only — door, frame, hardware submittals. All other submittal types, trade data, and non-DFH features go to the Parking Lot.
 
-Last updated: 2026-04-16 — reframed around DPR pilot (Grid-RR) accuracy + demo-ready dashboard. Phase 0–2 scaffolding is shipped and healthy; the work now is making the system *demonstrably reliable* on real DPR submittals and telling that story cleanly on the dashboard.
-
----
-
-## Guiding Principles
-
-1. **100% accuracy, delivered by extraction + Darrin.** The extractor will never be perfect. Darrin's job is to catch, question, and resolve anything that wasn't extracted cleanly — and the user must be able to *see* when that's complete. "Darrin has resolved everything" is a state the UI must render.
-2. **Scope stays DFH.** Material submittal → approval → procurement → receive → install → QA is the end-to-end we're perfecting. Other scopes (interiors, MEP, finishes) and other submittal types (shop drawings, cut sheets) are parked until DFH is airtight.
-3. **Real data as the test corpus.** Grid-RR is the pilot; Lyft/Waymo is the next template. Golden PDFs stay in place as regression gates, but the accuracy target is defined on these live DPR projects.
-4. **Demo-first on the dashboard.** Every new project lands at 0% progress. The dashboard has to look great at 0 and let Matthew demo "their project at 50%" or "100%" during sales calls without writing fake data to the DB.
+Last updated: 2026-04-16 (restructure around 3-track framing — DFH-only scope)
 
 ---
 
-## Active Focus (next ~4 weeks)
+## Active Tracks
 
-Three parallel tracks. All others are maintenance or parking lot.
+Three parallel workstreams. All three must reach baseline before the DPR pilot goes live.
 
-### Track 1 — 100% Reliable Extraction (Extraction + Darrin)
+---
 
-**Outcome:** For every DPR submittal uploaded, the final promoted dataset matches the PDF exactly, and the UI shows the user that's the case.
+### Track 1 — 100% Reliable Extraction
 
-- **1A. Accuracy on live corpus (Grid-RR + Lyft/Waymo)**
-  - Build a test harness that re-runs extraction on every real DPR submittal and diffs against a known-good snapshot.
-  - Diffs become the bug queue. Each delta is either a fix in the extractor, a fix in normalization/reconciliation, or a Darrin question.
-  - Target: zero unreconciled deltas on Grid-RR; zero on Lyft/Waymo once it's templated.
+**Goal:** End-to-end extraction that a GC can trust without manually auditing every line.  
+**Measure:** Pass all cases in the Grid-RR + Lyft/Waymo regression corpus with zero systematic errors.
 
-- **1B. Darrin coverage: every low-confidence field has a question**
-  - Audit every confidence signal (`suggest_deep_extraction`, field-level confidence, Darrin-triggered corrections) and ensure Darrin asks a user question for anything that isn't high-confidence.
-  - No silent acceptance of low-confidence data. No field promoted without either a green confidence badge or a Darrin resolution.
+#### 1A. Accuracy Bar — Grid-RR + Lyft/Waymo Corpus
 
-- **1C. User-visible certainty**
-  - UI state: "Darrin has resolved everything — this project is ready to use."
-  - Badge/banner that flips based on whether any unresolved low-confidence fields remain.
-  - Sits on review page, dashboard header, and export gate.
+The old "Phase 1 COMPLETE" label is retired because accuracy isn't a checkbox — it's a bar.  
+Grid-RR and the Lyft/Waymo PDFs represent the hardest real-world cases in the current corpus.  
+See: `docs/architecture/extraction-pipeline.md` for pipeline detail.
 
-- **1D. Regression safety net**
-  - Golden PDF tests stay green (hard gate before merge).
-  - Real-corpus harness runs as part of the pre-release check (nightly or on-demand).
-  - Extraction paths matrix (`docs/architecture/extraction-pipeline.md`) stays current.
+Status: **IN PROGRESS**  
+Remaining gaps: populate from metrics log (sheet 2206493777547140) after next corpus run.
 
-**Files to touch most often:** `api/extract-tables.py`, `src/lib/extraction/*`, `src/components/Darrin/*`, `src/components/ImportWizard/StepReview/*`, tests under `tests/` and `src/**/__tests__/`.
+#### 1B. Darrin Review Layer
+
+Darrin is the AI auto-resolve pass that runs after pdfplumber extraction. It catches quantity convention errors, ambiguous item names, and set-header misreads before the user sees them.
+
+Status: **IN PROGRESS** — backend logic merged; human-confirm UI pending
+
+Key behaviors:
+- Auto-resolve all import paths (chunked + unchunked)
+- Staging-first: Darrin writes candidates to staging, human confirms before promote
+- Confidence scoring gates which items need human review vs. auto-accept
 
 ---
 
 ### Track 2 — Demo-Ready Dashboard
 
-**Outcome:** A DPR executive can look at the dashboard for a brand-new project (0% progress) and immediately understand what they're looking at. During a sales call, Matthew can click a filter and demo what "50% through" or "100% delivered" looks like *for the exact project on screen*, with real opening/item counts but synthetic progress.
+**Goal:** A dashboard any stakeholder can read in 30 seconds. Used for sales demos and DPR pilot onboarding.  
+**Measure:** Project page loads with realistic data and a clear "X% complete" story.
 
-- **2A. Empty-state excellence (0% progress)**
-  - Every panel (stage funnel, floor progress, zone heatmap, timeline, blocked items) renders meaningfully with zero workflow data.
-  - No "no data" voids. Every panel explains what it *will* show once work starts.
-  - Hero metric at 0% conveys "project set up, ready to execute," not "nothing here."
+#### 2A. Per-Project Simulation Filter (50% / 100%)
 
-- **2B. Demo simulation filter**
-  - Client-side only. No DB writes.
-  - Toggle: `Off | 50% | 100%`. Visible only in a demo-enabled role or via a URL param initially.
-  - Reads the project's real opening/hardware counts and distributes them realistically across stages:
-    - 50% → most items in Installed/QA, rest spread back through Shipped/Received; ~half of blocked openings cleared.
-    - 100% → everything in Done, all QA resolved, blocked items at zero.
-  - Obvious visual indicator: "Demo view — simulated progress for [Project Name]."
-  - Dynamic for any project; uses the real project name/counts so DPR sees *their* project.
+Toggle a project between "50% installed" and "100% installed" states for demo purposes, without modifying real checklist data.
 
-- **2C. Dashboard reliability**
-  - Correctness of aggregates (stage counts, floor/zone breakdowns) audited against ground truth.
-  - Loading states, error states, empty states explicit and consistent.
-  - Chart resize, mobile breakpoints, share-token refresh flows verified.
+Status: **NOT STARTED**
 
-- **2D. Track 3 panels (feeds into 3A + 3B below)**
-  - Submittal & procurement lifecycle panel.
-  - Install progress panel.
-  - Both honor the demo simulation filter.
+Spec:
+- Filter lives on the dashboard page (demo-only flag; hidden in production after pilot)
+- Simulation overlays progress onto existing opening data
+- Does NOT write to `checklist_progress` — purely presentational
 
 ---
 
-### Track 3 — Lifecycle Tracking (Submittal/Procurement + Install)
+### Track 3 — Material Lifecycle
 
-A and B are independent flows. No forced sequencing.
+**Goal:** Track hardware from submittal approval through delivery and install — one flow, not three separate tools.
 
-#### 3A. Submittal & Procurement Tracking (NEW)
+#### 3A. Submittal/Procurement (New Build)
 
-**Outcome:** For every hardware item, the user can see where it is in the material lifecycle — submitted, approved, in production at the manufacturer, shipped, received on site.
+Pre-install phase for new construction: submittal review, approval tracking, procurement status per hardware set, expected delivery dates.
 
-- Model the lifecycle states: `Submitted → Approved → In Production → Shipped → Received`.
-- Decide whether this is a new table (`procurement_events` or `material_status`) or additional columns on `hardware_items`. Probably events table — transitions matter, and vendor/PO info attaches to each state.
-- UI: a material-lifecycle view per project. Individual item lookup. Batch update when a PO is submitted/approved.
-- Dashboard panel: count by stage, aging items (e.g., "shipped > 30 days, not received").
-- Honors demo simulation filter.
+Status: **NOT STARTED**
 
-#### 3B. Install Tracking (EXTEND)
+#### 3B. Install Tracking (Extend Existing)
 
-**Outcome:** Field workers mark hardware installed → QA'd → done. Dashboard shows field progress cleanly.
+Build on the existing Receive/Install/QA workflow (PRs #217–#221) to close the loop: link delivery records to install events, flag backorders, surface blocked openings.
 
-- Leverage existing `stage` enum on `hardware_items` (migration 031) + workflow tabs (PR #217) + QA findings (PR #225 / migration 030).
-- Gaps to close: consistent state transitions from the field UI, offline-sync correctness, per-item install attribution.
-- Dashboard panel: count by stage, per-floor/zone install progress, blocked items.
-- Honors demo simulation filter.
+Status: **IN PROGRESS** — foundational schemas merged (PRs #222–#224); UI phase pending
 
 ---
 
-## Maintenance (shipped — keep healthy, no proactive feature work)
+## Maintenance
 
-These are product surface areas that are working. Bugs get fixed; new features wait until accuracy + dashboard tracks are locked.
+Functionally complete items that need polish or are gated on upstream work.
 
-| Area | Shipped via | Current state |
+| Item | Status | Notes |
 |---|---|---|
-| Wizard (upload, map, triage, questions, review) | Phases 0–2, PR #259, #267, #268, #276 | Stable; Darrin conversational flow is active investment surface via Track 1 |
-| Review page | PRs #263, #264, #268 | Dual-mode view; keep polished but no redesign |
-| CSV export | PR #265 | Filters + extraction source column shipped |
-| Offline-first / PWA | PRs #218–#221 | Installable, service worker, sync queue |
-| Activity log | PR #227 | Complete unions, feed page |
-| Issue tracking | PRs #228, #230, #231 | Full CRUD, Kanban, email parsing |
-| QA findings + punch list | PR #225, fix #232 | Multi-dimension tracking |
-| Delivery tracking | PRs #222, #223 | `delivery_items` table, photos/damage |
-| Dashboard (baseline) | PR #229 | Recharts panels; now goes deeper in Track 2 |
-| Security (IDOR) | PR #210 | `assertProjectMember()` on all parse-pdf routes |
-| Zoom / region extract | PRs #206–#209, #212, #214 | Stable |
-| Deep extraction (Nuclear Option) | PRs #172–#179 | Complete, auto-fallback works |
+| Review page redesign (ex-Phase 3) | Deferred | Gated on Track 1 accuracy bar |
+| Zod boundary validation | Deferred | Add Zod schemas for ImportWizard API responses |
+| Export (ex-Phase 4) | Deferred | Gated on review page correctness |
+| `next build` as CI gate | Deferred | Gated on Turbopack module resolution fix |
+| Migration 022 renumber | Low | Two files share `022_` prefix |
+| `next.config.ts` cleanup | Low | Remove deprecated `eslint` key |
 
 ---
 
-## Parking Lot (Post-Accuracy Growth)
+## Parking Lot (Out of Scope — DFH Only)
 
-Explicitly **not** active. Listed so we can say "great idea, on the list, not yet."
+Intentionally deferred. Not "someday" — explicitly out of scope until DFH extraction is solid.
 
-- **Other DFH lifecycle stages** — warranty, change orders, closeout.
-- **Other scopes** — interiors (partitions, ceilings, finishes), MEP, site.
-- **Other submittal types** — shop drawings, cut sheets (prompts already exist), RFIs.
-- **Cut sheet fetching prompt** — prompts folder has a stub; not wired up.
-- **Turbopack production build** — `next build --turbopack` fails on `pdf-lib` (CJS) and `@supabase/supabase-js` (missing ESM types). Webpack production build works; Vercel production deploys are unaffected. Fix requires `turbopack.resolveAlias` config or dep updates.
-- **`next build` as CI gate** — blocked on Turbopack above (if we want Turbopack) or can land immediately (if we accept webpack).
-- **Python/TS classification unification** — duplicated logic; medium drift risk.
-- **Transform function duplication** — partially addressed in PR #275 (wizard transforms extracted); audit remaining duplications.
-- **Keyboard / ARIA on drag handles** — desktop accessibility for region selector.
-- **Inline PDF viewer** — future feature mentioned in notes.
-- **Product Families rethink** — open design question; wired to persistence in #267 but UX is still a placeholder.
+- **Interiors / MEP / other trades** — different domain, different schema, different clients
+- **Shop drawings / cut sheets / product data sheets** — not submittal tracking
+- **Warranty / change orders** — different lifecycle phase, out of DFH scope
+- **Turbopack production build** — module resolution errors with `pdf-lib` (CJS) + `@supabase/supabase-js` (missing ESM types); revisit after dependency updates
+- **Cut-sheet fetching** — prompt exists in `prompts/`; wiring deferred
+- **Product families rethink** — open design question; deferred until Track 1 is stable
 
 ---
 
 ## Deferred Debt
 
-Known issues we are *consciously not fixing now*. Resurface if any becomes load-bearing.
+Known technical debt. Not blockers, but each carries latent risk.
 
-| Item | Impact | Notes |
+| Item | Description | Risk |
 |---|---|---|
-| E: Point/table threshold misfires | Occasional tight-zoom misrouting | `isPointScan = area < 0.15`; route by item count instead of bbox area |
-| F: PDF re-parse on every page change | Performance, not correctness | `pdfBuffer.slice(0)` re-parses entire PDF; cache `PDFDocumentProxy` in ref |
-| G: Zero Sentry on region-extract | Blind spot in error reporting | Only `console.error`; add `Sentry.captureException` in region-extract routes + client |
-| J: No keyboard/aria on drag handles | Low; iPad is primary | Desktop a11y |
-| K: Stale worktrees in `.claude/` | Housekeeping | Sweep on next fresh-clone git op |
-| Storage policy naming | Cosmetic | Pre-existing |
-| 164 skipped Python tests | By design | Require golden PDF fixtures not in repo |
-| `test_zero_doors` xfail | Edge case | Extractor finds 1 opening in a 0-door doc |
-| `next.config.ts` cleanup | Low | Deprecated `eslint` key; `middleware` → `proxy` rename |
+| E: Point/table threshold misfires | `isPointScan = area < 0.15` misfires with tight zoom — route by item count instead of bbox area | Medium |
+| F: PDF re-parse on every page change | `pdfBuffer.slice(0)` re-parses entire PDF on each `renderPage` — cache `PDFDocumentProxy` in ref | Low |
+| G: Zero Sentry on region-extract | Only `console.error` — no `Sentry.captureException` in region-extract routes or client-side | Low |
+| J: No keyboard/aria on drag handles | Low priority for iPad-first; needed for desktop accessibility | Low |
+| K: Stale worktrees in .claude/ | Sweep `.claude/worktrees/` during next fresh-clone git operation | Low |
 
 ---
 
-## Bug Index (extraction regression gates)
+## Bug Index
+
+Regression references. All items below are passing as of last merge.
 
 | Bug | Description | Status |
 |---|---|---|
@@ -167,7 +128,7 @@ Known issues we are *consciously not fixing now*. Resurface if any becomes load-
 | BUG-3 | Quantity capping per category | Passing |
 | BUG-4 | Mojibake cleaning | Passing |
 | BUG-5 | Door number validation rejects HW set codes | Passing |
-| BUG-7 | Quantity normalization (float, pair doors) | Passing (39 tests) |
+| BUG-7 | Quantity normalization (float division, pair doors) | Passing (39 tests) |
 | BUG-8 | Page classification for 306169 format | Passing (4 tests) |
 | BUG-9 | Float division fix (modulo-based) | Passing |
 | BUG-10 | AKN non-standard format | Fixed (PR #173) |
@@ -175,13 +136,11 @@ Known issues we are *consciously not fixing now*. Resurface if any becomes load-
 | BUG-12 | MCA field concatenation | Fixed (PR #169) |
 | BUG-24 | BHMA finish code rejection | Passing |
 
-Any change to `api/extract-tables.py`, normalization, reconciliation, or classification requires the three golden PDFs to stay green before merge.
-
 ---
 
 ## PDF Corpus Reference
 
-21 test PDFs analyzed (report: `pdf_analysis_report.md`). Key stats:
+21 test PDFs analyzed (report: pdf_analysis_report.md). See `docs/ROADMAP-history.md` for per-PDF notes.
 
 | Metric | Value |
 |---|---|
@@ -192,40 +151,36 @@ Any change to `api/extract-tables.py`, normalization, reconciliation, or classif
 | Distinct set heading formats | 10 |
 | Difficulty range | 1/10 (Barnstable) to 9/10 (kinship-GTN3) |
 
-**Live corpus (source of truth for accuracy target):** Grid-RR (DPR pilot project, primary). Lyft/Waymo (next template, staged for after Grid-RR is airtight).
-
 ---
 
-## History (what got us here)
+## History
 
-Detailed phase history moved to `docs/ROADMAP-history.md` (to be created) once space pressure warrants. For now, here is the condensed version:
+Retired phase scaffolding — preserved for context. Labels below are no longer active.
 
-### Phase 0 — Infrastructure & Stability (COMPLETE — PRs #155–#166)
-Foundation: qty normalization, CI, background jobs, storage RLS, merge-based promote, hinge regression, retries, confirmations, vitest in CI, blind-spots audit.
+### Phase 0 — Infrastructure & Stability (COMPLETE)
 
-### Phase 1 — Extraction Accuracy (COMPLETE — PRs #168–#173)
-Qty convention detection, MCA field splitting, applyCorrections fuzzy matching, CP2 door sample cap, AKN format support.
+PRs #155–#166. Quantity normalization overhaul, CI noise reduction, background extraction infrastructure, storage RLS project scoping, merge-based promote (replaces destructive delete/reinsert), hinge dedup fix, retry/backoff, TypeScript CI (vitest), blind spots audit.
 
-### Nuclear Option — Deep Extraction (COMPLETE — PRs #172, #174, #175, #178, #179)
-Confidence scoring (A), vision extraction (B), reconciliation engine, auto-fallback trigger, confidence UI.
+### Phase 1 — Extraction Accuracy (label retired — see Track 1A)
 
-### Phase 2 — Wizard UX + Bug Fixes (CLOSED — PR #275)
-UX/skin overhaul (#185), comprehensive null safety (#186, #197), `write_staging_data` RPC (#183), hinge qty normalization (#188–#192), taxonomy overhaul (#193), `leaf_side` in SELECT (#196), context-aware re-scan (#198, #206–#209), zoom overhaul (#212, #214), electric hinge classification (#203), batch job path (#200), architecture docs (#199), migrations 020–025, code quality standards, IDOR fix (#210), transform dedup + migration renumber (#275).
+Core accuracy work merged in PRs #168–#173: quantity convention detection, MCA field concat fix, 5-tier fuzzy matching, door sample cap, AKN format support. The "COMPLETE" label is retired — Track 1A sets the new bar against the full regression corpus.
 
-### Phase 3 — Review Page + API Boundaries (PARTIAL — folded into Maintenance + Track 1C)
-Review page redesign (#263), StepReview sub-components (#264), dual-mode view (#268), Zod validation on parse-pdf routes (#266), Product Families persistence (#267), rich classification context + correction UI (#276).
+### Nuclear Option — Deep Extraction Mode (COMPLETE — backend + UI)
 
-### Phase 4 — Export (PARTIAL — folded into Maintenance)
-CSV filter query params + extraction source column (#265). No further proactive work until Track 1 complete.
+Multi-strategy extraction (pdfplumber + vision) with per-field reconciliation, confidence scoring, auto-fallback, and audit trail. PRs #172–#175, #178–#179.
 
-### Field Ops & Offline (COMPLETE — PRs #217–#224)
-Workflow phase tabs, offline-first architecture (SW, queue, sync), delivery tracking, qty audit columns.
+### Phase 2 — Wizard UX + Bug Fixes (NEARLY COMPLETE)
 
-### Dashboard, Issues, QA (COMPLETE — PRs #225, #227–#232)
-QA findings + punch list (#225, fix #232), activity log completeness (#227), issue tracking schema (#228) + API (#230) + UI (#231), dashboard visualization (#229).
+UX/skin overhaul (#185), null safety (#186, #197), `write_staging_data` RPC (#183), hinge quantity normalization (#188–#192), hardware taxonomy overhaul (#193), `leaf_side` in API SELECT (#196), electric hinge classification (#203), context-aware re-scan (#198, #206–#209), security IDOR fix (#210), zoom overhaul (#212, #214), batch job path (#200), architecture docs (#199).
 
-### Darrin (NEW NAME, PR #257)
-Punchy → Darrin rename. Persistent Darrin in review (#268), conversational wizard (#259), avatar system (#256, #261), rich classification context + correction UI (#276). **This is now the active investment surface via Track 1B/1C.**
+### Field Operations & Offline Readiness (COMPLETE — 2026-04-14/15)
 
-### Smartsheet Removal
-Historical integration ripped out (#111, migration 015); Smartsheet sync is no longer a pilot deliverable. Export is CSV (#265).
+Workflow phases / Receive-Install-QA tabs (#217), offline-first architecture (#218–#221, PWA manifest, service worker, sync coordinator), delivery tracking (#222–#223), extraction audit trail / `qty_source` (#224), QA findings + punch list (#225), activity log completeness (#227), dashboard visualization with Recharts (#229, migration 031), issue tracking schema + API + UI (#228, #230, #231, migration 032).
+
+### Phase 3 — Review Page (moved to Maintenance)
+
+Review page redesign, Zod schemas for ImportWizard API boundaries, product families design question. Gated on Track 1. See Maintenance section.
+
+### Phase 4 — Export (moved to Maintenance)
+
+Gated on Phase 3 / review page correctness. See Maintenance section.
