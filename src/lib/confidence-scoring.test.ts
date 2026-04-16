@@ -29,6 +29,14 @@ describe('scoreField', () => {
     expect(withBonus - without).toBeCloseTo(0.10, 1) // W_KNOWN_FORMAT = 0.10
   })
 
+  it('recognizes plural and full-word fire rating forms', () => {
+    // "90 Mins", "60 Minutes", "1 Hour", "3 Hours" should all score as valid
+    for (const rating of ['90 Mins', '60 Minutes', '1 Hour', '3 Hours', '1Hr', '90Min']) {
+      const score = scoreField('fire_rating', rating, { completeness: 1.0 })
+      expect(score).toBeGreaterThanOrEqual(0.85)
+    }
+  })
+
   it('uses neutral cross_field for fields without a pattern', () => {
     // "location" has no pattern in FIELD_PATTERNS
     const score = scoreField('location', 'Room 101', { completeness: 0.5 })

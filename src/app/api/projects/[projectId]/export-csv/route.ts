@@ -144,7 +144,8 @@ export async function GET(
       }
     }
 
-    const csv = rows.join('\n')
+    // Prepend UTF-8 BOM so Excel correctly detects the encoding
+    const csv = '\uFEFF' + rows.join('\n')
     const projectName = project?.name?.replace(/[^a-zA-Z0-9]/g, '_') || 'project'
     const date = new Date().toISOString().split('T')[0]
     const filename = `${projectName}_hardware_export_${date}.csv`
