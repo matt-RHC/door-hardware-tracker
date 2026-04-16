@@ -59,7 +59,7 @@ export async function GET(
  * POST /api/projects/[projectId]/decisions
  *
  * Save extraction decisions (batch).
- * Called when user completes the Punchy review phase.
+ * Called when user completes the Darrin review phase.
  *
  * Body: { decisions: Array<{
  *   decision_type, item_category?, set_id?, item_name?,

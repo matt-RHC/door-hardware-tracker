@@ -103,7 +103,7 @@ export function propagateQuantityDecision(
 }
 
 /**
- * Build a QtyDecision from a user's answer to a Punchy quantity question.
+ * Build a QtyDecision from a user's answer to a Darrin quantity question.
  *
  * Parses the answer to extract a quantity value and determines the
  * item category from the question context.

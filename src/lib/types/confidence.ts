@@ -13,7 +13,7 @@ export type ConfidenceLevel = 'high' | 'medium' | 'low' | 'unverified'
 export interface FieldConfidence {
   level: ConfidenceLevel
   /** Human-readable explanation, e.g. "pdfplumber extracted cleanly" or
-   *  "Punchy corrected this value" */
+   *  "Darrin corrected this value" */
   reason: string
 }
 
@@ -57,10 +57,10 @@ export interface ExtractionConfidence {
 export const DEEP_EXTRACTION_AUTO_TRIGGER_THRESHOLD = {
   /** Auto-trigger if >30% of items have empty manufacturer + model */
   empty_field_pct: 0.30,
-  /** Auto-trigger if >50% of Punchy corrections used fuzzy matching (tier 3+) */
+  /** Auto-trigger if >50% of Darrin corrections used fuzzy matching (tier 3+) */
   fuzzy_correction_pct: 0.50,
-  /** Auto-trigger if >20% of items were flagged by Punchy */
-  punchy_flag_pct: 0.20,
+  /** Auto-trigger if >20% of items were flagged by Darrin */
+  darrin_flag_pct: 0.20,
   /** Auto-trigger if overall confidence score < 40 */
   overall_score_below: 40,
 } as const

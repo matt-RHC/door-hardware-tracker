@@ -226,7 +226,7 @@ export default function StepQuestions({
       {/* ─── Progress section ─── */}
       <div className="glow-card glow-card--blue p-4 mb-6">
         <div className="flex items-center gap-3 mb-2">
-          {/* Punchy-style working indicator */}
+          {/* Darrin-style working indicator */}
           <div className="flex-shrink-0 w-8 h-8 rounded-full bg-accent-dim border border-accent/30 flex items-center justify-center">
             {job.isComplete ? (
               <span className="text-success text-sm">&#x2713;</span>

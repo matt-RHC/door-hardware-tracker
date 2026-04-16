@@ -48,8 +48,8 @@ __pycache__/
 *.pyc
 .pytest_cache/
 
-# punchy LLM review cache (per-PDF API responses)
-tests/punchy-cache/
+# darrin LLM review cache (per-PDF API responses)
+tests/darrin-cache/
 
 # local workspace
 /archive/

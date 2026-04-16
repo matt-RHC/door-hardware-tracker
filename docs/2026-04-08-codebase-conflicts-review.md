@@ -9,9 +9,9 @@ Full audit of the PDF extraction pipeline, database types, and dependencies for 
 
 ### 1A. `qty_source = 'llm_override'` Bypasses Normalization Guard (P0)
 - **Where:** `src/lib/parse-pdf-helpers.ts:257` sets `'llm_override'`, line 335 skip list omits it
-- **Bug:** When Punchy overrides a quantity, it marks `qty_source = 'llm_override'`. Then `normalizeQuantities()` runs and re-divides it because the skip list only checks `'divided' | 'flagged' | 'capped'`. Punchy's correction gets silently reverted.
+- **Bug:** When Darrin overrides a quantity, it marks `qty_source = 'llm_override'`. Then `normalizeQuantities()` runs and re-divides it because the skip list only checks `'divided' | 'flagged' | 'capped'`. Darrin's correction gets silently reverted.
 - **Fix:** Add `|| item.qty_source === 'llm_override'` to line 335.
-- **Effort:** 1 line. **Risk if unfixed:** Every Punchy quantity correction is wasted.
+- **Effort:** 1 line. **Risk if unfixed:** Every Darrin quantity correction is wasted.
 
 ### 1B. `flaggedDoors` Always `[]` in Non-Chunked Flow (P1)
 - **Where:** `src/app/api/parse-pdf/route.ts:167` hardcodes `flaggedDoors: []`
@@ -34,15 +34,15 @@ Three places compute per-opening quantities with **different fallback chains**:
 ### 1D. Quantity Check Error Looks Like "No Issues" (P1)
 - **Where:** `parse-pdf-helpers.ts:222-225` catch block returns `{ flags: [], compliance_issues: [] }`
 - **Bug:** Success (no issues) and failure (API error) return the same shape. Frontend at `route.ts:110-116` checks array length — empty = silent skip. The `notes` field has the error message but nothing reads it as an error signal.
-- **Fix:** Add `error_occurred: boolean` to the `PunchyQuantityCheck` type and return type.
+- **Fix:** Add `error_occurred: boolean` to the `DarrinQuantityCheck` type and return type.
 
 ### 1E. `knownSetIds` Not Passed in Non-Chunked Flow (P2)
-- **Where:** `route.ts:74` calls `callPunchyPostExtraction()` without `knownSetIds`; `chunk/route.ts:189` passes it
+- **Where:** `route.ts:74` calls `callDarrinPostExtraction()` without `knownSetIds`; `chunk/route.ts:189` passes it
 - **Note:** The function at `parse-pdf-helpers.ts:114` does include it in the prompt as `known_set_ids`. So the wiring works in chunked flow but not non-chunked.
 - **Fix:** Pass `knownSetIds` in the non-chunked call. ~3 lines.
 
 ### 1F. Column Mapping Review Skipped for Small PDFs (P2)
-- **Where:** `callPunchyColumnReview()` exists only in `chunk/route.ts:32-81`, called at line 156
+- **Where:** `callDarrinColumnReview()` exists only in `chunk/route.ts:32-81`, called at line 156
 - **Bug:** Non-chunked route (PDFs ≤45 pages) skips column mapping validation entirely.
 - **Fix:** Add review call to non-chunked `extractFromPDF()`. ~20 lines.
 
@@ -115,7 +115,7 @@ Run `supabase gen types typescript` against the live database to regenerate `dat
 | Smartsheet IDs hardcoded | `WORKSPACE_ID = 5453896878450564` in `sync-engine.ts` | Move to env vars |
 | `SMARTSHEET_API_KEY` missing from `.env.example` | Integration requires it but undocumented | Add to .env.example |
 | `@anthropic-ai/sdk ^0.82.0` caret range | Pre-1.0 package; minor bumps can break | Consider pinning |
-| Model split (Sonnet vs Haiku) | Triage uses Sonnet, Punchy uses Haiku | Intentional per CLAUDE.md — not a bug |
+| Model split (Sonnet vs Haiku) | Triage uses Sonnet, Darrin uses Haiku | Intentional per CLAUDE.md — not a bug |
 
 ---
 
@@ -123,7 +123,7 @@ Run `supabase gen types typescript` against the live database to regenerate `dat
 
 | Priority | Issues | Theme |
 |---|---|---|
-| **P0** | 1A | Punchy corrections silently reverted by normalization |
+| **P0** | 1A | Darrin corrections silently reverted by normalization |
 | **P1** | 1B, 1C, 1D, 2A-2E | Missing data in non-chunked flow; divergent normalization; type drift |
 | **P2** | 1E, 1F, 1G | Feature gaps between chunked/non-chunked flows |
 | **P3** | 1H, 3A-3F | UI polish, DX, config hygiene |

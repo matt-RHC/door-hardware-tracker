@@ -1,10 +1,10 @@
 /**
- * Punchy — AI Door Hardware Expert
+ * Darrin — AI Door Hardware Expert
  *
- * System prompts for the three pipeline checkpoints where Punchy reviews
+ * System prompts for the three pipeline checkpoints where Darrin reviews
  * extraction quality. Used by both chunk/route.ts and parse-pdf/route.ts.
  *
- * Punchy is a senior DFH consultant with 25 years in commercial construction.
+ * Darrin is a senior DFH consultant with 25 years in commercial construction.
  * Direct, confident, rates every observation with a confidence level.
  */
 
@@ -12,7 +12,7 @@ import { getTaxonomyPromptText } from './hardware-taxonomy'
 
 // ── Persona (shared across all checkpoints) ─────────────────────
 
-const PUNCHY_PERSONA = `You are Punchy, a senior door hardware consultant with 25 years in commercial construction. You've reviewed thousands of submittals from every major manufacturer. You know BHMA standards, IBC egress requirements, fire rating compliance, and ADA hardware requirements cold.
+const DARRIN_PERSONA = `You are Darrin, a senior door hardware consultant with 25 years in commercial construction. You've reviewed thousands of submittals from every major manufacturer. You know BHMA standards, IBC egress requirements, fire rating compliance, and ADA hardware requirements cold.
 
 Be direct and confident. If something doesn't pass the smell test, call it out. Rate every observation or correction with a confidence level.
 
@@ -109,7 +109,7 @@ IV=Ives, SC=Schlage, ZE=Zero, LC=LCN, AB=ABH, VO=Von Duprin, NA=NGP, ME=Medeco, 
 // ── Checkpoint 1: Column Mapping Review ─────────────────────────
 
 export function getColumnMappingReviewPrompt(): string {
-  return `${PUNCHY_PERSONA}
+  return `${DARRIN_PERSONA}
 
 ${DFH_DOMAIN_KNOWLEDGE}
 
@@ -149,7 +149,7 @@ Return valid JSON:
       "confidence": "medium"
     }
   ],
-  "notes": "Punchy's overall assessment"
+  "notes": "Darrin's overall assessment"
 }
 
 If everything looks correctly mapped, return: {"unmapped_fields": [], "mapping_issues": [], "notes": "Mapping looks solid."}`
@@ -160,21 +160,21 @@ If everything looks correctly mapped, return: {"unmapped_fields": [], "mapping_i
 /**
  * IMPORTANT: This prompt runs BEFORE normalizeQuantities() divides anything.
  *
- * The quantities Punchy sees in CP2 are RAW PDF totals (the exact numbers
+ * The quantities Darrin sees in CP2 are RAW PDF totals (the exact numbers
  * that appeared in the PDF, e.g. "42" for hinges across 6 pair doors, "6"
  * for closers across 6 doors). Python annotated each item with:
  *   qty_total       = the raw PDF number
  *   qty_door_count  = Python's recommended divisor (how many doors/leaves this total covers)
  *   qty_source      = 'needs_division' | 'needs_cap' | 'needs_review' | 'rhr_lhr_pair' | 'parsed'
  *
- * Punchy's role here is to validate the EXTRACTION (were the numbers read
+ * Darrin's role here is to validate the EXTRACTION (were the numbers read
  * correctly from the PDF?) using domain expertise:
  *   - Is 42 hinges plausible for 6 pair doors? (Yes: 3-4 per leaf × 12 leaves)
  *   - Is the door count in heading_door_count correct for this set?
  *   - Are any items missing that should be there?
  *
- * If Punchy changes a qty, it should set qty_source='llm_override', which
- * prevents normalizeQuantities() from re-dividing it. Punchy's corrected
+ * If Darrin changes a qty, it should set qty_source='llm_override', which
+ * prevents normalizeQuantities() from re-dividing it. Darrin's corrected
  * value is treated as a PER-OPENING value (already final).
  *
  * normalizeQuantities() runs AFTER CP2 and will divide items per Python's
@@ -188,7 +188,7 @@ export function getPostExtractionReviewPrompt(goldenSample?: {
     ? `\n\nGOLDEN SAMPLE (user-verified baseline):\nThe user confirmed set "${goldenSample.set_id}" is correctly extracted:\n${JSON.stringify(goldenSample.items, null, 2)}\nUse this as the naming/convention baseline for this submittal. If other sets use the same manufacturer abbreviations, finish codes, or naming patterns, treat those as correct — do not flag them as errors.`
     : ''
 
-  return `${PUNCHY_PERSONA}
+  return `${DARRIN_PERSONA}
 
 ${DFH_DOMAIN_KNOWLEDGE}
 
@@ -224,7 +224,7 @@ Return valid JSON with corrections. Every correction MUST include a confidence l
     {"set_id": "DH5", "heading": "Storage Room", "items": [{"qty": 3, "name": "Hinges", "manufacturer": "IV", "model": "5BB1", "finish": "626"}], "confidence": "medium"}
   ],
   "overall_confidence": "medium",
-  "notes": "Punchy's assessment"
+  "notes": "Darrin's assessment"
 }
 
 CRITICAL RULES:
@@ -253,7 +253,7 @@ export function getQuantityCheckPrompt(goldenSample?: {
     ? `\n\nGOLDEN SAMPLE (user-verified baseline):\nThe user confirmed set "${goldenSample.set_id}" has correct quantities:\n${JSON.stringify(goldenSample.items, null, 2)}\nUse this as the baseline for this submittal's quantity conventions. If other sets follow the same pattern, treat those quantities as correct.`
     : ''
 
-  return `${PUNCHY_PERSONA}
+  return `${DARRIN_PERSONA}
 
 ${DFH_DOMAIN_KNOWLEDGE}
 
@@ -311,7 +311,7 @@ Return valid JSON with these sections:
       "confidence": "high"
     }
   ],
-  "notes": "Punchy's overall quantity assessment"
+  "notes": "Darrin's overall quantity assessment"
 }
 
 CONFIDENCE TIERS:
@@ -351,7 +351,7 @@ export function getDeepExtractionPrompt(userHint?: string): string {
     ? `\n\nUSER GUIDANCE — the human operator provided this hint:\n"${trimmedHint}"\nUse it to focus your search, but still verify against the PDF. Do NOT fabricate items to satisfy the hint.\n`
     : ''
 
-  return `${PUNCHY_PERSONA}
+  return `${DARRIN_PERSONA}
 
 ${DFH_DOMAIN_KNOWLEDGE}
 

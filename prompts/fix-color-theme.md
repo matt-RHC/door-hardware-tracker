@@ -109,7 +109,7 @@ Read EVERY file listed below. Check each one for hardcoded colors and fix them.
 23. `src/components/ImportWizard/StepReview.tsx`
 24. `src/components/ImportWizard/StepCompare.tsx`
 25. `src/components/ImportWizard/PunchCard.tsx`
-26. `src/components/ImportWizard/PunchyReview.tsx`
+26. `src/components/ImportWizard/DarrinReview.tsx`
 
 ### Also Check
 27. `src/app/globals.css` — verify all CSS variables exist and are mapped

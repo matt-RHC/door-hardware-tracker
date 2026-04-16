@@ -14,10 +14,10 @@
 
 **Before PR #108:**
 - The empty_sets card's "Extract with AI" button had `disabled: busy` only
-  (`src/components/ImportWizard/PunchyReview.tsx`, previously ~line 616)
+  (`src/components/ImportWizard/DarrinReview.tsx`, previously ~line 616)
 - When deep extraction returned empty arrays (phantom sets with no items),
   `deepExtracting` was reset to `false` and the button became re-enabled
-- But clicking it again was a **silent no-op** — Punchy already tried and
+- But clicking it again was a **silent no-op** — Darrin already tried and
   found nothing, so the same empty result returned
 - The user sees buttons that look clickable but do nothing. The "Extract
   with AI" button appears to stop working. Back button still works but if
@@ -27,9 +27,9 @@
 - Added `emptySetsAttempted: Set<string>` state tracking
   (`src/components/ImportWizard/StepTriage.tsx:73-77`)
 - Empty_sets card now has `disabled: busy || allAttempted`
-  (`src/components/ImportWizard/PunchyReview.tsx:660`)
+  (`src/components/ImportWizard/DarrinReview.tsx:660`)
 - When all empty sets have been tried, the button is explicitly disabled
-  and relabeled to "Punchy couldn't find items — use options below"
+  and relabeled to "Darrin couldn't find items — use options below"
 - A warning banner appears directing users to per-set resolution options
   (Add manually / Remove / Try with hint)
 
@@ -49,7 +49,7 @@ provides explicit feedback and alternative actions.
 
 ### Hypothesis 2 (MEDIUM confidence): Cards regeneration race condition
 
-**File:** `src/components/ImportWizard/PunchyReview.tsx`
+**File:** `src/components/ImportWizard/DarrinReview.tsx`
 
 The `cards` array is a `useMemo` that depends on `[doors, hardwareSets, qtyCheck, pages]` (line 100). When `hardwareSets` changes (e.g., after deep extraction fills an empty set), the memo recomputes.
 
@@ -70,7 +70,7 @@ The `cards` array is a `useMemo` that depends on `[doors, hardwareSets, qtyCheck
    card area disappears, including all buttons
 
 **How to confirm:**
-- In DevTools Console, add a breakpoint on `PunchyReview.tsx` line 117
+- In DevTools Console, add a breakpoint on `DarrinReview.tsx` line 117
 - Watch for `currentCard` becoming `null` during the transition
 - Or add `console.log('cards:', cards.length, 'idx:', currentIdx)` before
   the return statement
@@ -109,7 +109,7 @@ To confirm which hypothesis applies, the user should capture:
 
 1. **Console errors** at the moment buttons grey out — any React errors,
    uncaught exceptions, or network failures
-2. **React DevTools state** for `PunchyReview` component:
+2. **React DevTools state** for `DarrinReview` component:
    - `currentIdx` value
    - `cards` array length
    - `deepExtracting` boolean
@@ -123,9 +123,9 @@ To confirm which hypothesis applies, the user should capture:
 
 1. Upload a PDF with at least one hardware set that pdfplumber can't parse
    (a set that will show up as "empty" in the wizard)
-2. Let the wizard reach the PunchyReview card flow
+2. Let the wizard reach the DarrinReview card flow
 3. On the empty_sets card, click "Extract with AI"
-4. If Punchy returns no items for that set:
+4. If Darrin returns no items for that set:
    - **Before PR #108:** The button re-enables but clicking does nothing
    - **After PR #108:** The button disables with explanation text
 5. Observe whether Back/Next become unresponsive at this point

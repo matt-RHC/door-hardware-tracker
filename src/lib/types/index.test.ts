@@ -1,28 +1,28 @@
 import { describe, it, expect } from 'vitest'
-import { toPunchyConfidence } from './index'
+import { toDarrinConfidence } from './index'
 
-describe('toPunchyConfidence', () => {
+describe('toDarrinConfidence', () => {
   it('accepts the three valid union members', () => {
-    expect(toPunchyConfidence('high')).toBe('high')
-    expect(toPunchyConfidence('medium')).toBe('medium')
-    expect(toPunchyConfidence('low')).toBe('low')
+    expect(toDarrinConfidence('high')).toBe('high')
+    expect(toDarrinConfidence('medium')).toBe('medium')
+    expect(toDarrinConfidence('low')).toBe('low')
   })
 
   it('coerces unknown strings to the default', () => {
-    expect(toPunchyConfidence('fair')).toBe('medium')
-    expect(toPunchyConfidence('unknown')).toBe('medium')
-    expect(toPunchyConfidence('HIGH')).toBe('medium') // case-sensitive by design
+    expect(toDarrinConfidence('fair')).toBe('medium')
+    expect(toDarrinConfidence('unknown')).toBe('medium')
+    expect(toDarrinConfidence('HIGH')).toBe('medium') // case-sensitive by design
   })
 
   it('coerces nullish and non-string values to the default', () => {
-    expect(toPunchyConfidence(undefined)).toBe('medium')
-    expect(toPunchyConfidence(null)).toBe('medium')
-    expect(toPunchyConfidence(0)).toBe('medium')
-    expect(toPunchyConfidence({})).toBe('medium')
+    expect(toDarrinConfidence(undefined)).toBe('medium')
+    expect(toDarrinConfidence(null)).toBe('medium')
+    expect(toDarrinConfidence(0)).toBe('medium')
+    expect(toDarrinConfidence({})).toBe('medium')
   })
 
   it('honours a caller-supplied fallback', () => {
-    expect(toPunchyConfidence('bogus', 'low')).toBe('low')
-    expect(toPunchyConfidence(undefined, 'high')).toBe('high')
+    expect(toDarrinConfidence('bogus', 'low')).toBe('low')
+    expect(toDarrinConfidence(undefined, 'high')).toBe('high')
   })
 })

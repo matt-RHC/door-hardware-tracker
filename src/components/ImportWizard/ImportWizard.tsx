@@ -672,7 +672,7 @@ export default function ImportWizard({
       {/* Step content — drawer is now INSIDE the scroller, anchored to top */}
       <PunchHighlightProvider activeKeys={activeKeys}>
         <div className="flex-1 overflow-y-auto min-h-0 flex flex-col">
-          {/* Punchy drawer sticks to top of content area during non-Triage steps */}
+          {/* Darrin drawer sticks to top of content area during non-Triage steps */}
           {state.currentStep !== WizardStep.Triage && (
             <PunchAssistant
               messages={punchMessages}

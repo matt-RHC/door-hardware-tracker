@@ -76,7 +76,7 @@ Multi-strategy extraction with cross-validation for near-guaranteed accuracy.
 ### Phase A: Confidence Scoring (PR #172)
 - Field-level confidence on every extracted item (name, qty, mfr, model, finish)
 - `suggest_deep_extraction` flag when confidence is low
-- Signals: empty fields, Punchy corrections, fuzzy match usage, statistical qty convention
+- Signals: empty fields, Darrin corrections, fuzzy match usage, statistical qty convention
 
 ### Phase B: Vision Extraction — Strategy B (PR #174)
 - Claude Sonnet reads each schedule page as an image

@@ -152,7 +152,7 @@ export interface WizardState {
   // Step 1: Upload
   file: File | null;
   pdfStoragePath: string | null;
-  /** PDF bytes — cached once for use in PDFPagePreview (StepReview, PunchyReview). */
+  /** PDF bytes — cached once for use in PDFPagePreview (StepReview, DarrinReview). */
   pdfBuffer: ArrayBuffer | null;
   classifyResult: ClassifyPagesResponse | null;
   profile?: ClassifyPagesResponse['profile'];

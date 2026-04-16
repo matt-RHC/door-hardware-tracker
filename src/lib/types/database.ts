@@ -1204,7 +1204,9 @@ export type Database = {
         }
         Relationships: []
       }
-      punchy_logs: {
+      // NOTE: aliased — the physical Supabase table is still named
+      // `punchy_logs` until migration 035 renames it to `darrin_logs`.
+      darrin_logs: {
         Row: {
           checkpoint: number
           created_at: string
@@ -1246,14 +1248,14 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "punchy_logs_extraction_run_id_fkey"
+            foreignKeyName: "darrin_logs_extraction_run_id_fkey"
             columns: ["extraction_run_id"]
             isOneToOne: false
             referencedRelation: "extraction_runs"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "punchy_logs_project_id_fkey"
+            foreignKeyName: "darrin_logs_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
             referencedRelation: "projects"

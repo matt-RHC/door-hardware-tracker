@@ -1,5 +1,5 @@
 """
-Punchy Review — Python wrapper that calls Anthropic API with the same
+Darrin Review — Python wrapper that calls Anthropic API with the same
 system prompt used in the production LLM review pass (parse-pdf/chunk/route.ts).
 
 Functions:
@@ -7,7 +7,7 @@ Functions:
   apply_corrections(hw_sets, doors, corrections) → merged result
 
 Uses claude-haiku-4-5-20251001, requires ANTHROPIC_API_KEY env var.
-Caches responses to tests/punchy-cache/{pdf_name}.json.
+Caches responses to tests/darrin-cache/{pdf_name}.json.
 """
 import base64
 import hashlib
@@ -16,7 +16,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-CACHE_DIR = Path(__file__).parent / "punchy-cache"
+CACHE_DIR = Path(__file__).parent / "darrin-cache"
 
 
 # ── Taxonomy text (ported from src/lib/hardware-taxonomy.ts getTaxonomyPromptText) ──

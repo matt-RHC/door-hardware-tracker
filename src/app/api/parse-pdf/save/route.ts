@@ -80,13 +80,13 @@ export async function POST(request: NextRequest) {
     // normalizeQuantities() is intentionally NOT called here.
     //
     // CONTEXT: normalizeQuantities() used to be called three times:
-    //   1. Inside chunk/route.ts (after Punchy CP2)
+    //   1. Inside chunk/route.ts (after Darrin CP2)
     //   2. Inside parse-pdf/route.ts (same)
     //   3. HERE — as a "final safety net"
     //
     // The third call was architecturally wrong. By the time save/route.ts
     // runs, the wizard client has already received the fully-normalized
-    // HardwareSets from the chunk pipeline, reviewed them with Punchy CP2+CP3,
+    // HardwareSets from the chunk pipeline, reviewed them with Darrin CP2+CP3,
     // and the user has made (or approved) any manual edits. The data is final.
     //
     // Calling normalizeQuantities() again here would:
@@ -100,7 +100,7 @@ export async function POST(request: NextRequest) {
     //      is specifically what we're eliminating: silent double-division.
     //
     // If you are tempted to add a safety net here again: solve it upstream
-    // instead (in Python annotation or Punchy CP2 feedback). Do not add a
+    // instead (in Python annotation or Darrin CP2 feedback). Do not add a
     // third division pass — the value of having a SINGLE authoritative pass
     // is that bugs are visible and traceable.
     //

@@ -4,7 +4,7 @@ import {
   computeExtractionHealth,
   findPageForSet,
 } from './punch-cards'
-import type { DoorEntry, HardwareSet, PunchyQuantityCheck, PageClassification } from '@/lib/types'
+import type { DoorEntry, HardwareSet, DarrinQuantityCheck, PageClassification } from '@/lib/types'
 
 // ── Helpers ──
 
@@ -34,7 +34,7 @@ function makeDoor(num: string, hwSet: string): DoorEntry {
   } as DoorEntry
 }
 
-const NO_QTY_CHECK: PunchyQuantityCheck = {
+const NO_QTY_CHECK: DarrinQuantityCheck = {
   flags: [],
   compliance_issues: [],
 }
@@ -255,7 +255,7 @@ describe('generatePunchCards', () => {
   })
 
   it('batches auto-corrections into one card', () => {
-    const qtyCheck: PunchyQuantityCheck = {
+    const qtyCheck: DarrinQuantityCheck = {
       auto_corrections: [
         { set_id: 'DH1', item_name: 'Hinges', from_qty: 6, to_qty: 3, reason: 'test', confidence: 'high' },
         { set_id: 'DH2', item_name: 'Hinges', from_qty: 6, to_qty: 3, reason: 'test', confidence: 'high' },
@@ -278,7 +278,7 @@ describe('generatePunchCards', () => {
   // ── Card Batching ──
 
   it('batches quantity questions with same item+options into one card', () => {
-    const qtyCheck: PunchyQuantityCheck = {
+    const qtyCheck: DarrinQuantityCheck = {
       questions: [
         { id: 'q1', set_id: 'DH1', item_name: 'Hinges', text: 'How many?', options: ['3', '4'], current_qty: 6, context: '' },
         { id: 'q2', set_id: 'DH2', item_name: 'Hinges', text: 'How many?', options: ['3', '4'], current_qty: 6, context: '' },
@@ -301,7 +301,7 @@ describe('generatePunchCards', () => {
   })
 
   it('keeps unique questions as individual cards', () => {
-    const qtyCheck: PunchyQuantityCheck = {
+    const qtyCheck: DarrinQuantityCheck = {
       questions: [
         { id: 'q1', set_id: 'DH1', item_name: 'Hinges', text: 'How many hinges?', options: ['3', '4'], current_qty: 6, context: '' },
         { id: 'q2', set_id: 'DH2', item_name: 'Closer', text: 'How many closers?', options: ['1', '2'], current_qty: 4, context: '' },
@@ -323,7 +323,7 @@ describe('generatePunchCards', () => {
   })
 
   it('batches compliance issues into one card', () => {
-    const qtyCheck: PunchyQuantityCheck = {
+    const qtyCheck: DarrinQuantityCheck = {
       compliance_issues: [
         { set_id: 'DH1', issue: 'No closer on fire door', regulation: 'NFPA 80', severity: 'error' },
         { set_id: 'DH3', issue: 'Missing smoke seal', regulation: 'NFPA 80', severity: 'warning' },

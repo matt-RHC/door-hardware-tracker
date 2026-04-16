@@ -79,7 +79,7 @@ export async function POST(request: NextRequest) {
 
     // --- Quantity correction ---
     //
-    // Revisions don't run through chunk/route.ts's Punchy pipeline the way a
+    // Revisions don't run through chunk/route.ts's Darrin pipeline the way a
     // fresh upload does, so this is the ONLY normalization pass between the
     // wizard and the DB. Call the authoritative category-aware normalizer
     // from parse-pdf-helpers.ts (per_leaf / per_opening / per_pair / per_frame

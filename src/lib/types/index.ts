@@ -32,7 +32,7 @@ export interface DoorEntry {
 }
 
 /**
- * qty_source values form the contract between Python, TS, Punchy, and the DB.
+ * qty_source values form the contract between Python, TS, Darrin, and the DB.
  *
  * Values set by Python (extract-tables.py normalize_quantities):
  *   'parsed'         — raw PDF value, plausibly already per-opening, no action needed
@@ -46,9 +46,9 @@ export interface DoorEntry {
  *   'flagged'        — TS divided but result was non-integer (rounded); needs user review
  *   'capped'         — TS applied category max cap on a single-door set
  *
- * Values set by Punchy / user interactions (NEVER re-normalized after this point):
- *   'llm_override'   — Punchy CP2 or CP3 explicitly corrected this qty
- *   'auto_corrected' — PunchyReview UI auto-applied a high-confidence correction
+ * Values set by Darrin / user interactions (NEVER re-normalized after this point):
+ *   'llm_override'   — Darrin CP2 or CP3 explicitly corrected this qty
+ *   'auto_corrected' — DarrinReview UI auto-applied a high-confidence correction
  *   'deep_extract'   — Claude vision pulled this qty from a targeted PDF region
  *   'region_extract' — same as deep_extract (older label)
  *   'propagated'     — apply-to-all copy of an already-normalized qty
@@ -65,7 +65,7 @@ export interface ExtractedHardwareItem {
   qty_total?: number
   qty_door_count?: number
   qty_source?: string
-  /** Original qty before Punchy auto-correction. Set when qty_source
+  /** Original qty before Darrin auto-correction. Set when qty_source
    *  becomes 'auto_corrected'. Used by StepReview to show revert button. */
   qty_before_correction?: number
   name: string
@@ -122,43 +122,43 @@ export interface PdfplumberFlaggedDoor {
   dominant_pattern: string
 }
 
-// ── Punchy AI review types ────────────────────────────────────────
+// ── Darrin AI review types ────────────────────────────────────────
 
-/** Confidence level for a Punchy observation or correction. */
-export type PunchyConfidence = 'high' | 'medium' | 'low'
+/** Confidence level for a Darrin observation or correction. */
+export type DarrinConfidence = 'high' | 'medium' | 'low'
 
 /**
  * Coerce an unknown value (typically a raw LLM string) to a valid
- * PunchyConfidence. Punchy's JSON is free-text at runtime — casting a
+ * DarrinConfidence. Darrin's JSON is free-text at runtime — casting a
  * surprise value like "fair" to the union pollutes downstream UI logic
  * (colored pills, sort order) that assumes high/medium/low. Defaults to
  * 'medium' when the value isn't recognized.
  */
-export function toPunchyConfidence(
+export function toDarrinConfidence(
   value: unknown,
-  fallback: PunchyConfidence = 'medium',
-): PunchyConfidence {
+  fallback: DarrinConfidence = 'medium',
+): DarrinConfidence {
   return value === 'high' || value === 'medium' || value === 'low' ? value : fallback
 }
 
-/** A single observation from Punchy at a pipeline checkpoint. */
-export interface PunchyObservation {
+/** A single observation from Darrin at a pipeline checkpoint. */
+export interface DarrinObservation {
   checkpoint: 'column_mapping' | 'post_extraction' | 'quantity_check'
   message: string
-  confidence: PunchyConfidence
+  confidence: DarrinConfidence
   /** Field-level suggestions (e.g., unmapped column found elsewhere) */
   field_suggestions?: Array<{
     field: string
     suggestion: string
     column?: string
     pages?: string
-    confidence: PunchyConfidence
+    confidence: DarrinConfidence
   }>
 }
 
-/** Corrections returned by Punchy's post-extraction review (Checkpoint 2).
+/** Corrections returned by Darrin's post-extraction review (Checkpoint 2).
  *  Confidence fields are optional because LLM output is not guaranteed to include them. */
-export interface PunchyCorrections {
+export interface DarrinCorrections {
   hardware_sets_corrections?: Array<{
     set_id: string
     heading?: string
@@ -169,7 +169,7 @@ export interface PunchyCorrections {
       field: string
       old_value: string
       new_value: string
-      confidence?: PunchyConfidence
+      confidence?: DarrinConfidence
     }>
   }>
   doors_corrections?: Array<{
@@ -177,12 +177,12 @@ export interface PunchyCorrections {
     field: string
     old_value: string
     new_value: string
-    confidence?: PunchyConfidence
+    confidence?: DarrinConfidence
   }>
-  missing_doors?: Array<DoorEntry & { confidence?: PunchyConfidence }>
+  missing_doors?: Array<DoorEntry & { confidence?: DarrinConfidence }>
   missing_sets?: Array<{
     set_id: string
-    /** Optional parent/generic set id when Punchy detects a sub-variant. */
+    /** Optional parent/generic set id when Darrin detects a sub-variant. */
     generic_set_id?: string
     heading: string
     /** Openings assigned to this set in the heading block (if known). */
@@ -192,30 +192,30 @@ export interface PunchyCorrections {
     /** Quantity convention detected from preamble text. */
     qty_convention?: 'per_opening' | 'aggregate' | 'unknown'
     items: ExtractedHardwareItem[]
-    confidence?: PunchyConfidence
+    confidence?: DarrinConfidence
   }>
   notes?: string
-  overall_confidence?: PunchyConfidence
+  overall_confidence?: DarrinConfidence
 }
 
-/** Column mapping review result from Punchy (Checkpoint 1). */
-export interface PunchyColumnReview {
+/** Column mapping review result from Darrin (Checkpoint 1). */
+export interface DarrinColumnReview {
   unmapped_fields: Array<{
     field: string
     found_location: string
-    confidence: PunchyConfidence
+    confidence: DarrinConfidence
     suggestion: string
   }>
   mapping_issues: Array<{
     field: string
     issue: string
-    confidence: PunchyConfidence
+    confidence: DarrinConfidence
   }>
   notes?: string
 }
 
-/** Quantity sanity check result from Punchy (Checkpoint 3). */
-export interface PunchyQuantityCheck {
+/** Quantity sanity check result from Darrin (Checkpoint 3). */
+export interface DarrinQuantityCheck {
   /** HIGH confidence corrections — safe to auto-apply. */
   auto_corrections?: Array<{
     set_id: string
@@ -244,7 +244,7 @@ export interface PunchyQuantityCheck {
     message: string
     reason?: string
     regulation?: string
-    confidence?: PunchyConfidence
+    confidence?: DarrinConfidence
   }>
   /** Code/regulation compliance issues. */
   compliance_issues: Array<{
@@ -252,7 +252,7 @@ export interface PunchyQuantityCheck {
     issue: string
     regulation: string
     severity: 'error' | 'warning' | 'info'
-    confidence?: PunchyConfidence
+    confidence?: DarrinConfidence
   }>
   notes?: string
 }

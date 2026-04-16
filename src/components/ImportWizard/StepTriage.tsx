@@ -8,7 +8,7 @@ import type {
   DoorEntry,
   HardwareSet,
 } from "./types";
-import type { PunchyQuantityCheck } from "@/lib/types";
+import type { DarrinQuantityCheck } from "@/lib/types";
 import type { ExtractionConfidence } from "@/lib/types/confidence";
 import type { ReconciliationResult } from "@/lib/types/reconciliation";
 import { scoreExtraction } from "@/lib/confidence-scoring";
@@ -23,13 +23,13 @@ import {
   CHUNK_SIZE_THRESHOLD,
   FALLBACK_PAGES_PER_CHUNK,
 } from "@/lib/pdf-utils";
-import PunchyReview from "./PunchyReview";
+import DarrinReview from "./DarrinReview";
 
 /**
- * Phases: extracting → punchy_review → triaging → done
- * "punchy_review" = Punchy card-by-card review (replaces old results/qty_review/questions)
+ * Phases: extracting → darrin_review → triaging → done
+ * "darrin_review" = Darrin card-by-card review (replaces old results/qty_review/questions)
  */
-type TriagePhase = "extracting" | "punchy_review" | "triaging" | "done";
+type TriagePhase = "extracting" | "darrin_review" | "triaging" | "done";
 
 interface StepTriageProps {
   projectId: string;
@@ -70,8 +70,8 @@ export default function StepTriage({
   const [doors, setDoors] = useState<DoorEntry[]>([]);
   const [hardwareSets, setHardwareSets] = useState<HardwareSet[]>([]);
   const [deepExtracting, setDeepExtracting] = useState(false);
-  // Set IDs that Punchy tried to deep-extract but returned zero items
-  // for. Tracked so the PunchyReview empty_sets card can disable the
+  // Set IDs that Darrin tried to deep-extract but returned zero items
+  // for. Tracked so the DarrinReview empty_sets card can disable the
   // batch "Extract with AI" button and tell the user to use the per-set
   // resolution options (Add manually / Remove / Try with hint) instead
   // of clicking the useless batch button repeatedly.
@@ -84,7 +84,7 @@ export default function StepTriage({
     items: HardwareSet["items"];
     confirmed: boolean;
   } | null>(null);
-  const [qtyCheck, setQtyCheck] = useState<PunchyQuantityCheck | null>(null);
+  const [qtyCheck, setQtyCheck] = useState<DarrinQuantityCheck | null>(null);
   const [extractionConfidence, setExtractionConfidence] = useState<ExtractionConfidence | null>(null);
   const [reconciliationResult, setReconciliationResult] = useState<ReconciliationResult | null>(null);
   // Deep extract for full submittal (not just empty sets)
@@ -163,11 +163,11 @@ export default function StepTriage({
 
         const allDoors: DoorEntry[] = [];
         const allSets: HardwareSet[] = [];
-        // Collect punchyQuantityCheck flags across all chunks so the qty
+        // Collect darrinQuantityCheck flags across all chunks so the qty
         // review phase has data even for large PDFs. Flags are merged by
         // appending — the qty check UI deduplicates by set_id on render.
-        const allQtyFlags: PunchyQuantityCheck["flags"] = [];
-        const allQtyComplianceIssues: PunchyQuantityCheck["compliance_issues"] = [];
+        const allQtyFlags: DarrinQuantityCheck["flags"] = [];
+        const allQtyComplianceIssues: DarrinQuantityCheck["compliance_issues"] = [];
         const chunkFailures: Array<{ index: number; error: string }> = [];
 
         setTotalChunks(chunks.length);
@@ -180,7 +180,7 @@ export default function StepTriage({
 
           // Route to the dedicated chunk endpoint which accepts chunkIndex /
           // totalChunks / knownSetIds and returns the correct response shape
-          // including punchyQuantityCheck. The main /api/parse-pdf route does
+          // including darrinQuantityCheck. The main /api/parse-pdf route does
           // not consume these fields and silently ignores ?parseOnly=true.
           const knownSetIds = allSets.map((s) => s.set_id);
           const chunkResp = await fetch("/api/parse-pdf/chunk", {
@@ -209,10 +209,10 @@ export default function StepTriage({
           allSets.push(...(chunkResult.hardwareSets ?? []));
 
           // Accumulate quantity check data from each chunk
-          if (chunkResult.punchyQuantityCheck) {
-            allQtyFlags.push(...(chunkResult.punchyQuantityCheck.flags ?? []));
+          if (chunkResult.darrinQuantityCheck) {
+            allQtyFlags.push(...(chunkResult.darrinQuantityCheck.flags ?? []));
             allQtyComplianceIssues.push(
-              ...(chunkResult.punchyQuantityCheck.compliance_issues ?? [])
+              ...(chunkResult.darrinQuantityCheck.compliance_issues ?? [])
             );
           }
         }
@@ -263,9 +263,9 @@ export default function StepTriage({
         extractedDoors = parseResult.doors ?? [];
         extractedSets = parseResult.sets ?? [];
 
-        // Capture Punchy quantity check for the qty_review phase
-        if (parseResult.punchyQuantityCheck) {
-          setQtyCheck(parseResult.punchyQuantityCheck);
+        // Capture Darrin quantity check for the qty_review phase
+        if (parseResult.darrinQuantityCheck) {
+          setQtyCheck(parseResult.darrinQuantityCheck);
         }
 
         // Capture extraction confidence for deep extract banner
@@ -305,15 +305,15 @@ export default function StepTriage({
       setHardwareSets(extractedSets);
       setProgress(60);
 
-      // Cache PDF buffer for page previews in PunchyReview
+      // Cache PDF buffer for page previews in DarrinReview
       try {
         const buf = await file.arrayBuffer();
         setPdfBuffer(buf);
       } catch { /* non-critical */ }
 
-      // Transition to Punchy card-by-card review
-      setPhase("punchy_review");
-      setStatus("Punchy is reviewing your extraction.");
+      // Transition to Darrin card-by-card review
+      setPhase("darrin_review");
+      setStatus("Darrin is reviewing your extraction.");
     } catch (err) {
       setPhase("done");
       onError(err instanceof Error ? err.message : "Extraction failed");
@@ -379,9 +379,9 @@ export default function StepTriage({
 
   // ─── Deep Extract: LLM-based item extraction for empty sets ───
   // Accepts optional opts:
-  //   - userHint: free-text hint forwarded to Punchy ("this set is on page 18")
+  //   - userHint: free-text hint forwarded to Darrin ("this set is on page 18")
   //   - targetSetIds: restrict the extraction to a specific set of empty IDs
-  //     (used by per-row "Try with hint" retries from PunchyReview)
+  //     (used by per-row "Try with hint" retries from DarrinReview)
   const handleDeepExtract = useCallback(async (
     opts?: { userHint?: string; targetSetIds?: string[] }
   ) => {
@@ -485,9 +485,9 @@ export default function StepTriage({
 
       // Merge extracted items into existing hardware sets.
       //
-      // Punchy may return entries with `items: []` for sets it couldn't
+      // Darrin may return entries with `items: []` for sets it couldn't
       // find anything for (the DH-4 phantom-set case from 2026-04-11).
-      // Track those in `emptySetsAttempted` so the PunchyReview empty_sets
+      // Track those in `emptySetsAttempted` so the DarrinReview empty_sets
       // card can disable the batch "Extract with AI" button and push the
       // user toward the per-set resolution options.
       const setsWithItems = extractedSets.filter(
@@ -537,7 +537,7 @@ export default function StepTriage({
         );
       } else {
         setStatus(
-          `Punchy couldn't find items for ${setsReturnedEmpty.length || emptySets.length} set${(setsReturnedEmpty.length || emptySets.length) !== 1 ? "s" : ""}. Use the per-set options (Add manually / Remove / Try with hint) to resolve.`
+          `Darrin couldn't find items for ${setsReturnedEmpty.length || emptySets.length} set${(setsReturnedEmpty.length || emptySets.length) !== 1 ? "s" : ""}. Use the per-set options (Add manually / Remove / Try with hint) to resolve.`
         );
       }
     } catch (err) {
@@ -847,8 +847,8 @@ export default function StepTriage({
       <p className="text-secondary text-sm mb-4">
         {phase === "extracting"
           ? "Extracting door schedule data from your PDF..."
-          : phase === "punchy_review"
-          ? "Punchy is walking you through the extraction results."
+          : phase === "darrin_review"
+          ? "Darrin is walking you through the extraction results."
           : "Classifying doors as accepted, by-others, or rejected."}
       </p>
 
@@ -897,7 +897,7 @@ export default function StepTriage({
       )}
 
       {/* ─── Deep Extract Banner ─── */}
-      {phase === "punchy_review" && !deepExtracting && !deepExtractComplete && extractionConfidence?.suggest_deep_extraction && (
+      {phase === "darrin_review" && !deepExtracting && !deepExtractComplete && extractionConfidence?.suggest_deep_extraction && (
         <div className="mb-4 p-4 bg-warning-dim border border-warning rounded-md">
           <div className="flex items-start gap-2 mb-2">
             <span className="text-warning text-lg leading-none" aria-hidden="true">&#x26A0;&#xFE0F;</span>
@@ -956,11 +956,11 @@ export default function StepTriage({
       )}
 
       {/* ═══════════════════════════════════════════════════════════════
-          PUNCHY CARD-BY-CARD REVIEW
+          DARRIN CARD-BY-CARD REVIEW
           Replaces old dashboard + qty_review + questions phases.
          ═══════════════════════════════════════════════════════════════ */}
-      {phase === "punchy_review" && (
-        <PunchyReview
+      {phase === "darrin_review" && (
+        <DarrinReview
           doors={doors}
           hardwareSets={hardwareSets}
           qtyCheck={qtyCheck}
@@ -1099,8 +1099,8 @@ export default function StepTriage({
         </>
       )}
 
-      {/* Navigation (shown for triaging and done phases — punchy_review has its own buttons) */}
-      {phase !== "punchy_review" && phase !== "extracting" && (
+      {/* Navigation (shown for triaging and done phases — darrin_review has its own buttons) */}
+      {phase !== "darrin_review" && phase !== "extracting" && (
         <div className="flex justify-between mt-6">
           <button
             onClick={onBack}

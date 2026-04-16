@@ -6,7 +6,7 @@ Tracks decisions, issues, and deviations for the background extraction job featu
 
 ### Decisions
 
-1. **Direct helper imports vs API route calls**: The job orchestrator (`/api/jobs/[id]/run`) imports and calls helper functions directly (`callPdfplumber`, `callPunchyColumnReview`, `callPunchyPostExtraction`, etc.) rather than fetching the existing Next.js API routes. This avoids unnecessary HTTP overhead, auth round-trips, and request size limits for server-to-server calls.
+1. **Direct helper imports vs API route calls**: The job orchestrator (`/api/jobs/[id]/run`) imports and calls helper functions directly (`callPdfplumber`, `callDarrinColumnReview`, `callDarrinPostExtraction`, etc.) rather than fetching the existing Next.js API routes. This avoids unnecessary HTTP overhead, auth round-trips, and request size limits for server-to-server calls.
 
 2. **Python API calls via fetch**: The Python endpoints (`classify-pages`, `detect-mapping`, `extract-tables`) are called via direct fetch with `X-Internal-Token` auth, matching the pattern used by existing proxy routes but skipping the user-auth layer since the job runs with service role credentials.
 
@@ -14,7 +14,7 @@ Tracks decisions, issues, and deviations for the background extraction job featu
 
 4. **Atomic job claim**: The orchestrator uses `UPDATE ... WHERE status='queued' RETURNING *` to atomically claim a job, preventing double-processing if the cron handler and fire-and-forget both attempt to run the same job.
 
-5. **Deep extraction skipped in Phase 1**: The background job does not run deep extraction for empty hardware sets. Deep extraction is an interactive feature (user provides hints, confirms golden samples) that requires the Punchy Review UI. In Phase 1, empty sets are left as-is in staging data. Phase 2 UI will provide the ability to trigger deep extraction post-job.
+5. **Deep extraction skipped in Phase 1**: The background job does not run deep extraction for empty hardware sets. Deep extraction is an interactive feature (user provides hints, confirms golden samples) that requires the Darrin Review UI. In Phase 1, empty sets are left as-is in staging data. Phase 2 UI will provide the ability to trigger deep extraction post-job.
 
 6. **Column mapping from detect-mapping**: Since Phase 1 skips the MapColumns UI step, the job uses the raw detect-mapping result as the column mapping. The wizard allows users to adjust this mapping — background jobs use the auto-detected mapping as-is.
 
@@ -46,7 +46,7 @@ Tracks decisions, issues, and deviations for the background extraction job featu
 
 3. **Early return pattern in ImportWizard**: When the feature flag is on, the component returns early with the job wizard JSX. When off, it falls through to the original render block — zero changes to the legacy flow. This pattern is simpler and more auditable than deeply interleaving conditionals.
 
-4. **PunchAssistant omitted from job flow**: The new Questions step replaces the Punchy-driven triage questions. The PunchAssistant drawer is not shown during the job flow since the guided questions serve the same purpose in a more structured format. The Review/Products/Confirm steps inherit the same PunchAssistant behavior if needed in a future iteration.
+4. **PunchAssistant omitted from job flow**: The new Questions step replaces the Darrin-driven triage questions. The PunchAssistant drawer is not shown during the job flow since the guided questions serve the same purpose in a more structured format. The Review/Products/Confirm steps inherit the same PunchAssistant behavior if needed in a future iteration.
 
 5. **StepUpload reused as-is**: The Upload step is identical in both flows. In the job flow, `onComplete` fires `job.createJob()` after upload finishes instead of advancing to ScanResults. StepUpload still runs classify-pages and uploads the PDF — the background job reads the stored PDF from the same storage path.
 
@@ -58,7 +58,7 @@ Tracks decisions, issues, and deviations for the background extraction job featu
 
 ### Deviations from Scope
 
-- **No Punchy avatar**: The spec suggested showing a Punchy avatar near the progress indicator. This was deferred to avoid adding new image assets in this PR. The gear icon with pulse animation serves as the working indicator.
+- **No Darrin avatar**: The spec suggested showing a Darrin avatar near the progress indicator. This was deferred to avoid adding new image assets in this PR. The gear icon with pulse animation serves as the working indicator.
 - **No success animation**: The spec mentioned a "success animation/indicator" when the job completes. The progress bar turning green and the checkmark icon serve this purpose without adding a separate animation system.
 - **onRemapColumns not available in job flow**: The Review step in the job flow doesn't offer "Remap Columns" since column mapping was done automatically by the background job. The prop is omitted.
 

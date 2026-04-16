@@ -5,15 +5,15 @@ import type {
   DoorEntry,
   HardwareSet,
   PdfplumberFlaggedDoor,
-  PunchyQuantityCheck,
-  PunchyObservation,
+  DarrinQuantityCheck,
+  DarrinObservation,
 } from '@/lib/types'
-import { toPunchyConfidence } from '@/lib/types'
+import { toDarrinConfidence } from '@/lib/types'
 import {
   callPdfplumber,
-  callPunchyColumnReview,
-  callPunchyPostExtraction,
-  callPunchyQuantityCheck,
+  callDarrinColumnReview,
+  callDarrinPostExtraction,
+  callDarrinQuantityCheck,
   applyCorrections,
   normalizeQuantities,
   calculateExtractionConfidence,
@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
       knownSetIds?: string[]
       userColumnMapping?: Record<string, number> | null
       projectId?: string
-      // Optional user-confirmed golden sample for Punchy CP2/CP3 baselining.
+      // Optional user-confirmed golden sample for Darrin CP2/CP3 baselining.
       // Matches the shape the wizard already sends to /deep-extract.
       goldenSample?: {
         set_id: string
@@ -120,17 +120,17 @@ export async function POST(request: NextRequest) {
     const flaggedDoors: PdfplumberFlaggedDoor[] = pdfplumberResult?.flagged_doors || []
 
     // ==========================================
-    // Step 2: Punchy Checkpoint 1 — Column Mapping Review
+    // Step 2: Darrin Checkpoint 1 — Column Mapping Review
     // (only on first chunk when user provided a mapping)
     // ==========================================
     const client = createAnthropicClient()
-    const punchyObservations: PunchyObservation[] = []
+    const darrinObservations: DarrinObservation[] = []
 
     if (chunkIndex === 0 && userColumnMapping) {
       try {
-        const columnReview = await callPunchyColumnReview(client, chunkBase64, userColumnMapping, { projectId })
+        const columnReview = await callDarrinColumnReview(client, chunkBase64, userColumnMapping, { projectId })
         if ((columnReview.unmapped_fields?.length ?? 0) > 0 || (columnReview.mapping_issues?.length ?? 0) > 0) {
-          punchyObservations.push({
+          darrinObservations.push({
             checkpoint: 'column_mapping',
             message: columnReview.notes ?? 'Column mapping review complete',
             confidence: (columnReview.unmapped_fields?.length ?? 0) > 0 ? 'medium' : 'high',
@@ -141,16 +141,16 @@ export async function POST(request: NextRequest) {
             })),
           })
         }
-        console.debug(`Chunk ${chunkIndex + 1}: Punchy column review: ${columnReview.unmapped_fields?.length ?? 0} unmapped fields, ${columnReview.mapping_issues?.length ?? 0} issues`)
+        console.debug(`Chunk ${chunkIndex + 1}: Darrin column review: ${columnReview.unmapped_fields?.length ?? 0} unmapped fields, ${columnReview.mapping_issues?.length ?? 0} issues`)
       } catch (err) {
-        console.error('Punchy column review error:', err instanceof Error ? err.message : String(err))
+        console.error('Darrin column review error:', err instanceof Error ? err.message : String(err))
       }
     }
 
     // ==========================================
-    // Step 3: Punchy Checkpoint 2 — Post-Extraction Review
+    // Step 3: Darrin Checkpoint 2 — Post-Extraction Review
     // ==========================================
-    const corrections = await callPunchyPostExtraction(client, chunkBase64, pdfplumberResult ?? {
+    const corrections = await callDarrinPostExtraction(client, chunkBase64, pdfplumberResult ?? {
       success: false,
       openings: [],
       hardware_sets: [],
@@ -163,12 +163,12 @@ export async function POST(request: NextRequest) {
       error: 'pdfplumber failed',
     }, knownSetIds, { projectId, goldenSample })
 
-    // Track Punchy's post-extraction observations
+    // Track Darrin's post-extraction observations
     if (corrections.notes) {
-      punchyObservations.push({
+      darrinObservations.push({
         checkpoint: 'post_extraction',
         message: corrections.notes,
-        confidence: toPunchyConfidence(corrections.overall_confidence),
+        confidence: toDarrinConfidence(corrections.overall_confidence),
       })
     }
 
@@ -177,31 +177,31 @@ export async function POST(request: NextRequest) {
     hardwareSets = corrected.hardwareSets
     doors = corrected.doors
 
-    // Post-Punchy qty re-normalization
+    // Post-Darrin qty re-normalization
     normalizeQuantities(hardwareSets, doors)
 
     // Extract fire ratings embedded in hw_heading/location fields
     extractFireRatings(doors)
 
     // ==========================================
-    // Step 4: Punchy Checkpoint 3 — Quantity Sanity Check
+    // Step 4: Darrin Checkpoint 3 — Quantity Sanity Check
     // ==========================================
-    let quantityCheck: PunchyQuantityCheck | null = null
+    let quantityCheck: DarrinQuantityCheck | null = null
     try {
-      quantityCheck = await callPunchyQuantityCheck(client, chunkBase64, hardwareSets, doors, goldenSample, { projectId })
+      quantityCheck = await callDarrinQuantityCheck(client, chunkBase64, hardwareSets, doors, goldenSample, { projectId })
       if ((quantityCheck.flags?.length ?? 0) > 0 || (quantityCheck.compliance_issues?.length ?? 0) > 0) {
-        punchyObservations.push({
+        darrinObservations.push({
           checkpoint: 'quantity_check',
           message: quantityCheck.notes ?? 'Quantity check complete',
           confidence: (quantityCheck.compliance_issues?.length ?? 0) > 0 ? 'medium' : 'high',
         })
       }
       console.debug(
-        `Chunk ${chunkIndex + 1}: Punchy qty check: ${quantityCheck.flags?.length ?? 0} flags, ` +
+        `Chunk ${chunkIndex + 1}: Darrin qty check: ${quantityCheck.flags?.length ?? 0} flags, ` +
         `${quantityCheck.compliance_issues?.length ?? 0} compliance issues`
       )
     } catch (err) {
-      console.error('Punchy quantity check error:', err instanceof Error ? err.message : String(err))
+      console.error('Darrin quantity check error:', err instanceof Error ? err.message : String(err))
     }
 
     // ==========================================
@@ -211,9 +211,9 @@ export async function POST(request: NextRequest) {
     const suggestDeep = shouldAutoTriggerDeepExtraction(confidence)
 
     console.debug(
-      `Chunk ${chunkIndex + 1}/${totalChunks}: Punchy pipeline complete: ` +
+      `Chunk ${chunkIndex + 1}/${totalChunks}: Darrin pipeline complete: ` +
       `${hardwareSets.length} sets, ${doors.length} doors, ` +
-      `${punchyObservations.length} observations, confidence: ${confidence.score}/100` +
+      `${darrinObservations.length} observations, confidence: ${confidence.score}/100` +
       `${suggestDeep ? ' (deep extraction suggested)' : ''}`
     )
 
@@ -223,8 +223,8 @@ export async function POST(request: NextRequest) {
       doors,
       flaggedDoors,
       reviewNotes: corrections.notes,
-      punchyObservations,
-      punchyQuantityCheck: quantityCheck,
+      darrinObservations,
+      darrinQuantityCheck: quantityCheck,
       confidence,
       suggest_deep_extraction: suggestDeep,
       extraction_confidence: {

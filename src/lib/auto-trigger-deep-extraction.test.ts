@@ -5,7 +5,7 @@ import {
 } from '@/lib/types/confidence'
 import type { ExtractionConfidence } from '@/lib/types/confidence'
 import { calculateExtractionConfidence } from '@/lib/parse-pdf-helpers'
-import type { HardwareSet, DoorEntry, PunchyCorrections } from '@/lib/types'
+import type { HardwareSet, DoorEntry, DarrinCorrections } from '@/lib/types'
 
 // ── Helpers ──────────────────────────────────────────────────────
 
@@ -61,7 +61,7 @@ function makeDoor(door_number: string, hw_set: string): DoorEntry {
   } as DoorEntry
 }
 
-const emptyCorrections: PunchyCorrections = {
+const emptyCorrections: DarrinCorrections = {
   hardware_sets_corrections: [],
   doors_corrections: [],
   missing_doors: [],
@@ -99,7 +99,7 @@ describe('shouldAutoTriggerDeepExtraction', () => {
       score: 55,
       overall: 'medium',
       suggest_deep_extraction: true,
-      deep_extraction_reasons: ['Punchy flagged 25% of items (threshold: 20%)'],
+      deep_extraction_reasons: ['Darrin flagged 25% of items (threshold: 20%)'],
     })
 
     expect(shouldAutoTriggerDeepExtraction(confidence)).toBe(true)
@@ -195,7 +195,7 @@ describe('auto-trigger integration with calculateExtractionConfidence', () => {
     const doors = [makeDoor('101', 'DH1')]
 
     // All corrections are fuzzy (low confidence)
-    const corrections: PunchyCorrections = {
+    const corrections: DarrinCorrections = {
       hardware_sets_corrections: [{
         set_id: 'DH1',
         items_to_fix: [
@@ -213,7 +213,7 @@ describe('auto-trigger integration with calculateExtractionConfidence', () => {
     expect(shouldAutoTriggerDeepExtraction(confidence)).toBe(true)
   })
 
-  it('Punchy flagging >20% of items triggers deep extraction', () => {
+  it('Darrin flagging >20% of items triggers deep extraction', () => {
     // 3 items, all 3 flagged (100% > 20% threshold)
     const sets = [
       makeSet('DH1', [
@@ -224,7 +224,7 @@ describe('auto-trigger integration with calculateExtractionConfidence', () => {
     ]
     const doors = [makeDoor('101', 'DH1')]
 
-    const corrections: PunchyCorrections = {
+    const corrections: DarrinCorrections = {
       hardware_sets_corrections: [{
         set_id: 'DH1',
         items_to_fix: [
@@ -274,7 +274,7 @@ describe('DEEP_EXTRACTION_AUTO_TRIGGER_THRESHOLD', () => {
   it('has expected threshold values', () => {
     expect(DEEP_EXTRACTION_AUTO_TRIGGER_THRESHOLD.empty_field_pct).toBe(0.30)
     expect(DEEP_EXTRACTION_AUTO_TRIGGER_THRESHOLD.fuzzy_correction_pct).toBe(0.50)
-    expect(DEEP_EXTRACTION_AUTO_TRIGGER_THRESHOLD.punchy_flag_pct).toBe(0.20)
+    expect(DEEP_EXTRACTION_AUTO_TRIGGER_THRESHOLD.darrin_flag_pct).toBe(0.20)
     expect(DEEP_EXTRACTION_AUTO_TRIGGER_THRESHOLD.overall_score_below).toBe(40)
   })
 })

@@ -29,8 +29,8 @@ const onError = useCallback((err: string) => patch({ error: err }), [patch]);
 ```
 Then pass `onError={onError}` to StepTriage, StepCompare, StepConfirm, StepUpload, and StepMapColumns. Search for every `onError={(err)` in ImportWizard.tsx and replace.
 
-### CRITICAL 2: PunchyReview Stale hardwareSets in Quantity Propagation  
-**File:** `src/components/ImportWizard/PunchyReview.tsx` (~line 179-195)
+### CRITICAL 2: DarrinReview Stale hardwareSets in Quantity Propagation  
+**File:** `src/components/ImportWizard/DarrinReview.tsx` (~line 179-195)
 **Problem:** `handleAnswerQuestion` has `[hardwareSets]` in its dependency array and calls `propagateQuantityDecision(decision, hardwareSets)` using the closure value. If user applies corrections on one card then answers a question on a later card, propagation runs on pre-correction data. Corrections silently lost.
 **Fix:** Use `setHardwareSets(prev => ...)` functional form inside `handleAnswerQuestion` instead of reading `hardwareSets` from closure. Remove `hardwareSets` from the dependency array. The propagation logic should operate on `prev` (current state), not the captured closure value.
 
@@ -57,8 +57,8 @@ Apply the same pattern to any other callback that reads `state.X` and uses it in
 **Problem:** `handleDeepExtract` captures `hardwareSets` in closure. If user removes a set while API call is in-flight, response merges into stale array. Items for removed sets silently dropped.
 **Fix:** Where the callback updates hardwareSets after the API response, use `setHardwareSets(prev => ...)` functional form and find sets by `set_id` in `prev`, not in the captured array.
 
-### HIGH 2: PunchyReview useEffect Missing cards Dependency
-**File:** `src/components/ImportWizard/PunchyReview.tsx` (~line 116-120)
+### HIGH 2: DarrinReview useEffect Missing cards Dependency
+**File:** `src/components/ImportWizard/DarrinReview.tsx` (~line 116-120)
 **Problem:** useEffect watches `[cards.length, currentIdx]` but not `cards` itself. If cards array changes structure but same length, currentIdx points to wrong card.
 **Fix:** Add `cards` to the dependency array, or better: compute a stable key from cards (e.g., `cards.map(c => c.id).join(',')`) and use that as the dependency.
 
@@ -97,10 +97,10 @@ Fix wizard pipeline callback stability and stale closure bugs
   infinite re-render loop in StepCompare and StepTriage)
 - Use setState functional form in onProductsComplete to read current
   state.hasExistingData instead of stale closure value
-- Fix PunchyReview handleAnswerQuestion to use setHardwareSets(prev =>)
+- Fix DarrinReview handleAnswerQuestion to use setHardwareSets(prev =>)
   instead of capturing stale hardwareSets closure
 - Fix StepTriage handleDeepExtract stale array after set removal
-- Add cards to PunchyReview useEffect dependency array
+- Add cards to DarrinReview useEffect dependency array
 - Add hasRun guard to StepTriage runExtraction useEffect
 - Re-initialize StepCompare decision state when compareResult changes
 ```
