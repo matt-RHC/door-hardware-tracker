@@ -1290,3 +1290,140 @@ class TestIsValidDoorNumberNewRejections:
         assert extract_tables.is_valid_door_number("110.1")
         assert extract_tables.is_valid_door_number("E102")
         assert extract_tables.is_valid_door_number("ST-100")
+
+
+# ── Region-extract field-mode helpers ─────────────────────────────
+# (formerly src/lib/rescan-field-detect.test.ts heuristics — detection
+# moved to Python so one regex set drives extract-time and rescan-time.)
+
+class TestRegionExtractFieldDetection:
+    """_detect_field_from_text classifies a raw PDF-region selection
+    using the same _HEADING_DOOR_HAND_RE / _FIRE_RATING_RE /
+    parse_heading_door_metadata helpers that Prompt 2 uses at
+    extraction time."""
+
+    def test_detects_basic_hand(self, extract_tables):
+        field, value, conf = extract_tables._detect_field_from_text("RH")
+        assert field == "hand"
+        assert value == "RH"
+        assert conf >= 0.9
+
+    def test_detects_pair_split_hand(self, extract_tables):
+        # LHR\RHR is the pair-door split form Prompt 2's regex supports.
+        field, value, conf = extract_tables._detect_field_from_text("LHR\\RHR")
+        assert field == "hand"
+        assert value == "LHR\\RHR"
+
+    def test_detects_fire_rating(self, extract_tables):
+        field, value, _ = extract_tables._detect_field_from_text("90Min")
+        assert field == "fire_rating"
+        assert value == "90Min"
+
+    def test_fire_rating_requires_suffix(self, extract_tables):
+        # Bare "90" is NOT a fire rating here — could be a room number.
+        # The Opening-Description path doesn't fire for a raw number.
+        field, _, _ = extract_tables._detect_field_from_text("90")
+        assert field != "fire_rating"
+
+    def test_does_not_misread_room_number_as_fire_rating(self, extract_tables):
+        # "ROOM 90Min" embedded in a long location must NOT strip "90Min".
+        # fullmatch guards against this — search would match the token.
+        field, value, _ = extract_tables._detect_field_from_text(
+            "ROOM 90Min to CORRIDOR"
+        )
+        assert field == "location"
+        assert "90Min" in value  # location is untouched
+
+    def test_detects_location_from_heading_tail(self, extract_tables):
+        # The common case — the user selected the tail of a heading
+        # door line that has BOTH a location and a hand. The splitter
+        # pulls the hand out and keeps the rest as location.
+        field, value, _ = extract_tables._detect_field_from_text(
+            "RECEPTION 101 to LARGE CONF. ROOM 102 LH"
+        )
+        assert field == "location"
+        assert value == "RECEPTION 101 to LARGE CONF. ROOM 102"
+
+    def test_empty_text_is_unknown(self, extract_tables):
+        field, value, conf = extract_tables._detect_field_from_text("   ")
+        assert field == "unknown"
+        assert value == ""
+        assert conf == 0.0
+
+
+class TestExtractHeadingDoorsOnPage:
+    """Single-page variant of the Prompt 2 parser. Rescan-time
+    propagation reuses this directly so the regexes stay in one
+    place."""
+
+    def test_single_page_picks_up_wrapped_location(self, extract_tables):
+        # Exact layout from Prompt 2's narrow-column fixture: the hand
+        # sits at the end of line 1, the location continues on line 2.
+        page_text = (
+            "Heading #H03 (Set #H03)\n"
+            "1 Single Door #E102 RECEPTION 101 to LARGE RH\n"
+            "CONF. ROOM 102\n"
+            "Opening Description: 90Min 3' 0\" x 7' 0\" Type HMD Type HMF\n"
+        )
+        heading_map = {}
+        extract_tables._extract_heading_doors_on_page(
+            _FakePage(page_text), heading_map
+        )
+        assert "E102" in heading_map
+        entry = heading_map["E102"]
+        assert entry.hand == "RH"
+        # Continuation stitched — parser matches Prompt 2's behavior.
+        assert entry.location == "RECEPTION 101 to LARGE CONF. ROOM 102"
+        assert entry.fire_rating == "90Min"
+
+    def test_build_heading_page_map_delegates_to_helper(self, extract_tables):
+        # Regression: the full-PDF walker should produce the same
+        # result whether we drive it via build_heading_page_map or
+        # call _extract_heading_doors_on_page directly.
+        page_text = (
+            "Heading #H01 (Set #H01)\n"
+            "1 Single Door #201 OFFICE 101 to CORRIDOR LH\n"
+        )
+        pdf = _FakePdf([_FakePage(page_text)])
+        via_full = extract_tables.build_heading_page_map(pdf)
+        via_helper = {}
+        extract_tables._extract_heading_doors_on_page(
+            _FakePage(page_text), via_helper
+        )
+        assert set(via_full.keys()) == set(via_helper.keys())
+        for dn in via_full:
+            assert via_full[dn].location == via_helper[dn].location
+            assert via_full[dn].hand == via_helper[dn].hand
+
+
+class TestPropagateFieldForTargets:
+    """Rescan-time propagation wrapper: run the shared page parser and
+    filter to the caller's target door numbers."""
+
+    def test_returns_fills_for_known_doors_only(self, extract_tables):
+        page_text = (
+            "Heading #H05 (Set #H05)\n"
+            "1 Single Door #301 LOBBY to CORRIDOR RH\n"
+            "1 Single Door #302 CORRIDOR to STAIR 1 LH\n"
+        )
+        pdf = _FakePdf([_FakePage(page_text)])
+        fills = extract_tables._propagate_field_for_targets(
+            pdf, target_page=0, target_door_numbers=["301", "302", "999"]
+        )
+        assert "301" in fills
+        assert fills["301"]["location"] == "LOBBY to CORRIDOR"
+        assert fills["301"]["hand"] == "RH"
+        assert "302" in fills
+        assert "999" not in fills
+
+    def test_empty_targets_returns_empty(self, extract_tables):
+        pdf = _FakePdf([_FakePage("Heading #H01 (Set #H01)\n")])
+        assert extract_tables._propagate_field_for_targets(
+            pdf, target_page=0, target_door_numbers=[]
+        ) == {}
+
+    def test_out_of_range_page_returns_empty(self, extract_tables):
+        pdf = _FakePdf([_FakePage("x")])
+        assert extract_tables._propagate_field_for_targets(
+            pdf, target_page=42, target_door_numbers=["301"]
+        ) == {}

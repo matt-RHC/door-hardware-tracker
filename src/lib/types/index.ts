@@ -269,3 +269,34 @@ export interface PageClassification {
   has_door_numbers?: boolean
   is_scanned?: boolean
 }
+
+// ── Rescan field-assignment types ─────────────────────────────────
+//
+// Detection and line parsing now live in Python (api/extract-tables.py)
+// — these types are only for the TS UI that renders what the server
+// returns. Previously the heuristics lived in src/lib/rescan-field-detect.ts;
+// that module was deleted after Prompt 2 shipped the shared regexes
+// (_HEADING_DOOR_HAND_RE / _FIRE_RATING_RE) that both extraction-time
+// and rescan-time now share.
+
+/** Field kinds the rescan flow can target. `door_number` is detected
+ *  but never writable via rescan (it's the primary key across the
+ *  wizard's maps). */
+export type RescanFieldType =
+  | 'location'
+  | 'hand'
+  | 'fire_rating'
+  | 'door_number'
+  | 'unknown'
+
+/** A Darrin-style per-door suggestion produced by the server's
+ *  propagation pass. Applied to `DoorEntry[field]` when the user
+ *  confirms in the PropagationSuggestionModal. */
+export interface PropagationSuggestion {
+  doorNumber: string
+  field: RescanFieldType
+  value: string
+  confidence: number
+  /** The heading-page line the value came from, for UI preview. */
+  sourceLine: string
+}

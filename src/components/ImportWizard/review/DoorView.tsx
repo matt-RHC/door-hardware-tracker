@@ -17,6 +17,7 @@ interface DoorViewProps {
   expandedDoors: Set<string>;
   onToggleDoor: (key: string) => void;
   onRequestRescan: (setId: string, pageIdx: number) => void;
+  onRequestFieldRescan: (setId: string, pageIdx: number, doorNumber: string) => void;
   onRevert: (setId: string, itemIdx: number, originalQty: number) => void;
   collapsedLeafSections: Set<string>;
   onToggleLeafSection: (setId: string, section: 'shared' | 'leaf1' | 'leaf2') => void;
@@ -35,6 +36,7 @@ export default function DoorView({
   expandedDoors,
   onToggleDoor,
   onRequestRescan,
+  onRequestFieldRescan,
   onRevert,
   collapsedLeafSections,
   onToggleLeafSection,
@@ -75,6 +77,7 @@ export default function DoorView({
                 classifyResult={classifyResult}
                 pdfBuffer={pdfBuffer}
                 onRequestRescan={onRequestRescan}
+                onRequestFieldRescan={onRequestFieldRescan}
                 onRevert={onRevert}
                 collapsedLeafSections={collapsedLeafSections}
                 onToggleLeafSection={onToggleLeafSection}

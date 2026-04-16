@@ -13,6 +13,11 @@ interface DoorDetailPanelProps {
   classifyResult: ClassifyPagesResponse | null;
   pdfBuffer: ArrayBuffer | null;
   onRequestRescan: (setId: string, pageIdx: number) => void;
+  /**
+   * Request a rescan in field-assignment mode (for filling missing
+   * location/hand/fire_rating on this door and optionally its siblings).
+   */
+  onRequestFieldRescan: (setId: string, pageIdx: number, doorNumber: string) => void;
   onRevert: (setId: string, itemIdx: number, originalQty: number) => void;
   collapsedLeafSections: Set<string>;
   onToggleLeafSection: (setId: string, section: 'shared' | 'leaf1' | 'leaf2') => void;
@@ -27,6 +32,7 @@ export default function DoorDetailPanel({
   classifyResult,
   pdfBuffer,
   onRequestRescan,
+  onRequestFieldRescan,
   onRevert,
   collapsedLeafSections,
   onToggleLeafSection,
@@ -77,14 +83,20 @@ export default function DoorDetailPanel({
         )}
       </div>
 
-      {/* Rescan trigger */}
+      {/* Rescan triggers */}
       {pdfPageIdx != null && pdfBuffer && (
         <div className="flex items-center gap-2 flex-wrap">
           <button
             onClick={() => onRequestRescan(hwSet.set_id, pdfPageIdx)}
             className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-tint border border-border-dim text-secondary text-[11px] font-medium hover:bg-tint-strong transition-colors min-h-9"
           >
-            Re-scan region from PDF
+            Re-scan hardware items
+          </button>
+          <button
+            onClick={() => onRequestFieldRescan(hwSet.set_id, pdfPageIdx, door.door_number)}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-accent-dim border border-accent text-accent text-[11px] font-medium hover:bg-tint-strong transition-colors min-h-9"
+          >
+            Fix missing field (location / hand / rating)
           </button>
           <span className="text-[10px] text-tertiary">from PDF page {pdfPageIdx + 1}</span>
         </div>

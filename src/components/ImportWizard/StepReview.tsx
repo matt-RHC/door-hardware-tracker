@@ -5,13 +5,17 @@ import { usePunchHighlight } from "./usePunchHighlight";
 import type { DoorEntry, HardwareSet, ClassifyPagesResponse } from "./types";
 import type { ReconciliationResult, ReconciledHardwareSet } from "@/lib/types/reconciliation";
 import { buildDoorToSetMap, normalizeDoorNumber } from "@/lib/parse-pdf-helpers";
+import type { RegionExtractField } from "@/lib/schemas/parse-pdf";
 import WizardNav from "./WizardNav";
 import ReviewSummary from "./review/ReviewSummary";
 import ReviewFilters from "./review/ReviewFilters";
 import SetView from "./review/SetView";
 import DoorView from "./review/DoorView";
-import InlineRescan from "./review/InlineRescan";
+import InlineRescan, { type InlineRescanMode } from "./review/InlineRescan";
+import PropagationSuggestionModal from "./review/PropagationSuggestionModal";
 import { isOrphanDoor, getDoorIssues, getConfidence } from "./review/utils";
+import type { PropagationSuggestion } from "@/lib/types";
+import { applyFieldToDoors, applyPropagationSuggestions } from "./review/rescan-apply";
 import type {
   DoorGroup,
   DoorStringField,
@@ -78,6 +82,18 @@ export default function StepReview({
   // Region extract modal state
   const [regionExtractSetId, setRegionExtractSetId] = useState<string | null>(null);
   const [regionExtractPageIdx, setRegionExtractPageIdx] = useState<number | null>(null);
+  const [regionExtractMode, setRegionExtractMode] = useState<InlineRescanMode>("items");
+  const [regionExtractTriggerDoor, setRegionExtractTriggerDoor] = useState<string | null>(null);
+
+  // Darrin propagation suggestion modal state. Set after a field is applied
+  // and we find sibling doors in the same set that are missing the same
+  // field. Cleared when the user dismisses or accepts.
+  // Each PropagationSuggestion carries its own field, so no dominant
+  // field is needed at the modal level — the tier-1 batch path mixes
+  // location / hand / fire_rating suggestions in a single list.
+  const [propagationSuggestions, setPropagationSuggestions] = useState<{
+    suggestions: PropagationSuggestion[];
+  } | null>(null);
 
   const [editingCell, setEditingCell] = useState<EditingCell | null>(null);
   const [editValue, setEditValue] = useState("");
@@ -357,12 +373,221 @@ export default function StepReview({
   const handleRequestRescan = useCallback((setId: string, pageIdx: number) => {
     setRegionExtractSetId(setId);
     setRegionExtractPageIdx(pageIdx);
+    setRegionExtractMode("items");
+    setRegionExtractTriggerDoor(null);
   }, []);
+
+  const handleRequestFieldRescan = useCallback(
+    (setId: string, pageIdx: number, doorNumber: string) => {
+      setRegionExtractSetId(setId);
+      setRegionExtractPageIdx(pageIdx);
+      setRegionExtractMode("field");
+      setRegionExtractTriggerDoor(doorNumber);
+    },
+    [],
+  );
+
+  // Tier-1 "Fix missing field" batch action, triggered from the set header
+  // when residual gaps exist after the Prompt 2 extraction-time join.
+  // Calls the server with propagate=true + every door in the set missing
+  // any metadata field. If the heading-page re-parse surfaces anything,
+  // open the propagation modal immediately (zero-click fix). If not,
+  // fall back to the manual region selector so the user can draw a box.
+  //
+  // Alternative considered: skip tier-1 and always open the region
+  // selector. Rejected — tier-1 catches the "parser just needed a
+  // retry with wider x_tolerance" case without making the user draw.
+  const handleBatchFixMissing = useCallback(
+    async (setId: string, pageIdx: number) => {
+      const setInfo = setMap.get(setId);
+      const setKey = setInfo?.set_id ?? setId;
+
+      const missingDoors = doors.filter((d) => {
+        const doorSetId =
+          doorToSetMap.get(normalizeDoorNumber(d.door_number))?.set_id ?? d.hw_set;
+        if (doorSetId !== setKey) return false;
+        return (
+          !(d.location ?? '').trim() ||
+          !(d.hand ?? '').trim() ||
+          !(d.fire_rating ?? '').trim()
+        );
+      });
+      if (missingDoors.length === 0) return;
+
+      const targetDoorNumbers = missingDoors.map((d) => d.door_number);
+      try {
+        const resp = await fetch('/api/parse-pdf/region-extract', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            projectId,
+            page: pageIdx,
+            bbox: { x0: 0, y0: 0, x1: 1, y1: 1 },
+            setId: setKey,
+            mode: 'field',
+            targetDoorNumbers,
+            propagate: true,
+          }),
+        });
+        if (!resp.ok) throw new Error(`region-extract status ${resp.status}`);
+        const json = (await resp.json()) as {
+          siblingFills?: Record<string, { location: string; hand: string; fire_rating: string }>;
+        };
+        const fills = json.siblingFills ?? {};
+
+        // Aggregate across all three fields — only suggest a value where
+        // the door is currently missing it AND the server resolved one.
+        const suggestions: PropagationSuggestion[] = [];
+        for (const d of missingDoors) {
+          const row = fills[d.door_number];
+          if (!row) continue;
+          // Narrow to the three writable fields — RegionExtractField
+          // also includes 'door_number' which isn't writable here.
+          const fieldsToCheck = ['location', 'hand', 'fire_rating'] as const;
+          for (const f of fieldsToCheck) {
+            if ((d[f] ?? '').trim()) continue;
+            const value = (row[f] ?? '').trim();
+            if (!value) continue;
+            suggestions.push({
+              doorNumber: d.door_number,
+              field: f,
+              value,
+              confidence: 0.85,
+              sourceLine: `${d.door_number} → ${f.replace('_', ' ')}: ${value}`,
+            });
+          }
+        }
+
+        if (suggestions.length > 0) {
+          // Tier-1 worked — skip the region selector entirely.
+          setPropagationSuggestions({ suggestions });
+          return;
+        }
+      } catch (err) {
+        console.error('[fix-missing-field] tier-1 failed:', err);
+        // Fall through to tier-2 below.
+      }
+
+      // Tier-2 fallback: open the manual region selector, seeded to the
+      // first still-missing door.
+      handleRequestFieldRescan(setId, pageIdx, missingDoors[0].door_number);
+    },
+    [projectId, setMap, doors, doorToSetMap, handleRequestFieldRescan],
+  );
 
   const handleRescanClose = useCallback(() => {
     setRegionExtractSetId(null);
     setRegionExtractPageIdx(null);
+    setRegionExtractTriggerDoor(null);
   }, []);
+
+  // Apply a field value to a list of doors. After applying, kick off a
+  // Darrin propagation scan: look at the set-page raw text for sibling doors
+  // in the same set that are still missing the same field, and surface any
+  // hits to the user as a suggestion modal.
+  //
+  // Alternative considered: auto-apply high-confidence propagation results.
+  // Rejected — users consistently ask for a preview step before bulk writes
+  // to data they'll sign off on (see AGENTS.md "Ask, don't guess").
+  const handleFieldApply = useCallback(
+    (field: RegionExtractField, value: string, doorNumbers: string[]) => {
+      setDoors((prev) => applyFieldToDoors(prev, field, value, doorNumbers));
+    },
+    [],
+  );
+
+  const handleFieldApplyWithPropagation = useCallback(
+    (field: RegionExtractField, value: string, doorNumbers: string[]) => {
+      handleFieldApply(field, value, doorNumbers);
+
+      // Only propagate when the field is propagatable (door_number isn't).
+      if (field === 'door_number') return;
+      if (regionExtractSetId == null || regionExtractPageIdx == null) return;
+
+      const setInfo = setMap.get(regionExtractSetId);
+      const setKey = setInfo?.set_id ?? regionExtractSetId;
+
+      // Derive the POST-apply door state explicitly. setDoors above is
+      // async — reading `doors` here would show the pre-apply snapshot
+      // and could double-count doors the user just fixed if the
+      // applied-set guard ever slipped. applyFieldToDoors is pure, so
+      // we just run the same transform locally.
+      const postApplyDoors = applyFieldToDoors(doors, field, value, doorNumbers);
+      const siblingCandidates = postApplyDoors
+        .filter((d) => {
+          const doorSetId =
+            doorToSetMap.get(normalizeDoorNumber(d.door_number))?.set_id ?? d.hw_set;
+          if (doorSetId !== setKey) return false;
+          return (d[field] ?? '').trim().length === 0;
+        })
+        .map((d) => d.door_number);
+
+      if (siblingCandidates.length === 0) return;
+
+      // Fire-and-forget server call with propagate=true. Python re-runs
+      // the shared _extract_heading_doors_on_page parser against just
+      // this page and returns siblingFills for any door it resolved.
+      // One parser powers extract-time and rescan-time so regex updates
+      // don't have to be duplicated on the TS side.
+      (async () => {
+        try {
+          const resp = await fetch('/api/parse-pdf/region-extract', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              projectId,
+              page: regionExtractPageIdx,
+              bbox: { x0: 0, y0: 0, x1: 1, y1: 1 },
+              setId: setKey,
+              mode: 'field',
+              targetField: field,
+              targetDoorNumbers: siblingCandidates,
+              propagate: true,
+            }),
+          });
+          if (!resp.ok) return;
+          const json = (await resp.json()) as {
+            siblingFills?: Record<string, { location: string; hand: string; fire_rating: string }>;
+          };
+          const fills = json.siblingFills ?? {};
+          const suggestions: PropagationSuggestion[] = [];
+          for (const dn of siblingCandidates) {
+            const row = fills[dn];
+            if (!row) continue;
+            // field is narrowed to the propagatable set above by the
+            // door_number early return; the `as` cast is safe.
+            const value = (row[field as 'location' | 'hand' | 'fire_rating'] ?? '').trim();
+            if (!value) continue;
+            suggestions.push({
+              doorNumber: dn,
+              field,
+              value,
+              confidence: 0.85,
+              sourceLine: `${dn} → ${value}`,
+            });
+          }
+          if (suggestions.length > 0) {
+            setPropagationSuggestions({ suggestions });
+          }
+        } catch (err) {
+          console.error('[darrin-propagation] server call failed:', err);
+        }
+      })();
+    },
+    [handleFieldApply, regionExtractSetId, regionExtractPageIdx, setMap, doors, doorToSetMap, projectId],
+  );
+
+  const handleAcceptPropagation = useCallback(
+    (accepted: PropagationSuggestion[]) => {
+      if (accepted.length === 0) {
+        setPropagationSuggestions(null);
+        return;
+      }
+      setDoors((prev) => applyPropagationSuggestions(prev, accepted));
+      setPropagationSuggestions(null);
+    },
+    [],
+  );
 
   return (
     <div className="flex flex-col h-full max-w-5xl mx-auto">
@@ -400,6 +625,7 @@ export default function StepReview({
             expandedDoors={expandedDoors}
             onToggleDoor={toggleDoor}
             onRequestRescan={handleRequestRescan}
+            onRequestFieldRescan={handleRequestFieldRescan}
             onRevert={handleRevert}
             collapsedLeafSections={collapsedLeafSections}
             onToggleLeafSection={toggleLeafSection}
@@ -418,6 +644,7 @@ export default function StepReview({
             previewOpen={previewOpen}
             onTogglePreview={togglePreview}
             onRequestRescan={handleRequestRescan}
+            onBatchFixMissing={handleBatchFixMissing}
             reconciledSetMap={reconciledSetMap}
             auditTrailOpen={auditTrailOpen}
             onToggleAuditTrail={toggleAuditTrail}
@@ -449,15 +676,36 @@ export default function StepReview({
         }
       />
 
-      {regionExtractSetId != null && regionExtractPageIdx != null && pdfBuffer && (
-        <InlineRescan
-          projectId={projectId}
-          pdfBuffer={pdfBuffer}
-          setId={regionExtractSetId}
-          pageIndex={regionExtractPageIdx}
-          onClose={handleRescanClose}
-          onPageChange={setRegionExtractPageIdx}
-          onItemsMerged={setHardwareSets}
+      {regionExtractSetId != null && regionExtractPageIdx != null && pdfBuffer && (() => {
+        const activeSet = setMap.get(regionExtractSetId);
+        const activeSetId = activeSet?.set_id ?? regionExtractSetId;
+        const doorsInSet = doors.filter((d) => {
+          const matched = doorToSetMap.get(normalizeDoorNumber(d.door_number));
+          if (matched?.set_id === activeSetId) return true;
+          return (d.hw_set ?? '') === activeSetId;
+        });
+        return (
+          <InlineRescan
+            projectId={projectId}
+            pdfBuffer={pdfBuffer}
+            setId={regionExtractSetId}
+            pageIndex={regionExtractPageIdx}
+            initialMode={regionExtractMode}
+            triggerDoorNumber={regionExtractTriggerDoor ?? undefined}
+            doorsInSet={doorsInSet}
+            onClose={handleRescanClose}
+            onPageChange={setRegionExtractPageIdx}
+            onItemsMerged={setHardwareSets}
+            onFieldApply={handleFieldApplyWithPropagation}
+          />
+        );
+      })()}
+
+      {propagationSuggestions && (
+        <PropagationSuggestionModal
+          suggestions={propagationSuggestions.suggestions}
+          onAccept={handleAcceptPropagation}
+          onCancel={() => setPropagationSuggestions(null)}
         />
       )}
     </div>

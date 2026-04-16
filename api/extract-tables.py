@@ -150,10 +150,25 @@ class ExtractionResult(BaseModel):
 
 
 class RegionExtractionResult(BaseModel):
-    """Lightweight result for bbox-cropped region extraction."""
+    """Lightweight result for bbox-cropped region extraction.
+
+    Fields populated depend on the request `mode`:
+      - mode='items' (legacy): `items` + `raw_text`.
+      - mode='field': `raw_text` + `detected_field` / `detected_value` /
+        `detection_confidence` (the server now runs detection using the
+        shared _HEADING_DOOR_HAND_RE / _FIRE_RATING_RE regexes so TS
+        doesn't duplicate the heuristics).
+      - mode='field' with propagate=true: `sibling_fills` maps each
+        requested door_number to {location, hand, fire_rating} pulled
+        from build_heading_page_map's single-page run.
+    """
     success: bool
     items: list[HardwareItem] = []
     raw_text: str = ""
+    detected_field: str = ""        # "hand" | "location" | "fire_rating" | "unknown" | ""
+    detected_value: str = ""
+    detection_confidence: float = 0.0
+    sibling_fills: dict[str, dict[str, str]] = {}
     error: str = ""
 
 
@@ -2282,6 +2297,114 @@ def _is_location_continuation_line(line: str) -> bool:
     return _CONTINUATION_BLOCKER_RE.match(stripped) is None
 
 
+def _extract_heading_doors_on_page(
+    page,
+    heading_map: dict[str, DoorEntry],
+    extract_kwargs: dict | None = None,
+) -> None:
+    """Per-page body of :func:`build_heading_page_map`.
+
+    Factored out so rescan-time (single-page) and extraction-time
+    (full-PDF walk) share ONE implementation of the line-parsing
+    rules. If you find yourself changing how per-door lines are parsed,
+    update this function — both paths will pick it up.
+
+    Mutates ``heading_map`` in place.
+
+    ``extract_kwargs`` are forwarded to ``page.extract_text`` when
+    present. Rescan-time can pass ``{"x_tolerance": 5, "y_tolerance": 5}``
+    as an aggressive-retry setting to merge nearby characters that the
+    default settings split. Do NOT pass ``layout=False`` — the parser
+    tracks ``pending_door`` through the line sequence and that state
+    machine relies on visual top-to-bottom order.
+    """
+    if extract_kwargs:
+        text = page.extract_text(**extract_kwargs) or ""
+    else:
+        text = page.extract_text() or ""
+    lines = text.split("\n")
+    current_set_id = ""
+    current_batch: list[DoorEntry] = []
+    # The most-recently created door that can still absorb a
+    # location-continuation line. Reset on any structural line.
+    pending_door: DoorEntry | None = None
+
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+
+        heading_match = _HEADING_LINE_PATTERN.match(line.strip())
+        if heading_match:
+            current_set_id = next(
+                (g for g in heading_match.groups() if g), ""
+            )
+            current_batch = []
+            pending_door = None
+            i += 1
+            continue
+
+        door_match = HEADING_DOOR_WITH_NUMBER.search(line)
+        if door_match:
+            door_num = door_match.group(3).strip().rstrip(",;:")
+            if (
+                door_num
+                and door_num not in heading_map
+                and is_valid_door_number(door_num)
+            ):
+                after_door = line[door_match.end(3):]
+                loc, hand = parse_heading_door_metadata(after_door)
+                entry = DoorEntry(
+                    door_number=door_num,
+                    hw_set=current_set_id,
+                    hw_heading=current_set_id,
+                    location=loc,
+                    hand=hand,
+                )
+                heading_map[door_num] = entry
+                current_batch.append(entry)
+                pending_door = entry
+            else:
+                pending_door = None
+            i += 1
+            continue
+
+        # Opening Description: stamp fire rating onto every door
+        # batched so far under this heading.
+        rating = parse_opening_description_fire_rating(line)
+        if rating and current_batch:
+            for d in current_batch:
+                if not (d.fire_rating or "").strip():
+                    d.fire_rating = rating
+            pending_door = None
+            i += 1
+            continue
+
+        # Location continuation: a line with text that isn't a new
+        # structural block. Stitch onto the most recent door's
+        # location (if any), then yield the pending slot so the next
+        # continuation-shaped line can't leak past another blocker.
+        if pending_door is not None and _is_location_continuation_line(line):
+            extra = line.strip()
+            if extra:
+                if pending_door.location:
+                    pending_door.location = (
+                        f"{pending_door.location} {extra}".strip()
+                    )
+                else:
+                    pending_door.location = extra
+            # Only one continuation per door is supported — this is
+            # the observed format in real submittals and keeps the
+            # parser from swallowing unrelated paragraphs below.
+            pending_door = None
+            i += 1
+            continue
+
+        # Any other line resets the pending slot so a later blank-
+        # ish line doesn't accidentally get appended.
+        pending_door = None
+        i += 1
+
+
 def build_heading_page_map(pdf) -> dict[str, DoorEntry]:
     """Step B of the Opening List ↔ Heading Page join.
 
@@ -2306,93 +2429,13 @@ def build_heading_page_map(pdf) -> dict[str, DoorEntry]:
         sits on the next non-structural line. This parser stitches
         such continuation lines back onto the most recently added
         door's location before moving on.
+
+    Per-page line parsing lives in ``_extract_heading_doors_on_page``
+    so the rescan-time single-page path can share it verbatim.
     """
     heading_map: dict[str, DoorEntry] = {}
-
     for page in pdf.pages:
-        text = page.extract_text() or ""
-        lines = text.split("\n")
-        current_set_id = ""
-        current_batch: list[DoorEntry] = []
-        # The most-recently created door that can still absorb a
-        # location-continuation line. Reset on any structural line.
-        pending_door: DoorEntry | None = None
-
-        i = 0
-        while i < len(lines):
-            line = lines[i]
-
-            heading_match = _HEADING_LINE_PATTERN.match(line.strip())
-            if heading_match:
-                current_set_id = next(
-                    (g for g in heading_match.groups() if g), ""
-                )
-                current_batch = []
-                pending_door = None
-                i += 1
-                continue
-
-            door_match = HEADING_DOOR_WITH_NUMBER.search(line)
-            if door_match:
-                door_num = door_match.group(3).strip().rstrip(",;:")
-                if (
-                    door_num
-                    and door_num not in heading_map
-                    and is_valid_door_number(door_num)
-                ):
-                    after_door = line[door_match.end(3):]
-                    loc, hand = parse_heading_door_metadata(after_door)
-                    entry = DoorEntry(
-                        door_number=door_num,
-                        hw_set=current_set_id,
-                        hw_heading=current_set_id,
-                        location=loc,
-                        hand=hand,
-                    )
-                    heading_map[door_num] = entry
-                    current_batch.append(entry)
-                    pending_door = entry
-                else:
-                    pending_door = None
-                i += 1
-                continue
-
-            # Opening Description: stamp fire rating onto every door
-            # batched so far under this heading.
-            rating = parse_opening_description_fire_rating(line)
-            if rating and current_batch:
-                for d in current_batch:
-                    if not (d.fire_rating or "").strip():
-                        d.fire_rating = rating
-                pending_door = None
-                i += 1
-                continue
-
-            # Location continuation: a line with text that isn't a new
-            # structural block. Stitch onto the most recent door's
-            # location (if any), then yield the pending slot so the next
-            # continuation-shaped line can't leak past another blocker.
-            if pending_door is not None and _is_location_continuation_line(line):
-                extra = line.strip()
-                if extra:
-                    if pending_door.location:
-                        pending_door.location = (
-                            f"{pending_door.location} {extra}".strip()
-                        )
-                    else:
-                        pending_door.location = extra
-                # Only one continuation per door is supported — this is
-                # the observed format in real submittals and keeps the
-                # parser from swallowing unrelated paragraphs below.
-                pending_door = None
-                i += 1
-                continue
-
-            # Any other line resets the pending slot so a later blank-
-            # ish line doesn't accidentally get appended.
-            pending_door = None
-            i += 1
-
+        _extract_heading_doors_on_page(page, heading_map)
     return heading_map
 
 
@@ -4620,6 +4663,95 @@ def normalize_quantities(
                         item.qty_source = "needs_review"
 
 
+# --- Region-extract field-mode helpers ---
+#
+# These reuse _HEADING_DOOR_HAND_RE, _FIRE_RATING_RE, and
+# parse_heading_door_metadata so detection in the rescan path matches
+# extraction-time behavior. If you change the field-parsing rules,
+# update them in Prompt 2's helpers and both paths pick it up.
+
+
+def _detect_field_from_text(raw: str) -> tuple[str, str, float]:
+    """Classify a raw text blob from a rescan region.
+
+    Returns ``(field, value, confidence)`` where ``field`` is one of
+    ``"hand"``, ``"fire_rating"``, ``"location"``, ``"unknown"``.
+    Detection order is hand → fire_rating → location → unknown so the
+    most specific patterns win. Uses ``fullmatch`` for hand and fire
+    rating — a substring match would misread ``"90Min"`` embedded in a
+    longer location string.
+    """
+    text = (raw or "").strip()
+    if not text:
+        return ("unknown", "", 0.0)
+
+    hand_match = _HEADING_DOOR_HAND_RE.fullmatch(text)
+    if hand_match:
+        return ("hand", hand_match.group(1).upper(), 0.95)
+
+    fr_match = _FIRE_RATING_RE.fullmatch(text)
+    if fr_match:
+        return ("fire_rating", fr_match.group(1), 0.9)
+
+    # Treat the blob as the tail of a heading door line. When the user
+    # selected "RECEPTION 101 to LARGE CONF. ROOM 102 LH",
+    # parse_heading_door_metadata splits off the hand for us.
+    loc, hand = parse_heading_door_metadata(text)
+    if loc and hand:
+        # Ambiguous — selection holds both. Prefer location with the hand
+        # stripped; the panel lets the user flip to hand if wrong.
+        return ("location", loc, 0.7)
+    if text:
+        return ("location", text, 0.4)
+    return ("unknown", "", 0.0)
+
+
+def _propagate_field_for_targets(
+    pdf,
+    target_page: int,
+    target_door_numbers: list[str],
+) -> dict[str, dict[str, str]]:
+    """Run ``_extract_heading_doors_on_page`` against the user's page and
+    return sibling_fills for any door in ``target_door_numbers`` the
+    parser could resolve.
+
+    Tries default extraction first, then retries once with wider
+    ``x_tolerance`` / ``y_tolerance`` to merge nearby characters split
+    by the default settings. Does NOT fall back to ``layout=False`` —
+    that flattens visual order and the parser relies on top-to-bottom
+    ``pending_door`` state.
+    """
+    if not target_door_numbers:
+        return {}
+    if target_page < 0 or target_page >= len(pdf.pages):
+        return {}
+
+    page = pdf.pages[target_page]
+    heading_map: dict[str, DoorEntry] = {}
+    _extract_heading_doors_on_page(page, heading_map)
+
+    # Aggressive retry if none of the requested doors landed.
+    if not any(dn in heading_map for dn in target_door_numbers):
+        heading_map = {}
+        _extract_heading_doors_on_page(
+            page,
+            heading_map,
+            extract_kwargs={"x_tolerance": 5, "y_tolerance": 5},
+        )
+
+    fills: dict[str, dict[str, str]] = {}
+    for dn in target_door_numbers:
+        hd = heading_map.get(dn)
+        if hd is None:
+            continue
+        fills[dn] = {
+            "location": hd.location or "",
+            "hand": hd.hand or "",
+            "fire_rating": hd.fire_rating or "",
+        }
+    return fills
+
+
 # --- Vercel Handler ---
 
 class handler(BaseHTTPRequestHandler):
@@ -4667,7 +4799,29 @@ class handler(BaseHTTPRequestHandler):
             bbox_data = data.get("bbox")
             target_page = data.get("target_page")
             if bbox_data is not None and target_page is not None:
-                self._handle_region_extract(pdf_bytes, target_page, bbox_data)
+                # mode='field' returns the raw text of the cropped region
+                # + server-side detection of hand/fire_rating/location
+                # using the shared Prompt 2 regexes.
+                # mode='items' (default) retains legacy behavior.
+                # propagate=true (field-mode only) additionally re-parses
+                # the target page's heading lines for each of
+                # target_door_numbers and returns sibling_fills.
+                region_mode = data.get("mode") or "items"
+                propagate_flag = bool(data.get("propagate", False))
+                raw_target_doors = data.get("target_door_numbers") or []
+                target_door_numbers: list[str] = (
+                    [str(d) for d in raw_target_doors if isinstance(d, (str, int))]
+                    if isinstance(raw_target_doors, list)
+                    else []
+                )
+                self._handle_region_extract(
+                    pdf_bytes,
+                    target_page,
+                    bbox_data,
+                    mode=region_mode,
+                    propagate=propagate_flag,
+                    target_door_numbers=target_door_numbers,
+                )
                 return
 
             with pdfplumber.open(pdf_file, unicode_norm="NFKC") as pdf:
@@ -4813,8 +4967,32 @@ class handler(BaseHTTPRequestHandler):
                 error=f"Extraction failed: {str(e)}"
             ))
 
-    def _handle_region_extract(self, pdf_bytes: bytes, target_page: int, bbox_data: dict):
-        """Extract hardware items from a cropped region of a single PDF page."""
+    def _handle_region_extract(
+        self,
+        pdf_bytes: bytes,
+        target_page: int,
+        bbox_data: dict,
+        mode: str = "items",
+        propagate: bool = False,
+        target_door_numbers: list[str] | None = None,
+    ):
+        """Extract from a cropped region of a single PDF page.
+
+        mode='items' (legacy): attempt to parse hardware items from the crop.
+
+        mode='field': return the cropped text plus detected field type using
+            the shared Prompt-2 regexes (_HEADING_DOOR_HAND_RE,
+            _FIRE_RATING_RE, parse_heading_door_metadata). Used by the
+            rescan field-assignment flow to fill missing location / hand /
+            fire-rating values on specific doors. Detection lives here —
+            not in TS — so extraction-time and rescan-time share one
+            implementation of the heuristics.
+
+        mode='field' + propagate=True: additionally run
+            _extract_heading_doors_on_page over the target page and return
+            sibling_fills for any of target_door_numbers whose per-door line
+            the parser matched. The TS layer then offers the user a preview.
+        """
         try:
             pdf_file = io.BytesIO(pdf_bytes)
             with pdfplumber.open(pdf_file, unicode_norm="NFKC") as pdf:
@@ -4849,7 +5027,7 @@ class handler(BaseHTTPRequestHandler):
                     return
 
                 logger.info(
-                    f"[region-extract] page={target_page}, "
+                    f"[region-extract] mode={mode} page={target_page}, "
                     f"bbox=({x0:.1f}, {y0:.1f}, {x1:.1f}, {y1:.1f}) "
                     f"page_size=({width:.1f}, {height:.1f})"
                 )
@@ -4857,6 +5035,55 @@ class handler(BaseHTTPRequestHandler):
                 # pdfplumber crop: (x0, top, x1, bottom)
                 cropped = page.crop((x0, y0, x1, y1))
                 cropped_text = cropped.extract_text() or ""
+
+                # Field mode: return raw text + server-side detection of
+                # hand / fire_rating / location using the SAME regexes
+                # Prompt 2 uses at extraction time. Keeps the heuristics
+                # in one place so they can't drift between extract-time
+                # and rescan-time.
+                if mode == "field":
+                    stripped = cropped_text.strip()
+                    detected_field, detected_value, detection_conf = (
+                        _detect_field_from_text(stripped)
+                    )
+
+                    # Propagation branch: also re-run the heading-page
+                    # parser over JUST this page and report which of
+                    # target_door_numbers it resolved. The TS layer then
+                    # filters to still-missing siblings and surfaces them.
+                    sibling_fills: dict[str, dict[str, str]] = {}
+                    if propagate and target_door_numbers:
+                        try:
+                            sibling_fills = _propagate_field_for_targets(
+                                pdf, target_page, target_door_numbers
+                            )
+                        except Exception as prop_err:
+                            # Propagation is best-effort — never fail the
+                            # primary detection because of a parser hiccup.
+                            logger.warning(
+                                "[region-extract] propagation error: %s",
+                                prop_err,
+                            )
+
+                    logger.info(
+                        "[region-extract] field mode: %d chars, "
+                        "detected=%s conf=%.2f, sibling_fills=%d",
+                        len(stripped),
+                        detected_field,
+                        detection_conf,
+                        len(sibling_fills),
+                    )
+                    self._send_region_json(200, RegionExtractionResult(
+                        success=bool(stripped),
+                        items=[],
+                        raw_text=stripped,
+                        detected_field=detected_field,
+                        detected_value=detected_value,
+                        detection_confidence=detection_conf,
+                        sibling_fills=sibling_fills,
+                        error="" if stripped else "No text found in selected region",
+                    ))
+                    return
 
                 items: list[HardwareItem] = []
 
