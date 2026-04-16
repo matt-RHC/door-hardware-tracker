@@ -19,6 +19,12 @@ interface SetViewProps {
   previewOpen: Set<string>;
   onTogglePreview: (setId: string) => void;
   onRequestRescan: (setId: string, pageIdx: number) => void;
+  /**
+   * Tier-1 batch "Fix missing field" — asks the server to re-parse the
+   * heading page. The parent handles tier-2 fallback (opening the region
+   * selector) when the server's re-parse comes up empty.
+   */
+  onBatchFixMissing: (setId: string, pageIdx: number) => void;
   reconciledSetMap: Map<string, ReconciledHardwareSet>;
   auditTrailOpen: Set<string>;
   onToggleAuditTrail: (setId: string) => void;
@@ -48,6 +54,7 @@ export default function SetView(props: SetViewProps) {
     previewOpen,
     onTogglePreview,
     onRequestRescan,
+    onBatchFixMissing,
     reconciledSetMap,
     auditTrailOpen,
     onToggleAuditTrail,
@@ -163,6 +170,30 @@ export default function SetView(props: SetViewProps) {
                 >
                   Re-scan region
                 </button>
+                {(() => {
+                  // "Fix missing field" — exception-handling entry point.
+                  // This button's presence is itself the signal that
+                  // residual post-Prompt-2 gaps exist; if every door has
+                  // location+hand+fire_rating, it disappears entirely
+                  // (the Prompt 2 extraction-time join handled them).
+                  //
+                  // Click routes to tier-1 (server re-parse) in the
+                  // parent; tier-1 falls back to the region selector
+                  // when it comes up empty. See handleBatchFixMissing
+                  // in StepReview.tsx for the full decision tree.
+                  const firstMissing = group.doors.find(({ door: d }) =>
+                    !d.location?.trim() || !d.hand?.trim() || !d.fire_rating?.trim()
+                  );
+                  if (!firstMissing) return null;
+                  return (
+                    <button
+                      onClick={() => onBatchFixMissing(group.setId, pdfPageIdx)}
+                      className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-warning/10 border border-warning/40 text-warning text-[11px] font-medium hover:bg-warning/20 transition-colors min-h-9"
+                    >
+                      Fix missing field
+                    </button>
+                  );
+                })()}
               </div>
             )}
 
