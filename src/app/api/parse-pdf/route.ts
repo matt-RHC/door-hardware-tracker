@@ -25,6 +25,8 @@ import { shouldAutoTriggerDeepExtraction } from '@/lib/types/confidence'
 import type { ExtractionConfidence } from '@/lib/types/confidence'
 import { createAdminSupabaseClient } from '@/lib/supabase/admin'
 import { assertProjectMember } from '@/lib/auth-helpers'
+import { validateJson, errorResponse } from '@/lib/api-helpers/validate'
+import { ParsePdfRequestSchema } from '@/lib/schemas/parse-pdf'
 
 // Vercel Fluid Compute: 800s timeout (Pro plan max)
 export const maxDuration = 800
@@ -224,12 +226,14 @@ export async function POST(request: NextRequest) {
       userSupabase = await createServerSupabaseClient()
       const { data: { user }, error: authError } = await userSupabase.auth.getUser()
       if (authError || !user) {
-        return NextResponse.json({ error: 'You must be signed in' }, { status: 401 })
+        return errorResponse('AUTH_REQUIRED', 'You must be signed in')
       }
       authedUserId = user.id
     }
 
-    const body = await request.json()
+    const parsed = await validateJson(request, ParsePdfRequestSchema)
+    if (!parsed.ok) return parsed.response
+    const body = parsed.data
 
     // Enforce project membership when a projectId is provided (IDOR prevention).
     // Skipped for service-role callers (testing scripts).
@@ -237,7 +241,7 @@ export async function POST(request: NextRequest) {
       try {
         await assertProjectMember(userSupabase, authedUserId, body.projectId)
       } catch {
-        return NextResponse.json({ error: 'Access denied to this project' }, { status: 403 })
+        return errorResponse('ACCESS_DENIED', 'Access denied to this project')
       }
     }
 
@@ -251,7 +255,7 @@ export async function POST(request: NextRequest) {
       }
     }
     if (!base64) {
-      return NextResponse.json({ error: 'Missing pdfBase64 or projectId' }, { status: 400 })
+      return errorResponse('VALIDATION_ERROR', 'Missing pdfBase64 or projectId')
     }
 
     // Client may send a filtered PDF (opening list + hardware schedule pages only)
