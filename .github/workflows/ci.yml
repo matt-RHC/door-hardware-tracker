@@ -10,6 +10,9 @@ on:
       - 'package.json'
       - 'tsconfig.json'
       - 'eslint.config.mjs'
+      - 'next.config.ts'
+      - 'vercel.json'
+      - 'vitest.config.ts'
   pull_request:
     paths:
       - 'api/**'
@@ -19,6 +22,9 @@ on:
       - 'package.json'
       - 'tsconfig.json'
       - 'eslint.config.mjs'
+      - 'next.config.ts'
+      - 'vercel.json'
+      - 'vitest.config.ts'
 
 jobs:
   test:

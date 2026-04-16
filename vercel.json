@@ -38,6 +38,12 @@
     "src/app/api/parse-pdf/detect-mapping/route.ts": {
       "maxDuration": 120
     },
+    "src/app/api/parse-pdf/deep-extract/route.ts": {
+      "maxDuration": 300
+    },
+    "src/app/api/parse-pdf/vision-extract/route.ts": {
+      "maxDuration": 300
+    },
     "src/app/api/jobs/route.ts": {
       "maxDuration": 30
     },
