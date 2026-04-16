@@ -144,7 +144,7 @@ function reconcileField(
   if (aEmpty && bEmpty) {
     return {
       value: '',
-      confidence: 'single_source',
+      confidence: 'conflict',
       sources: {},
       chosen_from: 'agreed',
       reason: `${context}: both strategies returned empty ${fieldName}`,

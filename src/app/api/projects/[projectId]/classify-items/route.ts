@@ -150,6 +150,18 @@ export async function GET(
       return NextResponse.json({ error: 'item_name query param required' }, { status: 400 })
     }
 
+    // Verify user has access to project
+    const { data: projectMember } = await supabase
+      .from('project_members')
+      .select('role')
+      .eq('project_id', projectId)
+      .eq('user_id', user.id)
+      .single()
+
+    if (!projectMember) {
+      return NextResponse.json({ error: 'Access denied' }, { status: 403 })
+    }
+
     const adminSupabase = createAdminSupabaseClient()
 
     // Get all openings in project

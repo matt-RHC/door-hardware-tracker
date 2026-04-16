@@ -18,7 +18,19 @@ export async function assertProjectMember(
     .eq('user_id', userId)
     .single()
 
-  if (error || !data) {
+  if (error) {
+    // Distinguish "not found" (no membership) from actual DB errors
+    if (error.code === 'PGRST116') {
+      const err = new Error('Access denied to this project')
+      ;(err as any).status = 403
+      throw err
+    }
+    // Genuine database error — propagate as 500
+    const err = new Error(`Database error checking project membership: ${error.message}`)
+    ;(err as any).status = 500
+    throw err
+  }
+  if (!data) {
     const err = new Error('Access denied to this project')
     ;(err as any).status = 403
     throw err
