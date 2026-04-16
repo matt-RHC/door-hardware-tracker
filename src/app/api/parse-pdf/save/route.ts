@@ -5,6 +5,8 @@ import type { StagingOpening } from '@/lib/extraction-staging'
 import type { DoorEntry, HardwareSet } from '@/lib/types'
 import { buildPerOpeningItems, buildDoorToSetMap, detectIsPair, normalizeDoorNumber } from '@/lib/parse-pdf-helpers'
 import { logActivity } from '@/lib/activity-log'
+import { validateJson, errorResponse } from '@/lib/api-helpers/validate'
+import { ParsePdfSaveRequestSchema } from '@/lib/schemas/parse-pdf'
 
 // --- Shared: check for unmatched sets ---
 //
@@ -35,18 +37,15 @@ export async function POST(request: NextRequest) {
     const supabase = await createServerSupabaseClient()
     const { data: { user }, error: authError } = await supabase.auth.getUser()
     if (authError || !user) {
-      return NextResponse.json({ error: 'You must be signed in' }, { status: 401 })
+      return errorResponse('AUTH_REQUIRED', 'You must be signed in')
     }
 
-    const body = await request.json()
-    const { projectId, hardwareSets, doors } = body as {
+    const parsed = await validateJson(request, ParsePdfSaveRequestSchema)
+    if (!parsed.ok) return parsed.response
+    const { projectId, hardwareSets, doors } = parsed.data as {
       projectId: string
       hardwareSets: HardwareSet[]
       doors: DoorEntry[]
-    }
-
-    if (!projectId || !doors || doors.length === 0) {
-      return NextResponse.json({ error: 'Missing projectId or doors' }, { status: 400 })
     }
 
     // Project membership check (finding #9): verify the authenticated user is
@@ -59,7 +58,7 @@ export async function POST(request: NextRequest) {
       .eq('user_id', user.id)
       .single()
     if (memberError || !membership) {
-      return NextResponse.json({ error: 'Access denied' }, { status: 403 })
+      return errorResponse('ACCESS_DENIED', 'Access denied')
     }
 
     // Build set lookup map — register under BOTH set_id and generic_set_id

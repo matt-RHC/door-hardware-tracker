@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import type { DoorEntry, HardwareSet } from '@/lib/types'
+import { validateJson, errorResponse } from '@/lib/api-helpers/validate'
+import { ParsePdfCompareRequestSchema } from '@/lib/schemas/parse-pdf'
 
 interface ExistingOpening {
   id: string
@@ -41,18 +43,15 @@ export async function POST(request: NextRequest) {
     const supabase = await createServerSupabaseClient()
     const { data: { user }, error: authError } = await supabase.auth.getUser()
     if (authError || !user) {
-      return NextResponse.json({ error: 'You must be signed in' }, { status: 401 })
+      return errorResponse('AUTH_REQUIRED', 'You must be signed in')
     }
 
-    const body = await request.json()
-    const { projectId, hardwareSets, doors } = body as {
+    const parsed = await validateJson(request, ParsePdfCompareRequestSchema)
+    if (!parsed.ok) return parsed.response
+    const { projectId, hardwareSets, doors } = parsed.data as {
       projectId: string
       hardwareSets: HardwareSet[]
       doors: DoorEntry[]
-    }
-
-    if (!projectId || !doors) {
-      return NextResponse.json({ error: 'Missing projectId or doors' }, { status: 400 })
     }
 
     // Project membership check: verify the authenticated user is a member of
@@ -65,7 +64,7 @@ export async function POST(request: NextRequest) {
       .eq('user_id', user.id)
       .single()
     if (memberError || !membership) {
-      return NextResponse.json({ error: 'Access denied' }, { status: 403 })
+      return errorResponse('ACCESS_DENIED', 'Access denied')
     }
 
     // Fetch existing openings with hardware items and progress
