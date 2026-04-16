@@ -3,83 +3,43 @@
 import { useState, useCallback, useRef, useEffect, useMemo } from "react"
 import type { UseExtractionJobReturn } from "@/hooks/useExtractionJob"
 import WizardNav from "./WizardNav"
-
-// ─── Question definitions ───
-
-interface QuestionDef {
-  key: string
-  label: string
-  helper: string
-  type: "number" | "select" | "tags" | "choice"
-  options?: string[]
-  placeholder?: string
-}
-
-const QUESTIONS: QuestionDef[] = [
-  {
-    key: "opening_count",
-    label: "Approximately how many openings are in your scope?",
-    helper: "This helps us verify we found all doors in the submittal",
-    type: "number",
-    placeholder: "e.g. 85",
-  },
-  {
-    key: "fire_rated_pct",
-    label: "Roughly what percentage of doors are fire-rated?",
-    helper: "Helps catch misread fire ratings",
-    type: "select",
-    options: [
-      "None (0%)",
-      "A few (~10-20%)",
-      "About half (~50%)",
-      "Most (~75%+)",
-      "All (100%)",
-      "Not sure",
-    ],
-  },
-  {
-    key: "manufacturers",
-    label: "Who are the primary hardware manufacturers?",
-    helper: "Helps identify unexpected manufacturer names in extraction",
-    type: "tags",
-    options: [
-      "Hager",
-      "Assa Abloy",
-      "Allegion/Schlage",
-      "Von Duprin",
-      "LCN",
-      "Norton",
-      "Rixson",
-      "Sargent",
-      "Corbin Russwin",
-      "dormakaba",
-    ],
-  },
-  {
-    key: "set_count",
-    label: "About how many unique hardware sets are there?",
-    helper: "Helps verify set detection completeness",
-    type: "number",
-    placeholder: "e.g. 12",
-  },
-  {
-    key: "has_pairs",
-    label: "Are there any pair (double) doors in this project?",
-    helper: "Pair doors need special handling for leaf-specific hardware",
-    type: "choice",
-    options: ["Yes", "No", "Not sure"],
-  },
-  {
-    key: "source_software",
-    label: "What software generated this submittal?",
-    helper: "Different software produces different PDF layouts",
-    type: "select",
-    options: ["Comsense", "OpeningStudio", "Dooracle", "Other", "Not sure"],
-  },
-]
+import DarrinMessage, { DarrinAction } from "./DarrinMessage"
 
 // ─── Auto-save debounce ───
 const DEBOUNCE_MS = 1500
+
+// ─── Helpers ───
+
+function formatPageList(pages: number[]): string {
+  if (pages.length === 0) return "none"
+  if (pages.length <= 6) return pages.join(", ")
+  return `${pages.slice(0, 5).join(", ")}, +${pages.length - 5} more`
+}
+
+function joinWithAnd(items: string[]): string {
+  if (items.length === 0) return ""
+  if (items.length === 1) return items[0]
+  if (items.length === 2) return `${items[0]} and ${items[1]}`
+  return `${items.slice(0, -1).join(", ")}, and ${items[items.length - 1]}`
+}
+
+function compactSetIds(setIds: string[]): string {
+  if (setIds.length === 0) return ""
+  const unique = Array.from(new Set(setIds))
+  if (unique.length <= 6) return unique.join(", ")
+  return `${unique.slice(0, 5).join(", ")}, +${unique.length - 5} more`
+}
+
+// Map each Darrin question to the constraint question_key the backend triage
+// route expects (see run/route.ts userHints assembly).
+const QUESTION_KEYS = {
+  classifyCheck: "classify_check",
+  doorCount: "opening_count",
+  fireRatedPct: "fire_rated_pct",
+  manufacturers: "manufacturers",
+  hasPairs: "has_pairs",
+  orphans: "orphan_handling",
+} as const
 
 // ─── Component ───
 
@@ -101,8 +61,13 @@ export default function StepQuestions({
   const [answers, setAnswers] = useState<Record<string, unknown>>({})
   const [saving, setSaving] = useState(false)
   const [pdfOpen, setPdfOpen] = useState(false)
+  const [doorCountInput, setDoorCountInput] = useState("")
+  const [manufacturerInput, setManufacturerInput] = useState("")
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const lastSavedRef = useRef<string>("")
+
+  const phaseData = job.phaseData
+  const { classify, extraction, triage } = phaseData
 
   // Create a stable blob URL for the PDF file
   const pdfUrl = useMemo(() => {
@@ -110,7 +75,6 @@ export default function StepQuestions({
     return URL.createObjectURL(file)
   }, [file])
 
-  // Revoke blob URL on unmount
   useEffect(() => {
     return () => {
       if (pdfUrl) URL.revokeObjectURL(pdfUrl)
@@ -144,7 +108,6 @@ export default function StepQuestions({
     [saveAnswers],
   )
 
-  // Clean up debounce on unmount + flush pending save
   useEffect(() => {
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current)
@@ -162,25 +125,8 @@ export default function StepQuestions({
     [debouncedSave],
   )
 
-  // ─── Manufacturer tags ───
-  const toggleTag = useCallback(
-    (tag: string) => {
-      setAnswers((prev) => {
-        const current = (prev.manufacturers as string[]) ?? []
-        const next = current.includes(tag)
-          ? current.filter((t) => t !== tag)
-          : [...current, tag]
-        const updated = { ...prev, manufacturers: next }
-        debouncedSave(updated)
-        return updated
-      })
-    },
-    [debouncedSave],
-  )
-
-  // ─── Continue handler ───
+  // ─── Continue ───
   const handleContinue = useCallback(async () => {
-    // Flush any pending saves before continuing
     if (debounceRef.current) {
       clearTimeout(debounceRef.current)
       debounceRef.current = null
@@ -189,10 +135,8 @@ export default function StepQuestions({
     onComplete()
   }, [answers, saveAnswers, onComplete])
 
-  // ─── Retry handler ───
   const handleRetry = useCallback(() => {
     onError("")
-    // Parent wizard will trigger a new job creation
     onBack()
   }, [onError, onBack])
 
@@ -203,15 +147,29 @@ export default function StepQuestions({
     return "bg-accent"
   }, [job.isFailed, job.isComplete])
 
-  // Detect deep extraction in status message
-  const isDeepExtracting = useMemo(() => {
-    const msg = (job.statusMessage ?? "").toLowerCase()
-    return msg.includes("deep extract") || msg.includes("vision") || msg.includes("cross-validat")
-  }, [job.statusMessage])
+  // Darrin picks a worried face when fire ratings look lopsided.
+  const triageAvatar = useMemo(() => {
+    if (!triage) return "scanning" as const
+    if (triage.fire_rated_pct < 20 || triage.fire_rated_pct > 80) return "concerned" as const
+    return "scanning" as const
+  }, [triage])
+
+  const pairDoorExample = useMemo(() => {
+    const first = triage?.pair_doors_detected?.[0]
+    if (!first) return ""
+    return first.door_b ? `${first.door_a} + ${first.door_b}` : first.door_a
+  }, [triage?.pair_doors_detected])
+
+  const orphanNumbers = useMemo(() => {
+    const list = triage?.orphan_doors ?? []
+    if (list.length === 0) return ""
+    const nums = list.map((d) => d.door_number)
+    if (nums.length <= 5) return nums.join(", ")
+    return `${nums.slice(0, 5).join(", ")}, +${nums.length - 5} more`
+  }, [triage?.orphan_doors])
 
   return (
     <div className="max-w-2xl mx-auto">
-      {/* Header */}
       <h3
         className="text-[11px] font-semibold uppercase text-secondary tracking-wider"
         style={{ fontFamily: "var(--font-display)" }}
@@ -219,8 +177,8 @@ export default function StepQuestions({
         Guided Questions
       </h3>
       <p className="text-sm text-tertiary mt-1 mb-5">
-        Answer a few optional questions while we process your submittal. Your
-        answers help us validate the extraction results.
+        Darrin walks through findings as he picks them up. Answer inline —
+        your input feeds the final triage pass.
       </p>
 
       {/* ─── Progress section ─── */}
@@ -241,16 +199,9 @@ export default function StepQuestions({
               <span className="text-sm text-primary font-medium truncate">
                 {job.statusMessage ?? "Processing..."}
               </span>
-              <div className="flex items-center gap-2 flex-shrink-0">
-                {isDeepExtracting && (
-                  <span className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-accent-dim text-accent border border-accent">
-                    Deep Extraction
-                  </span>
-                )}
-                <span className="text-xs text-tertiary">
-                  {job.progress}%
-                </span>
-              </div>
+              <span className="text-xs text-tertiary flex-shrink-0">
+                {job.progress}%
+              </span>
             </div>
             <div className="w-full bg-tint rounded-full h-2 overflow-hidden">
               <div
@@ -261,7 +212,6 @@ export default function StepQuestions({
           </div>
         </div>
 
-        {/* Save indicator */}
         {saving && (
           <p className="text-[11px] text-tertiary mt-1 text-right">
             Saving answers...
@@ -269,7 +219,7 @@ export default function StepQuestions({
         )}
       </div>
 
-      {/* ─── PDF Preview ─── */}
+      {/* ─── PDF Preview toggle ─── */}
       {pdfUrl && (
         <div className="mb-6">
           <button
@@ -311,17 +261,246 @@ export default function StepQuestions({
         </div>
       )}
 
-      {/* ─── Questions ─── */}
+      {/* ─── Conversation with Darrin ─── */}
       <div className="space-y-4">
-        {QUESTIONS.map((q) => (
-          <QuestionCard
-            key={q.key}
-            question={q}
-            value={answers[q.key]}
-            onUpdate={(val) => updateAnswer(q.key, val)}
-            onToggleTag={q.key === "manufacturers" ? toggleTag : undefined}
+        {/* Message 1 — opener */}
+        <DarrinMessage
+          avatar="scanning"
+          message="Hey, I'm Darrin. I just picked up your PDF — give me a sec to look through it."
+        />
+
+        {/* Message 2 — classify */}
+        {classify && (
+          <DarrinMessage
+            avatar="scanning"
+            message={
+              <>
+                Alright, {classify.total_pages} pages total. I&apos;m seeing door
+                schedule data on pages{" "}
+                <span className="text-accent">{formatPageList(classify.schedule_pages)}</span>{" "}
+                and hardware sets on pages{" "}
+                <span className="text-accent">{formatPageList(classify.hardware_pages)}</span>.
+                Sound right?
+              </>
+            }
+          >
+            <DarrinAction
+              selected={answers[QUESTION_KEYS.classifyCheck] === "ok"}
+              onClick={() => updateAnswer(QUESTION_KEYS.classifyCheck, "ok")}
+            >
+              Looks right &#10003;
+            </DarrinAction>
+            <DarrinAction
+              selected={answers[QUESTION_KEYS.classifyCheck] === "off"}
+              onClick={() => updateAnswer(QUESTION_KEYS.classifyCheck, "off")}
+            >
+              Something&apos;s off &mdash; let me check
+            </DarrinAction>
+          </DarrinMessage>
+        )}
+
+        {/* Message 3 — extraction */}
+        {extraction && (
+          <DarrinMessage
+            avatar="excited"
+            message={
+              <>
+                First pass done &mdash; I found{" "}
+                <span className="text-accent font-semibold">{extraction.door_count}</span>{" "}
+                openings across{" "}
+                <span className="text-accent font-semibold">{extraction.hw_set_count}</span>{" "}
+                hardware sets ({compactSetIds(extraction.hw_sets)}). Still
+                refining, but does that ballpark match your scope?
+              </>
+            }
+          >
+            <DarrinAction
+              selected={answers[QUESTION_KEYS.doorCount] === "about_right"}
+              onClick={() => updateAnswer(QUESTION_KEYS.doorCount, "about_right")}
+            >
+              That&apos;s about right &#10003;
+            </DarrinAction>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-tertiary">Should be closer to</span>
+              <input
+                type="number"
+                min={0}
+                value={doorCountInput}
+                onChange={(e) => {
+                  const v = e.target.value
+                  setDoorCountInput(v)
+                  updateAnswer(
+                    QUESTION_KEYS.doorCount,
+                    v === "" ? null : Number(v),
+                  )
+                }}
+                placeholder="e.g. 85"
+                className="w-24 bg-tint border border-border-dim rounded-lg px-2 py-1.5 text-xs text-primary placeholder:text-tertiary/50 focus:outline-none focus:border-accent/50 transition-colors"
+              />
+            </div>
+          </DarrinMessage>
+        )}
+
+        {/* Message 4 — fire ratings */}
+        {triage && (
+          <DarrinMessage
+            avatar={triageAvatar}
+            message={
+              <>
+                I&apos;m picking up fire ratings on{" "}
+                <span className="text-accent font-semibold">{triage.fire_rated_pct}%</span>{" "}
+                of doors
+                {triage.fire_ratings_found.length > 0 ? (
+                  <>
+                    {" "}&mdash; mostly {joinWithAnd(triage.fire_ratings_found)}
+                  </>
+                ) : null}
+                . Does that sound right for this project?
+              </>
+            }
+          >
+            <DarrinAction
+              selected={answers[QUESTION_KEYS.fireRatedPct] === "yes"}
+              onClick={() => updateAnswer(QUESTION_KEYS.fireRatedPct, "yes")}
+            >
+              Yes &#10003;
+            </DarrinAction>
+            <DarrinAction
+              selected={answers[QUESTION_KEYS.fireRatedPct] === "most_rated"}
+              onClick={() => updateAnswer(QUESTION_KEYS.fireRatedPct, "most_rated")}
+            >
+              Most doors are rated
+            </DarrinAction>
+            <DarrinAction
+              selected={answers[QUESTION_KEYS.fireRatedPct] === "few_rated"}
+              onClick={() => updateAnswer(QUESTION_KEYS.fireRatedPct, "few_rated")}
+            >
+              Very few are rated
+            </DarrinAction>
+          </DarrinMessage>
+        )}
+
+        {/* Message 5 — manufacturers */}
+        {triage && triage.manufacturers_found.length > 0 && (
+          <DarrinMessage
+            avatar="excited"
+            message={
+              <>
+                Manufacturers I&apos;m seeing:{" "}
+                <span className="text-accent">
+                  {joinWithAnd(triage.manufacturers_found)}
+                </span>
+                . Anyone I&apos;m missing?
+              </>
+            }
+          >
+            <DarrinAction
+              selected={answers[QUESTION_KEYS.manufacturers] === "complete"}
+              onClick={() => updateAnswer(QUESTION_KEYS.manufacturers, "complete")}
+            >
+              Looks complete &#10003;
+            </DarrinAction>
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-tertiary">Also check for</span>
+              <input
+                type="text"
+                value={manufacturerInput}
+                onChange={(e) => {
+                  const v = e.target.value
+                  setManufacturerInput(v)
+                  updateAnswer(
+                    QUESTION_KEYS.manufacturers,
+                    v.trim() === "" ? null : `also:${v.trim()}`,
+                  )
+                }}
+                placeholder="e.g. Sargent"
+                className="w-40 bg-tint border border-border-dim rounded-lg px-2 py-1.5 text-xs text-primary placeholder:text-tertiary/50 focus:outline-none focus:border-accent/50 transition-colors"
+              />
+            </div>
+          </DarrinMessage>
+        )}
+
+        {/* Message 6 — pair doors */}
+        {triage && triage.pair_doors_detected.length > 0 && (
+          <DarrinMessage
+            avatar="scanning"
+            message={
+              <>
+                I noticed{" "}
+                <span className="text-accent font-semibold">
+                  {triage.pair_doors_detected.length}
+                </span>{" "}
+                pair doors (e.g., {pairDoorExample}). Want me to handle
+                leaf-specific hardware?
+              </>
+            }
+          >
+            <DarrinAction
+              selected={answers[QUESTION_KEYS.hasPairs] === "yes"}
+              onClick={() => updateAnswer(QUESTION_KEYS.hasPairs, "yes")}
+            >
+              Yes
+            </DarrinAction>
+            <DarrinAction
+              selected={answers[QUESTION_KEYS.hasPairs] === "no"}
+              onClick={() => updateAnswer(QUESTION_KEYS.hasPairs, "no")}
+            >
+              No
+            </DarrinAction>
+            <DarrinAction
+              selected={answers[QUESTION_KEYS.hasPairs] === "not_sure"}
+              onClick={() => updateAnswer(QUESTION_KEYS.hasPairs, "not_sure")}
+            >
+              Not sure
+            </DarrinAction>
+          </DarrinMessage>
+        )}
+
+        {/* Message 7 — orphan doors */}
+        {triage && triage.orphan_doors.length > 0 && (
+          <DarrinMessage
+            avatar="concerned"
+            message={
+              <>
+                Heads up &mdash; I found{" "}
+                <span className="text-warning font-semibold">
+                  {triage.orphan_doors.length}
+                </span>{" "}
+                door entries with no hardware items ({orphanNumbers}). These
+                look like inactive leaves. I&apos;ll exclude them automatically.
+              </>
+            }
+          >
+            <DarrinAction
+              selected={answers[QUESTION_KEYS.orphans] === "exclude"}
+              onClick={() => updateAnswer(QUESTION_KEYS.orphans, "exclude")}
+            >
+              Sounds good &#10003;
+            </DarrinAction>
+            <DarrinAction
+              selected={answers[QUESTION_KEYS.orphans] === "keep"}
+              onClick={() => updateAnswer(QUESTION_KEYS.orphans, "keep")}
+            >
+              Keep them &mdash; I&apos;ll fix manually
+            </DarrinAction>
+          </DarrinMessage>
+        )}
+
+        {/* Final message — done */}
+        {job.isComplete && extraction && (
+          <DarrinMessage
+            avatar="success"
+            message={
+              <>
+                All done! Found{" "}
+                <span className="text-success font-semibold">
+                  {extraction.door_count}
+                </span>{" "}
+                doors ready for review. Let&apos;s take a look.
+              </>
+            }
           />
-        ))}
+        )}
       </div>
 
       {/* ─── Navigation ─── */}
@@ -338,104 +517,6 @@ export default function StepQuestions({
         nextDisabled={!job.isComplete && !job.isFailed}
         nextVariant={job.isComplete ? "success" : "accent"}
       />
-    </div>
-  )
-}
-
-// ─── Individual question card ───
-
-interface QuestionCardProps {
-  question: QuestionDef
-  value: unknown
-  onUpdate: (value: unknown) => void
-  onToggleTag?: (tag: string) => void
-}
-
-function QuestionCard({
-  question,
-  value,
-  onUpdate,
-  onToggleTag,
-}: QuestionCardProps) {
-  return (
-    <div className="glow-card p-4">
-      <label className="block text-sm text-primary font-medium mb-1">
-        {question.label}
-      </label>
-      <p className="text-xs text-tertiary mb-3">{question.helper}</p>
-
-      {question.type === "number" && (
-        <input
-          type="number"
-          min={0}
-          placeholder={question.placeholder}
-          value={(value as number) ?? ""}
-          onChange={(e) => {
-            const v = e.target.value
-            onUpdate(v === "" ? null : Number(v))
-          }}
-          className="w-full max-w-[200px] bg-tint border border-border-dim rounded-lg px-3 py-2 text-sm text-primary placeholder:text-tertiary/50 focus:outline-none focus:border-accent/50 transition-colors"
-        />
-      )}
-
-      {question.type === "select" && (
-        <select
-          value={(value as string) ?? ""}
-          onChange={(e) => onUpdate(e.target.value || null)}
-          className="w-full max-w-xs bg-tint border border-border-dim rounded-lg px-3 py-2 text-sm text-primary focus:outline-none focus:border-accent/50 transition-colors appearance-none"
-        >
-          <option value="">Select...</option>
-          {question.options?.map((opt) => (
-            <option key={opt} value={opt}>
-              {opt}
-            </option>
-          ))}
-        </select>
-      )}
-
-      {question.type === "tags" && (
-        <div className="flex flex-wrap gap-2">
-          {question.options?.map((tag) => {
-            const selected = Array.isArray(value) && value.includes(tag)
-            return (
-              <button
-                key={tag}
-                type="button"
-                onClick={() => onToggleTag?.(tag)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border ${
-                  selected
-                    ? "bg-accent-dim border-accent/50 text-accent"
-                    : "bg-tint border-border-dim text-secondary hover:text-primary hover:border-accent/30"
-                }`}
-              >
-                {tag}
-              </button>
-            )
-          })}
-        </div>
-      )}
-
-      {question.type === "choice" && (
-        <div className="flex gap-2">
-          {question.options?.map((opt) => {
-            const selected = value === opt
-            return (
-              <button
-                key={opt}
-                type="button"
-                onClick={() => onUpdate(selected ? null : opt)}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors border ${
-                  selected
-                    ? "bg-accent-dim border-accent/50 text-accent"
-                    : "bg-tint border-border-dim text-secondary hover:text-primary hover:border-accent/30"
-                }`}
-              >
-                {opt}
-              </button>
-            )
-          })}
-        </div>
-      )}
     </div>
   )
 }
