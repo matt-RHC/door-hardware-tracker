@@ -1,5 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import {
+  CHECKLIST_PROGRESS_COLUMNS,
+  OPENING_COLUMNS,
+  HARDWARE_ITEM_COLUMNS,
+} from '@/lib/supabase-selects'
 
 export async function GET(
   request: NextRequest,
@@ -32,28 +37,9 @@ export async function GET(
     const { data: rows, error: fetchError } = await supabase
       .from('checklist_progress')
       .select(`
-        id,
-        opening_id,
-        item_id,
-        leaf_index,
-        qa_findings,
-        qa_notes,
-        qa_qc,
-        qa_resolved_at,
-        qa_resolved_by,
-        openings!inner (
-          id,
-          door_number,
-          location,
-          project_id
-        ),
-        hardware_items!inner (
-          id,
-          name,
-          manufacturer,
-          model,
-          finish
-        )
+        ${CHECKLIST_PROGRESS_COLUMNS},
+        openings!inner (${OPENING_COLUMNS}),
+        hardware_items!inner (${HARDWARE_ITEM_COLUMNS})
       `)
       .eq('openings.project_id', projectId)
       .eq('openings.is_active', true)

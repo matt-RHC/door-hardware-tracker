@@ -1,6 +1,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { createAdminSupabaseClient } from '@/lib/supabase/admin'
+import {
+  OPENING_COLUMNS,
+  HARDWARE_ITEM_COLUMNS,
+  CHECKLIST_PROGRESS_COLUMNS,
+} from '@/lib/supabase-selects'
 
 export async function GET(
   request: NextRequest,
@@ -41,9 +46,9 @@ export async function GET(
     const { data: openingsRaw } = await admin
       .from('openings')
       .select(`
-        id,
-        hardware_items(id, install_type),
-        checklist_progress(id, checked, received, pre_install, installed, qa_qc),
+        ${OPENING_COLUMNS},
+        hardware_items(${HARDWARE_ITEM_COLUMNS}),
+        checklist_progress(${CHECKLIST_PROGRESS_COLUMNS}),
         attachments(id, category)
       `)
       .eq('project_id', projectId)

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { createAdminSupabaseClient } from '@/lib/supabase/admin'
 import { OpeningUpdate } from '@/lib/types/database'
+import { OPENING_DETAIL_SELECT } from '@/lib/supabase-selects'
 
 interface UpdateOpeningRequest {
   door_number?: string
@@ -49,70 +50,7 @@ export async function GET(
     const { data: opening, error: openingError } = await supabase
       .from('openings')
       .select(`
-        id,
-        project_id,
-        door_number,
-        hw_set,
-        hw_heading,
-        location,
-        door_type,
-        frame_type,
-        fire_rating,
-        hand,
-        notes,
-        pdf_page,
-        leaf_count,
-        is_active,
-        floor_number,
-        zone_name,
-        created_at,
-        hardware_items(
-          id,
-          name,
-          qty,
-          qty_total,
-          qty_door_count,
-          qty_source,
-          manufacturer,
-          model,
-          finish,
-          options,
-          sort_order,
-          install_type,
-          leaf_side,
-          stage,
-          created_at
-        ),
-        checklist_progress(
-          id,
-          item_id,
-          leaf_index,
-          checked,
-          checked_by,
-          checked_at,
-          received,
-          received_by,
-          received_at,
-          pre_install,
-          pre_install_by,
-          pre_install_at,
-          installed,
-          installed_by,
-          installed_at,
-          qa_qc,
-          qa_qc_by,
-          qa_qc_at,
-          notes,
-          qa_findings,
-          qa_notes,
-          qa_resolved_at,
-          qa_resolved_by,
-          client_id,
-          client_updated_at,
-          server_updated_at,
-          sync_status,
-          created_at
-        ),
+        ${OPENING_DETAIL_SELECT},
         attachments(
           id,
           file_name,

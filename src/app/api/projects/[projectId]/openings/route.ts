@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { OPENING_LIST_SELECT } from '@/lib/supabase-selects'
 
 interface OpeningWithCounts {
   id: string
@@ -14,6 +15,10 @@ interface OpeningWithCounts {
   hand: string | null
   notes: string | null
   pdf_page: number | null
+  leaf_count: number
+  is_active: boolean
+  floor_number: number | null
+  zone_name: string | null
   created_at: string
   hardware_items: Array<{ id: string }>
   checklist_progress: Array<{
@@ -59,23 +64,7 @@ export async function GET(
     // Get openings with hardware counts and checklist progress
     const { data: openings, error: openingsError } = await supabase
       .from('openings')
-      .select(`
-        id,
-        project_id,
-        door_number,
-        hw_set,
-        hw_heading,
-        location,
-        door_type,
-        frame_type,
-        fire_rating,
-        hand,
-        notes,
-        pdf_page,
-        created_at,
-        hardware_items:hardware_items(id),
-        checklist_progress(id, checked, received, pre_install, installed, qa_qc)
-      `)
+      .select(OPENING_LIST_SELECT)
       .eq('project_id', projectId)
       .order('door_number', { ascending: true })
 
