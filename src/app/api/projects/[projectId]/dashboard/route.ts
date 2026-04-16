@@ -29,18 +29,27 @@ export async function GET(
     const adminSupabase = createAdminSupabaseClient()
 
     // --- Stage counts ---
+    // First fetch active opening IDs, then use the array in .in()
+    // (Supabase JS client .in() expects an array, not a query builder)
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: stageRows } = await (adminSupabase as any)
-      .from('hardware_items')
-      .select('stage, opening_id')
-      .in('opening_id',
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (adminSupabase as any)
-          .from('openings')
-          .select('id')
-          .eq('project_id', projectId)
-          .eq('is_active', true)
-      )
+    const { data: activeOpeningRows } = await (adminSupabase as any)
+      .from('openings')
+      .select('id')
+      .eq('project_id', projectId)
+      .eq('is_active', true)
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const activeOpeningIds = ((activeOpeningRows as any[]) ?? []).map((o: { id: string }) => o.id)
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let stageRows: any[] | null = null
+    if (activeOpeningIds.length > 0) {
+      const { data } = await (adminSupabase as any)
+        .from('hardware_items')
+        .select('stage, opening_id')
+        .in('opening_id', activeOpeningIds)
+      stageRows = data
+    }
 
     const stageCounts: Record<string, number> = {
       ordered: 0, shipped: 0, received: 0, installed: 0, qa_passed: 0,

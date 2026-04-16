@@ -727,14 +727,14 @@ class handler(BaseHTTPRequestHandler):
                 }).encode())
                 return
 
-            pdf_base64 = data.get("pdfBase64", "")
+            pdf_base64 = data.get("pdf_base64") or data.get("pdfBase64", "")
             max_chunk_pages = data.get("maxChunkPages", 40)
 
             if not pdf_base64:
                 self.send_response(400)
                 self.send_header("Content-Type", "application/json")
                 self.end_headers()
-                self.wfile.write(json.dumps({"error": "pdfBase64 is required"}).encode())
+                self.wfile.write(json.dumps({"error": "pdf_base64 is required"}).encode())
                 return
 
             # Decode PDF

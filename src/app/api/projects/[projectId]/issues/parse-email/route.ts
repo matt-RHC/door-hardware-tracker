@@ -50,14 +50,14 @@ export async function POST(
     // Fetch project openings for fuzzy matching
     const { data: openings } = await (supabase as any)
       .from('openings')
-      .select('id, name')
+      .select('id, door_number')
       .eq('project_id', projectId)
 
     const openingMap = new Map<string, string>()
     for (const o of openings ?? []) {
-      if (o.name) {
-        // Index by normalized name (lowercase, trimmed)
-        openingMap.set(o.name.toLowerCase().trim(), o.id)
+      if (o.door_number) {
+        // Index by normalized door_number (lowercase, trimmed)
+        openingMap.set(o.door_number.toLowerCase().trim(), o.id)
       }
     }
 
