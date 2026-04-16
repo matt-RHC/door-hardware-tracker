@@ -8,6 +8,7 @@ import type {
   ColumnMapping,
   DoorEntry,
 } from "./types";
+import { transformDetectMappingResponse } from "./transforms";
 import { arrayBufferToBase64 } from "@/lib/pdf-utils";
 import WizardNav from "./WizardNav";
 
@@ -99,34 +100,8 @@ export default function StepMapColumns({
         );
       }
 
-      // Transform Python response to match DetectMappingResponse type.
-      // Python returns: { headers: string[], auto_mapping: {field: colIdx}, confidence_scores: {field: score}, sample_rows, page_index }
-      // TS expects:     { columns: DetectedColumn[], best_door_schedule_page: number, raw_headers: string[] }
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const raw: any = await resp.json();
-      const headers: string[] = raw.headers ?? [];
-      const autoMapping: Record<string, number> = raw.auto_mapping ?? {};
-      const confidenceScores: Record<string, number> = raw.confidence_scores ?? {};
-
-      // Build reverse map: column index -> mapped field name
-      const indexToField = new Map<number, string>();
-      for (const [field, colIdx] of Object.entries(autoMapping)) {
-        indexToField.set(colIdx as number, field);
-      }
-
-      const result: DetectMappingResponse = {
-        columns: headers.map((header, i) => {
-          const mappedField = indexToField.get(i) ?? null;
-          const confidence = mappedField ? (confidenceScores[mappedField] ?? 0) : 0;
-          return {
-            source_header: header,
-            mapped_field: mappedField as keyof DoorEntry | null,
-            confidence,
-          };
-        }),
-        best_door_schedule_page: raw.page_index ?? bestPage,
-        raw_headers: headers,
-      };
+      const raw = (await resp.json()) as Record<string, unknown>;
+      const result = transformDetectMappingResponse(raw, bestPage);
       setDetectResult(result);
 
       // Initialize mappings from detected columns

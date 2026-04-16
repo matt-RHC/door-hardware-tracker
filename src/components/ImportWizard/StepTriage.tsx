@@ -8,6 +8,7 @@ import type {
   DoorEntry,
   HardwareSet,
 } from "./types";
+import { transformTriageResponse } from "./transforms";
 import type { DarrinQuantityCheck } from "@/lib/types";
 import type { ExtractionConfidence } from "@/lib/types/confidence";
 import type { ReconciliationResult } from "@/lib/types/reconciliation";
@@ -765,48 +766,8 @@ export default function StepTriage({
         };
         setTriageResult(result);
       } else {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const raw: any = await triageResp.json();
-        const triageError: boolean = raw.triage_error === true;
-        const triageErrorMessage: string = raw.triage_error_message ?? '';
-        const retryable: boolean = raw.retryable === true;
-        const classifications: Array<{
-          door_number: string;
-          class: string;
-          confidence: string;
-          reason: string;
-        }> = Array.isArray(raw.classifications) ? raw.classifications : [];
-
-        const acceptedDoors = doors.filter((d) => {
-          const c = classifications.find(
-            (cl) => cl.door_number === d.door_number
-          );
-          return !c || c.class === "door";
-        });
-        const flagged = classifications
-          .filter((c) => c.class === "by_others" || (c.confidence === "low" && c.class !== "door"))
-          .map((c) => ({
-            door_number: c.door_number,
-            reason: c.reason,
-            confidence:
-              c.confidence === "high"
-                ? 0.9
-                : c.confidence === "medium"
-                ? 0.6
-                : 0.3,
-          }));
-
-        const result: TriageResult = {
-          doors_found: raw.stats?.total ?? doors.length,
-          by_others: raw.stats?.by_others ?? 0,
-          rejected: raw.stats?.rejected ?? 0,
-          accepted: acceptedDoors,
-          flagged,
-          triage_error: triageError,
-          triage_error_message: triageErrorMessage || undefined,
-          retryable,
-        };
-        setTriageResult(result);
+        const raw = (await triageResp.json()) as Record<string, unknown>;
+        setTriageResult(transformTriageResponse(raw, doors));
       }
 
       setProgress(100);

@@ -3,107 +3,12 @@
  * These are pure-function tests — no React rendering needed.
  */
 import { describe, it, expect } from 'vitest'
-import type { ClassifyPagesResponse, DetectMappingResponse, TriageResult } from '../types'
-
-// ── Transform functions extracted from StepUpload ──
-
-function transformClassifyResponse(raw: Record<string, unknown>): ClassifyPagesResponse {
-  const pageClassifications = (raw.page_classifications ?? []) as Array<{
-    index: number
-    type: string
-    confidence?: number
-  }>
-  return {
-    pages: pageClassifications.map((p) => ({
-      page_number: p.index,
-      page_type: p.type as ClassifyPagesResponse['pages'][0]['page_type'],
-      confidence: p.confidence ?? 1,
-    })),
-    summary: {
-      total_pages: (raw.total_pages as number) ?? pageClassifications.length,
-      door_schedule_pages: pageClassifications
-        .filter((p) => p.type === 'door_schedule')
-        .map((p) => p.index),
-      hardware_set_pages: pageClassifications
-        .filter((p) => p.type === 'hardware_set')
-        .map((p) => p.index),
-      submittal_pages: pageClassifications
-        .filter((p) => p.type === 'reference')
-        .map((p) => p.index),
-      cover_pages: pageClassifications
-        .filter((p) => p.type === 'cover')
-        .map((p) => p.index),
-      other_pages: pageClassifications
-        .filter((p) => p.type === 'other')
-        .map((p) => p.index),
-    },
-  }
-}
-
-// ── Transform from StepMapColumns ──
-
-function transformDetectMappingResponse(raw: Record<string, unknown>): DetectMappingResponse {
-  const headers = (raw.headers ?? []) as string[]
-  const autoMapping = (raw.auto_mapping ?? {}) as Record<string, number>
-  const confidenceScores = (raw.confidence_scores ?? {}) as Record<string, number>
-
-  const indexToField = new Map<number, string>()
-  for (const [field, colIdx] of Object.entries(autoMapping)) {
-    indexToField.set(colIdx, field)
-  }
-
-  return {
-    columns: headers.map((header, i) => {
-      const mappedField = indexToField.get(i) ?? null
-      const confidence = mappedField ? (confidenceScores[mappedField] ?? 0) : 0
-      return {
-        source_header: header,
-        mapped_field: mappedField as keyof import('../types').DoorEntry | null,
-        confidence,
-      }
-    }),
-    best_door_schedule_page: (raw.page_index as number) ?? 0,
-    raw_headers: headers,
-  }
-}
-
-// ── Transform from StepTriage ──
-
-interface RawTriageClassification {
-  door_number: string
-  class: string
-  confidence: string
-  reason: string
-}
-
-function transformTriageResponse(
-  raw: { classifications?: RawTriageClassification[]; stats?: Record<string, number> },
-  extractedDoors: Array<{ door_number: string }>,
-): TriageResult {
-  const classifications = raw.classifications ?? []
-  const acceptedDoors = extractedDoors.filter((d) => {
-    const c = classifications.find((cl) => cl.door_number === d.door_number)
-    return !c || c.class === 'door'
-  })
-  // Flag by_others doors and low-confidence non-door classifications.
-  // Don't flag class="door" items — if triage failed, all doors come back
-  // as class="door" + confidence="low" and flagging them all is useless.
-  const flagged = classifications
-    .filter((c) => c.class === 'by_others' || (c.confidence === 'low' && c.class !== 'door'))
-    .map((c) => ({
-      door_number: c.door_number,
-      reason: c.reason,
-      confidence: c.confidence === 'high' ? 0.9 : c.confidence === 'medium' ? 0.6 : 0.3,
-    }))
-
-  return {
-    doors_found: raw.stats?.total ?? extractedDoors.length,
-    by_others: raw.stats?.by_others ?? 0,
-    rejected: raw.stats?.rejected ?? 0,
-    accepted: acceptedDoors as TriageResult['accepted'],
-    flagged,
-  }
-}
+import type { DoorEntry } from '../types'
+import {
+  transformClassifyResponse,
+  transformDetectMappingResponse,
+  transformTriageResponse,
+} from '../transforms'
 
 // ── Tests ──
 
@@ -159,6 +64,78 @@ describe('transformClassifyResponse', () => {
     const result = transformClassifyResponse(raw)
     expect(result.pages[0].confidence).toBe(1)
   })
+
+  // ── Tripwire: lock in superset fields that were silently dropped by the
+  //    previous in-file copy of the transform. If any future edit removes
+  //    these, these assertions will fail loudly.
+  it('defaults superset page fields when absent from raw', () => {
+    const raw = { page_classifications: [{ index: 0, type: 'door_schedule' }] }
+    const result = transformClassifyResponse(raw)
+    expect(result.pages[0].section_labels).toEqual([])
+    expect(result.pages[0].hw_set_ids).toEqual([])
+    expect(result.pages[0].has_door_numbers).toBe(false)
+    expect(result.pages[0].is_scanned).toBe(false)
+  })
+
+  it('passes through superset page fields when present in raw', () => {
+    const raw = {
+      page_classifications: [
+        {
+          index: 0,
+          type: 'door_schedule',
+          section_labels: ['A1', 'A2'],
+          hw_set_ids: ['HW-01'],
+          has_door_numbers: true,
+          is_scanned: true,
+        },
+      ],
+    }
+    const result = transformClassifyResponse(raw)
+    expect(result.pages[0].section_labels).toEqual(['A1', 'A2'])
+    expect(result.pages[0].hw_set_ids).toEqual(['HW-01'])
+    expect(result.pages[0].has_door_numbers).toBe(true)
+    expect(result.pages[0].is_scanned).toBe(true)
+  })
+
+  it('defaults summary.scanned_pages to 0 when absent', () => {
+    const result = transformClassifyResponse({ page_classifications: [] })
+    expect(result.summary.scanned_pages).toBe(0)
+  })
+
+  it('passes through summary.scanned_pages when present', () => {
+    const raw = {
+      page_classifications: [{ index: 0, type: 'door_schedule' }],
+      summary: { scanned_pages: 3 },
+    }
+    const result = transformClassifyResponse(raw)
+    expect(result.summary.scanned_pages).toBe(3)
+  })
+
+  it('round-trips profile and extraction_strategy from raw', () => {
+    const profile = {
+      source: 'python',
+      heading_format: 'numbered',
+      door_number_format: 'standard',
+      table_strategy: 'grid',
+      hw_set_count: 4,
+      door_schedule_pages: 2,
+      has_reference_tables: true,
+    }
+    const raw = {
+      page_classifications: [{ index: 0, type: 'door_schedule' }],
+      profile,
+      extraction_strategy: 'deep',
+    }
+    const result = transformClassifyResponse(raw)
+    expect(result.profile).toEqual(profile)
+    expect(result.extraction_strategy).toBe('deep')
+  })
+
+  it('leaves profile and extraction_strategy undefined when absent', () => {
+    const result = transformClassifyResponse({ page_classifications: [] })
+    expect(result.profile).toBeUndefined()
+    expect(result.extraction_strategy).toBeUndefined()
+  })
 })
 
 describe('transformDetectMappingResponse', () => {
@@ -169,7 +146,7 @@ describe('transformDetectMappingResponse', () => {
       confidence_scores: { door_number: 0.7, hw_set: 1.0, door_type: 1.0, frame_type: 1.0 },
       page_index: 2,
     }
-    const result = transformDetectMappingResponse(raw)
+    const result = transformDetectMappingResponse(raw, 0)
 
     expect(result.columns).toHaveLength(4)
     expect(result.columns[0].source_header).toBe('Opening')
@@ -186,16 +163,40 @@ describe('transformDetectMappingResponse', () => {
       auto_mapping: { door_number: 0, hw_set: 2 },
       confidence_scores: { door_number: 0.9, hw_set: 0.95 },
     }
-    const result = transformDetectMappingResponse(raw)
+    const result = transformDetectMappingResponse(raw, 0)
 
     expect(result.columns[1].mapped_field).toBeNull()
     expect(result.columns[1].confidence).toBe(0)
   })
 
   it('handles empty headers', () => {
-    const result = transformDetectMappingResponse({ headers: [], auto_mapping: {} })
+    const result = transformDetectMappingResponse({ headers: [], auto_mapping: {} }, 0)
     expect(result.columns).toHaveLength(0)
     expect(result.raw_headers).toEqual([])
+  })
+
+  // ── Tripwire: fallbackPage is REQUIRED (no default). When raw.page_index
+  //    is missing, the caller's fallback must be used — defaulting to 0
+  //    would silently route the wizard to a cover page.
+  it('uses fallbackPage when raw.page_index is missing', () => {
+    const raw = {
+      headers: ['Opening'],
+      auto_mapping: { door_number: 0 },
+      confidence_scores: { door_number: 0.9 },
+    }
+    const result = transformDetectMappingResponse(raw, 7)
+    expect(result.best_door_schedule_page).toBe(7)
+  })
+
+  it('prefers raw.page_index over fallbackPage when present', () => {
+    const raw = {
+      headers: ['Opening'],
+      auto_mapping: { door_number: 0 },
+      confidence_scores: { door_number: 0.9 },
+      page_index: 3,
+    }
+    const result = transformDetectMappingResponse(raw, 7)
+    expect(result.best_door_schedule_page).toBe(3)
   })
 })
 
@@ -205,7 +206,7 @@ describe('transformTriageResponse', () => {
     { door_number: '102' },
     { door_number: '103' },
     { door_number: 'L9175' }, // product code, should be rejected
-  ]
+  ] as DoorEntry[]
 
   it('accepts doors classified as "door"', () => {
     const raw = {
@@ -250,5 +251,29 @@ describe('transformTriageResponse', () => {
     const result = transformTriageResponse({}, doors)
     expect(result.accepted).toHaveLength(4) // all accepted by default
     expect(result.flagged).toHaveLength(0)
+  })
+
+  // ── Tripwire: lock in triage_error / triage_error_message / retryable
+  //    superset fields. These were silently dropped by the previous in-file
+  //    copy — they must now flow through.
+  it('forwards triage_error / triage_error_message / retryable when present', () => {
+    const raw = {
+      classifications: [],
+      stats: { total: 0 },
+      triage_error: true,
+      triage_error_message: 'timeout',
+      retryable: true,
+    }
+    const result = transformTriageResponse(raw, doors)
+    expect(result.triage_error).toBe(true)
+    expect(result.triage_error_message).toBe('timeout')
+    expect(result.retryable).toBe(true)
+  })
+
+  it('defaults triage_error / retryable to false and message to undefined when absent', () => {
+    const result = transformTriageResponse({}, doors)
+    expect(result.triage_error).toBe(false)
+    expect(result.triage_error_message).toBeUndefined()
+    expect(result.retryable).toBe(false)
   })
 })

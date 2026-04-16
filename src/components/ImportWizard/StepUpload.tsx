@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback, type ChangeEvent, type DragEvent } from "react";
 import type { ClassifyPagesResponse } from "./types";
+import { transformClassifyResponse } from "./transforms";
 import { arrayBufferToBase64 } from "@/lib/pdf-utils";
 import WizardNav from "./WizardNav";
 
@@ -97,47 +98,8 @@ export default function StepUpload({
         );
       }
 
-      // Transform Python response to match ClassifyPagesResponse type.
-      // Python returns: { page_classifications: [{index, type, ...}], summary: {door_schedule_pages: count, ...} }
-      // TS expects:     { pages: [{page_number, page_type, confidence}], summary: {door_schedule_pages: number[], ...} }
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const raw: any = await resp.json();
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const pageClassifications: Array<{ index: number; type: string; confidence?: number; section_labels?: string[]; hw_set_ids?: string[]; has_door_numbers?: boolean; is_scanned?: boolean }> =
-        raw.page_classifications ?? [];
-
-      const result: ClassifyPagesResponse = {
-        pages: pageClassifications.map((p) => ({
-          page_number: p.index,
-          page_type: p.type as ClassifyPagesResponse["pages"][0]["page_type"],
-          confidence: p.confidence ?? 1,
-          section_labels: p.section_labels ?? [],
-          hw_set_ids: p.hw_set_ids ?? [],
-          has_door_numbers: p.has_door_numbers ?? false,
-          is_scanned: p.is_scanned ?? false,
-        })),
-        summary: {
-          total_pages: raw.total_pages ?? pageClassifications.length,
-          door_schedule_pages: pageClassifications
-            .filter((p) => p.type === "door_schedule")
-            .map((p) => p.index),
-          hardware_set_pages: pageClassifications
-            .filter((p) => p.type === "hardware_set")
-            .map((p) => p.index),
-          submittal_pages: pageClassifications
-            .filter((p) => p.type === "reference")
-            .map((p) => p.index),
-          cover_pages: pageClassifications
-            .filter((p) => p.type === "cover")
-            .map((p) => p.index),
-          other_pages: pageClassifications
-            .filter((p) => p.type === "other")
-            .map((p) => p.index),
-          scanned_pages: raw.summary?.scanned_pages ?? 0,
-        },
-        profile: raw.profile ?? undefined,
-        extraction_strategy: raw.extraction_strategy ?? undefined,
-      };
+      const raw = (await resp.json()) as Record<string, unknown>;
+      const result = transformClassifyResponse(raw);
       setClassifyResult(result);
       setProgress(70);
       setStatus("Classification complete.");
