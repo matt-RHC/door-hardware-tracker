@@ -141,14 +141,36 @@ function getCategoryLabel(categoryId: string): string {
 // ── Main analysis function ─────────────────────────────────────────
 
 /**
+ * Minimal shape of an existing product family. Only the fields
+ * analyzeProducts needs to pre-resolve typo candidates — the wizard passes
+ * a superset of this from /api/projects/:id/product-families.
+ */
+export interface ExistingProductFamilyRef {
+  manufacturer: string
+  base_series: string
+}
+
+/** Lowercase key for matching a family against ExistingProductFamilyRef. */
+function familyKey(manufacturer: string, baseSeries: string): string {
+  return `${(manufacturer ?? '').toLowerCase()}|${(baseSeries ?? '').toLowerCase()}`
+}
+
+/**
  * Analyze hardware sets to build product family groupings and detect typos.
  *
  * 1. Flatten all items from all sets
  * 2. Extract/validate base series for each item
  * 3. Group by (manufacturer, baseSeries) → ProductFamily
  * 4. Cross-family typo detection via Levenshtein on base series strings
+ *
+ * When `existingFamilies` is supplied, typo candidates where at least one
+ * side matches a previously-confirmed family (by manufacturer+base_series)
+ * are filtered out — we've already made that decision in a past session.
  */
-export function analyzeProducts(hardwareSets: HardwareSet[]): ProductAnalysis {
+export function analyzeProducts(
+  hardwareSets: HardwareSet[],
+  existingFamilies: ExistingProductFamilyRef[] = [],
+): ProductAnalysis {
   // Map key: "manufacturer|baseSeries" → variants map
   const familyMap = new Map<string, {
     baseSeries: string
@@ -242,6 +264,13 @@ export function analyzeProducts(hardwareSets: HardwareSet[]): ProductAnalysis {
     }
   }
 
+  // Pre-computed set of existing (manufacturer|base_series) keys so typos
+  // involving families the user already confirmed in a prior session are
+  // filtered out — we don't re-prompt for settled decisions.
+  const existingKeys = new Set<string>(
+    existingFamilies.map((f) => familyKey(f.manufacturer, f.base_series)),
+  )
+
   // Cross-family typo detection: compare base series within same (manufacturer, category)
   const typoCandidates: TypoCandidate[] = []
   const categoryEntries = Array.from(byCategory.entries())
@@ -256,9 +285,15 @@ export function analyzeProducts(hardwareSets: HardwareSet[]): ProductAnalysis {
           (a.baseSeries ?? '').toLowerCase(),
           (b.baseSeries ?? '').toLowerCase(),
         )
-        if (dist === 1) {
-          typoCandidates.push({ familyA: a, familyB: b, distance: dist })
+        if (dist !== 1) continue
+        // Skip if either side is already a known family
+        if (
+          existingKeys.has(familyKey(a.manufacturer, a.baseSeries)) ||
+          existingKeys.has(familyKey(b.manufacturer, b.baseSeries))
+        ) {
+          continue
         }
+        typoCandidates.push({ familyA: a, familyB: b, distance: dist })
       }
     }
   }

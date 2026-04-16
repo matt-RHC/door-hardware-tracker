@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useCallback, useState } from "react";
+import { useEffect, useMemo, useCallback, useState } from "react";
 import type { HardwareSet } from "./types";
 import {
   analyzeProducts,
@@ -8,6 +8,7 @@ import {
   type ProductFamily,
   type ProductAnalysis,
   type TypoCandidate,
+  type ExistingProductFamilyRef,
 } from "@/lib/product-dedup";
 import WizardNav from "./WizardNav";
 
@@ -46,12 +47,14 @@ function accentForCategory(categoryId: string): string {
 // ── Main component ──
 
 interface StepProductsProps {
+  projectId: string;
   hardwareSets: HardwareSet[];
   onComplete: (hardwareSets: HardwareSet[]) => void;
   onBack: () => void;
 }
 
 export default function StepProducts({
+  projectId,
   hardwareSets: initialSets,
   onComplete,
   onBack,
@@ -59,8 +62,33 @@ export default function StepProducts({
   const [sets, setSets] = useState<HardwareSet[]>(initialSets);
   const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
   const [resolvedTypos, setResolvedTypos] = useState<Set<string>>(new Set());
+  const [existingFamilies, setExistingFamilies] = useState<ExistingProductFamilyRef[]>([]);
 
-  const analysis: ProductAnalysis = useMemo(() => analyzeProducts(sets), [sets]);
+  // Load existing product families for this project so typos we've already
+  // decided on in a prior session don't re-prompt. Failures here are
+  // non-fatal — the page still works as a pure in-memory analyzer.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/projects/${projectId}/product-families`);
+        if (!res.ok) return;
+        const rows: Array<{ manufacturer: string; base_series: string }> = await res.json();
+        if (cancelled) return;
+        setExistingFamilies(rows);
+      } catch (err) {
+        console.warn('[StepProducts] Failed to load existing product families:', err);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [projectId]);
+
+  const analysis: ProductAnalysis = useMemo(
+    () => analyzeProducts(sets, existingFamilies),
+    [sets, existingFamilies],
+  );
 
   const toggleExpanded = useCallback((key: string) => {
     setExpandedCards(prev => {
@@ -83,8 +111,60 @@ export default function StepProducts({
       }
       const typoKey = `${typo.familyA.baseSeries}|${typo.familyB.baseSeries}`;
       setResolvedTypos(prev => new Set(prev).add(typoKey));
+
+      // Persist the winning family so future imports know this decision.
+      // Combine variants from both sides so the DB reflects the complete
+      // set the user confirmed as one product. Fire-and-forget — a failure
+      // here shouldn't block the wizard; the correction is still applied
+      // locally.
+      const persistedVariants = [
+        ...keepFamily.items,
+        ...otherFamily.items,
+      ].map((v) => ({
+        model: v.model,
+        normalizedModel: v.normalizedModel,
+        name: v.name,
+        finish: v.finish,
+        occurrences: v.occurrences,
+        setIds: v.setIds,
+      }));
+
+      fetch(`/api/projects/${projectId}/product-families`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          manufacturer: keepFamily.manufacturer,
+          base_series: keepFamily.baseSeries,
+          canonical_model: canonical,
+          category: keepFamily.categoryId,
+          variants: persistedVariants,
+        }),
+      })
+        .then((res) => {
+          if (!res.ok) {
+            console.warn('[StepProducts] product-families upsert returned', res.status);
+            return;
+          }
+          // Optimistically mark the kept family as existing so subsequent
+          // re-analysis (in this session) treats it as a settled decision.
+          setExistingFamilies((prev) => {
+            const key = `${keepFamily.manufacturer.toLowerCase()}|${keepFamily.baseSeries.toLowerCase()}`;
+            const already = prev.some(
+              (p) =>
+                `${p.manufacturer.toLowerCase()}|${p.base_series.toLowerCase()}` === key,
+            );
+            if (already) return prev;
+            return [
+              ...prev,
+              { manufacturer: keepFamily.manufacturer, base_series: keepFamily.baseSeries },
+            ];
+          });
+        })
+        .catch((err) => {
+          console.warn('[StepProducts] product-families upsert failed:', err);
+        });
     },
-    [],
+    [projectId],
   );
 
   const handleDismissTypo = useCallback((typo: TypoCandidate) => {

@@ -583,6 +583,7 @@ export default function ImportWizard({
 
             {jobStep === JobWizardStep.Products && (
               <StepProducts
+                projectId={projectId}
                 hardwareSets={state.hardwareSets}
                 onComplete={onJobProductsComplete}
                 onBack={() => setJobStep(JobWizardStep.Review)}
@@ -740,6 +741,7 @@ export default function ImportWizard({
 
             {state.currentStep === WizardStep.Products && (
               <StepProducts
+                projectId={projectId}
                 hardwareSets={state.hardwareSets}
                 onComplete={onProductsComplete}
                 onBack={() => goToStep(WizardStep.Review)}
