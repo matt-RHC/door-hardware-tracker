@@ -1,8 +1,15 @@
--- Migration 022: Add deep extraction columns to extraction_jobs
+-- Migration 047: Add deep extraction columns to extraction_jobs
 --
 -- Phase D of the "nuclear option": supports auto-fallback deep extraction
 -- by adding dedicated columns for tracking deep extraction state,
 -- auto-trigger status, confidence data, and reconciliation results.
+--
+-- Originally landed as 022b_ (between 022_activity_log and 023_). The
+-- non-numeric `b` suffix broke the Supabase CLI's version-string parser,
+-- causing `supabase db pull` / `db push` to silently skip the file.
+-- Renumbered to 047 (next free slot). All statements are idempotent
+-- (IF NOT EXISTS), so re-application on environments that already have
+-- the columns is a no-op.
 
 ALTER TABLE extraction_jobs
   ADD COLUMN IF NOT EXISTS deep_extraction       BOOLEAN NOT NULL DEFAULT false,

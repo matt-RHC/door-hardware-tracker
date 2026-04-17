@@ -109,3 +109,28 @@ jobs:
       - name: Tear down
         if: always()
         run: supabase stop --no-backup
+
+  migration-filenames:
+    # Guards against the `022b` class of bug: the Supabase CLI silently
+    # skips migration files whose prefix isn't purely numeric (or a
+    # 14-digit timestamp). A skipped file never applies and never shows
+    # up in `db pull` history-reconcile output, so the mistake is
+    # invisible until a fresh `db reset` exposes it. Fail the PR instead.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate supabase/migrations filenames
+        run: |
+          set -euo pipefail
+          pattern='^[0-9]+_[a-z0-9_]+\.sql$'
+          bad=$(find supabase/migrations -maxdepth 1 -name '*.sql' -printf '%f\n' | grep -Ev "$pattern" || true)
+          if [ -n "$bad" ]; then
+            echo "::error::Invalid migration filename(s) — Supabase CLI will silently skip these:"
+            printf '  - %s\n' $bad
+            echo
+            echo "Required pattern: $pattern"
+            echo "Examples: 047_deep_extraction_columns.sql, 20260417035024_add_column.sql"
+            exit 1
+          fi
+          count=$(find supabase/migrations -maxdepth 1 -name '*.sql' -printf '.' | wc -c)
+          echo "All $count migration filenames valid."
