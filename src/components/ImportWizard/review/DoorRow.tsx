@@ -35,7 +35,7 @@ export default function DoorRow({
       ref={(el) => {
         if (door.door_number) registerRef(door.door_number, el);
       }}
-      className={`${confBorder(door)} border-t border-border-dim bg-tint transition-opacity duration-150 ${
+      className={`${confBorder(door)} border-t border-border-dim bg-tint transition-colors duration-150 ${
         isAutoApproved ? 'opacity-70' : ''
       }`}
     >

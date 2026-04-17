@@ -314,7 +314,7 @@ function DoorTableRow({
       ref={(el) => {
         if (door.door_number) registerRef(door.door_number, el);
       }}
-      className={`${confBorder(door)} border-t border-border-dim hover:bg-tint transition-opacity duration-150 ${
+      className={`${confBorder(door)} border-t border-border-dim hover:bg-tint transition-colors duration-150 ${
         rowIndex % 2 === 1 ? "bg-tint" : ""
       } ${isAutoApproved ? "opacity-70" : ""}`}
       style={{ minHeight: "40px" }}
@@ -331,12 +331,14 @@ function DoorTableRow({
         return (
           <td
             key={field}
-            className={`px-4 py-3 transition-colors duration-500 ${
-              // Just-edited flash: commitEdit sets recentlyEdited for 1.5s
-              // so the user sees a soft success tint confirming the keystroke
-              // landed. No API save happens here — the flash is the only
-              // feedback in this client-state-only edit path.
-              isJustEdited ? "bg-success-dim motion-safe:animate-in" : ""
+            // Just-edited flash: commitEdit sets recentlyEdited for 1.5s
+            // so the user sees a soft success tint confirming the keystroke
+            // landed. No API save happens here — the flash is the only
+            // feedback in this client-state-only edit path. Wrapped in
+            // motion-safe so reduced-motion users still see the flash
+            // but without the 500ms cross-fade.
+            className={`px-4 py-3 motion-safe:transition-colors motion-safe:duration-500 ${
+              isJustEdited ? "bg-success-dim" : ""
             }`}
           >
             {isEditing ? (

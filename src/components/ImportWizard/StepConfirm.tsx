@@ -251,6 +251,13 @@ export default function StepConfirm({
         failedChunks: result.failedChunks,
       });
       setPromoteFailed(false);
+      // Retry success deserves the same satisfying confirmation as the
+      // first-try success — otherwise the user who just recovered from a
+      // failed promote gets no acknowledgment, only a silent screen swap.
+      showToast(
+        "success",
+        `Promoted ${result.openingsCount} opening${result.openingsCount !== 1 ? "s" : ""} to production`,
+      );
     } catch (err) {
       setRetryError(err instanceof Error ? err.message : "Retry failed.");
     } finally {
