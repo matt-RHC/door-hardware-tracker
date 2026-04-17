@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import type { DoorEntry, HardwareSet } from '@/lib/types'
+import { buildPerOpeningItems, buildDoorToSetMap, normalizeQuantities } from '@/lib/parse-pdf-helpers'
+import { logActivity } from '@/lib/activity-log'
 
 // User decisions from the wizard
 interface RemovedDecision {
@@ -53,35 +55,42 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Missing projectId' }, { status: 400 })
     }
 
+    // Project membership check (finding #9): verify the authenticated user is
+    // a member of projectId before modifying any production data. Auth alone
+    // is not sufficient — an authenticated user could supply any projectId.
+    const { data: membership, error: memberError } = await supabase
+      .from('project_members')
+      .select('role')
+      .eq('project_id', projectId)
+      .eq('user_id', user.id)
+      .single()
+    if (memberError || !membership) {
+      return NextResponse.json({ error: 'Access denied' }, { status: 403 })
+    }
+
     const setMap = new Map<string, HardwareSet>()
     for (const set of hardwareSets) {
       setMap.set(set.set_id, set)
-    }
-
-    // --- Quantity correction (heading-based, same strategy as save/route.ts) ---
-    for (const [setId, set] of setMap) {
-      const leafCount = (set.heading_leaf_count ?? 0) > 1 ? (set.heading_leaf_count ?? 0) : 0
-      const doorCount = (set.heading_door_count ?? 0) > 1 ? (set.heading_door_count ?? 0) : 0
-      if (leafCount <= 1 && doorCount <= 1) continue
-
-      for (const item of set.items) {
-        if (item.qty_source === 'divided' || item.qty_source === 'flagged' || item.qty_source === 'capped') continue
-        let divided = false
-        if (leafCount > 1 && item.qty >= leafCount) {
-          const perLeaf = item.qty / leafCount
-          if (Number.isInteger(perLeaf)) {
-            item.qty = perLeaf
-            divided = true
-          }
-        }
-        if (!divided && doorCount > 1 && doorCount !== leafCount && item.qty >= doorCount) {
-          const perOpening = item.qty / doorCount
-          if (Number.isInteger(perOpening)) {
-            item.qty = perOpening
-          }
-        }
+      if (set.generic_set_id && set.generic_set_id !== set.set_id) {
+        setMap.set(set.generic_set_id, set)
       }
     }
+    const doorToSetMap = buildDoorToSetMap(hardwareSets)
+
+    // --- Quantity correction ---
+    //
+    // Revisions don't run through chunk/route.ts's Darrin pipeline the way a
+    // fresh upload does, so this is the ONLY normalization pass between the
+    // wizard and the DB. Call the authoritative category-aware normalizer
+    // from parse-pdf-helpers.ts (per_leaf / per_opening / per_pair / per_frame
+    // handling, sub-heading detection, max-qty sanity check, doorsPerSet
+    // fallback for older PDFs with missing heading counts).
+    //
+    // Phase 4 of groovy-tumbling-backus: this used to be a trimmed inline
+    // loop that lacked category awareness — revisions normalized differently
+    // than fresh extractions. Collapsed to the shared helper so the two
+    // flows can't drift.
+    normalizeQuantities(hardwareSets, allDoors)
 
     const doorMap = new Map<string, DoorEntry>()
     for (const door of allDoors) {
@@ -98,7 +107,7 @@ export async function POST(request: NextRequest) {
     // ==========================================
     // 1. Handle REMOVED doors
     // ==========================================
-    const toDelete = removed_decisions.filter(d => d.action === 'delete').map(d => d.existing_id)
+    const toDelete = (removed_decisions ?? []).filter(d => d.action === 'delete').map(d => d.existing_id)
     if (toDelete.length > 0) {
       // Delete in chunks
       for (let i = 0; i < toDelete.length; i += CHUNK_SIZE) {
@@ -118,7 +127,7 @@ export async function POST(request: NextRequest) {
     // ==========================================
     // 2. Handle CHANGED doors
     // ==========================================
-    for (const decision of changed_decisions) {
+    for (const decision of changed_decisions ?? []) {
       const parsedDoor = doorMap.get(decision.door_number)
       if (!parsedDoor) continue
 
@@ -135,6 +144,7 @@ export async function POST(request: NextRequest) {
           frame_type: parsedDoor.frame_type || null,
           fire_rating: parsedDoor.fire_rating || null,
           hand: parsedDoor.hand || null,
+          pdf_page: hwSet?.pdf_page ?? null,
         })
         .eq('id', decision.existing_id)
 
@@ -144,54 +154,73 @@ export async function POST(request: NextRequest) {
       }
 
       if (!decision.transfer_progress) {
-        // Reset: delete old hardware items and checklist, insert new ones
-        await (supabase as any)
-          .from('hardware_items')
-          .delete()
-          .eq('opening_id', decision.existing_id)
+        // Reset the CHECKLIST WORKFLOW (received → pre_install → installed →
+        // qa_qc) but preserve user-classified hardware items.
+        //
+        // The previous implementation deleted ALL hardware_items plus ALL
+        // checklist_progress for the opening, then re-inserted items from
+        // the new PDF. That silently destroyed:
+        //   - user classifications (install_type = bench/field)
+        //   - user edits to qty / model / finish / options
+        //   - any manually-added items not present in the new PDF
+        //
+        // "Reset progress" in the UI means "restart the workflow on this
+        // door," not "wipe everything I've edited." Fix: delete only
+        // checklist_progress; preserve items the user has touched
+        // (install_type set), and refresh only untouched items from the
+        // new PDF.
 
+        // 1. Reset the workflow.
         await (supabase as any)
           .from('checklist_progress')
           .delete()
           .eq('opening_id', decision.existing_id)
 
-        // Insert new hardware items
-        if (hwSet?.items?.length) {
-          const doorInfo = { door_type: parsedDoor.door_type, frame_type: parsedDoor.frame_type }
-          const heading = (hwSet.heading || '').toLowerCase()
-          const doorType = (doorInfo.door_type || '').toLowerCase()
-          const isPair = heading.includes('pair') || heading.includes('double') ||
-                         doorType.includes('pr') || doorType.includes('pair')
+        // 2. Fetch existing items to decide which to preserve.
+        const { data: existingItems } = await (supabase as any)
+          .from('hardware_items')
+          .select('id, name, install_type')
+          .eq('opening_id', decision.existing_id)
 
-          const newItems: Array<Record<string, unknown>> = []
-          let sortOrder = 0
+        type ExistingRow = { id: string; name: string | null; install_type: string | null }
+        const rows: ExistingRow[] = (existingItems ?? []) as ExistingRow[]
+        const preserved = rows.filter(r => r.install_type !== null)
+        const preservedNames = new Set(
+          preserved.map(r => (r.name ?? '').toLowerCase()),
+        )
+        const toDeleteIds = rows
+          .filter(r => r.install_type === null)
+          .map(r => r.id)
 
-          // Door(s)
-          if (isPair) {
-            newItems.push({ opening_id: decision.existing_id, name: 'Door (Active Leaf)', qty: 1, manufacturer: null, model: doorInfo.door_type || null, finish: null, sort_order: sortOrder++ })
-            newItems.push({ opening_id: decision.existing_id, name: 'Door (Inactive Leaf)', qty: 1, manufacturer: null, model: doorInfo.door_type || null, finish: null, sort_order: sortOrder++ })
-          } else {
-            newItems.push({ opening_id: decision.existing_id, name: 'Door', qty: 1, manufacturer: null, model: doorInfo.door_type || null, finish: null, sort_order: sortOrder++ })
-          }
-
-          // Frame
-          newItems.push({ opening_id: decision.existing_id, name: 'Frame', qty: 1, manufacturer: null, model: doorInfo.frame_type || null, finish: null, sort_order: sortOrder++ })
-
-          // Hardware items
-          for (const item of hwSet.items) {
-            newItems.push({
-              opening_id: decision.existing_id,
-              name: item.name, qty: item.qty || 1,
-              manufacturer: item.manufacturer || null,
-              model: item.model || null,
-              finish: item.finish || null,
-              sort_order: sortOrder++,
-            })
-          }
-
+        // 3. Delete only untouched (un-classified) existing items.
+        if (toDeleteIds.length > 0) {
           await (supabase as any)
             .from('hardware_items')
-            .insert(newItems)
+            .delete()
+            .in('id', toDeleteIds)
+        }
+
+        // 4. Insert fresh items from the new PDF, skipping any whose name
+        //    collides with a preserved item (case-insensitive) so the
+        //    user's edit wins.
+        const doorInfoMap = new Map([[parsedDoor.door_number, {
+          door_type: parsedDoor.door_type || '',
+          frame_type: parsedDoor.frame_type || '',
+        }]])
+        const newItems = buildPerOpeningItems(
+          [{ id: decision.existing_id, door_number: parsedDoor.door_number, hw_set: parsedDoor.hw_set ?? null }],
+          doorInfoMap,
+          setMap,
+          doorToSetMap,
+        )
+        const itemsToInsert = newItems.filter(item => {
+          const itemName = typeof item.name === 'string' ? item.name : ''
+          return !preservedNames.has(itemName.toLowerCase())
+        })
+        if (itemsToInsert.length > 0) {
+          await (supabase as any)
+            .from('hardware_items')
+            .insert(itemsToInsert)
         }
 
         progressReset++
@@ -205,7 +234,7 @@ export async function POST(request: NextRequest) {
     // ==========================================
     // 3. Handle NEW doors
     // ==========================================
-    const newDoors = new_door_numbers.map(dn => doorMap.get(dn)).filter(Boolean) as DoorEntry[]
+    const newDoors = (new_door_numbers ?? []).map(dn => doorMap.get(dn)).filter(Boolean) as DoorEntry[]
 
     if (newDoors.length > 0) {
       const openingRows = newDoors.map(door => ({
@@ -218,6 +247,7 @@ export async function POST(request: NextRequest) {
         frame_type: door.frame_type || null,
         fire_rating: door.fire_rating || null,
         hand: door.hand || null,
+        pdf_page: setMap.get(door.hw_set)?.pdf_page ?? null,
       }))
 
       const insertedOpenings: Array<{ id: string; door_number: string; hw_set: string }> = []
@@ -236,40 +266,15 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      // Insert hardware items for new doors
-      const allHardwareRows: Array<Record<string, unknown>> = []
-
-      for (const opening of insertedOpenings) {
-        let sortOrder = 0
-        const door = doorMap.get(opening.door_number)
-        const hwSet = setMap.get(opening.hw_set)
-        const heading = (hwSet?.heading || '').toLowerCase()
-        const doorType = (door?.door_type || '').toLowerCase()
-        const isPair = heading.includes('pair') || heading.includes('double') ||
-                       doorType.includes('pr') || doorType.includes('pair')
-
-        if (isPair) {
-          allHardwareRows.push({ opening_id: opening.id, name: 'Door (Active Leaf)', qty: 1, manufacturer: null, model: door?.door_type || null, finish: null, sort_order: sortOrder++ })
-          allHardwareRows.push({ opening_id: opening.id, name: 'Door (Inactive Leaf)', qty: 1, manufacturer: null, model: door?.door_type || null, finish: null, sort_order: sortOrder++ })
-        } else {
-          allHardwareRows.push({ opening_id: opening.id, name: 'Door', qty: 1, manufacturer: null, model: door?.door_type || null, finish: null, sort_order: sortOrder++ })
-        }
-
-        allHardwareRows.push({ opening_id: opening.id, name: 'Frame', qty: 1, manufacturer: null, model: door?.frame_type || null, finish: null, sort_order: sortOrder++ })
-
-        if (hwSet?.items?.length) {
-          for (const item of hwSet.items) {
-            allHardwareRows.push({
-              opening_id: opening.id,
-              name: item.name, qty: item.qty || 1,
-              manufacturer: item.manufacturer || null,
-              model: item.model || null,
-              finish: item.finish || null,
-              sort_order: sortOrder++,
-            })
-          }
-        }
+      // Build hardware items for new doors via shared builder
+      const newDoorInfoMap = new Map<string, { door_type: string; frame_type: string }>()
+      for (const door of newDoors) {
+        newDoorInfoMap.set(door.door_number, {
+          door_type: door.door_type || '',
+          frame_type: door.frame_type || '',
+        })
       }
+      const allHardwareRows = buildPerOpeningItems(insertedOpenings, newDoorInfoMap, setMap, doorToSetMap)
 
       for (let i = 0; i < allHardwareRows.length; i += CHUNK_SIZE) {
         const chunk = allHardwareRows.slice(i, i + CHUNK_SIZE)
@@ -281,17 +286,26 @@ export async function POST(request: NextRequest) {
       doorsAdded = insertedOpenings.length
     }
 
-    return NextResponse.json({
-      success: true,
-      summary: {
-        doors_deleted: doorsDeleted,
-        doors_updated: doorsUpdated,
-        doors_added: doorsAdded,
-        progress_transferred: progressTransferred,
-        progress_reset: progressReset,
-        doors_kept: removed_decisions.filter(d => d.action === 'keep').length,
-      },
+    const summary = {
+      doors_deleted: doorsDeleted,
+      doors_updated: doorsUpdated,
+      doors_added: doorsAdded,
+      progress_transferred: progressTransferred,
+      progress_reset: progressReset,
+      doors_kept: (removed_decisions ?? []).filter(d => d.action === 'keep').length,
+    }
+
+    // Audit trail
+    await logActivity({
+      projectId,
+      userId: user.id,
+      action: 'extraction_promoted',
+      entityType: 'project',
+      entityId: projectId,
+      details: { revision: true, ...summary },
     })
+
+    return NextResponse.json({ success: true, summary })
   } catch (error) {
     console.error('Apply revision error:', error)
     const message = error instanceof Error ? error.message : 'Internal server error'

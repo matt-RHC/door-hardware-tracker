@@ -2,6 +2,7 @@
 
 import { useState, FormEvent, ChangeEvent } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { playClick, playSuccess } from "@/lib/sounds";
 
@@ -48,23 +49,23 @@ export default function SignupPage() {
 
   if (success) {
     return (
-      <div className="min-h-screen w-full bg-black flex items-center justify-center px-4 py-12">
+      <div className="min-h-screen w-full bg-background flex items-center justify-center px-4 py-12">
         <div className="w-full max-w-md">
-          <div className="bg-white/[0.04] border border-white/[0.08] rounded-xl shadow-xl p-6 md:p-8 text-center">
-            <div className="mb-4 text-[#30d158] text-4xl">✓</div>
-            <h2 className="text-2xl font-bold text-[#f5f5f7] mb-2">
+          <div className="bg-tint border border-border-dim rounded-md shadow-xl p-6 md:p-8 text-center">
+            <div className="mb-4 text-success text-4xl">✓</div>
+            <h2 className="text-2xl font-bold text-primary mb-2">
               Check your email
             </h2>
-            <p className="text-[#a1a1a6] mb-6">
-              We've sent a confirmation link to {email}. Please check your email
+            <p className="text-secondary mb-6">
+              We&apos;ve sent a confirmation link to {email}. Please check your email
               to verify your account.
             </p>
-            <a
+            <Link
               href="/"
-              className="text-[#0a84ff] hover:text-[#0a84ff]/80 font-medium"
+              className="text-accent hover:text-accent/80 font-medium"
             >
               Back to login
-            </a>
+            </Link>
           </div>
         </div>
       </div>
@@ -72,13 +73,16 @@ export default function SignupPage() {
   }
 
   return (
-    <div className="min-h-screen w-full bg-black flex items-center justify-center px-4 py-12">
+    <div className="min-h-screen w-full bg-background flex items-center justify-center px-4 py-12">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <h1 className="comic-heading text-3xl md:text-4xl font-bold text-glow-cyan mb-2">
-            Create Account
+          <h1
+            className="text-3xl md:text-4xl font-bold text-primary mb-2"
+            style={{ fontFamily: "var(--font-display)", letterSpacing: "0.04em" }}
+          >
+            CREATE ACCOUNT
           </h1>
-          <p className="text-[#a1a1a6]">
+          <p className="text-secondary">
             Join Door Hardware Tracker
           </p>
         </div>
@@ -88,7 +92,7 @@ export default function SignupPage() {
           className="panel corner-brackets p-6 md:p-8"
         >
           {error && (
-            <div className="mb-4 p-3 bg-[#ff453a]/20 border border-[#ff453a]/40 rounded-lg text-[#ff453a] text-sm">
+            <div className="mb-4 p-3 bg-danger-dim border border-danger rounded-lg text-danger text-sm">
               {error}
             </div>
           )}
@@ -96,7 +100,7 @@ export default function SignupPage() {
           <div className="mb-4">
             <label
               htmlFor="fullName"
-              className="block text-sm font-medium text-[#f5f5f7] mb-2"
+              className="block text-sm font-medium text-primary mb-2"
             >
               Full Name
             </label>
@@ -116,7 +120,7 @@ export default function SignupPage() {
           <div className="mb-4">
             <label
               htmlFor="email"
-              className="block text-sm font-medium text-[#f5f5f7] mb-2"
+              className="block text-sm font-medium text-primary mb-2"
             >
               Email
             </label>
@@ -136,7 +140,7 @@ export default function SignupPage() {
           <div className="mb-6">
             <label
               htmlFor="password"
-              className="block text-sm font-medium text-[#f5f5f7] mb-2"
+              className="block text-sm font-medium text-primary mb-2"
             >
               Password
             </label>
@@ -162,15 +166,25 @@ export default function SignupPage() {
           </button>
         </form>
 
-        <div className="mt-6 text-center">
-          <p className="text-[#a1a1a6] text-sm">
+        <div className="mt-6 text-center space-y-2">
+          <p className="text-secondary text-sm">
             Already have an account?{" "}
-            <a
+            <Link
               href="/"
-              className="text-[#0a84ff] hover:text-[#0a84ff]/80 font-medium"
+              className="text-accent hover:text-accent/80 font-medium"
             >
               Sign in
-            </a>
+            </Link>
+          </p>
+          <p className="text-muted-foreground text-xs">
+            By signing up, you agree to our{" "}
+            <Link href="/terms" className="underline hover:text-foreground/80">
+              Terms of Service
+            </Link>{" "}
+            and{" "}
+            <Link href="/privacy" className="underline hover:text-foreground/80">
+              Privacy Policy
+            </Link>
           </p>
         </div>
       </div>

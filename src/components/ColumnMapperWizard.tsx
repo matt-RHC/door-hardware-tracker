@@ -2,6 +2,7 @@
 
 import { useState, useMemo, useCallback } from "react";
 import PDFPageBrowser from "./PDFPageBrowser";
+import type { DarrinObservation } from "@/lib/types";
 
 // ─── Types ───
 
@@ -30,6 +31,7 @@ interface ColumnMapperWizardProps {
   data: DetectMappingResponse;
   pdfBuffer?: ArrayBuffer;
   pageCount?: number;
+  darrinObservations?: DarrinObservation[];
   onConfirm: (mapping: ColumnMapping) => void;
   onSkip: () => void;
   onRedetect?: (pageIndex: number) => Promise<DetectMappingResponse | null>;
@@ -64,15 +66,94 @@ const DEFAULT_FIELD_LABELS: Record<string, string> = {
 // ─── Color for field badges ───
 
 const FIELD_COLORS: Record<string, string> = {
-  door_number: "#0a84ff",
-  hw_set: "#30d158",
-  hw_heading: "#bf5af2",
-  location: "#ff9f0a",
-  door_type: "#64d2ff",
-  frame_type: "#ff6482",
-  fire_rating: "#ff453a",
-  hand: "#ffd60a",
+  door_number: "var(--blue)",
+  hw_set: "var(--green)",
+  hw_heading: "var(--purple)",
+  location: "var(--orange)",
+  door_type: "var(--blue)",
+  frame_type: "var(--red)",
+  fire_rating: "var(--red)",
+  hand: "var(--yellow)",
 };
+
+// ─── Darrin Column Suggestions ───
+
+function DarrinSuggestions({
+  observations,
+  onAccept,
+  onDismiss,
+}: {
+  observations: DarrinObservation[];
+  onAccept: (field: string) => void;
+  onDismiss: (idx: number) => void;
+}) {
+  // Filter to only observations that have field_suggestions
+  const withSuggestions = observations
+    .map((obs, idx) => ({ obs, idx }))
+    .filter(({ obs }) => (obs.field_suggestions?.length ?? 0) > 0);
+
+  const [dismissed, setDismissed] = useState<Set<number>>(new Set());
+
+  if (withSuggestions.length === 0) return null;
+
+  const visible = withSuggestions.filter(({ idx }) => !dismissed.has(idx));
+  if (visible.length === 0) return null;
+
+  return (
+    <div className="mb-4 space-y-2">
+      {visible.map(({ obs, idx }) => (
+        <div
+          key={`ps-${idx}`}
+          className="p-3 rounded-lg flex items-start gap-3"
+          style={{
+            backgroundColor: 'var(--blue-dim)',
+            border: '1px solid var(--blue-dim)',
+          }}
+        >
+          <span className="text-lg shrink-0">🤖</span>
+          <div className="flex-1 min-w-0">
+            <p className="text-sm text-info font-medium" style={{ fontFamily: "'Orbitron', sans-serif" }}>
+              Darrin found unmapped fields
+            </p>
+            <div className="mt-1.5 space-y-1">
+              {(obs.field_suggestions ?? []).map((sug, si) => (
+                <div key={si} className="flex items-center gap-2 text-xs">
+                  <span className="text-primary">
+                    <strong className="text-info">{sug.field}</strong>
+                    {sug.column ? ` in column ${sug.column}` : ''}
+                    {sug.pages ? ` (pages ${sug.pages})` : ''}
+                    {sug.suggestion ? ` — ${sug.suggestion}` : ''}
+                  </span>
+                  <button
+                    onClick={() => onAccept(sug.field)}
+                    className="px-2 py-0.5 rounded text-[10px] font-semibold uppercase tracking-wide transition-colors"
+                    style={{
+                      backgroundColor: 'var(--green-dim)',
+                      color: 'var(--green)',
+                      border: '1px solid var(--green-dim)',
+                    }}
+                  >
+                    Map it
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+          <button
+            onClick={() => {
+              setDismissed(prev => new Set([...prev, idx]));
+              onDismiss(idx);
+            }}
+            className="shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs text-tertiary hover:text-secondary hover:bg-tint transition-colors"
+            title="Dismiss"
+          >
+            ✕
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
 
 // ─── Step indicator component ───
 
@@ -84,11 +165,11 @@ function StepIndicator({ currentStep, totalSteps }: { currentStep: number; total
           <div
             className="flex items-center justify-center w-10 h-10 rounded-full font-display font-bold text-sm transition-all"
             style={{
-              backgroundColor: i === currentStep ? "rgba(90,200,250,0.2)" : "rgba(255,255,255,0.03)",
-              borderColor: i === currentStep ? "rgba(90,200,250,0.5)" : "rgba(255,255,255,0.1)",
+              backgroundColor: i === currentStep ? "var(--blue-dim)" : "var(--tint)",
+              borderColor: i === currentStep ? "var(--blue)" : "var(--tint-strong)",
               borderWidth: "1px",
-              color: i === currentStep ? "#5ac8fa" : "#636366",
-              boxShadow: i === currentStep ? "0 0 12px rgba(90,200,250,0.2)" : "none",
+              color: i === currentStep ? "var(--blue)" : "var(--text-tertiary)",
+              boxShadow: i === currentStep ? "0 0 12px var(--blue-dim)" : "none",
             }}
           >
             {i + 1}
@@ -96,8 +177,8 @@ function StepIndicator({ currentStep, totalSteps }: { currentStep: number; total
           {i < totalSteps - 1 && (
             <div className="w-8 h-px" style={{
               background: i < currentStep
-                ? "linear-gradient(90deg, #5ac8fa, rgba(90,200,250,0.3))"
-                : "rgba(255,255,255,0.1)"
+                ? "linear-gradient(90deg, var(--blue), var(--blue-dim))"
+                : "var(--tint-strong)"
             }} />
           )}
         </div>
@@ -120,25 +201,25 @@ function Step1IdentifyTable({
   return (
     <div className="space-y-6 animate-fade-in-up">
       <div>
-        <h2 className="font-display text-2xl font-bold text-white mb-2">
+        <h2 className="font-display text-2xl font-bold text-primary mb-2">
           VERIFY YOUR DOOR SCHEDULE
         </h2>
-        <p className="text-sm text-[#a1a1a6] leading-relaxed">
+        <p className="text-sm text-secondary leading-relaxed">
           We found a table in your submittal that looks like the master door list.
-          Check that the preview below shows <span className="text-[#e8e8ed] font-medium">door numbers</span>,{" "}
-          <span className="text-[#e8e8ed] font-medium">hardware sets</span>, and other door info
+          Check that the preview below shows <span className="text-primary font-medium">door numbers</span>,{" "}
+          <span className="text-primary font-medium">hardware sets</span>, and other door info
           — not a hardware set detail page or cover sheet.
         </p>
         {data.page_index !== undefined && (
-          <p className="text-xs text-[#636366] mt-2">
+          <p className="text-xs text-tertiary mt-2">
             Found on page {data.page_index + 1} of {data.total_pages}
           </p>
         )}
       </div>
 
       {/* What happens next */}
-      <div className="p-3 rounded-lg bg-[rgba(90,200,250,0.06)] border border-[rgba(90,200,250,0.15)]">
-        <p className="text-xs text-[#5ac8fa]">
+      <div className="p-3 rounded-lg bg-accent-dim border border-accent-dim">
+        <p className="text-xs text-info">
           <strong>Next step:</strong> After you confirm, you&apos;ll be able to tell us which column is
           which (Door Number, Fire Rating, etc.) so we parse everything correctly.
         </p>
@@ -146,11 +227,11 @@ function Step1IdentifyTable({
 
       {/* Low confidence warning */}
       {data.low_confidence && (
-        <div className="p-4 rounded-lg bg-[rgba(255,159,10,0.08)] border border-[rgba(255,159,10,0.25)]">
-          <p className="text-[#ff9f0a] font-semibold text-sm mb-1">
+        <div className="p-4 rounded-lg bg-warning-dim border border-warning-dim">
+          <p className="text-warning font-semibold text-sm mb-1">
             Low Confidence Detection
           </p>
-          <p className="text-xs text-[#a1a1a6]">
+          <p className="text-xs text-secondary">
             We&apos;re not very confident this is the right table. Review it carefully,
             or click &quot;Not the right table&quot; to skip.
           </p>
@@ -159,8 +240,8 @@ function Step1IdentifyTable({
 
       {/* Sample table - dark theme, scrollable */}
       <div
-        className="rounded-lg border border-[rgba(255,255,255,0.08)] overflow-hidden flex flex-col"
-        style={{ maxHeight: "420px", backgroundColor: "rgba(10,10,14,0.95)" }}
+        className="rounded-lg border border-border-dim-strong overflow-hidden flex flex-col"
+        style={{ maxHeight: "420px", backgroundColor: "var(--background)" }}
       >
         <div className="overflow-auto flex-1">
           <table className="w-full text-sm border-collapse">
@@ -171,13 +252,13 @@ function Step1IdentifyTable({
                     key={idx}
                     className="px-3 py-3 text-left font-semibold whitespace-nowrap border-b"
                     style={{
-                      color: "#5ac8fa",
-                      backgroundColor: "rgba(10,10,14,0.98)",
-                      borderBottomColor: "rgba(90,200,250,0.25)",
+                      color: "var(--blue)",
+                      backgroundColor: "var(--background)",
+                      borderBottomColor: "var(--blue-dim)",
                     }}
                   >
                     <div className="flex flex-col gap-0.5">
-                      <span className="text-[10px] uppercase tracking-widest text-[#4a4a4e]">
+                      <span className="text-[10px] uppercase tracking-widest text-tertiary">
                         Col {idx + 1}
                       </span>
                       <span className="text-sm">{header || "(empty)"}</span>
@@ -192,16 +273,16 @@ function Step1IdentifyTable({
                   key={rowIdx}
                   style={{
                     backgroundColor: rowIdx % 2 === 0
-                      ? "rgba(255,255,255,0.02)"
-                      : "rgba(0,0,0,0.15)",
-                    borderBottom: "1px solid rgba(255,255,255,0.05)",
+                      ? "var(--tint)"
+                      : "var(--tint-strong)",
+                    borderBottom: "1px solid var(--tint)",
                   }}
                 >
                   {data.headers.map((_, colIdx) => (
                     <td
                       key={colIdx}
                       className="px-3 py-2.5 text-sm max-w-[200px] truncate"
-                      style={{ color: "#d1d1d6" }}
+                      style={{ color: "var(--text-secondary)" }}
                     >
                       {row[colIdx] || "—"}
                     </td>
@@ -219,7 +300,7 @@ function Step1IdentifyTable({
           <button onClick={onSkip} className="glow-btn glow-btn--ghost">
             Not the right table
           </button>
-          <span className="text-[10px] text-[#4a4a4e] ml-1">
+          <span className="text-[10px] text-tertiary ml-1">
             Skip to auto-detect per page
           </span>
         </div>
@@ -245,6 +326,7 @@ function Step2MapColumns({
   fieldLabels,
   skippedFields,
   onToggleSkip,
+  darrinObservations,
 }: {
   data: DetectMappingResponse;
   mapping: ColumnMapping;
@@ -257,6 +339,7 @@ function Step2MapColumns({
   fieldLabels: Record<string, string>;
   skippedFields: Set<string>;
   onToggleSkip: (field: string) => void;
+  darrinObservations?: DarrinObservation[];
 }) {
   // Reverse mapping: column index → field name
   const reverseMapping = useMemo(() => {
@@ -292,16 +375,16 @@ function Step2MapColumns({
   return (
     <div className="space-y-6 animate-fade-in-up">
       <div>
-        <h2 className="font-display text-2xl font-bold text-white mb-2">
+        <h2 className="font-display text-2xl font-bold text-primary mb-2">
           MAP YOUR COLUMNS
         </h2>
-        <p className="text-sm text-[#a1a1a6] leading-relaxed">
+        <p className="text-sm text-secondary leading-relaxed">
           We pre-filled our best guesses below — fix any that look wrong.
-          Only <span className="text-[#ff453a] font-medium">Door Number</span> is required.
+          Only <span className="text-danger font-medium">Door Number</span> is required.
           Map as many other fields as your PDF has.
         </p>
-        <div className="mt-3 p-3 rounded-lg bg-[rgba(90,200,250,0.06)] border border-[rgba(90,200,250,0.15)]">
-          <p className="text-xs text-[#5ac8fa] leading-relaxed">
+        <div className="mt-3 p-3 rounded-lg bg-accent-dim border border-accent-dim">
+          <p className="text-xs text-info leading-relaxed">
             <strong>1.</strong> Click a field on the left to select it.{" "}
             <strong>2.</strong> Click the matching column on the right to assign it.
             Already-assigned fields show their column number — click them again to reassign.
@@ -309,10 +392,24 @@ function Step2MapColumns({
         </div>
       </div>
 
+      {/* Darrin suggestions for unmapped fields */}
+      {(darrinObservations?.length ?? 0) > 0 && (
+        <DarrinSuggestions
+          observations={darrinObservations ?? []}
+          onAccept={(field) => {
+            // Select the field for mapping
+            if (ALL_FIELDS.includes(field)) {
+              onFieldClick(field);
+            }
+          }}
+          onDismiss={() => { /* dismissed via internal state */ }}
+        />
+      )}
+
       <div className="grid grid-cols-2 gap-6 min-h-[500px]">
         {/* Left: Field cards */}
         <div className="space-y-3">
-          <div className="text-xs uppercase tracking-widest text-[#636366] font-semibold mb-3 ml-1">
+          <div className="text-xs uppercase tracking-widest text-tertiary font-semibold mb-3 ml-1">
             1. Pick a Field
           </div>
           <div className="stagger-children space-y-2">
@@ -332,13 +429,13 @@ function Step2MapColumns({
                       onFieldClick(isActive ? null : field);
                     }}
                     className={`flex-1 rounded-lg p-3 text-left transition-all ${
-                      isActive ? "ring-2 ring-[#5ac8fa] scale-[1.02]" : ""
+                      isActive ? "ring-2 ring-info scale-[1.02]" : ""
                     }`}
                     style={{
                       backgroundColor: isSkipped
-                        ? "rgba(255,255,255,0.02)"
+                        ? "var(--tint)"
                         : `${color}10`,
-                      border: `1px solid ${isSkipped ? "rgba(255,255,255,0.06)" : `${color}25`}`,
+                      border: `1px solid ${isSkipped ? "var(--border-dim)" : `${color}25`}`,
                       opacity: isSkipped ? 0.5 : 1,
                     }}
                     disabled={isSkipped}
@@ -348,18 +445,18 @@ function Step2MapColumns({
                         <span
                           className="font-semibold text-sm"
                           style={{
-                            color: isSkipped ? "#636366" : color,
+                            color: isSkipped ? "var(--text-tertiary)" : color,
                             textDecoration: isSkipped ? "line-through" : "none",
                           }}
                         >
                           {fieldLabels[field]}
                         </span>
                         {isRequired && !isSkipped && (
-                          <span className="text-[#ff453a] text-xs">required</span>
+                          <span className="text-danger text-xs">required</span>
                         )}
                       </div>
                       {isSkipped && (
-                        <p className="text-xs text-[#636366] italic">Not in this table</p>
+                        <p className="text-xs text-tertiary italic">Not in this table</p>
                       )}
                       {!isSkipped && isMapped && (
                         <div className="text-xs" style={{ color }}>
@@ -370,7 +467,7 @@ function Step2MapColumns({
                         </div>
                       )}
                       {!isSkipped && !isMapped && (
-                        <p className="text-xs text-[#8e8e93]">Click to assign</p>
+                        <p className="text-xs text-tertiary">Click to assign</p>
                       )}
                     </div>
                   </button>
@@ -380,10 +477,10 @@ function Step2MapColumns({
                       className="flex-shrink-0 w-8 rounded-lg flex items-center justify-center text-xs transition-all"
                       style={{
                         backgroundColor: isSkipped
-                          ? "rgba(90,200,250,0.1)"
-                          : "rgba(255,255,255,0.03)",
-                        border: "1px solid rgba(255,255,255,0.08)",
-                        color: isSkipped ? "#5ac8fa" : "#636366",
+                          ? "var(--blue-dim)"
+                          : "var(--tint)",
+                        border: "1px solid var(--tint-strong)",
+                        color: isSkipped ? "var(--blue)" : "var(--text-tertiary)",
                       }}
                       title={isSkipped ? "Re-enable this field" : "Not in this table"}
                     >
@@ -398,7 +495,7 @@ function Step2MapColumns({
 
         {/* Right: Column headers */}
         <div className="space-y-3">
-          <div className="text-xs uppercase tracking-widest text-[#636366] font-semibold mb-3 ml-1">
+          <div className="text-xs uppercase tracking-widest text-tertiary font-semibold mb-3 ml-1">
             2. Assign to a Column
           </div>
           <div className="stagger-children space-y-2 max-h-[600px] overflow-y-auto">
@@ -406,7 +503,7 @@ function Step2MapColumns({
               const assignedField = reverseMapping[colIdx];
               const color = assignedField
                 ? FIELD_COLORS[assignedField]
-                : "#636366";
+                : "var(--text-tertiary)";
               const isSelectable = activeField !== null;
 
               return (
@@ -420,21 +517,21 @@ function Step2MapColumns({
                       : "opacity-60 cursor-default"
                   }`}
                   style={{
-                    borderLeftColor: assignedField ? color : "rgba(255,255,255,0.08)",
+                    borderLeftColor: assignedField ? color : "var(--tint-strong)",
                     background: assignedField
                       ? `${color}12`
-                      : "rgba(255,255,255,0.02)",
+                      : "var(--tint)",
                     boxShadow: isSelectable && activeField
-                      ? "inset 0 0 8px rgba(90,200,250,0.1)"
+                      ? "inset 0 0 8px var(--blue-dim)"
                       : "none",
                   }}
                 >
                   <div className="space-y-1">
                     <div className="flex items-baseline gap-2">
-                      <span className="text-xs uppercase tracking-widest text-[#636366]">
+                      <span className="text-xs uppercase tracking-widest text-tertiary">
                         Col {colIdx + 1}
                       </span>
-                      <span className="text-sm font-semibold text-[#e8e8ed] flex-1 truncate">
+                      <span className="text-sm font-semibold text-primary flex-1 truncate">
                         {header || "(empty)"}
                       </span>
                     </div>
@@ -451,11 +548,11 @@ function Step2MapColumns({
 
                       if (nonEmpty.length === 0) {
                         return (
-                          <div className="mt-1.5 p-2 rounded bg-[rgba(255,69,58,0.08)] border border-[rgba(255,69,58,0.2)]">
-                            <p className="text-[11px] text-[#ff453a] font-medium">
+                          <div className="mt-1.5 p-2 rounded bg-danger-dim border border-danger">
+                            <p className="text-[11px] text-danger font-medium">
                               All {total} sample rows are empty
                             </p>
-                            <p className="text-[10px] text-[#636366] mt-0.5">
+                            <p className="text-[10px] text-tertiary mt-0.5">
                               This column may not have data in your PDF
                             </p>
                           </div>
@@ -464,13 +561,13 @@ function Step2MapColumns({
 
                       return (
                         <div className="mt-1">
-                          <p className="text-[10px] text-[#4a4a4e] mb-1">
+                          <p className="text-[10px] text-tertiary mb-1">
                             {nonEmpty.length} of {total} rows have data
                           </p>
                           <div className="space-y-0.5">
                             {nonEmpty.map(({ val, rIdx }) => (
-                              <p key={rIdx} className="text-[11px] text-[#8e8e93] truncate">
-                                <span className="text-[#4a4a4e] mr-1">r{rIdx + 1}</span>
+                              <p key={rIdx} className="text-[11px] text-tertiary truncate">
+                                <span className="text-tertiary mr-1">r{rIdx + 1}</span>
                                 {val}
                               </p>
                             ))}
@@ -488,14 +585,14 @@ function Step2MapColumns({
 
       {/* Status message */}
       {activeField ? (
-        <div className="p-3 rounded-lg bg-[rgba(90,200,250,0.1)] border border-[rgba(90,200,250,0.2)]">
-          <p className="text-sm text-[#5ac8fa]">
+        <div className="p-3 rounded-lg bg-accent-dim border border-accent-dim">
+          <p className="text-sm text-info">
             Assigning <strong>{fieldLabels[activeField]}</strong> — click a column on the right to assign it
           </p>
         </div>
       ) : (
-        <div className="p-3 rounded-lg bg-[rgba(255,255,255,0.03)] border border-[rgba(255,255,255,0.08)]">
-          <p className="text-sm text-[#636366]">
+        <div className="p-3 rounded-lg bg-tint border border-border-dim-strong">
+          <p className="text-sm text-tertiary">
             Select a field on the left to begin mapping
           </p>
         </div>
@@ -503,15 +600,15 @@ function Step2MapColumns({
 
       {/* Validation message */}
       {!canConfirm && (
-        <div className="p-3 rounded-lg bg-[rgba(255,69,58,0.1)] border border-[rgba(255,69,58,0.2)]">
-          <p className="text-sm text-[#ff453a]">
+        <div className="p-3 rounded-lg bg-danger-dim border border-danger">
+          <p className="text-sm text-danger">
             <strong>Required field missing:</strong> Door Number must be mapped before confirming.
           </p>
         </div>
       )}
 
       {/* Actions */}
-      <div className="flex items-center justify-between pt-4 gap-4 border-t border-[rgba(255,255,255,0.06)] pt-6">
+      <div className="flex items-center justify-between pt-4 gap-4 border-t border-border-dim pt-6">
         <div className="flex gap-2">
           <button onClick={onReset} className="glow-btn glow-btn--ghost text-xs">
             Reset Mappings
@@ -559,26 +656,26 @@ function Step3Confirm({
   return (
     <div className="space-y-6 animate-fade-in-up">
       <div>
-        <h2 className="font-display text-2xl font-bold text-white mb-2">
+        <h2 className="font-display text-2xl font-bold text-primary mb-2">
           CONFIRM & EXTRACT
         </h2>
-        <p className="text-sm text-[#a1a1a6] leading-relaxed">
+        <p className="text-sm text-secondary leading-relaxed">
           Review the mapping below. The preview shows how your data will be read.
-          When everything looks right, hit <span className="text-[#e8e8ed] font-medium">Confirm &amp; Extract</span> to
+          When everything looks right, hit <span className="text-primary font-medium">Confirm &amp; Extract</span> to
           start parsing your submittal.
         </p>
-        <p className="text-xs text-[#636366] mt-2">
+        <p className="text-xs text-tertiary mt-2">
           You&apos;ll review all extracted data before anything is saved to your project.
         </p>
       </div>
 
       {/* Summary table showing all assignments */}
       <div
-        className="rounded-lg border border-[rgba(255,255,255,0.08)] p-6"
-        style={{ backgroundColor: "rgba(10,10,14,0.95)" }}
+        className="rounded-lg border border-border-dim-strong p-6"
+        style={{ backgroundColor: "var(--background)" }}
       >
         <div className="mb-4">
-          <h3 className="font-semibold text-sm text-[#e8e8ed] mb-3">
+          <h3 className="font-semibold text-sm text-primary mb-3">
             Field Assignments
           </h3>
           <div className="space-y-2">
@@ -599,17 +696,17 @@ function Step3Confirm({
                     <div className="font-semibold text-sm" style={{ color }}>
                       {fieldLabels[field]}
                     </div>
-                    <div className="text-xs text-[#a1a1a6] mt-1">
-                      Column {colIdx + 1}: <strong className="text-[#d1d1d6]">{data.headers[colIdx]}</strong>
+                    <div className="text-xs text-secondary mt-1">
+                      Column {colIdx + 1}: <strong className="text-secondary">{data.headers[colIdx]}</strong>
                     </div>
                     {confidence !== undefined && (
-                      <div className="text-xs text-[#636366] mt-0.5">
+                      <div className="text-xs text-tertiary mt-0.5">
                         Confidence: {Math.round(confidence * 100)}%
                       </div>
                     )}
                   </div>
                   {data.sample_rows.length > 0 && (
-                    <div className="text-right text-xs text-[#a1a1a6] max-w-[150px] truncate">
+                    <div className="text-right text-xs text-secondary max-w-[150px] truncate">
                       Sample: &quot;{data.sample_rows[0][colIdx]}&quot;
                     </div>
                   )}
@@ -623,10 +720,10 @@ function Step3Confirm({
       {/* Sample data preview table */}
       {data.sample_rows.length > 0 && (
         <div
-          className="rounded-lg border border-[rgba(255,255,255,0.08)] p-4"
-          style={{ backgroundColor: "rgba(10,10,14,0.95)" }}
+          className="rounded-lg border border-border-dim-strong p-4"
+          style={{ backgroundColor: "var(--background)" }}
         >
-          <div className="text-xs uppercase tracking-widest text-[#636366] font-semibold mb-3">
+          <div className="text-xs uppercase tracking-widest text-tertiary font-semibold mb-3">
             Preview with Extracted Data
           </div>
           <div className="overflow-x-auto">
@@ -641,7 +738,7 @@ function Step3Confirm({
                         className="px-2 py-2 text-left font-semibold whitespace-nowrap"
                         style={{
                           color,
-                          backgroundColor: "rgba(10,10,14,0.98)",
+                          backgroundColor: "var(--background)",
                           borderBottom: `2px solid ${color}30`,
                         }}
                       >
@@ -655,13 +752,13 @@ function Step3Confirm({
                 {data.sample_rows.map((row, rowIdx) => (
                   <tr
                     key={rowIdx}
-                    className={`border-b border-[rgba(255,255,255,0.04)] ${
-                      rowIdx % 2 === 0 ? "bg-[rgba(255,255,255,0.01)]" : ""
+                    className={`border-b border-border-dim ${
+                      rowIdx % 2 === 0 ? "bg-tint" : ""
                     }`}
                   >
                     {Object.entries(mapping).map(([field, colIdx]) => (
                       <td key={`${rowIdx}-${field}`}
-                          className="px-2 py-2 text-[#e8e8ed] truncate max-w-[150px]">
+                          className="px-2 py-2 text-primary truncate max-w-[150px]">
                         {row[colIdx] || "—"}
                       </td>
                     ))}
@@ -674,7 +771,7 @@ function Step3Confirm({
       )}
 
       {/* Actions */}
-      <div className="flex items-center justify-between pt-4 gap-4 border-t border-[rgba(255,255,255,0.06)] pt-6">
+      <div className="flex items-center justify-between pt-4 gap-4 border-t border-border-dim pt-6">
         <button onClick={onBack} className="glow-btn glow-btn--ghost">
           Back
         </button>
@@ -692,6 +789,7 @@ export default function ColumnMapperWizard({
   data,
   pdfBuffer,
   pageCount: pageCountProp,
+  darrinObservations,
   onConfirm: onConfirmProp,
   onSkip: onSkipProp,
   onRedetect,
@@ -814,7 +912,7 @@ export default function ColumnMapperWizard({
       <div
         className="panel corner-brackets relative w-full max-w-6xl max-h-[90vh] overflow-y-auto p-8 md:p-10"
         style={{
-          backgroundColor: "rgba(12,12,16,0.98)",
+          backgroundColor: "var(--background)",
           backdropFilter: "blur(30px)",
         }}
       >
@@ -833,8 +931,8 @@ export default function ColumnMapperWizard({
                 loading={redetecting}
               />
               {redetectError && (
-                <div className="mt-4 p-3 rounded-lg bg-[rgba(255,69,58,0.1)] border border-[rgba(255,69,58,0.2)]">
-                  <p className="text-sm text-[#ff453a]">{redetectError}</p>
+                <div className="mt-4 p-3 rounded-lg bg-danger-dim border border-danger">
+                  <p className="text-sm text-danger">{redetectError}</p>
                 </div>
               )}
             </>
@@ -852,6 +950,7 @@ export default function ColumnMapperWizard({
               fieldLabels={fieldLabels}
               skippedFields={skippedFields}
               onToggleSkip={handleToggleSkip}
+              darrinObservations={darrinObservations}
             />
           )}
           {phase === "step3" && (

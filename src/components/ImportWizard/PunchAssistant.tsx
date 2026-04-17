@@ -9,17 +9,17 @@ import type { PunchMessage, PunchQuestion, PunchSeverity } from '@/lib/punch-mes
 // ── Helpers ──────────────────────────────────────────────────────────
 
 const severityColor: Record<PunchSeverity, string> = {
-  info:    '#4BA3E3',
-  success: '#2ECC71',
-  warning: '#E8811A',
-  error:   '#E04850',
+  info:    'var(--blue)',
+  success: 'var(--green)',
+  warning: 'var(--orange)',
+  error:   'var(--red)',
 };
 
 const severityBg: Record<PunchSeverity, string> = {
-  info:    'rgba(75,163,227,0.12)',
-  success: 'rgba(46,204,113,0.12)',
-  warning: 'rgba(232,129,26,0.12)',
-  error:   'rgba(224,72,80,0.12)',
+  info:    'var(--blue-dim)',
+  success: 'var(--green-dim)',
+  warning: 'var(--orange-dim)',
+  error:   'var(--red-dim)',
 };
 
 function avatarStateFromMessages(msgs: PunchMessage[]): PunchAvatarState {
@@ -52,7 +52,6 @@ export function PunchInlineTip({ message }: InlineTipProps) {
         color,
         backgroundColor: bg,
         border: `1px solid ${color}33`,
-        animation: 'punchSlideIn 0.3s ease-out both',
       }}
     >
       <PunchAvatar size="sm" state={message.severity === 'info' ? 'idle' : message.severity} />
@@ -70,85 +69,34 @@ interface QuestionCardProps {
 }
 
 function QuestionCard({ question, onAnswer, onDismiss }: QuestionCardProps) {
-  // Already answered — show collapsed
   if (question.answer) {
     return (
-      <div
-        style={{
-          padding: '6px 10px',
-          borderRadius: 8,
-          backgroundColor: 'rgba(46,204,113,0.10)',
-          borderLeft: '3px solid #2ECC71',
-          fontSize: 12,
-          color: '#6B7280',
-          animation: 'punchBounce 0.35s ease-out both',
-        }}
-      >
-        <span style={{ color: '#a1a1a6' }}>{question.text}</span>
-        <span style={{ marginLeft: 6, color: '#2ECC71', fontWeight: 600 }}>
-          → {question.answer}
-        </span>
+      <div className="py-1.5 px-2.5 rounded-lg bg-success-dim border-l-[3px] border-l-success text-xs text-tertiary">
+        <span className="text-secondary">{question.text}</span>
+        <span className="ml-1.5 text-success font-semibold">→ {question.answer}</span>
       </div>
     );
   }
 
-  // Dismissed — show muted
   if (question.dismissed) {
     return (
-      <div
-        style={{
-          padding: '6px 10px',
-          borderRadius: 8,
-          backgroundColor: 'rgba(107,114,128,0.08)',
-          borderLeft: '3px solid #6B7280',
-          fontSize: 12,
-          color: '#6B7280',
-          animation: 'punchBounce 0.35s ease-out both',
-        }}
-      >
+      <div className="py-1.5 px-2.5 rounded-lg bg-tint-strong border-l-[3px] border-l-tertiary text-xs text-tertiary">
         <span>{question.text}</span>
-        <span style={{ marginLeft: 6, fontStyle: 'italic' }}>Skipped</span>
+        <span className="ml-1.5 italic">Skipped</span>
       </div>
     );
   }
 
-  // Active question — full card
   return (
-    <div
-      style={{
-        padding: '10px',
-        borderRadius: 8,
-        backgroundColor: 'rgba(10,132,255,0.10)',
-        border: '1px solid rgba(10,132,255,0.25)',
-        fontSize: 13,
-        color: '#E4E6EB',
-        animation: 'punchBounce 0.35s ease-out both',
-      }}
-    >
-      <p style={{ margin: '0 0 8px', lineHeight: '18px' }}>{question.text}</p>
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-        {question.options.map((opt) => (
+    <div className="p-2.5 rounded-lg bg-accent-dim border border-accent text-[13px] text-primary">
+      <p className="mb-2 leading-[18px]">{question.text}</p>
+      <div className="flex flex-wrap gap-1.5">
+        {(question.options ?? []).map((opt) => (
           <button
             key={opt}
             type="button"
             onClick={() => onAnswer(question.id, opt)}
-            style={{
-              padding: '4px 10px',
-              borderRadius: 6,
-              border: '1px solid rgba(10,132,255,0.4)',
-              backgroundColor: 'rgba(10,132,255,0.15)',
-              color: '#4BA3E3',
-              fontSize: 12,
-              fontWeight: 600,
-              cursor: 'pointer',
-              transition: 'background-color 0.15s',
-            }}
-            onMouseEnter={(e) => {
-              (e.target as HTMLButtonElement).style.backgroundColor = 'rgba(10,132,255,0.3)';
-            }}
-            onMouseLeave={(e) => {
-              (e.target as HTMLButtonElement).style.backgroundColor = 'rgba(10,132,255,0.15)';
-            }}
+            className="px-2.5 py-1 rounded-md border border-accent bg-accent-dim text-accent text-xs font-semibold hover:bg-accent-dim transition-colors"
           >
             {opt}
           </button>
@@ -156,22 +104,7 @@ function QuestionCard({ question, onAnswer, onDismiss }: QuestionCardProps) {
         <button
           type="button"
           onClick={() => onDismiss(question.id)}
-          style={{
-            padding: '4px 10px',
-            borderRadius: 6,
-            border: '1px solid rgba(107,114,128,0.3)',
-            backgroundColor: 'transparent',
-            color: '#6B7280',
-            fontSize: 12,
-            cursor: 'pointer',
-            transition: 'background-color 0.15s',
-          }}
-          onMouseEnter={(e) => {
-            (e.target as HTMLButtonElement).style.backgroundColor = 'rgba(107,114,128,0.15)';
-          }}
-          onMouseLeave={(e) => {
-            (e.target as HTMLButtonElement).style.backgroundColor = 'transparent';
-          }}
+          className="px-2.5 py-1 rounded-md border border-border-dim-strong text-tertiary text-xs hover:bg-tint-strong transition-colors"
         >
           Skip
         </button>
@@ -180,18 +113,17 @@ function QuestionCard({ question, onAnswer, onDismiss }: QuestionCardProps) {
   );
 }
 
-// ── Sidebar Panel ────────────────────────────────────────────────────
+// ── Drawer states ────────────────────────────────────────────────────
+
+type DrawerState = 'collapsed' | 'peek' | 'full';
+
+// ── Bottom Drawer Panel ──────────────────────────────────────────────
 
 interface PunchAssistantProps {
-  /** Current set of messages to display (non-inline ones show in sidebar). */
   messages: PunchMessage[];
-  /** Interactive validation questions. */
   questions?: PunchQuestion[];
-  /** Called when user picks an answer. */
   onAnswer?: (questionId: string, answer: string) => void;
-  /** Called when user clicks Skip. */
   onDismiss?: (questionId: string) => void;
-  /** If true, the sidebar starts collapsed. */
   defaultCollapsed?: boolean;
 }
 
@@ -200,13 +132,11 @@ export default function PunchAssistant({
   questions = [],
   onAnswer,
   onDismiss,
-  defaultCollapsed = false,
 }: PunchAssistantProps) {
   const { scrollToRef } = usePunchHighlight();
-  const [collapsed, setCollapsed] = useState(defaultCollapsed);
+  const [drawerState, setDrawerState] = useState<DrawerState>('collapsed');
   const listRef = useRef<HTMLDivElement>(null);
 
-  // Only show non-inline messages in the sidebar
   const sidebarMessages = messages.filter((m) => !m.inline);
   const avatarState = avatarStateFromMessages(sidebarMessages);
 
@@ -214,182 +144,216 @@ export default function PunchAssistant({
     (q) => !q.answer && !q.dismissed,
   ).length;
 
-  // Auto-scroll to bottom when new messages or questions arrive
-  useEffect(() => {
-    if (listRef.current) {
-      listRef.current.scrollTop = listRef.current.scrollHeight;
-    }
-  }, [sidebarMessages.length, questions.length]);
-
-  // Badge count for collapsed state (warnings + unanswered questions)
   const warningCount =
     sidebarMessages.filter(
       (m) => m.severity === 'warning' || m.severity === 'error',
-    ).length + activeQuestionCount;
+    ).length;
+  const totalCount = sidebarMessages.length;
+
+  // Auto-scroll when new messages arrive and drawer is open
+  useEffect(() => {
+    if (listRef.current && drawerState !== 'collapsed') {
+      listRef.current.scrollTop = listRef.current.scrollHeight;
+    }
+  }, [sidebarMessages.length, questions.length, drawerState]);
+
+  // Auto-open peek when first messages arrive
+  useEffect(() => {
+    if (totalCount > 0 && drawerState === 'collapsed') {
+      setDrawerState('peek');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [totalCount > 0]);
+
+  const toggleDrawer = () => {
+    setDrawerState((s) => {
+      if (s === 'collapsed') return 'peek';
+      if (s === 'peek') return 'full';
+      return 'collapsed';
+    });
+  };
+
+  // Group messages by severity for full view
+  const errorMsgs = sidebarMessages.filter((m) => m.severity === 'error');
+  const warningMsgs = sidebarMessages.filter((m) => m.severity === 'warning');
+  const infoMsgs = sidebarMessages.filter((m) => m.severity === 'info' || m.severity === 'success');
 
   return (
-    <>
-      {/* Keyframe injection (once) */}
-      <style>{`
-        @keyframes punchSlideIn {
-          from { opacity: 0; transform: translateX(12px); }
-          to   { opacity: 1; transform: translateX(0); }
-        }
-        @keyframes punchBounce {
-          0%   { transform: translateX(12px) scale(0.95); opacity: 0; }
-          60%  { transform: translateX(-2px) scale(1.02); opacity: 1; }
-          100% { transform: translateX(0) scale(1); opacity: 1; }
-        }
-      `}</style>
-
+    <div
+      className={`drawer ${
+        drawerState === 'collapsed'
+          ? 'drawer--collapsed'
+          : drawerState === 'peek'
+          ? 'drawer--peek'
+          : 'drawer--full'
+      }`}
+    >
+      {/* Pill bar (always visible) — sits at the top since drawer expands down */}
       <div
-        style={{
-          position: 'relative',
-          display: 'flex',
-          flexDirection: 'column',
-          width: collapsed ? 48 : 280,
-          minHeight: 120,
-          maxHeight: '100%',
-          borderRadius: 12,
-          backgroundColor: '#1c1c1e',
-          border: '1px solid #2E323C',
-          overflow: 'hidden',
-          transition: 'width 0.25s ease',
-          flexShrink: 0,
-        }}
+        onClick={toggleDrawer}
+        className="flex items-center gap-3 px-4 pt-3 pb-2 cursor-pointer select-none"
       >
-        {/* Header */}
-        <button
-          type="button"
-          onClick={() => setCollapsed((c) => !c)}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-            padding: collapsed ? '10px 8px' : '10px 12px',
-            background: 'none',
-            border: 'none',
-            borderBottom: collapsed ? 'none' : '1px solid #2E323C',
-            cursor: 'pointer',
-            color: '#E4E6EB',
-            justifyContent: collapsed ? 'center' : 'flex-start',
-          }}
+        <PunchAvatar size="sm" state={avatarState} />
+        <span className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>
+          Punch
+        </span>
+        {totalCount > 0 && (
+          <span className="text-xs px-2.5 py-0.5 rounded-full font-medium" style={{ background: 'var(--blue-dim)', color: 'var(--text-secondary)' }}>
+            {totalCount} observation{totalCount !== 1 ? 's' : ''}
+          </span>
+        )}
+        {warningCount > 0 && (
+          <span className="text-xs px-2.5 py-0.5 rounded-full font-semibold" style={{ background: 'var(--orange-dim)', color: 'var(--orange)' }}>
+            {warningCount} warning{warningCount !== 1 ? 's' : ''}
+          </span>
+        )}
+        {activeQuestionCount > 0 && (
+          <span className="text-xs px-2.5 py-0.5 rounded-full font-semibold animate-pulse" style={{ background: 'var(--blue-dim)', color: 'var(--blue)' }}>
+            {activeQuestionCount} question{activeQuestionCount !== 1 ? 's' : ''}
+          </span>
+        )}
+        <span className="ml-auto text-xs font-medium" style={{ color: 'var(--blue)' }}>
+          {drawerState === 'collapsed' ? 'Expand \u25BE' : drawerState === 'peek' ? 'Full \u25BE' : 'Collapse \u25B4'}
+        </span>
+      </div>
+
+      {/* Content area (visible in peek/full) */}
+      {drawerState !== 'collapsed' && (
+        <div
+          ref={listRef}
+          className="flex-1 overflow-y-auto px-4 pb-4 overscroll-contain"
+          style={{ maxHeight: drawerState === 'full' ? 'min(calc(60vh - 80px), 400px)' : '120px' }}
         >
-          <PunchAvatar size="lg" state={avatarState} />
-          {!collapsed && (
-            <span style={{ fontWeight: 600, fontSize: 14, whiteSpace: 'nowrap' }}>
-              Punch
-            </span>
+          {sidebarMessages.length === 0 && (
+            <p className="text-tertiary text-sm">
+              Waiting for extraction results...
+            </p>
           )}
-          {collapsed && warningCount > 0 && (
-            <span
-              style={{
-                position: 'absolute',
-                top: 6,
-                right: 4,
-                minWidth: 18,
-                height: 18,
-                borderRadius: 9,
-                backgroundColor: '#E8811A',
-                color: '#fff',
-                fontSize: 11,
-                fontWeight: 700,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                padding: '0 4px',
-              }}
-            >
-              {warningCount}
-            </span>
-          )}
-          {!collapsed && (
-            <span
-              style={{
-                marginLeft: 'auto',
-                fontSize: 12,
-                color: '#6B7280',
-              }}
-            >
-              {collapsed ? '\u25B6' : '\u25C0'}
-            </span>
-          )}
-        </button>
 
-        {/* Message list */}
-        {!collapsed && (
-          <div
-            ref={listRef}
-            style={{
-              flex: 1,
-              overflowY: 'auto',
-              padding: '8px 10px',
-              display: 'flex',
-              flexDirection: 'column',
-              gap: 6,
-            }}
-          >
-            {sidebarMessages.length === 0 && (
-              <p style={{ color: '#6B7280', fontSize: 13, margin: 0 }}>
-                Waiting for data...
-              </p>
-            )}
-
-            {sidebarMessages.map((msg, i) => {
-              const refKey = msg.field ?? msg.rowId;
-              return (
-                <div
-                  key={`${msg.severity}-${i}`}
-                  onClick={refKey ? () => scrollToRef(refKey) : undefined}
-                  style={{
-                    padding: '8px 10px',
-                    borderRadius: 8,
-                    backgroundColor: severityBg[msg.severity],
-                    borderLeft: `3px solid ${severityColor[msg.severity]}`,
-                    fontSize: 13,
-                    lineHeight: '18px',
-                    color: '#E4E6EB',
-                    cursor: refKey ? 'pointer' : undefined,
-                    animation: 'punchBounce 0.35s ease-out both',
-                    animationDelay: `${i * 60}ms`,
-                  }}
-                >
-                  {msg.text}
-                </div>
-              );
-            })}
-
-            {/* Validation questions */}
-            {questions.length > 0 && onAnswer && onDismiss && (
-              <>
-                {questions.some((q) => !q.answer && !q.dismissed) && (
+          {/* In peek mode: flat list, most recent first */}
+          {drawerState === 'peek' && (
+            <div className="flex flex-col gap-1.5">
+              {sidebarMessages.slice(-5).map((msg, i) => {
+                const refKey = msg.field ?? msg.rowId;
+                return (
                   <div
+                    key={`${msg.severity}-${i}`}
+                    onClick={refKey ? () => scrollToRef(refKey) : undefined}
+                    className={`py-1.5 px-2.5 rounded-lg text-xs leading-[18px] text-primary ${refKey ? 'cursor-pointer hover:brightness-110' : ''}`}
                     style={{
-                      padding: '4px 0',
-                      borderTop: '1px solid #2E323C',
-                      marginTop: 2,
-                      fontSize: 11,
-                      color: '#6B7280',
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.05em',
+                      backgroundColor: severityBg[msg.severity],
+                      borderLeft: `3px solid ${severityColor[msg.severity]}`,
                     }}
                   >
-                    Validation
+                    {msg.text}
                   </div>
-                )}
-                {questions.map((q) => (
-                  <QuestionCard
-                    key={q.id}
-                    question={q}
-                    onAnswer={onAnswer}
-                    onDismiss={onDismiss}
-                  />
-                ))}
-              </>
-            )}
-          </div>
-        )}
+                );
+              })}
+              {sidebarMessages.length > 5 && (
+                <button
+                  onClick={() => setDrawerState('full')}
+                  className="text-xs text-accent hover:underline self-start"
+                >
+                  +{sidebarMessages.length - 5} more...
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* In full mode: grouped by severity */}
+          {drawerState === 'full' && (
+            <div className="flex flex-col gap-3">
+              {errorMsgs.length > 0 && (
+                <div>
+                  <h4 className="text-xs font-semibold text-danger uppercase mb-1.5">Errors ({errorMsgs.length})</h4>
+                  <div className="flex flex-col gap-1.5">
+                    {errorMsgs.map((msg, i) => {
+                      const refKey = msg.field ?? msg.rowId;
+                      return (
+                        <div
+                          key={`error-${i}`}
+                          onClick={refKey ? () => scrollToRef(refKey) : undefined}
+                          className={`py-1.5 px-2.5 rounded-lg text-xs leading-[18px] text-primary ${refKey ? 'cursor-pointer hover:brightness-110' : ''}`}
+                          style={{ backgroundColor: severityBg.error, borderLeft: `3px solid ${severityColor.error}` }}
+                        >
+                          {msg.text}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {warningMsgs.length > 0 && (
+                <div>
+                  <h4 className="text-xs font-semibold text-warning uppercase mb-1.5">Warnings ({warningMsgs.length})</h4>
+                  <div className="flex flex-col gap-1.5">
+                    {warningMsgs.map((msg, i) => {
+                      const refKey = msg.field ?? msg.rowId;
+                      return (
+                        <div
+                          key={`warn-${i}`}
+                          onClick={refKey ? () => scrollToRef(refKey) : undefined}
+                          className={`py-1.5 px-2.5 rounded-lg text-xs leading-[18px] text-primary ${refKey ? 'cursor-pointer hover:brightness-110' : ''}`}
+                          style={{ backgroundColor: severityBg.warning, borderLeft: `3px solid ${severityColor.warning}` }}
+                        >
+                          {msg.text}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {infoMsgs.length > 0 && (
+                <div>
+                  <h4 className="text-xs font-semibold text-accent uppercase mb-1.5">Info ({infoMsgs.length})</h4>
+                  <div className="flex flex-col gap-1.5">
+                    {infoMsgs.map((msg, i) => {
+                      const refKey = msg.field ?? msg.rowId;
+                      return (
+                        <div
+                          key={`info-${i}`}
+                          onClick={refKey ? () => scrollToRef(refKey) : undefined}
+                          className={`py-1.5 px-2.5 rounded-lg text-xs leading-[18px] text-primary ${refKey ? 'cursor-pointer hover:brightness-110' : ''}`}
+                          style={{ backgroundColor: severityBg.info, borderLeft: `3px solid ${severityColor.info}` }}
+                        >
+                          {msg.text}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Validation questions */}
+              {questions.length > 0 && onAnswer && onDismiss && (
+                <div>
+                  <h4 className="text-xs font-semibold text-accent uppercase mb-1.5">Questions</h4>
+                  <div className="flex flex-col gap-1.5">
+                    {questions.map((q) => (
+                      <QuestionCard
+                        key={q.id}
+                        question={q}
+                        onAnswer={onAnswer}
+                        onDismiss={onDismiss}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Drag handle at the bottom — drawer expands downward */}
+      <div
+        onClick={toggleDrawer}
+        className="cursor-pointer pt-1 pb-2 mt-auto"
+      >
+        <div className="drawer__handle" />
       </div>
-    </>
+    </div>
   );
 }

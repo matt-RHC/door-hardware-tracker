@@ -10,7 +10,7 @@ import type { DoorEntry } from '@/lib/types'
 
 export type { DoorEntry }
 
-const FIRE_RATING_PATTERN = /\b(\d{1,3}\s*[Mm]in|[123]\s*[Hh]r)\b/
+const FIRE_RATING_PATTERN = /\b(\d{1,3}\s*[Mm]in(?:ute)?s?|[123](?:\.5)?\s*[Hh](?:ou)?rs?)\b/
 
 /**
  * Scans doors for fire ratings embedded in hw_heading or location fields.

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { createAdminSupabaseClient } from '@/lib/supabase/admin'
 
 interface InviteRequest {
   projectId: string
@@ -26,7 +27,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Verify user has access to project
+    // Verify user has admin access to project (only admins can invite)
     const { data: projectMember, error: memberError } = await supabase
       .from('project_members')
       .select('role')
@@ -41,17 +42,61 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Add to project_members
-    // Note: In a real application, you would send an email invitation
-    const { data: projectMemberRecord, error: addError } = await supabase
+    if ((projectMember as { role: string }).role !== 'admin') {
+      return NextResponse.json(
+        { error: 'Only project admins can invite members' },
+        { status: 403 }
+      )
+    }
+
+    // Look up invitee by email using the admin client (auth.admin.listUsers
+    // is not available on the client SDK, so we query profiles or use the
+    // admin API). Use the admin client to find the user by email.
+    const adminSupabase = createAdminSupabaseClient()
+    const { data: { users }, error: lookupError } = await adminSupabase.auth.admin.listUsers({
+      perPage: 1,
+      page: 1,
+    })
+
+    // Filter by email since listUsers doesn't support email filter directly
+    // Use getUserByEmail via the admin API
+    let inviteeId: string | null = null
+    // Prefer the direct lookup method
+    const matchedUsers = (users ?? []).filter(u => u.email === email.toLowerCase())
+    if (matchedUsers.length > 0) {
+      inviteeId = matchedUsers[0].id
+    }
+
+    if (lookupError || !inviteeId) {
+      return NextResponse.json(
+        { error: 'No user found with that email. They must sign up first.' },
+        { status: 404 }
+      )
+    }
+
+    // Check if invitee is already a member
+    const { data: existingMember } = await adminSupabase
       .from('project_members')
-      .insert([
-        {
-          project_id: projectId,
-          user_id: user.id, // For now, just associate with current user
-          role: 'member',
-        } as any,
-      ] as any)
+      .select('id')
+      .eq('project_id', projectId)
+      .eq('user_id', inviteeId)
+      .maybeSingle()
+
+    if (existingMember) {
+      return NextResponse.json(
+        { error: 'User is already a member of this project' },
+        { status: 409 }
+      )
+    }
+
+    // Add invitee to project_members
+    const { data: projectMemberRecord, error: addError } = await (adminSupabase as any)
+      .from('project_members')
+      .insert({
+        project_id: projectId,
+        user_id: inviteeId,
+        role: 'member',
+      })
       .select()
       .single()
 

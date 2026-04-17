@@ -1,0 +1,8 @@
+{
+  "pdf_name": "sched-AKN.pdf",
+  "catalog_key": "SCHED_AKN",
+  "format": "schedule",
+  "expected_door_count": 180,
+  "expected_set_count": 3,
+  "verified": false
+}

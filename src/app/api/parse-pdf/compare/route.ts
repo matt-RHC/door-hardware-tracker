@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import type { DoorEntry, HardwareSet } from '@/lib/types'
+import { validateJson, errorResponse } from '@/lib/api-helpers/validate'
+import { ParsePdfCompareRequestSchema } from '@/lib/schemas/parse-pdf'
 
 interface ExistingOpening {
   id: string
@@ -41,18 +43,28 @@ export async function POST(request: NextRequest) {
     const supabase = await createServerSupabaseClient()
     const { data: { user }, error: authError } = await supabase.auth.getUser()
     if (authError || !user) {
-      return NextResponse.json({ error: 'You must be signed in' }, { status: 401 })
+      return errorResponse('AUTH_REQUIRED', 'You must be signed in')
     }
 
-    const body = await request.json()
-    const { projectId, hardwareSets, doors } = body as {
+    const parsed = await validateJson(request, ParsePdfCompareRequestSchema)
+    if (!parsed.ok) return parsed.response
+    const { projectId, hardwareSets, doors } = parsed.data as {
       projectId: string
       hardwareSets: HardwareSet[]
       doors: DoorEntry[]
     }
 
-    if (!projectId || !doors) {
-      return NextResponse.json({ error: 'Missing projectId or doors' }, { status: 400 })
+    // Project membership check: verify the authenticated user is a member of
+    // projectId before reading any project data. Auth alone is not sufficient —
+    // an authenticated user could supply any projectId they know.
+    const { data: membership, error: memberError } = await supabase
+      .from('project_members')
+      .select('role')
+      .eq('project_id', projectId)
+      .eq('user_id', user.id)
+      .single()
+    if (memberError || !membership) {
+      return errorResponse('ACCESS_DENIED', 'Access denied')
     }
 
     // Fetch existing openings with hardware items and progress
@@ -94,6 +106,9 @@ export async function POST(request: NextRequest) {
     const setMap = new Map<string, HardwareSet>()
     for (const set of hardwareSets) {
       setMap.set(set.set_id, set)
+      if (set.generic_set_id && set.generic_set_id !== set.set_id) {
+        setMap.set(set.generic_set_id, set)
+      }
     }
 
     // Categorize each door
@@ -236,7 +251,7 @@ export async function POST(request: NextRequest) {
         progress_count: r.progress_count,
         item_count: r.existing.hardware_items?.length || 0,
       })),
-      hardwareSets: hardwareSets.map(s => ({ set_id: s.set_id, heading: s.heading, item_count: s.items.length })),
+      hardwareSets: hardwareSets.map(s => ({ set_id: s.set_id, heading: s.heading, item_count: (s.items ?? []).length })),
     })
   } catch (error) {
     console.error('Compare error:', error)
