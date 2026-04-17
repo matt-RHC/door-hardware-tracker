@@ -30,9 +30,9 @@
   --border-hover: #3E434F;
 
   /* Text (off-white to reduce halation for the 33-50% of users with astigmatism) */
-  --text-primary: #E4E6EB;
-  --text-secondary: #9BA1AE;
-  --text-tertiary: #6B7280;
+  --text-primary: #F2F4F8;
+  --text-secondary: #B5BBC6;
+  --text-tertiary: #8A93A3;
 
   /* ── Primary Brand: Steel Blue ──
      Professional trust color. Distinct from Procore (orange) and

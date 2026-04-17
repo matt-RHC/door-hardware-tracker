@@ -47,7 +47,7 @@ export default function DarrinMessage({ avatar, message, children }: DarrinMessa
         mounted ? "opacity-100 translate-y-0" : "opacity-0 translate-y-2"
       }`}
     >
-      <div className="flex-shrink-0 w-12 h-12 rounded-full overflow-hidden bg-slate-800 border border-border-dim flex items-center justify-center">
+      <div className="flex-shrink-0 w-12 h-12 rounded-full overflow-hidden bg-surface-raised border border-border-dim flex items-center justify-center">
         {imgError ? (
           <span className="text-xl" role="img" aria-label={AVATAR_ALT[avatar]}>👷</span>
         ) : (
@@ -63,7 +63,7 @@ export default function DarrinMessage({ avatar, message, children }: DarrinMessa
           />
         )}
       </div>
-      <div className="flex-1 min-w-0 bg-slate-800 rounded-lg p-4 border border-border-dim/50">
+      <div className="flex-1 min-w-0 bg-surface-raised rounded-lg p-4 border border-border-dim/50">
         <div className="text-sm text-primary leading-relaxed">{message}</div>
         {children && <div className="mt-3 flex flex-wrap gap-2">{children}</div>}
       </div>
@@ -89,12 +89,15 @@ export function DarrinAction({
   disabled = false,
 }: DarrinActionProps) {
   const base =
-    "px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border min-h-9 disabled:opacity-50 disabled:cursor-not-allowed"
+    "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border min-h-9 disabled:opacity-50 disabled:cursor-not-allowed"
+  // Selected chips use a solid accent fill so users can tell at a glance
+  // which answer they've committed to — the previous dim-tint was too
+  // subtle against the dark chat bubble.
   const styles = selected
-    ? "bg-accent-dim border-accent/50 text-accent"
+    ? "bg-accent border-accent text-white shadow-[0_0_0_2px_var(--blue-dim)]"
     : variant === "primary"
     ? "bg-accent hover:bg-accent/80 border-accent text-white"
-    : "bg-tint border-border-dim text-secondary hover:text-primary hover:border-accent/30"
+    : "bg-tint border-border-dim text-primary hover:border-accent/50"
 
   return (
     <button
@@ -102,7 +105,9 @@ export function DarrinAction({
       onClick={onClick}
       disabled={disabled}
       className={`${base} ${styles}`}
+      aria-pressed={selected}
     >
+      {selected && <span aria-hidden="true">&#10003;</span>}
       {children}
     </button>
   )
