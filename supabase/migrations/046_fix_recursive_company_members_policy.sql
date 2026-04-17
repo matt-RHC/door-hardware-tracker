@@ -1,0 +1,62 @@
+-- Migration 046: Fix recursive RLS policy on company_members (SELECT).
+--
+-- ─────────────────────────────────────────────────────────────────────────
+-- Incident summary (2026-04-17 ~03:48 UTC)
+-- ─────────────────────────────────────────────────────────────────────────
+-- Production /api/projects and /api/portfolio/stats both returned 500 with:
+--   "infinite recursion detected in policy for relation company_members"
+--
+-- Root cause: the SELECT policy on company_members introduced in migration
+-- 040 ("Members can view their company rosters") used a subquery-barrier
+-- pattern that still self-references the table:
+--
+--   USING (
+--     company_id IN (
+--       SELECT cm2.company_id FROM public.company_members cm2
+--       WHERE cm2.user_id = (SELECT auth.uid())
+--     )
+--   )
+--
+-- Postgres evaluates the inner SELECT with the same USING clause applied,
+-- which re-enters the policy and recurses. The barrier pattern only holds
+-- when the planner treats the subquery as an init-plan; under our planner
+-- state on 2026-04-17 it did not, and every SELECT touching company_members
+-- (directly, or via the EXISTS checks in the projects / openings / etc.
+-- policies) aborted.
+--
+-- ─────────────────────────────────────────────────────────────────────────
+-- Fix
+-- ─────────────────────────────────────────────────────────────────────────
+-- Anchor the USING clause on the caller's own row. This is the same
+-- own-row shape that was used to unwind the equivalent bug on
+-- project_members: a scalar comparison against auth.uid() cannot recurse,
+-- because evaluating it does not require another SELECT on the table.
+--
+--   USING (user_id = (SELECT auth.uid()))
+--
+-- Tenant-roster reads (e.g. the admin "list members of company X" view)
+-- go through the service-role client in
+-- src/app/api/admin/companies/[id]/members/route.ts, which bypasses RLS.
+-- User-scoped code paths (src/lib/supabase/middleware.ts,
+-- src/lib/companies.ts getActiveCompanyId / assertProjectInUserCompany,
+-- src/app/api/auth/callback/route.ts) all filter on
+-- .eq('user_id', user.id) already, so narrowing the SELECT policy to the
+-- caller's own row does not regress any feature.
+--
+-- ─────────────────────────────────────────────────────────────────────────
+-- Provenance
+-- ─────────────────────────────────────────────────────────────────────────
+-- This migration DUPLICATES a hotfix that was already applied directly to
+-- production on 2026-04-17 via Supabase MCP and recorded in
+-- schema_migrations under name `fix_recursive_company_members_policy`.
+-- It exists in-repo so branch databases / local dev / any future reset
+-- rebuild the correct policy, and so the repo is no longer drifted from
+-- prod. DO NOT `supabase db push` this migration against prod — it is
+-- already there. The DROP/CREATE below is idempotent so re-application is
+-- safe everywhere else.
+
+DROP POLICY IF EXISTS "Members can view their company rosters" ON public.company_members;
+
+CREATE POLICY "Members can view their company rosters"
+  ON public.company_members FOR SELECT
+  USING (user_id = (SELECT auth.uid()));
