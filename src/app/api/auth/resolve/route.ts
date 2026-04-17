@@ -69,22 +69,34 @@ function extractDomain(email: string): string | null {
 }
 
 /**
- * Map a company's registered provider preference. v1 doesn't track this
- * per-company, so we apply a deliberately tiny heuristic: only the
- * literal `*.onmicrosoft.com` tenant domains route to Azure; everything
- * else defaults to Google.
+ * Map a company's registered provider preference. Admins may set
+ * `company_domains.preferred_provider` to pin a domain to `google` or
+ * `azure`; when NULL we fall back to a tiny heuristic that only routes
+ * literal `*.onmicrosoft.com` tenant domains to Azure and defaults the
+ * rest to Google.
  *
  * Known limitation: an Azure AD tenant with a vanity domain (e.g.
- * dpr.com) gets routed to Google by this heuristic. Those customers
- * should fall through to the fallback OAuth pills under the divider, or
- * be served by the v2 `company_domains.preferred_provider` column.
- *
- * TODO(v2): add `company_domains.preferred_provider` and read it here.
+ * dpr.com) whose admin hasn't set `preferred_provider` yet gets routed
+ * to Google by the heuristic. Those customers should fall through to the
+ * fallback OAuth pills under the divider, or have an admin set
+ * `preferred_provider='azure'` for their domain.
  */
-function providerForDomain(domain: string): 'google' | 'azure' {
+export function providerForDomain(domain: string): 'google' | 'azure' {
   const microsoftFirst = /\.onmicrosoft\.com$/i
   if (microsoftFirst.test(domain)) return 'azure'
   return 'google'
+}
+
+/**
+ * Pure helper: honour an explicit `preferred_provider` override if set,
+ * otherwise fall through to the regex heuristic. Exported for unit tests
+ * so the POST handler doesn't need Supabase mocking.
+ */
+export function resolveProviderForDomain(
+  domain: string,
+  preferredProvider: 'google' | 'azure' | null | undefined,
+): 'google' | 'azure' {
+  return preferredProvider ?? providerForDomain(domain)
 }
 
 export async function POST(request: NextRequest): Promise<NextResponse<ResolveResponse>> {
@@ -127,7 +139,7 @@ export async function POST(request: NextRequest): Promise<NextResponse<ResolveRe
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const { data: companyDomain } = await (admin as any)
     .from('company_domains')
-    .select('company_id, companies ( name )')
+    .select('company_id, preferred_provider, companies ( name )')
     .eq('domain', domain)
     .maybeSingle()
 
@@ -135,9 +147,13 @@ export async function POST(request: NextRequest): Promise<NextResponse<ResolveRe
     const companyName =
       (companyDomain.companies as { name?: string } | null)?.name ??
       'your organization'
+    const preferred = (companyDomain.preferred_provider ?? null) as
+      | 'google'
+      | 'azure'
+      | null
     return NextResponse.json({
       kind: 'sso',
-      provider: providerForDomain(domain),
+      provider: resolveProviderForDomain(domain, preferred),
       company_name: companyName,
     } as const)
   }
