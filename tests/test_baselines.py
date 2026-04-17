@@ -155,6 +155,27 @@ class TestMediumBaseline:
                     f"'{expected_item['qty_source']}' to '{item.qty_source}'"
                 )
 
+    def test_no_bare_door_frame_items(self, extract_tables, medium_pdf_path):
+        """Regression gate for the 2026-04-17 Radius DC phantom-row bug.
+
+        Hardware-set column headers for door-type / frame-type codes must
+        never slip through NON_HARDWARE_PATTERN as bare 'Door' / 'Frame'
+        items. If they do, buildPerOpeningItems on the TS side amplifies
+        them into duplicated structural rows on every opening.
+        Radius DC run 5fd76705-b97a-49e9-888e-ddf4f0a34597 carried 127
+        such rows across 22-27 sets; 249 invariant violations resulted.
+        """
+        hw_sets, *_ = _run_full_pipeline(extract_tables, medium_pdf_path)
+        offenders = []
+        for hs in hw_sets:
+            for item in hs.items:
+                if (item.name or "").strip().lower() in ("door", "frame"):
+                    offenders.append((hs.set_id, item.name, item.model))
+        assert not offenders, (
+            f"Radius DC baseline emitted bare Door/Frame items "
+            f"(set_id, name, model): {offenders}"
+        )
+
 
 class TestLargeBaseline:
     """LARGE PDF (82 pages) regression tests."""
