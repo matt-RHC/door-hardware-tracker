@@ -36,6 +36,8 @@ interface SetViewProps {
   onSort: (field: DoorStringField) => void;
   editingCell: EditingCell | null;
   editValue: string;
+  /** Set for ~1.5s after a commit to drive the just-edited flash. */
+  recentlyEdited: EditingCell | null;
   onStartEdit: (originalIndex: number, field: DoorStringField) => void;
   onEditValueChange: (value: string) => void;
   onCommitEdit: () => void;
@@ -66,6 +68,7 @@ export default function SetView(props: SetViewProps) {
     onSort,
     editingCell,
     editValue,
+    recentlyEdited,
     onStartEdit,
     onEditValueChange,
     onCommitEdit,
@@ -253,6 +256,7 @@ export default function SetView(props: SetViewProps) {
                         rowIndex={i}
                         editingCell={editingCell}
                         editValue={editValue}
+                        recentlyEdited={recentlyEdited}
                         onStartEdit={onStartEdit}
                         onEditValueChange={onEditValueChange}
                         onCommitEdit={onCommitEdit}
@@ -277,6 +281,7 @@ interface DoorTableRowProps {
   rowIndex: number;
   editingCell: EditingCell | null;
   editValue: string;
+  recentlyEdited: EditingCell | null;
   onStartEdit: (originalIndex: number, field: DoorStringField) => void;
   onEditValueChange: (value: string) => void;
   onCommitEdit: () => void;
@@ -290,6 +295,7 @@ function DoorTableRow({
   rowIndex,
   editingCell,
   editValue,
+  recentlyEdited,
   onStartEdit,
   onEditValueChange,
   onCommitEdit,
@@ -299,7 +305,8 @@ function DoorTableRow({
   // Auto-approved rows (≥0.85) recede visually so the eye lands on rows
   // that still need human attention. The row-accent border communicates
   // WHY the row is quiet (it passed); opacity communicates HOW much to
-  // care right now.
+  // care right now. We keep cells editable on purpose — users can still
+  // correct auto-approved rows; they just shouldn't draw attention.
   const isAutoApproved = getConfidence(door) === "high";
 
   return (
@@ -315,12 +322,27 @@ function DoorTableRow({
       {FIELD_KEYS.map((field) => {
         const isEditing =
           editingCell?.row === originalIndex && editingCell?.field === field;
+        const isJustEdited =
+          recentlyEdited?.row === originalIndex &&
+          recentlyEdited?.field === field;
         // Door number is the primary wayfinding column — full weight and
         // tabular-nums so e.g. "101A / 102 / 10" align on decimal glyphs.
         const isPrimary = field === "door_number";
         return (
-          <td key={field} className="px-4 py-3">
+          <td
+            key={field}
+            className={`px-4 py-3 transition-colors duration-500 ${
+              // Just-edited flash: commitEdit sets recentlyEdited for 1.5s
+              // so the user sees a soft success tint confirming the keystroke
+              // landed. No API save happens here — the flash is the only
+              // feedback in this client-state-only edit path.
+              isJustEdited ? "bg-success-dim motion-safe:animate-in" : ""
+            }`}
+          >
             {isEditing ? (
+              /* In-edit state: input inherits the focus-visible ring the
+                 shared input-field styling would provide; we spell it out
+                 here because the existing class sets focus:outline-none. */
               <input
                 autoFocus
                 type="text"
@@ -334,9 +356,29 @@ function DoorTableRow({
                 className="w-full bg-tint-strong border border-accent rounded px-2 py-1 text-primary text-[13px] focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 focus-visible:ring-offset-surface"
               />
             ) : (
+              /* Idle state carrying four overlapping affordances:
+                 - default: quiet, no border
+                 - hover: bg-surface-raised/30 cues interactivity
+                 - focus-visible: 2px accent ring (keyboard users)
+                 - auto-approved: title attribute explains reduced salience
+                 spans are keyboard-inert by default, so tabIndex + keydown
+                 wires Enter/Space to the same startEdit the click uses. */
               <span
+                role="button"
+                tabIndex={0}
                 onClick={() => onStartEdit(originalIndex, field)}
-                className={`cursor-pointer text-[13px] font-mono tabular-nums ${
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    onStartEdit(originalIndex, field);
+                  }
+                }}
+                title={
+                  isAutoApproved
+                    ? "Auto-approved — edits still land but are low-priority"
+                    : undefined
+                }
+                className={`inline-block rounded-sm px-1 -mx-1 cursor-pointer text-[13px] font-mono tabular-nums transition-colors duration-150 hover:bg-surface-raised/40 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent focus:outline-none ${
                   isPrimary ? "font-semibold" : ""
                 } ${
                   door[field]
