@@ -55,3 +55,4 @@ tests/darrin-cache/
 /archive/
 /.claude/
 .env*.local
+/supabase/.temp
