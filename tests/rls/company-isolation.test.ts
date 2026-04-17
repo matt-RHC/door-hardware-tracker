@@ -98,14 +98,22 @@ async function signUpAndMint(
 }
 
 describeOrSkip('company isolation RLS', () => {
-  const admin = createClient(RLS_URL ?? '', RLS_SERVICE ?? '', {
-    auth: { autoRefreshToken: false, persistSession: false },
-  }) as AnyClient
-
+  // Lazy init — `describeOrSkip` stops the `it` blocks from running when
+  // the RLS_TEST_* env vars are absent, but vitest still evaluates the
+  // describe body during collection, so a top-level `createClient('', '')`
+  // would throw `supabaseUrl is required` and fail the whole file even
+  // though we meant to skip it. Deferring to beforeAll keeps the file
+  // loadable in environments without Supabase creds (local dev, the
+  // default test-ts CI job).
+  let admin: AnyClient
   let acme: Fixture
   let initech: Fixture
 
   beforeAll(async () => {
+    admin = createClient(RLS_URL!, RLS_SERVICE!, {
+      auth: { autoRefreshToken: false, persistSession: false },
+    }) as AnyClient
+
     const { data: acmeCompany, error: acmeErr } = await admin
       .from('companies')
       .insert({ name: 'Acme', slug: `acme-${Date.now()}` })
