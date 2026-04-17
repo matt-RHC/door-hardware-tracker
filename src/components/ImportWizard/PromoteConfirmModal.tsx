@@ -92,7 +92,13 @@ export default function PromoteConfirmModal({
       }}
       onKeyDown={handleTrap}
     >
-      <div className="bg-surface border border-th-border rounded-md p-5 w-full max-w-md shadow-2xl space-y-4">
+      {/* `.panel` is the app's established modal chrome (matches the
+          wizard's internal close-confirm modal at ImportWizard.tsx:622).
+          Brings backdrop-blur + themed surface/border in one class so
+          this new modal doesn't introduce a parallel visual vocabulary.
+          `animate-fade-in-up` is already disabled under prefers-reduced-
+          motion and low/mid perf tiers (globals.css:653). */}
+      <div className="panel animate-fade-in-up p-5 w-full max-w-md shadow-2xl space-y-4">
         <div>
           <h3
             id="promote-confirm-title"
