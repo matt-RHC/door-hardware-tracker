@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from 'next/server'
+import { NextResponse } from 'next/server'
 import { createServerSupabaseClient, createAdminSupabaseClient } from '@/lib/supabase/server'
 
 type ProjectRow = {
@@ -32,7 +32,7 @@ type ProjectStats = {
   completion_pct: number
 }
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     const supabase = await createServerSupabaseClient()
 
@@ -51,7 +51,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to fetch memberships' }, { status: 500 })
     }
 
-    const projectIds = (memberships ?? []).map((m: any) => m.project_id as string)
+    const membershipRows = (memberships ?? []) as Array<{ project_id: string }>
+    const projectIds = membershipRows.map((m) => m.project_id)
 
     if (projectIds.length === 0) {
       return NextResponse.json({
@@ -69,7 +70,7 @@ export async function GET(request: NextRequest) {
 
     const admin = createAdminSupabaseClient()
 
-    const { data: projectsRaw, error: projectsError } = await (admin as any)
+    const { data: projectsRaw, error: projectsError } = await admin
       .from('projects')
       .select('id, name, job_number, general_contractor, architect, address')
       .in('id', projectIds)
@@ -80,9 +81,9 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to fetch projects' }, { status: 500 })
     }
 
-    const projects = (projectsRaw ?? []) as ProjectRow[]
+    const projects = (projectsRaw ?? []) as unknown as ProjectRow[]
 
-    const { data: openingsRaw, error: openingsError } = await (admin as any)
+    const { data: openingsRaw, error: openingsError } = await admin
       .from('openings')
       .select(`
         id,
@@ -97,7 +98,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to fetch openings' }, { status: 500 })
     }
 
-    const openings = (openingsRaw ?? []) as OpeningRow[]
+    const openings = (openingsRaw ?? []) as unknown as OpeningRow[]
 
     const byProject = new Map<string, ProjectStats>()
     for (const p of projects) {
