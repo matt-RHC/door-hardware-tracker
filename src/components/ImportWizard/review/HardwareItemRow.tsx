@@ -42,7 +42,7 @@ export default function HardwareItemRow({ item, leafIdx, onRevert }: HardwareIte
         {conf && <ConfidenceBadge level={conf.name.level} tooltip={conf.name.reason} />}
       </span>
       <span
-        className={`text-[11px] shrink-0 inline-flex items-center ${
+        className={`text-[11px] shrink-0 inline-flex items-center tabular-nums ${
           isCorrected ? 'text-info font-bold' : 'text-accent'
         }`}
       >
