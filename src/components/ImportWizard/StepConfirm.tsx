@@ -3,6 +3,8 @@
 import { useState } from "react";
 import type { DoorEntry, HardwareSet, TriageResult } from "./types";
 import WizardNav from "./WizardNav";
+import PromoteConfirmModal from "./PromoteConfirmModal";
+import { useToast } from "@/components/ToastProvider";
 import {
   buildDefinedSetIds,
   buildDoorToSetMap,
@@ -32,6 +34,7 @@ export default function StepConfirm({
   onBackToReview,
   onError,
 }: StepConfirmProps) {
+  const { showToast } = useToast();
   const [loading, setLoading] = useState(false);
   const [status, setStatus] = useState("");
   const [saveComplete, setSaveComplete] = useState(false);
@@ -40,6 +43,10 @@ export default function StepConfirm({
   const [promoteFailed, setPromoteFailed] = useState(false);
   const [retrying, setRetrying] = useState(false);
   const [retryError, setRetryError] = useState<string | null>(null);
+  // Promote gate: clicking Save opens the confirmation modal; the modal's
+  // Confirm button is what actually fires the API call. Staging → prod is
+  // a one-way write, so one deliberate pause is worth the extra click.
+  const [showConfirm, setShowConfirm] = useState(false);
   const [saveResult, setSaveResult] = useState<{
     openingsCount: number;
     itemsCount: number;
@@ -149,6 +156,10 @@ export default function StepConfirm({
         setPromoteFailed(true);
         setStatus("Promotion failed");
         setSaveComplete(true);
+        showToast(
+          "warning",
+          "Saved to staging but promotion failed. You can retry below.",
+        );
         return;
       }
 
@@ -167,10 +178,21 @@ export default function StepConfirm({
 
       setStatus("Save complete!");
       setSaveComplete(true);
+      // One satisfying confirmation per high-stakes action (per styling
+      // pass scope). Partial saves still show the toast because some
+      // openings DID land; the inline "Partial Save" card spells out
+      // the caveat on the success screen.
+      showToast(
+        "success",
+        `Promoted ${result.openingsCount} opening${result.openingsCount !== 1 ? "s" : ""} to production`,
+      );
     } catch (err) {
-      onError(err instanceof Error ? err.message : "Save failed");
+      const msg = err instanceof Error ? err.message : "Save failed";
+      showToast("error", msg);
+      onError(msg);
     } finally {
       setLoading(false);
+      setShowConfirm(false);
     }
   };
 
@@ -481,13 +503,22 @@ export default function StepConfirm({
         </div>
       )}
 
-      {/* Navigation */}
+      {/* Navigation — Save opens the confirmation modal; the modal's
+          Confirm button is what actually calls handleSave. */}
       <WizardNav
         onBack={onBack}
-        onNext={handleSave}
+        onNext={() => setShowConfirm(true)}
         nextLabel={loading ? "Saving..." : "Save"}
         nextDisabled={loading || saveBlocked}
         nextVariant="success"
+      />
+
+      <PromoteConfirmModal
+        isOpen={showConfirm}
+        openingCount={doors.length - orphanDoors.length}
+        isPromoting={loading}
+        onConfirm={handleSave}
+        onCancel={() => setShowConfirm(false)}
       />
     </div>
   );
