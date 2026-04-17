@@ -22,6 +22,19 @@
 --    isn't exposed to PostgREST by default. RPC is the clean path.
 
 -- ─────────────────────────────────────────────────────────────────────────
+-- 0. Ensure the bucket exists before we declare policies on it. Production
+--    already has this row from a manual dashboard creation (032 only
+--    documented the bucket name in a comment), so ON CONFLICT DO NOTHING
+--    makes this statement a true no-op there. Fresh environments (CI,
+--    restored backups) need the explicit INSERT — the policies below
+--    would otherwise reference a bucket that doesn't exist, and the
+--    rls-tenancy test suite would 404 on upload before any RLS check.
+-- ─────────────────────────────────────────────────────────────────────────
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('issue-evidence', 'issue-evidence', false)
+ON CONFLICT (id) DO NOTHING;
+
+-- ─────────────────────────────────────────────────────────────────────────
 -- 1. Drop any pre-existing issue-evidence policies (defensive — none
 --    expected, but a previous attempt to land this migration could have
 --    left fragments).

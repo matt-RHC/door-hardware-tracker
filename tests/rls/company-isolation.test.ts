@@ -211,7 +211,12 @@ describeOrSkip('company isolation RLS', () => {
     // Put a file in initech's project folder via admin so it's truly cross-tenant.
     const path = `${initech.projectId}/rls-test-${Date.now()}.txt`
     const buf = new TextEncoder().encode('secret')
-    const { error: upErr } = await admin.storage.from('attachments').upload(path, buf)
+    // Explicit contentType so the bucket's allowed_mime_types (set on
+    // CI's local Supabase but not on prod) doesn't 415 the upload
+    // before the RLS check runs.
+    const { error: upErr } = await admin.storage
+      .from('attachments')
+      .upload(path, buf, { contentType: 'application/octet-stream' })
     expect(upErr).toBeNull()
 
     const { data, error } = await acme.client.storage.from('attachments').download(path)
@@ -230,7 +235,9 @@ describeOrSkip('company isolation RLS', () => {
     const fakeIssueId = '00000000-0000-0000-0000-000000000001'
     const path = `${initech.projectId}/${fakeIssueId}/rls-test-${Date.now()}.txt`
     const buf = new TextEncoder().encode('secret')
-    const { error: upErr } = await admin.storage.from('issue-evidence').upload(path, buf)
+    const { error: upErr } = await admin.storage
+      .from('issue-evidence')
+      .upload(path, buf, { contentType: 'application/octet-stream' })
     expect(upErr).toBeNull()
 
     const { data, error } = await acme.client.storage.from('issue-evidence').download(path)
