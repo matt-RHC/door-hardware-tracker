@@ -12,7 +12,7 @@ import type {
   PageClassification,
 } from '@/lib/types'
 import { normalizeDoorNumber } from '@/lib/parse-pdf-helpers'
-import { generateTriageQuestions, type PunchQuestion } from '@/lib/punch-messages'
+import { generateTriageQuestions } from '@/lib/punch-messages'
 
 // ── Card data types ──
 

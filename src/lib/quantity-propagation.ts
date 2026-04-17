@@ -11,7 +11,7 @@
  */
 
 import { TAXONOMY_REGEX_CACHE } from '@/lib/hardware-taxonomy'
-import type { HardwareSet, ExtractedHardwareItem } from '@/lib/types'
+import type { HardwareSet } from '@/lib/types'
 
 // ── Category classification (uses shared TAXONOMY_REGEX_CACHE) ──
 
