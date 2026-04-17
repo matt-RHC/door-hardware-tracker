@@ -89,6 +89,16 @@ export async function GET() {
     const visibleProjectIds = projects.map((p) => p.id)
 
     if (visibleProjectIds.length === 0) {
+      // User has project_members rows but none of those projects are visible
+      // under RLS — typically a dangling membership after a company tenancy
+      // change. Log it so the state is observable in prod instead of
+      // invisibly healing.
+      if (projectIds.length > 0) {
+        console.warn(
+          'Portfolio stats: user has project_members but no visible projects',
+          { user_id: user.id, dangling_membership_count: projectIds.length },
+        )
+      }
       return NextResponse.json({
         projects: [],
         totals: {
@@ -102,6 +112,10 @@ export async function GET() {
       })
     }
 
+    // Admin client here because openings RLS requires direct project
+    // membership checks that don't cascade cleanly through the joined
+    // hardware_items / checklist_progress selects. visibleProjectIds
+    // already gates visibility to projects the caller can see via RLS.
     const admin = createAdminSupabaseClient()
 
     const { data: openingsRaw, error: openingsError } = await admin
