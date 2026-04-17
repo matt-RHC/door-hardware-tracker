@@ -276,4 +276,60 @@ describe('Radius DC: buildPerOpeningItems must not emit duplicate structural row
       }
     }
   })
+
+  // Documents that buildPerOpeningItems is the AMPLIFIER — given a
+  // Radius-DC-shaped payload where Python already emitted phantom bare
+  // "Door"/"Frame" rows in hwSet.items (the pre-fix state), the helper
+  // faithfully appends them on top of its own structural rows, yielding
+  // the exact 2× Door / 2× Frame fingerprint observed in production.
+  // This test stays GREEN to pin that behavior; the Python fix
+  // (NON_HARDWARE_PATTERN) prevents the phantom inputs upstream, so this
+  // amplification path is not reachable in prod.
+  it('AMPLIFICATION WITNESS: phantom Python Door/Frame items produce >1 bare Door per opening', () => {
+    const PHANTOM_PAYLOAD = {
+      ...SYNTHETIC_PAYLOAD,
+      hardwareSets: SYNTHETIC_PAYLOAD.hardwareSets.map(s => ({
+        ...s,
+        items: [
+          ...s.items,
+          { name: 'Door',  qty: 1, model: 'A',  finish: '', manufacturer: '' },
+          { name: 'Frame', qty: 1, model: 'F1', finish: '', manufacturer: '' },
+        ],
+      })),
+    }
+
+    const { hardwareSets, doors } = PHANTOM_PAYLOAD
+    const setMap = buildSetLookupMap(hardwareSets)
+    const doorToSetMap = buildDoorToSetMap(hardwareSets)
+    const doorInfoMap = new Map<string, { door_type: string; frame_type: string }>()
+    for (const d of doors) {
+      doorInfoMap.set(d.door_number, {
+        door_type: d.door_type || '',
+        frame_type: d.frame_type || '',
+      })
+    }
+    const openings = doors.map((d, i) => ({
+      id: `stub-phantom-${i}`,
+      door_number: d.door_number,
+      hw_set: d.hw_set ?? null,
+    }))
+
+    const rows = buildPerOpeningItems(openings, doorInfoMap, setMap, doorToSetMap, 'staging_opening_id', {})
+
+    let maxBareDoors = 0
+    let maxFrames = 0
+    for (const o of openings) {
+      const r = rows.filter(x => x.staging_opening_id === o.id)
+      maxBareDoors = Math.max(maxBareDoors, r.filter(x => x.name === 'Door').length)
+      maxFrames = Math.max(maxFrames, r.filter(x => x.name === 'Frame').length)
+    }
+
+    // The exact Radius DC production fingerprint: 2× Door + 2× Frame
+    // per opening. If this drops to 1×, either the TS helper started
+    // filtering phantom rows (which is NOT what we want — that would
+    // mask future Python regressions) or the fixture stopped seeding
+    // phantoms.
+    expect(maxBareDoors, 'phantom Python items should amplify into >1 bare Door rows').toBeGreaterThan(1)
+    expect(maxFrames, 'phantom Python items should amplify into >1 Frame rows').toBeGreaterThan(1)
+  })
 })
