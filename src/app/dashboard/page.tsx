@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Navbar from "@/components/Navbar";
 import OfflineIndicator from "@/components/OfflineIndicator";
+import ProgressBar from "@/components/ProgressBar";
 import { Project } from "@/lib/types/database";
 import { playClick, playHover } from "@/lib/sounds";
 
@@ -13,6 +14,25 @@ interface ProjectFormData {
   general_contractor: string;
   architect: string;
   address: string;
+}
+
+interface ProjectStats {
+  project_id: string;
+  openings_total: number;
+  openings_complete: number;
+  openings_incomplete: number;
+  items_total: number;
+  items_checked: number;
+  completion_pct: number;
+}
+
+interface PortfolioTotals {
+  projects: number;
+  openings: number;
+  openings_complete: number;
+  items_total: number;
+  items_checked: number;
+  completion_pct: number;
 }
 
 const emptyForm: ProjectFormData = {
@@ -25,6 +45,9 @@ const emptyForm: ProjectFormData = {
 
 export default function DashboardPage() {
   const [projects, setProjects] = useState<Project[]>([]);
+  const [statsByProject, setStatsByProject] = useState<Record<string, ProjectStats>>({});
+  const [totals, setTotals] = useState<PortfolioTotals | null>(null);
+  const [statsLoading, setStatsLoading] = useState(true);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
@@ -37,6 +60,7 @@ export default function DashboardPage() {
 
   useEffect(() => {
     fetchProjects();
+    fetchPortfolioStats();
   }, []);
 
   useEffect(() => {
@@ -55,6 +79,24 @@ export default function DashboardPage() {
       setError(err instanceof Error ? err.message : "An error occurred");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchPortfolioStats = async () => {
+    try {
+      const response = await fetch("/api/portfolio/stats");
+      if (!response.ok) return;
+      const data = await response.json();
+      const map: Record<string, ProjectStats> = {};
+      for (const p of (data.projects ?? []) as ProjectStats[]) {
+        map[p.project_id] = p;
+      }
+      setStatsByProject(map);
+      setTotals(data.totals ?? null);
+    } catch (err) {
+      console.error("Failed to fetch portfolio stats", err);
+    } finally {
+      setStatsLoading(false);
     }
   };
 
@@ -98,6 +140,7 @@ export default function DashboardPage() {
       }
       setShowModal(false);
       fetchProjects();
+      fetchPortfolioStats();
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred");
     } finally {
@@ -113,6 +156,7 @@ export default function DashboardPage() {
       if (!res.ok) throw new Error("Failed to delete project");
       setDeleteConfirm(null);
       fetchProjects();
+      fetchPortfolioStats();
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred");
     }
@@ -151,6 +195,70 @@ export default function DashboardPage() {
             New Project
           </button>
         </div>
+
+        {/* Portfolio summary */}
+        {!statsLoading && totals && totals.projects > 0 && (
+          <div className="panel corner-brackets p-4 sm:p-5 rounded-md mb-5 animate-fade-in-up">
+            <div className="flex items-center justify-between mb-3">
+              <span
+                className="text-[12px] text-secondary uppercase tracking-wider"
+                style={{ fontFamily: "var(--font-display)", letterSpacing: "0.08em" }}
+              >
+                Portfolio Overview
+              </span>
+              <span className="text-[12px] text-tertiary tabular-nums">
+                {totals.openings_complete} / {totals.openings} openings complete
+              </span>
+            </div>
+            <ProgressBar value={totals.completion_pct} size="lg" showLabel={false} />
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4">
+              <div className="text-center sm:text-left">
+                <div
+                  className="text-[22px] font-bold text-primary tabular-nums"
+                  style={{ fontFamily: "var(--font-display)" }}
+                >
+                  {totals.projects}
+                </div>
+                <div className="text-[11px] text-tertiary uppercase tracking-wider mt-0.5">
+                  Projects
+                </div>
+              </div>
+              <div className="text-center sm:text-left">
+                <div
+                  className="text-[22px] font-bold text-primary tabular-nums"
+                  style={{ fontFamily: "var(--font-display)" }}
+                >
+                  {totals.openings}
+                </div>
+                <div className="text-[11px] text-tertiary uppercase tracking-wider mt-0.5">
+                  Openings
+                </div>
+              </div>
+              <div className="text-center sm:text-left">
+                <div
+                  className="text-[22px] font-bold text-[var(--green)] tabular-nums"
+                  style={{ fontFamily: "var(--font-display)" }}
+                >
+                  {totals.completion_pct}%
+                </div>
+                <div className="text-[11px] text-tertiary uppercase tracking-wider mt-0.5">
+                  Complete
+                </div>
+              </div>
+              <div className="text-center sm:text-left">
+                <div
+                  className="text-[22px] font-bold text-[var(--orange)] tabular-nums"
+                  style={{ fontFamily: "var(--font-display)" }}
+                >
+                  {totals.openings - totals.openings_complete}
+                </div>
+                <div className="text-[11px] text-tertiary uppercase tracking-wider mt-0.5">
+                  Outstanding
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Content */}
         {loading ? (
@@ -257,6 +365,43 @@ export default function DashboardPage() {
                     <span className="truncate">{project.address}</span>
                   </p>
                 )}
+
+                {/* Progress */}
+                {(() => {
+                  const s = statsByProject[project.id];
+                  if (!s || s.openings_total === 0) {
+                    return (
+                      <div className="mt-3 pt-2 border-t border-th-border">
+                        <div className="text-[11px] text-tertiary uppercase tracking-wider">
+                          {statsLoading ? "Loading..." : "No openings yet"}
+                        </div>
+                      </div>
+                    );
+                  }
+                  return (
+                    <div className="mt-3 pt-2 border-t border-th-border">
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-[11px] text-tertiary uppercase tracking-wider">
+                          Progress
+                        </span>
+                        <span className="text-[12px] text-secondary tabular-nums font-semibold">
+                          {s.completion_pct}%
+                        </span>
+                      </div>
+                      <ProgressBar value={s.completion_pct} size="sm" showLabel={false} />
+                      <div className="flex items-center justify-between mt-1.5 text-[11px] text-tertiary tabular-nums">
+                        <span>
+                          {s.openings_complete} / {s.openings_total} openings
+                        </span>
+                        {s.openings_incomplete > 0 && (
+                          <span className="text-[var(--orange)]">
+                            {s.openings_incomplete} outstanding
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 {/* Bottom arrow hint on hover */}
                 <div className="absolute bottom-2 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
