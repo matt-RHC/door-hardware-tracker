@@ -207,16 +207,18 @@ describeOrSkip('company isolation RLS', () => {
     }
   })
 
+  // 4-byte PDF magic header. Migration 017 restricts the `attachments`
+  // bucket's allowed_mime_types to images + PDF, so the test payload
+  // needs to match something in that allowlist. We never actually read
+  // the file — this is purely a cross-tenant download denial fixture.
+  const PDF_HEADER = new Uint8Array([0x25, 0x50, 0x44, 0x46]) // "%PDF"
+
   it('cross-tenant storage download is denied', async () => {
     // Put a file in initech's project folder via admin so it's truly cross-tenant.
-    const path = `${initech.projectId}/rls-test-${Date.now()}.txt`
-    const buf = new TextEncoder().encode('secret')
-    // Explicit contentType so the bucket's allowed_mime_types (set on
-    // CI's local Supabase but not on prod) doesn't 415 the upload
-    // before the RLS check runs.
+    const path = `${initech.projectId}/rls-test-${Date.now()}.pdf`
     const { error: upErr } = await admin.storage
       .from('attachments')
-      .upload(path, buf, { contentType: 'application/octet-stream' })
+      .upload(path, PDF_HEADER, { contentType: 'application/pdf' })
     expect(upErr).toBeNull()
 
     const { data, error } = await acme.client.storage.from('attachments').download(path)
@@ -230,14 +232,16 @@ describeOrSkip('company isolation RLS', () => {
   // issue-evidence had no RLS, and old uploads put a literal string in
   // segment 1 of the path. Migration 043 fixed both; this test holds
   // the line by mirroring the attachments cross-tenant denial against
-  // the new layout.
+  // the new layout. Uses the same PDF payload as attachments for
+  // symmetry — issue-evidence doesn't currently set
+  // allowed_mime_types, but mirroring keeps both tests bulletproof
+  // if a future migration tightens this bucket.
   it('cross-tenant issue-evidence download is denied', async () => {
     const fakeIssueId = '00000000-0000-0000-0000-000000000001'
-    const path = `${initech.projectId}/${fakeIssueId}/rls-test-${Date.now()}.txt`
-    const buf = new TextEncoder().encode('secret')
+    const path = `${initech.projectId}/${fakeIssueId}/rls-test-${Date.now()}.pdf`
     const { error: upErr } = await admin.storage
       .from('issue-evidence')
-      .upload(path, buf, { contentType: 'application/octet-stream' })
+      .upload(path, PDF_HEADER, { contentType: 'application/pdf' })
     expect(upErr).toBeNull()
 
     const { data, error } = await acme.client.storage.from('issue-evidence').download(path)
