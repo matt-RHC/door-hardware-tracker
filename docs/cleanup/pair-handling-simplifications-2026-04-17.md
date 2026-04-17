@@ -194,7 +194,18 @@ logic deleted, one new DB column pair, zero new helpers.
 
 ## 3. Golden test coverage audit
 
-Three golden PDFs live in `test-pdfs/reference/` and `test-pdfs/training/`.
+> **Note (corrected 2026-04-17):** The authoritative golden-suite runner is
+> `scripts/run-golden-suite.mjs`. Its `PDF_CATALOG` catalogs ~18 training
+> PDFs with `BASELINES` for doors/sets; `test-pdfs/training/` contains ~20
+> PDFs; `test-pdfs/reference/` contains 3 pinned-behavior fixtures.
+> Exact counts drift as PDFs are added — **do not panic over count
+> mismatches**. Health is: suite runs green, per-PDF counts stay within a
+> reasonable delta of `BASELINES`. The "small/medium/large" shorthand used
+> below is legacy taxonomy from the 2026-04-08 codebase review, not a
+> current filename convention. Radius DC in particular now lives as
+> `grid-RR` (`306169_RR_HW_Submittal_03-20-26.pdf`) in `PDF_CATALOG`, not
+> as `sched-*.pdf`.
+
 The four bug classes we need tests for:
 - **B1 structural doubling** — pair door produces 2 Door rows + 1 Frame
   row; single door produces 1 Door row + 1 Frame row.
@@ -205,7 +216,7 @@ The four bug classes we need tests for:
 - **B4 fire-rating-as-location** — `parse_heading_door_metadata` doesn't
   slurp the fire rating into the location field.
 
-### 3.1 Golden #1: MEDIUM (Radius DC, `sched-*.pdf`, 44 pages, has DH4A.0/DH4A.1)
+### 3.1 Golden #1: MEDIUM (Radius DC — `grid-RR` in PDF_CATALOG; legacy name `MEDIUM`; has DH4A.0/DH4A.1)
 
 - `tests/baselines/medium-baseline.json` asserts door_count,
   hw_set_count, set_ids, item_count per set, per-item qty and

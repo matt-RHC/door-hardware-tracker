@@ -58,7 +58,7 @@ Extraction jobs are rate-limited to 5 per project per hour (`src/lib/extraction-
 
 - **TypeScript:** Always use `?.`, `??`, and `?? []` for nullable access. Turbopack will reject `&&` guards and `if` narrowing patterns that tsc accepts. See CLAUDE.md for the full list.
 - **No placeholder code.** Every feature must work end-to-end before moving on. No TODOs in production code.
-- **Test against golden PDFs.** Any change to the extraction pipeline must be tested against the 15 benchmark PDFs in `test-pdfs/training/` (grid, schedule, kinship, mixed formats).
+- **Test against golden PDFs.** Any change to the extraction pipeline must be tested against the benchmark suite run by `scripts/run-golden-suite.mjs` (catalog of training PDFs with per-PDF `BASELINES` for door and set counts), plus the pinned-behavior fixtures in `test-pdfs/reference/`. The training directory and the runner catalog drift over time as new PDFs are added — **do not panic over exact count mismatches**. The health signals that matter are: (1) the suite runs green, (2) per-PDF door and set counts stay within a reasonable delta of `BASELINES` (no drastic swings up or down). Add new PDFs to `PDF_CATALOG` and record their baselines in the same PR that introduces them.
 
 ## Darrin AI Review Architecture
 
