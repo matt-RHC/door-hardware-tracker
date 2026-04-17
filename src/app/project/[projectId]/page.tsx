@@ -1,10 +1,21 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback } from "react";
 import { useRouter, useParams } from "next/navigation";
 import OfflineIndicator from "@/components/OfflineIndicator";
 import ProgressBar from "@/components/ProgressBar";
+import BlockedBadge from "@/components/BlockedBadge";
 import ImportWizard from "@/components/ImportWizard/ImportWizard";
+import { useToast } from "@/components/ToastProvider";
+import { openProjectPdfAtPage } from "@/lib/pdf-page-link";
+import type { OpeningBlocked } from "@/lib/types/database";
+
+interface StageCounts {
+  received: number;
+  pre_install: number;
+  installed: number;
+  qa_qc: number;
+}
 
 interface OpeningWithProgress {
   id: string;
@@ -17,9 +28,11 @@ interface OpeningWithProgress {
   frame_type: string | null;
   fire_rating: string | null;
   hand: string | null;
+  pdf_page: number | null;
   created_at: string;
   total_items: number;
   checked_items: number;
+  stage_counts?: StageCounts;
 }
 
 interface Filters {
@@ -45,14 +58,36 @@ export default function ProjectDetailPage() {
   const projectId = params.projectId as string;
   const router = useRouter();
 
+  const { showToast } = useToast();
   const [openings, setOpenings] = useState<OpeningWithProgress[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filters, setFilters] = useState<Filters>(defaultFilters);
   const [showFilters, setShowFilters] = useState(false);
   const [showUploadModal, setShowUploadModal] = useState(false);
-  const [syncing, setSyncing] = useState(false);
-  const [syncResult, setSyncResult] = useState<{ success: boolean; message: string; permalink?: string } | null>(null);
+  const [showCsvMenu, setShowCsvMenu] = useState(false);
+  const [blockedMap, setBlockedMap] = useState<Record<string, OpeningBlocked[]>>({});
+  const [qaFindingsCount, setQaFindingsCount] = useState(0);
+
+  const downloadCsv = useCallback(
+    (params?: Record<string, string>) => {
+      const search = new URLSearchParams(params ?? {}).toString();
+      const qs = search ? `?${search}` : "";
+      window.location.href = `/api/projects/${projectId}/export-csv${qs}`;
+      setShowCsvMenu(false);
+    },
+    [projectId],
+  );
+
+  const handleViewPdfPage = useCallback(
+    async (pageIndex: number) => {
+      const result = await openProjectPdfAtPage(projectId, pageIndex);
+      if (!result.ok) {
+        showToast("error", `Couldn't open PDF page: ${result.error}`);
+      }
+    },
+    [projectId, showToast],
+  );
 
   useEffect(() => {
     fetchProjectData();
@@ -60,10 +95,29 @@ export default function ProjectDetailPage() {
 
   const fetchProjectData = async () => {
     try {
-      const response = await fetch(`/api/projects/${projectId}/openings`);
-      if (!response.ok) throw new Error("Failed to fetch openings");
-      const data = await response.json();
+      const [openingsRes, blockedRes, punchRes] = await Promise.all([
+        fetch(`/api/projects/${projectId}/openings`),
+        fetch(`/api/projects/${projectId}/blocked-openings`),
+        fetch(`/api/projects/${projectId}/punch-list`),
+      ]);
+      if (!openingsRes.ok) throw new Error("Failed to fetch openings");
+      const data = await openingsRes.json();
       setOpenings(data);
+
+      if (blockedRes.ok) {
+        const blocked: OpeningBlocked[] = await blockedRes.json();
+        const map: Record<string, OpeningBlocked[]> = {};
+        for (const b of blocked) {
+          (map[b.opening_id] ??= []).push(b);
+        }
+        setBlockedMap(map);
+      }
+
+      if (punchRes.ok) {
+        const punchItems: unknown[] = await punchRes.json();
+        setQaFindingsCount(punchItems.length);
+      }
+
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : "An error occurred");
@@ -97,7 +151,7 @@ export default function ProjectDetailPage() {
       const q = filters.search.toLowerCase();
       filtered = filtered.filter(
         (o) =>
-          o.door_number.toLowerCase().includes(q) ||
+          (o.door_number ?? '').toLowerCase().includes(q) ||
           o.location?.toLowerCase().includes(q) ||
           o.hw_set?.toLowerCase().includes(q)
       );
@@ -127,34 +181,6 @@ export default function ProjectDetailPage() {
     setFilters((prev) => ({ ...prev, [key]: value }));
   };
 
-  const syncToSmartsheet = async () => {
-    setSyncing(true);
-    setSyncResult(null);
-    try {
-      const response = await fetch(`/api/projects/${projectId}/sync-smartsheet`, {
-        method: "POST",
-      });
-      const data = await response.json();
-      if (!response.ok) {
-        setSyncResult({ success: false, message: data.error || "Sync failed" });
-      } else {
-        const verb = data.created ? "Created" : "Updated";
-        setSyncResult({
-          success: true,
-          message: `${verb} Smartsheet with ${data.rowsSynced} openings`,
-          permalink: data.permalink,
-        });
-      }
-    } catch (err) {
-      setSyncResult({
-        success: false,
-        message: err instanceof Error ? err.message : "Sync failed",
-      });
-    } finally {
-      setSyncing(false);
-    }
-  };
-
   // Card border color based on progress
   const getCardVariant = (pct: number): string => {
     if (pct === 100) return "glow-card--green";
@@ -172,7 +198,7 @@ export default function ProjectDetailPage() {
         <div className="mb-6">
           <button
             onClick={() => router.push("/dashboard")}
-            className="text-[var(--blue)] hover:text-[var(--blue)]/80 mb-3 text-[13px] flex items-center gap-1 transition-colors"
+            className="text-accent hover:text-accent/80 mb-3 text-[13px] flex items-center gap-1 transition-colors"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
@@ -180,24 +206,45 @@ export default function ProjectDetailPage() {
             Projects
           </button>
           <h1
-            className="text-2xl sm:text-3xl font-bold text-[var(--text-primary)] mb-4"
+            className="text-xl sm:text-2xl font-bold text-primary mb-4 pb-3 border-b border-th-border"
             style={{ fontFamily: "var(--font-display)", letterSpacing: "0.02em" }}
           >
             PROJECT DETAILS
           </h1>
 
           {/* Overall Progress */}
-          <div className="panel p-4 rounded-lg">
+          <div className="panel p-4 rounded-md">
             <div className="flex justify-between items-center mb-2">
-              <span className="text-[13px] text-[var(--text-secondary)] uppercase tracking-wider">
+              <span className="text-[13px] text-secondary uppercase tracking-wider">
                 Overall Progress
               </span>
-              <span className="text-[13px] text-[var(--text-tertiary)] tabular-nums">
+              <span className="text-[13px] text-tertiary tabular-nums">
                 {totalChecked} / {totalItems} items
               </span>
             </div>
             <ProgressBar value={overallProgress} size="lg" showLabel={true} />
           </div>
+
+          {/* QA Findings Summary */}
+          {qaFindingsCount > 0 && (
+            <button
+              onClick={() => router.push(`/project/${projectId}/punch-list`)}
+              className="mt-3 w-full panel p-3 rounded-md flex items-center gap-3 text-left transition-colors hover:bg-surface-hover group"
+            >
+              <span
+                className="inline-flex items-center justify-center w-8 h-8 rounded-full text-[12px] font-bold shrink-0"
+                style={{ background: 'var(--red-dim)', color: 'var(--red)', border: '1px solid var(--red)' }}
+              >
+                {qaFindingsCount}
+              </span>
+              <span className="text-[13px] text-secondary">
+                item{qaFindingsCount !== 1 ? 's' : ''} with QA findings
+              </span>
+              <svg className="w-4 h-4 text-tertiary ml-auto opacity-0 group-hover:opacity-100 transition-opacity" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </button>
+          )}
         </div>
 
         {/* ── Search + Actions ── */}
@@ -214,9 +261,9 @@ export default function ProjectDetailPage() {
           <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1">
             <button
               onClick={() => setShowFilters(!showFilters)}
-              className={`shrink-0 glow-btn text-[13px] rounded-lg ${
+              className={`shrink-0 glow-btn text-[13px] rounded ${
                 showFilters || activeFilterCount > 0
-                  ? "bg-[rgba(10,132,255,0.1)] border-[rgba(10,132,255,0.25)] text-[var(--blue)]"
+                  ? "bg-accent-dim border-accent text-accent"
                   : "glow-btn--ghost"
               }`}
               style={{ padding: "0.5rem 0.875rem" }}
@@ -226,50 +273,103 @@ export default function ProjectDetailPage() {
               </svg>
               Filters
               {activeFilterCount > 0 && (
-                <span className="bg-[rgba(10,132,255,0.2)] text-[10px] px-1.5 py-0.5 rounded-full text-[var(--blue)] font-semibold">
+                <span className="bg-accent-dim text-[10px] px-1.5 py-0.5 rounded-full text-accent font-semibold">
                   {activeFilterCount}
                 </span>
               )}
             </button>
             <button
+              onClick={() => router.push(`/project/${projectId}/activity`)}
+              className="shrink-0 glow-btn glow-btn--ghost text-[13px] rounded"
+              style={{ padding: "0.5rem 0.875rem" }}
+            >
+              Activity
+            </button>
+            <button
+              onClick={() => router.push(`/project/${projectId}/dashboard`)}
+              className="shrink-0 glow-btn glow-btn--ghost text-[13px] rounded"
+              style={{ padding: "0.5rem 0.875rem" }}
+            >
+              Dashboard
+            </button>
+            <button
+              onClick={() => router.push(`/project/${projectId}/issues`)}
+              className="shrink-0 glow-btn glow-btn--ghost text-[13px] rounded"
+              style={{ padding: "0.5rem 0.875rem" }}
+            >
+              Issues
+            </button>
+            <button
               onClick={() => router.push(`/project/${projectId}/qr-codes`)}
-              className="shrink-0 glow-btn glow-btn--ghost text-[13px] rounded-lg"
+              className="shrink-0 glow-btn glow-btn--ghost text-[13px] rounded"
               style={{ padding: "0.5rem 0.875rem" }}
             >
               QR Codes
             </button>
             <button
-              onClick={() => {
-                window.location.href = `/api/projects/${projectId}/export-csv`;
-              }}
-              className="shrink-0 glow-btn glow-btn--ghost text-[13px] rounded-lg"
+              onClick={() => router.push(`/project/${projectId}/punch-list`)}
+              className="shrink-0 glow-btn glow-btn--ghost text-[13px] rounded"
               style={{ padding: "0.5rem 0.875rem" }}
             >
-              CSV
-            </button>
-            <button
-              onClick={syncToSmartsheet}
-              disabled={syncing}
-              className="shrink-0 glow-btn glow-btn--success text-[13px] rounded-lg"
-              style={{ padding: "0.5rem 0.875rem" }}
-            >
-              {syncing ? (
-                <>
-                  <span className="w-3.5 h-3.5 border-2 border-[var(--green)] border-t-transparent rounded-full animate-spin" />
-                  Syncing...
-                </>
-              ) : (
-                <>
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                  </svg>
-                  Smartsheet
-                </>
+              Punch List
+              {qaFindingsCount > 0 && (
+                <span
+                  className="text-[10px] px-1.5 py-0.5 rounded-full font-semibold"
+                  style={{ background: 'var(--red-dim)', color: 'var(--red)' }}
+                >
+                  {qaFindingsCount}
+                </span>
               )}
             </button>
+            <div className="shrink-0 relative">
+              <button
+                onClick={() => setShowCsvMenu((v) => !v)}
+                className="glow-btn glow-btn--ghost text-[13px] rounded inline-flex items-center gap-1"
+                style={{ padding: "0.5rem 0.875rem" }}
+                aria-haspopup="menu"
+                aria-expanded={showCsvMenu}
+              >
+                CSV
+                <span aria-hidden="true" className="text-[10px]">▾</span>
+              </button>
+              {showCsvMenu && (
+                <>
+                  <div
+                    className="fixed inset-0 z-40"
+                    onClick={() => setShowCsvMenu(false)}
+                  />
+                  <div
+                    role="menu"
+                    className="absolute right-0 top-full mt-1 z-50 min-w-[180px] rounded-md border border-border-dim bg-surface shadow-lg py-1"
+                  >
+                    <button
+                      role="menuitem"
+                      onClick={() => downloadCsv()}
+                      className="w-full text-left text-[12px] px-3 py-1.5 hover:bg-tint text-primary"
+                    >
+                      All doors
+                    </button>
+                    <button
+                      role="menuitem"
+                      onClick={() => downloadCsv({ fire_rated: "true" })}
+                      className="w-full text-left text-[12px] px-3 py-1.5 hover:bg-tint text-primary"
+                    >
+                      Fire-rated only
+                    </button>
+                    <button
+                      role="menuitem"
+                      onClick={() => downloadCsv({ issues_only: "true" })}
+                      className="w-full text-left text-[12px] px-3 py-1.5 hover:bg-tint text-primary"
+                    >
+                      Issues only (no items)
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
             <button
               onClick={() => setShowUploadModal(true)}
-              className="shrink-0 glow-btn glow-btn--primary text-[13px] rounded-lg"
+              className="shrink-0 glow-btn glow-btn--primary text-[13px] rounded"
               style={{ padding: "0.5rem 0.875rem" }}
             >
               <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -280,50 +380,17 @@ export default function ProjectDetailPage() {
           </div>
         </div>
 
-        {/* Sync Result */}
-        {syncResult && (
-          <div
-            className={`mb-5 p-3 rounded-lg flex items-center justify-between text-[13px] border animate-fade-in-up ${
-              syncResult.success
-                ? "bg-[rgba(48,209,88,0.08)] border-[rgba(48,209,88,0.15)] text-[var(--green)]"
-                : "bg-[rgba(255,69,58,0.08)] border-[rgba(255,69,58,0.15)] text-[var(--red)]"
-            }`}
-          >
-            <span>{syncResult.message}</span>
-            <div className="flex items-center gap-3">
-              {syncResult.permalink && (
-                <a
-                  href={syncResult.permalink}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-[var(--blue)] hover:opacity-80 underline transition-opacity text-[12px]"
-                >
-                  Open in Smartsheet
-                </a>
-              )}
-              <button
-                onClick={() => setSyncResult(null)}
-                className="text-current opacity-50 hover:opacity-100 transition-opacity"
-              >
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-          </div>
-        )}
-
         {/* ── Filter Panel ── */}
         {showFilters && (
-          <div className="panel p-4 rounded-lg mb-5 animate-fade-in-up">
+          <div className="panel p-4 rounded-md mb-5 animate-fade-in-up">
             <div className="flex justify-between items-center mb-3">
-              <span className="text-[12px] text-[var(--text-secondary)] font-medium uppercase tracking-wider">
+              <span className="text-[12px] text-secondary font-medium uppercase tracking-wider">
                 Filter Openings
               </span>
               {activeFilterCount > 0 && (
                 <button
                   onClick={clearFilters}
-                  className="text-[12px] text-[var(--blue)] hover:opacity-80 transition-opacity"
+                  className="text-[12px] text-accent hover:opacity-80 transition-opacity"
                 >
                   Clear all
                 </button>
@@ -338,7 +405,7 @@ export default function ProjectDetailPage() {
                 { label: "Hand", key: "hand", options: [["", "All"], ...filterOptions.hands.map(h => [h, h])] },
               ].map((f) => (
                 <div key={f.key}>
-                  <label className="block text-[11px] text-[var(--text-tertiary)] mb-1.5 uppercase tracking-wider">
+                  <label className="block text-[11px] text-tertiary mb-1.5 uppercase tracking-wider">
                     {f.label}
                   </label>
                   <select
@@ -353,7 +420,7 @@ export default function ProjectDetailPage() {
                 </div>
               ))}
             </div>
-            <p className="mt-3 text-[11px] text-[var(--text-tertiary)]">
+            <p className="mt-3 text-[11px] text-tertiary">
               Showing {filteredOpenings.length} of {openings.length} openings
             </p>
           </div>
@@ -362,20 +429,20 @@ export default function ProjectDetailPage() {
         {/* ── Openings Grid ── */}
         {loading ? (
           <div className="flex items-center justify-center py-20 gap-3">
-            <div className="w-5 h-5 border-2 border-[var(--blue)] border-t-transparent rounded-full animate-spin" />
-            <span className="text-[13px] text-[var(--text-tertiary)]">Loading openings...</span>
+            <div className="w-5 h-5 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+            <span className="text-[13px] text-tertiary">Loading openings...</span>
           </div>
         ) : error ? (
-          <div className="p-4 bg-[rgba(255,69,58,0.08)] border border-[rgba(255,69,58,0.15)] rounded-lg text-[var(--red)] text-[14px]">
+          <div className="p-4 bg-danger-dim border border-danger rounded-md text-danger text-[14px]">
             {error}
           </div>
         ) : filteredOpenings.length === 0 ? (
           <div className="text-center py-16">
-            <p className="text-[15px] text-[var(--text-secondary)] mb-1">
+            <p className="text-[15px] text-secondary mb-1">
               {openings.length === 0 ? "No openings found" : "No openings match your filters"}
             </p>
             {openings.length === 0 && (
-              <p className="text-[13px] text-[var(--text-tertiary)]">Upload a PDF submittal to get started</p>
+              <p className="text-[13px] text-tertiary">Upload a PDF submittal to get started</p>
             )}
           </div>
         ) : (
@@ -391,20 +458,41 @@ export default function ProjectDetailPage() {
                   onClick={() =>
                     router.push(`/project/${projectId}/door/${opening.id}`)
                   }
-                  className={`glow-card ${getCardVariant(progressPercent)} p-4 cursor-pointer group`}
+                  className={`glow-card ${getCardVariant(progressPercent)} px-4 py-3 cursor-pointer group`}
                 >
                   {/* Door number + badges row */}
-                  <div className="flex items-start justify-between mb-2">
-                    <h2 className="text-[17px] font-bold text-[var(--text-primary)] leading-tight">
+                  <div className="flex items-start justify-between mb-1.5">
+                    <h2 className="text-[15px] font-bold text-primary leading-tight">
                       {opening.door_number}
                     </h2>
-                    <span className="text-[11px] text-[var(--text-tertiary)] tabular-nums shrink-0 ml-2">
-                      {progressPercent.toFixed(0)}%
-                    </span>
+                    <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                      {opening.pdf_page != null && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleViewPdfPage(opening.pdf_page as number);
+                          }}
+                          className="inline-flex items-center justify-center w-7 h-7 rounded-full text-accent bg-accent-dim border border-accent hover:opacity-80 transition-opacity"
+                          aria-label={`Open submittal PDF at page ${opening.pdf_page + 1}`}
+                          title={`PDF page ${opening.pdf_page + 1}`}
+                        >
+                          <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                          </svg>
+                        </button>
+                      )}
+                      <span className="text-[11px] text-tertiary tabular-nums">
+                        {progressPercent.toFixed(0)}%
+                      </span>
+                    </div>
                   </div>
 
                   {/* Badges */}
-                  <div className="flex flex-wrap gap-1.5 mb-2.5">
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    {blockedMap[opening.id]?.length > 0 && (
+                      <BlockedBadge blocks={blockedMap[opening.id]} />
+                    )}
                     {opening.hw_set && (
                       <span className="status-badge status-badge--active" style={{ fontSize: "10px", padding: "2px 8px" }}>
                         {opening.hw_set}
@@ -416,19 +504,19 @@ export default function ProjectDetailPage() {
                       </span>
                     )}
                     {opening.door_type && (
-                      <span className="text-[10px] text-[var(--text-tertiary)] bg-[var(--surface)] border border-[var(--border)] px-2 py-0.5 rounded-full">
+                      <span className="text-[10px] text-tertiary bg-surface border border-th-border px-2 py-0.5 rounded-full">
                         {opening.door_type}
                       </span>
                     )}
                     {opening.hand && (
-                      <span className="text-[10px] text-[var(--text-tertiary)] bg-[var(--surface)] border border-[var(--border)] px-2 py-0.5 rounded-full">
+                      <span className="text-[10px] text-tertiary bg-surface border border-th-border px-2 py-0.5 rounded-full">
                         {opening.hand}
                       </span>
                     )}
                   </div>
 
                   {opening.location && (
-                    <p className="text-[12px] text-[var(--text-tertiary)] mb-3 truncate">
+                    <p className="text-[12px] text-tertiary mb-2 truncate">
                       {opening.location}
                     </p>
                   )}
@@ -436,14 +524,31 @@ export default function ProjectDetailPage() {
                   {/* Progress bar */}
                   <ProgressBar value={progressPercent} size="sm" showLabel={false} />
 
-                  {/* Item count */}
-                  <p className="text-[11px] text-[var(--text-tertiary)] mt-2 tabular-nums">
-                    {opening.checked_items} / {opening.total_items} items
-                  </p>
+                  {/* Item count + stage breakdown */}
+                  <div className="flex items-center justify-between mt-2">
+                    <p className="text-[11px] text-tertiary tabular-nums">
+                      {opening.checked_items} / {opening.total_items} items
+                    </p>
+                    {opening.stage_counts && (opening.stage_counts.received > 0 || opening.stage_counts.installed > 0 || opening.stage_counts.qa_qc > 0) && (
+                      <div className="flex items-center gap-2 text-[10px] tabular-nums">
+                        {opening.stage_counts.received > 0 && (
+                          <span style={{ color: 'var(--blue)' }}>{opening.stage_counts.received}R</span>
+                        )}
+                        {(opening.stage_counts.pre_install > 0 || opening.stage_counts.installed > 0) && (
+                          <span style={{ color: 'var(--field)' }}>
+                            {(opening.stage_counts.pre_install + opening.stage_counts.installed)}I
+                          </span>
+                        )}
+                        {opening.stage_counts.qa_qc > 0 && (
+                          <span style={{ color: 'var(--green)' }}>{opening.stage_counts.qa_qc}Q</span>
+                        )}
+                      </div>
+                    )}
+                  </div>
 
                   {/* Hover arrow */}
                   <div className="absolute bottom-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <svg className="w-3.5 h-3.5 text-[var(--blue)]/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <svg className="w-3.5 h-3.5 text-accent/50" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
                     </svg>
                   </div>

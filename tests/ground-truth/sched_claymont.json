@@ -1,0 +1,8 @@
+{
+  "pdf_name": "sched-Claymont.pdf",
+  "catalog_key": "SCHED_CLAYMONT",
+  "format": "schedule",
+  "expected_door_count": 0,
+  "expected_set_count": 29,
+  "verified": false
+}

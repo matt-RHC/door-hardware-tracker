@@ -1,13 +1,10 @@
 /**
- * Shared PDF utilities for ImportWizard and PDFUploadModal.
- *
- * Extracted from PDFUploadModal to avoid duplication and ensure
- * both code paths use the same chunking/merging logic.
+ * Shared PDF utilities for the ImportWizard extraction pipeline.
  */
 import { PDFDocument } from 'pdf-lib'
-import type { DoorEntry, HardwareItem, HardwareSet } from '@/lib/types'
+import type { DoorEntry, ExtractedHardwareItem, HardwareSet } from '@/lib/types'
 
-export type { DoorEntry, HardwareItem, HardwareSet }
+export type { DoorEntry, ExtractedHardwareItem, HardwareSet }
 
 // ── Constants ──────────────────────────────────────────────────────
 
@@ -120,7 +117,7 @@ const NAME_ABBREVIATIONS: Record<string, string> = {
 }
 
 export function normalizeItemName(name: string): string {
-  let n = name.toLowerCase().trim()
+  let n = (name ?? '').toLowerCase().trim()
   // Sort abbreviations longest-first so "w/o" matches before "w/"
   const sorted = Object.entries(NAME_ABBREVIATIONS).sort(
     (a, b) => b[0].length - a[0].length,
@@ -133,15 +130,15 @@ export function normalizeItemName(name: string): string {
   return n.replace(/[()]/g, '').replace(/\s+/g, ' ').replace(/[,;.]+$/, '').trim()
 }
 
-function hardwareItemDedupKey(item: HardwareItem): string {
+function hardwareItemDedupKey(item: ExtractedHardwareItem): string {
   const model = (item.model || '').trim().toLowerCase()
   if (model) return `model:${model}`
   return `name:${normalizeItemName(item.name)}`
 }
 
 /** Deduplicate hardware items, keeping the version with more complete data */
-export function deduplicateHardwareItems(items: HardwareItem[]): HardwareItem[] {
-  const seen = new Map<string, HardwareItem>()
+export function deduplicateHardwareItems(items: ExtractedHardwareItem[]): ExtractedHardwareItem[] {
+  const seen = new Map<string, ExtractedHardwareItem>()
   for (const item of items) {
     const key = hardwareItemDedupKey(item)
     const existing = seen.get(key)
@@ -162,16 +159,16 @@ export function mergeHardwareSets(allSets: HardwareSet[]): HardwareSet[] {
   for (const set of allSets) {
     const existing = map.get(set.set_id)
     if (!existing) {
-      map.set(set.set_id, { ...set, items: [...set.items] })
+      map.set(set.set_id, { ...set, items: [...(set.items ?? [])] })
     } else {
-      existing.items.push(...set.items)
+      existing.items.push(...(set.items ?? []))
       if (set.heading && (!existing.heading || set.heading.length > existing.heading.length)) {
         existing.heading = set.heading
       }
     }
   }
   for (const set of map.values()) {
-    set.items = deduplicateHardwareItems(set.items)
+    set.items = deduplicateHardwareItems(set.items ?? [])
   }
   return Array.from(map.values())
 }

@@ -30,12 +30,12 @@ export default function PunchAvatar({
   // Accent colour per state
   const accent =
     state === 'success'
-      ? '#2ECC71'
+      ? 'var(--green)'
       : state === 'warning'
-        ? '#E8811A'
+        ? 'var(--orange)'
         : state === 'error'
-          ? '#E04850'
-          : '#4BA3E3'; // idle / thinking
+          ? 'var(--red)'
+          : 'var(--blue)'; // idle / thinking
 
   return (
     <svg
@@ -48,16 +48,16 @@ export default function PunchAvatar({
       aria-hidden
     >
       {/* Clipboard body */}
-      <rect x="8" y="10" width="32" height="34" rx="4" fill="#252830" stroke="#3E434F" strokeWidth="1.5" />
+      <rect x="8" y="10" width="32" height="34" rx="4" fill="var(--surface-hover)" stroke="var(--border-hover)" strokeWidth="1.5" />
 
       {/* Clipboard clip */}
-      <rect x="16" y="6" width="16" height="8" rx="3" fill="#3E434F" />
-      <rect x="20" y="4" width="8" height="4" rx="2" fill="#4BA3E3" />
+      <rect x="16" y="6" width="16" height="8" rx="3" fill="var(--border-hover)" />
+      <rect x="20" y="4" width="8" height="4" rx="2" fill="var(--blue)" />
 
       {/* Lined paper effect */}
-      <line x1="14" y1="22" x2="34" y2="22" stroke="#3E434F" strokeWidth="0.75" />
-      <line x1="14" y1="28" x2="34" y2="28" stroke="#3E434F" strokeWidth="0.75" />
-      <line x1="14" y1="34" x2="34" y2="34" stroke="#3E434F" strokeWidth="0.75" />
+      <line x1="14" y1="22" x2="34" y2="22" stroke="var(--border-hover)" strokeWidth="0.75" />
+      <line x1="14" y1="28" x2="34" y2="28" stroke="var(--border-hover)" strokeWidth="0.75" />
+      <line x1="14" y1="34" x2="34" y2="34" stroke="var(--border-hover)" strokeWidth="0.75" />
 
       {/* State indicator */}
       <g>
@@ -102,7 +102,7 @@ export default function PunchAvatar({
         {(state === 'idle' || state === 'thinking') && (
           <>
             {/* Friendly dot-dot eyes */}
-            <circle cx="20" cy="26" r="1.5" fill="#9BA1AE">
+            <circle cx="20" cy="26" r="1.5" fill="var(--text-secondary)">
               {state === 'thinking' && (
                 <animate
                   attributeName="cy"
@@ -112,7 +112,7 @@ export default function PunchAvatar({
                 />
               )}
             </circle>
-            <circle cx="28" cy="26" r="1.5" fill="#9BA1AE">
+            <circle cx="28" cy="26" r="1.5" fill="var(--text-secondary)">
               {state === 'thinking' && (
                 <animate
                   attributeName="cy"
@@ -126,7 +126,7 @@ export default function PunchAvatar({
             {/* Small smile */}
             <path
               d="M21 31 Q24 34 27 31"
-              stroke="#9BA1AE"
+              stroke="var(--text-secondary)"
               strokeWidth="1.25"
               strokeLinecap="round"
               fill="none"

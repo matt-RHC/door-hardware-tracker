@@ -17,9 +17,11 @@ Location: /api/extract-tables.py (project root, Vercel Python runtime)
 """
 
 import base64
+import hmac
 import io
 import json
 import logging
+import os
 import re
 import traceback
 import unicodedata
@@ -30,6 +32,55 @@ logging.basicConfig(level=logging.INFO)
 
 import pdfplumber
 from pydantic import BaseModel
+
+
+# --- Internal Token Auth ---
+#
+# All three Python endpoints (/api/extract-tables, /api/classify-pages,
+# /api/detect-mapping) are publicly reachable on the Vercel deployment URL.
+# To prevent anonymous PDF uploads, the Next.js layer forwards a shared
+# secret in the X-Internal-Token header. This helper validates that header.
+#
+# If PYTHON_INTERNAL_SECRET is unset, the request is rejected with 401
+# to prevent unauthenticated access. Keep this
+# helper in sync across all api/*.py files (Vercel bundles them
+# separately, so duplication is intentional).
+
+def require_internal_token(request_handler) -> bool:
+    """Verify X-Internal-Token matches PYTHON_INTERNAL_SECRET.
+
+    Returns True if authorized. If not authorized, sends a 401 response
+    and returns False — caller should return immediately without further
+    processing.
+
+    If PYTHON_INTERNAL_SECRET is not set, the request is rejected with 401
+    to prevent unauthenticated access in misconfigured environments.
+    """
+    expected = os.environ.get("PYTHON_INTERNAL_SECRET", "") or ""
+    if not expected:
+        logger.error(
+            "PYTHON_INTERNAL_SECRET is not set — rejecting request. "
+            "Configure the env var in Vercel to enable this endpoint."
+        )
+        body = json.dumps({"error": "Internal secret not configured"}).encode()
+        request_handler.send_response(401)
+        request_handler.send_header("Content-Type", "application/json")
+        request_handler.send_header("Content-Length", str(len(body)))
+        request_handler.end_headers()
+        request_handler.wfile.write(body)
+        return False
+
+    provided = request_handler.headers.get("X-Internal-Token", "") or ""
+    if not hmac.compare_digest(expected, provided):
+        body = json.dumps({"error": "Unauthorized"}).encode()
+        request_handler.send_response(401)
+        request_handler.send_header("Content-Type", "application/json")
+        request_handler.send_header("Content-Length", str(len(body)))
+        request_handler.end_headers()
+        request_handler.wfile.write(body)
+        return False
+
+    return True
 
 
 # --- Pydantic Models ---
@@ -43,14 +94,17 @@ class HardwareItem(BaseModel):
     manufacturer: str = ""
     model: str = ""
     finish: str = ""
+    base_series: str = ""               # product family ID (e.g., "5BB1", "L9010")
 
 
 class HardwareSetDef(BaseModel):
-    set_id: str              # heading-level ID (e.g., "I2S-1E:WI")
-    generic_set_id: str = "" # set-level ID (e.g., "I2S-1E") for UI grouping
+    set_id: str              # heading-level ID (e.g., "I2S-1E:WI" or "DH4A.0")
+    generic_set_id: str = "" # set-level ID (e.g., "I2S-1E" or "DH4A") for UI grouping
     heading: str = ""
     heading_door_count: int = 0   # openings listed in heading block
     heading_leaf_count: int = 0   # total leaves (pairs × 2, singles × 1)
+    heading_doors: list[str] = [] # specific door numbers listed under this sub-heading
+    qty_convention: str = "unknown"  # "per_opening" | "aggregate" | "unknown" — detected from preamble text
     items: list[HardwareItem] = []
 
 
@@ -95,16 +149,42 @@ class ExtractionResult(BaseModel):
     extraction_notes: list[str] = []  # human-readable notes about extraction quality
 
 
+class RegionExtractionResult(BaseModel):
+    """Lightweight result for bbox-cropped region extraction.
+
+    Fields populated depend on the request `mode`:
+      - mode='items' (legacy): `items` + `raw_text`.
+      - mode='field': `raw_text` + `detected_field` / `detected_value` /
+        `detection_confidence` (the server now runs detection using the
+        shared _HEADING_DOOR_HAND_RE / _FIRE_RATING_RE regexes so TS
+        doesn't duplicate the heuristics).
+      - mode='field' with propagate=true: `sibling_fills` maps each
+        requested door_number to {location, hand, fire_rating} pulled
+        from build_heading_page_map's single-page run.
+    """
+    success: bool
+    items: list[HardwareItem] = []
+    raw_text: str = ""
+    detected_field: str = ""        # "hand" | "location" | "fire_rating" | "unknown" | ""
+    detected_value: str = ""
+    detection_confidence: float = 0.0
+    sibling_fills: dict[str, dict[str, str]] = {}
+    error: str = ""
+
+
 # --- Category-Aware Quantity Validation ---
 # Expected per-opening quantity ranges by hardware category.
 # Values outside these ranges are likely aggregate/total quantities.
 EXPECTED_QTY_RANGES: dict[str, tuple[int, int]] = {
     "hinge":              (2, 5),   # 3 standard, 4-5 for tall/heavy doors
+    "electric_hinge":     (1, 5),   # Per-opening, but use hinge max for cap-path compat
+    "wire_harness":       (1, 2),   # Per-leaf, paired with electric hardware
     "continuous_hinge":   (1, 2),
     "pivot":              (1, 2),
     "lockset":            (1, 1),
     "exit_device":        (1, 2),
     "flush_bolt":         (1, 2),
+    "auto_operator":      (1, 1),   # Replaces closer, 1 per opening
     "closer":             (1, 2),
     "coordinator":        (0, 1),
     "stop":               (1, 2),
@@ -126,20 +206,23 @@ EXPECTED_QTY_RANGES: dict[str, tuple[int, int]] = {
 # "opening_only" — items that exist once per opening, never per-leaf
 DIVISION_PREFERENCE: dict[str, str] = {
     "hinge":            "leaf",
+    "electric_hinge":   "opening",     # 1 per opening, replaces one NRP position
+    "wire_harness":     "leaf",        # Per-leaf, follows electrified hardware
     "continuous_hinge": "leaf",
     "pivot":            "leaf",
+    "auto_operator":    "opening",     # 1 per opening, replaces closer
     "closer":           "opening",
     "lockset":          "opening",
-    "exit_device":      "opening",
-    "stop":             "opening",
+    "exit_device":      "leaf",        # Each leaf gets its own exit device
+    "stop":             "leaf",        # Each leaf gets its own stop/holder
     "holder":           "opening",
-    "kick_plate":       "opening",
+    "kick_plate":       "leaf",        # Each leaf gets its own protection plate
     "cylinder":         "opening",
     "strike":           "opening",
     "pull":             "opening",
     "silencer":         "opening",
     "threshold":        "opening_only",
-    "sweep":            "opening_only",
+    "sweep":            "leaf",        # Each leaf gets its own door bottom/sweep
     "astragal":         "opening_only",
     "seal":             "opening_only",
     "coordinator":      "opening_only",
@@ -149,11 +232,25 @@ DIVISION_PREFERENCE: dict[str, str] = {
 # Map item names to categories using keyword matching
 _CATEGORY_PATTERNS: list[tuple[str, re.Pattern]] = [
     ("continuous_hinge", re.compile(r"(?i)continuous\s*hinge|cont\.?\s*hinge")),
+    # Electric/conductor/power-transfer hinges: per-opening, not per-leaf.
+    # These replace ONE standard hinge position on the active leaf.
+    # Must be checked BEFORE generic "hinge" pattern.
+    ("electric_hinge", re.compile(
+        r"(?i)hinge.*\bCON\b|hinge.*\bTW\d|hinge.*electr|hinge.*conduct"
+        r"|electr.*hinge|conductor.*hinge|power\s*transfer\s*hinge"
+    )),
     ("hinge",     re.compile(r"(?i)\bhinge|pivot|spring\s*hinge")),
     ("pivot",     re.compile(r"(?i)\bpivot\b")),
     ("lockset",   re.compile(r"(?i)lockset|latchset|latch\s*set|lock\s*set|passage|privacy|storeroom|classroom|entrance|mortise|cylindrical|deadbolt")),
     ("exit_device", re.compile(r"(?i)exit\s*device|panic|rim\s*device|concealed\s*vertical|surface\s*vertical|push\s*bar|touch\s*bar")),
     ("flush_bolt", re.compile(r"(?i)flush\s*bolt|surface\s*bolt")),
+    # Automatic operators: replace the closer function. When both exist, flag.
+    ("auto_operator", re.compile(r"(?i)auto.*operator|automatic\s*operator|power\s*operator|ada\s*operator")),
+    # Wire harness / connector: per-leaf, follows electrified hardware.
+    # Mirrors the TS taxonomy at src/lib/hardware-taxonomy.ts:205. Placed
+    # AFTER electric_hinge so "hinge CON TW8" is classified as electric_hinge,
+    # but BEFORE cylinder so standalone "CON-5" style connectors are caught.
+    ("wire_harness", re.compile(r"(?i)wire\s*harness|\bmolex\b|\bcon-\d|\bwiring\b|\bpigtail\b|\bconnector\b")),
     ("closer",    re.compile(r"(?i)\bcloser\b|door\s*check|floor\s*closer")),
     ("coordinator", re.compile(r"(?i)\bcoordinator\b")),
     ("stop",      re.compile(r"(?i)\bstop\b|wall\s*stop|floor\s*stop|overhead\s*stop|door\s*stop")),
@@ -183,6 +280,78 @@ def _max_qty_for_category(category: str | None) -> int:
     if category and category in EXPECTED_QTY_RANGES:
         return EXPECTED_QTY_RANGES[category][1]
     return 4  # Conservative default for unknown categories
+
+
+# --- Quantity Convention Detection ---
+# Preamble phrases that definitively indicate per-opening quantities.
+# These appear in schedule-format PDFs (sched-Barnstable, sched-Claymont, etc.)
+# and are strong enough to override the statistical heuristic.
+_PER_OPENING_PREAMBLES: list[re.Pattern] = [
+    re.compile(r"(?i)each\s+opening\s+to\s+have\s*:"),
+    re.compile(r"(?i)each\s+to\s+receive\s*:"),
+    re.compile(r"(?i)each\s+to\s+have\s*:"),
+    re.compile(r"(?i)each\s+door\s+leaf\s+shall\s+have\s*:"),
+    re.compile(r"(?i)each\s+door\s+to\s+have\s*:"),
+    re.compile(r"(?i)per\s+opening\s*:"),
+]
+
+# Dual-quantity format: "(total) per_door EA" — used by SpecWorks/kinship PDFs.
+# E.g., "(42) 3 EA" means 42 total, 3 per door.
+_DUAL_QTY_RE = re.compile(r"\((\d+)\)\s*(\d+)\s*EA\b", re.IGNORECASE)
+
+
+def detect_quantity_convention(text: str, door_count: int = 0) -> str:
+    """Detect whether a hardware set uses per-opening or aggregate quantities.
+
+    Scans the text for definitive preamble phrases. If a per-opening preamble
+    is found, returns "per_opening". If no preamble is found and quantities
+    are much larger than expected for single-door counts, returns "aggregate".
+    Otherwise returns "unknown".
+
+    Args:
+        text: The raw text of the hardware set section (heading + items).
+        door_count: Number of doors assigned to this heading (0 if unknown).
+
+    Returns:
+        "per_opening", "aggregate", or "unknown"
+    """
+    # Definitive: per-opening preamble phrases
+    for pattern in _PER_OPENING_PREAMBLES:
+        if pattern.search(text):
+            return "per_opening"
+
+    # Dual-quantity format "(total) per_door EA" — definitively per-opening
+    # because the per-door number is explicitly provided.
+    if _DUAL_QTY_RE.search(text):
+        return "per_opening"
+
+    # Supportive: absence of per-opening preambles + quantities >> door count
+    # suggests aggregate. Only classify as aggregate if we have a door count
+    # AND the text contains item lines with large quantities.
+    # Exclude door assignment lines (e.g., "1 SGL Door:101") which start with
+    # small numbers but are not hardware item quantities.
+    if door_count > 1:
+        item_qtys = []
+        for m in re.finditer(r"^\s*(\d{1,3})\s+(.+)", text, re.MULTILINE):
+            rest = m.group(2).strip()
+            # Skip door assignment lines
+            if re.match(r"(?i)(SGL|PRA/PRI|PR|Pair)\s+(Door|Opening)", rest):
+                continue
+            item_qtys.append(int(m.group(1)))
+        if item_qtys:
+            over_threshold = sum(1 for v in item_qtys if v > 6)
+            if len(item_qtys) >= 2 and over_threshold / len(item_qtys) > 0.6:
+                return "aggregate"
+
+    return "unknown"
+
+
+def extract_dual_qty(text: str) -> list[tuple[int, int]]:
+    """Extract dual-quantity pairs from SpecWorks "(total) per_door EA" format.
+
+    Returns list of (total, per_door) tuples found in the text.
+    """
+    return [(int(m.group(1)), int(m.group(2))) for m in _DUAL_QTY_RE.finditer(text)]
 
 
 # --- Hardware Item Dedup (Level 1: within-chunk/within-page) ---
@@ -456,10 +625,13 @@ def split_concatenated_hw_fields(
     if not extracted_model and not extracted_mfr and not extracted_finish:
         return item
 
+    # Extract base series from model string for product family grouping
+    base_series = extract_base_series(extracted_model, extracted_mfr)
+
     logger.debug(
         f"[split] '{item.name}' → name='{extracted_name}', "
         f"model='{extracted_model}', finish='{extracted_finish}', "
-        f"mfr='{extracted_mfr}'"
+        f"mfr='{extracted_mfr}', base_series='{base_series}'"
     )
 
     return HardwareItem(
@@ -471,6 +643,7 @@ def split_concatenated_hw_fields(
         manufacturer=extracted_mfr,
         model=extracted_model,
         finish=extracted_finish,
+        base_series=base_series,
     )
 
 
@@ -524,13 +697,56 @@ def _heal_broken_words(text: str) -> str:
     return " ".join(result)
 
 
+def _join_split_rows(items: list[HardwareItem]) -> list[HardwareItem]:
+    """Join rows that pdfplumber split across column boundaries.
+
+    Detects fragments like {"name": "Others)", "model": "CONTRACTOR"} that
+    should be part of "Hardware by Others (Contractor)" on the previous row.
+
+    Heuristic: if an item's name is < 4 chars, ends with unmatched ')',
+    starts with lowercase, or is pure punctuation — merge it into the
+    previous item's model/finish fields.
+    """
+    if len(items) < 2:
+        return items
+    merged: list[HardwareItem] = []
+    for item in items:
+        name = item.name.strip()
+        is_fragment = (
+            (len(name) < 4 and not re.match(r"^[A-Z]{1,3}$", name))
+            or re.match(r"^[)\]\s]+$", name)
+            or (len(name) > 0 and name[0].islower())
+            or name.endswith(")")
+        )
+        if is_fragment and merged:
+            prev = merged[-1]
+            # Join into previous item's model field
+            join_text = f"{name} {item.model}".strip() if item.model else name
+            new_model = f"{prev.model} {join_text}".strip() if prev.model else join_text
+            merged[-1] = HardwareItem(
+                qty=prev.qty,
+                qty_total=prev.qty_total,
+                qty_door_count=prev.qty_door_count,
+                qty_source=prev.qty_source,
+                name=prev.name,
+                manufacturer=prev.manufacturer,
+                model=new_model,
+                finish=prev.finish if prev.finish else item.finish,
+            )
+            logger.debug("[join_split_rows] Merged fragment %r into prev item %r", name, prev.name)
+        else:
+            merged.append(item)
+    return merged
+
+
 def apply_field_splitting(
     hardware_sets: list[HardwareSetDef],
     reference_codes: list[ReferenceCode],
 ) -> None:
     """
     Post-processing pass: filter garbage items, reassemble truncated fields,
-    split concatenated fields, and re-deduplicate. Mutates hardware_sets in place.
+    split concatenated fields, join split rows, and re-deduplicate.
+    Mutates hardware_sets in place.
     Called after hardware sets AND reference codes are both extracted.
     """
     for hw_set in hardware_sets:
@@ -553,6 +769,8 @@ def apply_field_splitting(
                 )
             item = split_concatenated_hw_fields(item, reference_codes)
             new_items.append(item)
+        # Join rows that pdfplumber split across column boundaries
+        new_items = _join_split_rows(new_items)
         # Second filter pass: reassembly can produce longer garbage strings
         # from short fragments that survived the first filter
         new_items = filter_non_hardware_items(new_items)
@@ -784,12 +1002,15 @@ OPTION_HEADER = re.compile(
 # 4. "SET: I1S-7B" / "Set: AD2"        — colon-separated
 # 5. "HARDWARE GROUP 04" / "HW GROUP 04" — group keyword
 # 6. "04 - Hardware Set"               — ID-first format
+# 7. "Heading #: E1-XL.1 3 X 7 IWM"   — ESC/AKN format (colon after #)
 HW_SET_HEADING_PATTERN = re.compile(
     r"(?i)"
     r"(?:"
-    r"heading\s*#?\s*([A-Z0-9][A-Z0-9.\-:]*)\s*\(set\s*#?\s*([A-Z0-9][A-Z0-9.\-:]*)\)"  # Format 3: Heading #X (Set #Y)
+    r"heading\s*#?\s*([A-Z0-9][A-Z0-9.\-:]*)\s*\((?:hw\s*)?set\s*#?\s*([A-Z0-9][A-Z0-9.\-:]*)\)"  # Format 3: Heading #X (Set #Y) or (HwSet Y)
     r"|"
-    r"(?:hardware\s+|hw\s+)(?:set|group)\s*[:# ]\s*(?!for|that|numbers|should|shall|must|will|with|each|from|into|this|which|their|these|have|been|were|they|also|such|only|when|more|than|some|other|does|both|same|very|much|just|like|make|many|most|made|over|upon|after|being|under|where)([A-Z0-9][A-Z0-9.\-]{0,14})\b"  # Format 2/5: HARDWARE SET/GROUP #X (with spec-language blocklist)
+    r"heading\s*#:\s*([A-Z0-9][A-Z0-9.\-]{0,30})\b"  # Format 7: Heading #: ID (ESC/AKN)
+    r"|"
+    r"(?:hardware\s+|hw\s+)(?:set|group)\s*[:# ]\s*(?!for|that|numbers|should|shall|must|will|with|each|from|into|this|which|their|these|have|been|were|they|also|such|only|when|more|than|some|other|does|both|same|very|much|just|like|make|many|most|made|over|upon|after|being|under|where|added|built)([A-Z0-9][A-Z0-9.\-]{0,14})\b"  # Format 2/5: HARDWARE SET/GROUP #X (with spec-language blocklist)
     r"|"
     r"([A-Z0-9][A-Z0-9.\-]{0,14})\s+[-–—]\s+(?:hardware\s+)?set\b"  # Format 6: ID - Hardware Set
     r"|"
@@ -920,6 +1141,86 @@ NOT_FINISH_PATTERN = re.compile(
     r"|^CON-\w+"               # Connector model suffixes: CON-6W, CON-38P
     r"|^\d+FP$"                # Model suffixes like 60FP
 )
+
+# ─── Base series extraction ─────────────────────────────────────────────────
+
+# Size indicator pattern — matches dimensions like "4 1/2 x 4 1/2", "36\"", "83\""
+_SIZE_PATTERN = re.compile(
+    r"^\d+[\-\s]?\d*/?\d*\s*[x×X]\s*\d+"  # WxH: "4 1/2 x 4 1/2", "4x4"
+    r"|^\d+['\"\u2033\u201d]"               # Length: 36", 83", 108"
+    r"|^\d+\-\d+/\d+"                       # Fraction: 4-1/2
+)
+
+# Known manufacturer-specific base series patterns.
+# Order matters — more specific patterns first.
+_BASE_SERIES_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
+    # Schlage L-series: L + 4 digits (L9010, L9040, L9080, L9092)
+    ("schlage", re.compile(r"^(L\d{4})", re.IGNORECASE)),
+    # Von Duprin: 2-digit series (98, 99, 22, 88, 55, 78, 75, 94, 95, 33, 35)
+    ("von duprin", re.compile(r"^(\d{2})(?:EO|NL|L|TP|DT|-|$|\s)", re.IGNORECASE)),
+    # LCN: 4-digit model with optional suffix (4040XP, 4041, 1460, 9542, 4640)
+    ("lcn", re.compile(r"^(\d{4}[A-Z]*)", re.IGNORECASE)),
+    # Sargent: 2-4 digit model (8200, 8800, 11 line, 28, 482)
+    ("sargent", re.compile(r"^(\d{2,4})", re.IGNORECASE)),
+    # Corbin Russwin: ML or CL + 4 digits (ML2000, CL3300)
+    ("corbin russwin", re.compile(r"^([MC]L\d{4})", re.IGNORECASE)),
+    # Adams Rite: 4-digit model (4900, 8800, 7400, 4300)
+    ("adams rite", re.compile(r"^(\d{4})", re.IGNORECASE)),
+    # Securitron: Letter + 2-3 digits (M32, M62, M82)
+    ("securitron", re.compile(r"^([A-Z]\d{2,3})", re.IGNORECASE)),
+    # dormakaba / Dorma: 4-digit model (8600, 8900, 7400)
+    ("dorma", re.compile(r"^(\d{4})", re.IGNORECASE)),
+    ("dormakaba", re.compile(r"^(\d{4})", re.IGNORECASE)),
+    # Norton: 4-digit model (7500, 1600, 8000)
+    ("norton", re.compile(r"^(\d{4})", re.IGNORECASE)),
+]
+
+
+def extract_base_series(model: str, manufacturer: str) -> str:
+    """Extract the base product family identifier from a model string.
+
+    The base series is the leading identifier that maps to a single cut sheet.
+    For example:
+      "5BB1 HW 4 1/2 x 4 1/2 NRP 652"  → "5BB1"
+      "L9010 03N LH 626"                → "L9010"
+      "4040XP RWPA TBWMS AL"            → "4040XP"
+      "99EO-F 3' US26D"                 → "99"
+
+    Args:
+        model: The model string (already split from name/finish/manufacturer).
+        manufacturer: The manufacturer name or abbreviation.
+
+    Returns:
+        The base series string, or empty string if extraction fails.
+    """
+    model = model.strip()
+    if not model:
+        return ""
+
+    mfr_lower = manufacturer.lower()
+
+    # Try manufacturer-specific patterns first
+    for mfr_key, pattern in _BASE_SERIES_PATTERNS:
+        if mfr_key in mfr_lower:
+            m = pattern.match(model)
+            if m:
+                return m.group(1).upper()
+
+    # Generic fallback: first token that contains alphanumeric chars
+    # and is not a pure size indicator
+    tokens = model.split()
+    for tok in tokens:
+        if _SIZE_PATTERN.match(tok):
+            continue
+        # Must contain at least one alphanumeric character
+        if re.search(r"[A-Za-z0-9]", tok):
+            # Strip trailing hyphens/punctuation
+            cleaned = re.sub(r"[\-,;:]+$", "", tok)
+            if cleaned:
+                return cleaned.upper()
+
+    return ""
+
 
 # Non-hardware item patterns — used to filter garbage from extraction.
 NON_HARDWARE_PATTERN = re.compile(
@@ -1367,6 +1668,13 @@ DOOR_NUMBER_PATTERNS = [
     r'^[A-Z]?\d[A-Z]?[-]\d{2,4}[A-Z]?$',
     # Multi-digit-dash-multi-digit: 110-01, 110-01A, 120-02A, 110A-04A
     r'^\d{2,4}[A-Z]?[-]\d{2,4}[A-Z]?$',
+    # Multi-letter suffix on floor-room doors: 10-03AB, 09-04AA
+    # Prefix limited to 2-3 digits (floor numbers) to avoid matching product models like 4040-18TJ
+    r'^\d{2,3}[-]\d{2,4}[A-Z]{2,3}$',
+    # Revision suffix: 10-82A.R1M, 10-82B.R1M
+    r'^\d{2,4}[-]\d{2,4}[A-Z]\.[A-Z]\d[A-Z]$',
+    # REV-embedded door numbers: 09-15AREV1 (after space normalization)
+    r'^\d{2,4}[-]\d{2,4}[A-Z]{0,3}REV\d?$',
     # Simple numeric: 101, 1001 (3-4 digits, optionally with letter suffix)
     # Bare 2-digit numbers (20, 94) are quantities/page numbers, not doors
     r'^\d{3,4}[A-Z]?$',
@@ -1433,6 +1741,10 @@ def is_valid_door_number(val: str, log_rejections: bool = False) -> bool:
 
     clean = val.strip().upper()
 
+    # Normalize revision designator: "09-15A REV1" → "09-15AREV1"
+    # pdfplumber sometimes inserts a space before REV in door numbers.
+    clean = re.sub(r'\s+(?=REV\d?$)', '', clean)
+
     # Reject empty or extreme lengths
     if len(clean) < 2 or len(clean) > 15:
         if log_rejections:
@@ -1466,8 +1778,25 @@ def is_valid_door_number(val: str, log_rejections: bool = False) -> bool:
             print(f"[DOOR_VALIDATION] Rejected '{val}': no digits")
         return False
 
+    # Reject option-list codes with trailing colons (e.g. "10A:", "11A:")
+    if clean.endswith(":"):
+        return False
+
     # Reject trailing dash (project/document IDs like MCA1-2-)
     if clean.endswith("-"):
+        return False
+
+    # Reject hardware catalog patterns: NN-0NN or NN-NNN (e.g. "14-010",
+    # "13-247", "14-048"). These are strike/hardware catalog numbers, not
+    # door numbers. Real door numbers with dashes typically have a longer
+    # prefix or an alpha component (e.g. "1-101", "ST-100").
+    if re.match(r'^\d{2}-0\d{2,3}$', clean) or re.match(r'^\d{2}-\d{3}$', clean):
+        return False
+
+    # Reject closer/hardware model numbers with product-line suffixes.
+    # Common patterns: 4040XP, 4040XP-3077, 4040XP-3077SCNS, etc.
+    # Requires 2+ alpha chars to avoid rejecting real doors like "2100A".
+    if re.match(r'^\d{4}[A-Z]{2,3}(?:-\d{3,4}[A-Z]*)?$', clean):
         return False
 
     # Reject phone number patterns and multi-dash numeric strings
@@ -1502,10 +1831,21 @@ def is_valid_door_number(val: str, log_rejections: bool = False) -> bool:
                     print(f"[DOOR_VALIDATION] Rejected '{val}': HW set prefix {prefix}")
                 return False
 
-    # Must match at least one positive door number pattern
-    for pattern in DOOR_NUMBER_PATTERNS:
-        if re.match(pattern, clean):
-            return True
+    # Reject BHMA finish code ranges: "615-622", "626-630" etc.
+    # Both sides are 3-digit numbers in the 600-699 range (BHMA architectural finishes).
+    _finish_range = re.match(r'^(\d{3})-(\d{3})$', clean)
+    if _finish_range:
+        left, right = int(_finish_range.group(1)), int(_finish_range.group(2))
+        if 600 <= left <= 699 and 600 <= right <= 699:
+            if log_rejections:
+                print(f"[DOOR_VALIDATION] Rejected '{val}': BHMA finish code range")
+            return False
+
+    # Reject leading-zero numeric strings: "0468", "0123" — product/model numbers, not doors
+    if re.match(r'^0\d{2,3}[A-Z]?$', clean):
+        if log_rejections:
+            print(f"[DOOR_VALIDATION] Rejected '{val}': leading-zero numeric (product code)")
+        return False
 
     # S-065: Reject values containing ANSI/BHMA finish codes (US32D, US26D, US10B, etc.)
     # These appear when table parsing concatenates a value with its finish column
@@ -1514,17 +1854,34 @@ def is_valid_door_number(val: str, log_rejections: bool = False) -> bool:
             print(f"[DOOR_VALIDATION] Rejected '{val}': contains ANSI finish code suffix")
         return False
 
-    # Fallback: if it has 3+ consecutive digits and isn't a set ID, cautiously accept
-    # This catches unconventional numbering we haven't seen yet.
-    # Require 3+ digits to avoid matching bare quantities (20, 94, etc.)
+    # S-067: Reject standalone BHMA architectural finish codes (600-699 range).
+    if re.match(r'^\d{3}$', clean):
+        code = int(clean)
+        if 600 <= code <= 699:
+            if log_rejections:
+                print(f"[DOOR_VALIDATION] Rejected '{val}': BHMA finish code (600-699)")
+            return False
+
+    # PERMISSIVE ACCEPTANCE: Accept anything that passed the blocklist checks
+    # above, as long as it meets minimum structural requirements. Unusual door
+    # numbering schemes should NOT be silently rejected — the consensus
+    # validator and human review handle outliers downstream.
+    # (DOOR_NUMBER_PATTERNS retained for documentation but no longer used as gate.)
+
     # Reject pure-digit strings > 4 chars (project/document numbers like 303872)
     if re.match(r'^\d{5,}$', clean):
         if log_rejections:
             print(f"[DOOR_VALIDATION] Rejected '{val}': pure numeric > 4 digits (project/doc number)")
         return False
-    # S-065: Tightened — only accept bare 3-4 digit numbers in fallback,
-    # not arbitrary mixed alphanumeric with 3+ embedded digits
-    if re.match(r'^\d{3,4}$', clean):
+
+    # Reject bare 1-2 digit numbers (quantities, page numbers, not doors)
+    if re.match(r'^\d{1,2}$', clean):
+        if log_rejections:
+            print(f"[DOOR_VALIDATION] Rejected '{val}': bare 1-2 digit number")
+        return False
+
+    # Accept: must contain at least one digit and be within length bounds
+    if len(clean) >= 2 and len(clean) <= 15:
         return True
 
     if log_rejections:
@@ -1649,11 +2006,18 @@ def parse_hw_set_id_from_text(text: str) -> tuple[str, str, str]:
     if not m:
         return ("", "", "")
 
+    # Reject if the match is inside a numbered list item (e.g., "33. HW Set EL-XL1").
+    # These are notes that reference set IDs, not actual hardware set headings.
+    match_line = text[max(0, text.rfind("\n", 0, m.start()) + 1): m.end()]
+    if re.match(r"\d+\.\s", match_line.lstrip()):
+        return ("", "", "")
+
     # Group 1 = heading ID from "Heading #X (Set #Y)" (includes :1/.PR4 suffix)
     # Group 2 = generic set ID from same format (from parenthetical)
-    # Group 3 = set ID from "HARDWARE SET/GROUP #X" format
-    # Group 4 = set ID from "ID - Hardware Set" format (ID-first)
-    # Group 5 = set ID from "SET #X" / "SET: X" format (bare set)
+    # Group 3 = set ID from "Heading #: ID" (ESC/AKN format)
+    # Group 4 = set ID from "HARDWARE SET/GROUP #X" format
+    # Group 5 = set ID from "ID - Hardware Set" format (ID-first)
+    # Group 6 = set ID from "SET #X" / "SET: X" format (bare set)
     heading_id = ""
     generic_set_id = ""
 
@@ -1662,17 +2026,21 @@ def parse_hw_set_id_from_text(text: str) -> tuple[str, str, str]:
         heading_id = m.group(1).strip()
         generic_set_id = m.group(2).strip()
     elif m.group(3):
-        # "HARDWARE SET DH1" / "HW GROUP 04"
+        # "Heading #: E1-XL.1" (ESC/AKN format)
         heading_id = m.group(3).strip()
         generic_set_id = m.group(3).strip()
     elif m.group(4):
-        # "04 - Hardware Set" (ID-first format)
+        # "HARDWARE SET DH1" / "HW GROUP 04"
         heading_id = m.group(4).strip()
         generic_set_id = m.group(4).strip()
     elif m.group(5):
-        # "SET #04" / "SET: AD2"
+        # "04 - Hardware Set" (ID-first format)
         heading_id = m.group(5).strip()
         generic_set_id = m.group(5).strip()
+    elif m.group(6):
+        # "SET #04" / "SET: AD2"
+        heading_id = m.group(6).strip()
+        generic_set_id = m.group(6).strip()
     elif m.group(1):
         # Heading number only (fallback)
         heading_id = m.group(1).strip()
@@ -1683,6 +2051,14 @@ def parse_hw_set_id_from_text(text: str) -> tuple[str, str, str]:
     lines = text.split("\n")
     for line in lines:
         if HW_SET_HEADING_PATTERN.search(line):
+            # ESC/AKN format: "Heading #: ID DESCRIPTION" — strip prefix + ID
+            esc_match = re.match(
+                r"(?i)heading\s*#:\s*([A-Z0-9][A-Z0-9.\-]*)\s+(.*)",
+                line,
+            )
+            if esc_match:
+                heading = esc_match.group(2).strip()
+                break
             # Try to extract description after dash
             dash_match = re.search(
                 r"(?:heading\s*#?\s*[A-Z0-9][A-Z0-9.\-:]*)\s*[-–—]\s*(.+?)(?:\(|$)",
@@ -1700,6 +2076,12 @@ def parse_hw_set_id_from_text(text: str) -> tuple[str, str, str]:
                 heading = re.sub(r"\(set\s*#?\s*[A-Z0-9][A-Z0-9.\-]*\)\s*$", "", heading, flags=re.IGNORECASE).strip()
             break
 
+    # Defensive: reject heading descriptions that look like numbered list items
+    # (e.g. "5. Tags 110A-02B, 110A-03B: ..."). These come from body content lines
+    # that happened to match HW_SET_HEADING_PATTERN due to an embedded ID.
+    if heading and re.match(r"^\d+\.\s", heading):
+        heading = ""
+
     return (heading_id, generic_set_id, heading)
 
 
@@ -1709,6 +2091,14 @@ def parse_hw_set_id_from_text(text: str) -> tuple[str, str, str]:
 HEADING_DOOR_LINE = re.compile(
     r"(?:For\s+|Qty[:\s]+)?(\d+)\s*[-–]?\s*(Pair|Single)\s+Doors?\s*"
     r"(?:Opening)?s?\s*(?:#|$)",
+    re.IGNORECASE,
+)
+
+# BUG-25: Pattern to extract door numbers from heading block lines.
+# Captures: qty, type (Pair/Single), and the door number after #.
+HEADING_DOOR_WITH_NUMBER = re.compile(
+    r"(?:For\s+|Qty[:\s]+)?(\d+)\s*[-–]?\s*(Pair|Single)\s+Doors?\s*"
+    r"(?:Opening)?s?\s*#\s*(\S+)",
     re.IGNORECASE,
 )
 
@@ -1733,12 +2123,566 @@ def count_heading_doors(page_text: str) -> tuple[int, int]:
     return (opening_count, leaf_count)
 
 
+def extract_heading_door_numbers(section_text: str) -> list[str]:
+    """
+    Extract specific door numbers listed under a hardware set heading block.
+
+    Uses HEADING_DOOR_WITH_NUMBER regex to parse lines like:
+      "1 Pair Doors #110-02A  Corridor 1203 from Gallery 1"
+      "1 Single Door #09-15AREV1 SOCIAL HUB"
+
+    Returns normalized door numbers (stripped, uppercased), preserving
+    insertion order and skipping duplicates.
+
+    This is used to populate HardwareSetDef.heading_doors so that the
+    TypeScript layer can match doors to specific sub-sets (e.g., DH4A.0
+    vs DH4A.1) instead of collapsing them by generic_set_id.
+    """
+    doors: list[str] = []
+    seen: set[str] = set()
+    # Primary: use HEADING_DOOR_WITH_NUMBER which captures qty + type + first door
+    for m in HEADING_DOOR_WITH_NUMBER.finditer(section_text):
+        door_num = m.group(3).strip().rstrip(",;:").upper()
+        if door_num and door_num not in seen and is_valid_door_number(door_num):
+            seen.add(door_num)
+            doors.append(door_num)
+    # Secondary: scan for all #<door_number> patterns in the text.
+    # This catches cases where multiple doors are listed on one line
+    # (e.g., "5 Single Doors #1603, #1708, #1803, #2101, #2103")
+    # that the primary regex only captures the first of.
+    for m in re.finditer(r"#\s*(\S+)", section_text):
+        door_num = m.group(1).strip().rstrip(",;:").upper()
+        if door_num and door_num not in seen and is_valid_door_number(door_num):
+            seen.add(door_num)
+            doors.append(door_num)
+    # Tertiary: ESC/AKN format "N SGL|PR|PRA/PRI Door:XXX.XX.Y.ZZ"
+    for sd in _parse_specworks_door_assignments(section_text):
+        door_num = sd["door_number"].upper()
+        if door_num and door_num not in seen:
+            seen.add(door_num)
+            doors.append(door_num)
+    return doors
+
+
+# Hand codes that appear at the end of hardware-schedule heading door lines.
+# Supports LH / RH / LHR / RHR / LHA / RHA / LHRA / RHRA, optionally preceded
+# by a swing-degree indicator like "90° LH" or "180° RHR". Pair doors
+# sometimes record one hand per leaf with a backslash separator — e.g.
+# "LHR\RHR" or "RH\LH" — so the trailing token may contain such a pair.
+_HAND_CODE = r"(?:LHRA|RHRA|LHR|RHR|LHA|RHA|LH|RH)"
+_HEADING_DOOR_HAND_RE = re.compile(
+    r"(?:\d{1,3}°\s+)?(" + _HAND_CODE + r"(?:\\" + _HAND_CODE + r")?)\s*$",
+    re.IGNORECASE,
+)
+
+# Trailing degree-only suffix (e.g. "90°") without a hand code.
+_TRAILING_DEGREE_RE = re.compile(r"\s+\d{1,3}°\s*$")
+
+
+def parse_heading_door_metadata(after_door_text: str) -> tuple[str, str]:
+    """Parse (location, hand) from the trailing portion of a heading door line.
+
+    The caller passes the text that appears AFTER the door number on a line
+    like ``"1 Single Door #E102 RECEPTION 101 to LARGE CONF. ROOM 102 LH"``.
+
+    Returns a ``(location, hand)`` tuple. Either value may be the empty
+    string when not present on the line.
+
+    Decision: we parse hand as a suffix and treat everything preceding it
+    as the location rather than using the previous single-regex approach
+    that only captured location. That approach silently dropped RHRA/LHRA
+    because its trailing lookahead ``\\s+[LR]H[RA]?\\s*$`` only matches one
+    of the two reverse/active letters. Doing the split explicitly keeps
+    both fields and supports the full DFH hand set documented in Prompt 2.
+    """
+    text = (after_door_text or "").strip()
+    if not text:
+        return ("", "")
+
+    hand = ""
+    location = text
+
+    hand_match = _HEADING_DOOR_HAND_RE.search(text)
+    if hand_match:
+        hand = hand_match.group(1).upper()
+        location = text[: hand_match.start()].rstrip()
+
+    # Strip a bare trailing degree suffix when no hand followed it.
+    location = _TRAILING_DEGREE_RE.sub("", location).strip()
+
+    return (location, hand)
+
+
+# Fire-rating pattern ported from src/lib/fire-rating.ts:13 so the Python and
+# TypeScript layers recognise the same shapes ("90Min", "45 Min", "1 Hr",
+# "3 Hours"). Anchored with a leading word boundary so "PR3" etc. don't match.
+_FIRE_RATING_RE = re.compile(
+    r"\b(\d{1,3}\s*[Mm]in(?:ute)?s?|[123](?:\.5)?\s*[Hh](?:ou)?rs?)\b"
+)
+
+# The line prefix that marks a door-spec row inside a heading block.
+# Real PDFs sometimes pad with extra spaces or a tab; keep it permissive.
+_OPENING_DESCRIPTION_PREFIX_RE = re.compile(
+    r"(?i)^\s*opening\s+description\s*[:\-]",
+)
+
+
+def parse_opening_description_fire_rating(line: str) -> str:
+    """Extract a fire rating from an ``Opening Description:`` line.
+
+    The line format in hardware-schedule heading blocks is::
+
+        Opening Description: [<rating>] 3' 0" x 7' 0" Type <door> Type <frame>
+
+    The rating, when present, precedes the size dimensions (sometimes the
+    two ``Type`` tokens appear after the size). This helper only fires on
+    lines that actually begin with ``Opening Description`` so door lines
+    with embedded ``90Min`` tokens don't produce false positives.
+
+    Returns the rating verbatim (e.g. ``"90Min"`` or ``"1 Hr"``) or an
+    empty string when no rating is present.
+    """
+    if not line or not _OPENING_DESCRIPTION_PREFIX_RE.match(line):
+        return ""
+    match = _FIRE_RATING_RE.search(line)
+    return match.group(1) if match else ""
+
+
+def extract_doors_from_set_headings(pdf) -> list[DoorEntry]:
+    """
+    BUG-25: Extract door numbers from hardware schedule heading blocks as a
+    fallback when the opening list table extraction fails or returns
+    incomplete results.
+
+    Thin wrapper around :func:`build_heading_page_map`; kept for
+    backward compatibility with callers that just want a flat list.
+    The returned DoorEntry objects carry door_number, hw_set, hw_heading,
+    location, hand, and (when an "Opening Description" line under the
+    heading supplied one) fire_rating.
+    """
+    doors = list(build_heading_page_map(pdf).values())
+    logger.info(
+        f"[extract-tables] extract_doors_from_set_headings: "
+        f"{len(doors)} doors from hardware schedule headings"
+    )
+    return doors
+
+
+# Patterns used to tell a location-continuation line apart from structural
+# lines (another door, a new heading, the Opening Description, an item,
+# a bare size / door-type row that some PDFs print without the "Opening
+# Description:" prefix). Documented as a group so the decision rules sit
+# next to each other — if a new real PDF turns up a missed blocker,
+# extend this pattern + add a test case.
+_CONTINUATION_BLOCKER_RE = re.compile(
+    r"(?i)^\s*(?:"
+    r"heading\b"                            # new heading starts here
+    r"|opening\s+description\b"             # fire-rating / size line
+    r"|\d+\s+(?:pair|single)\s+doors?\b"    # another door line
+    r"|\d+\s+[A-Za-z]"                      # qty + word = item line ("12 Hinges …")
+    r"|\d+(?:\s*[-–]\s*\d+)?\s*['\"\u2032\u2033]"  # bare dimensions ("3' 0\"" / "2 - 3' 0\"")
+    r"|note[s]?\s*[:]"                      # note line
+    r"|phase\s*[:]|project\s*id\s*[:]"      # ESC/SpecWorks header
+    r")"
+)
+
+
+def _is_location_continuation_line(line: str) -> bool:
+    """True if ``line`` is text that continues the previous door's
+    location (the PDF wrapped on column width). A continuation line has
+    content but doesn't start a new structural block."""
+    stripped = (line or "").strip()
+    if not stripped:
+        return False
+    return _CONTINUATION_BLOCKER_RE.match(stripped) is None
+
+
+def _extract_heading_doors_on_page(
+    page,
+    heading_map: dict[str, DoorEntry],
+    extract_kwargs: dict | None = None,
+) -> None:
+    """Per-page body of :func:`build_heading_page_map`.
+
+    Factored out so rescan-time (single-page) and extraction-time
+    (full-PDF walk) share ONE implementation of the line-parsing
+    rules. If you find yourself changing how per-door lines are parsed,
+    update this function — both paths will pick it up.
+
+    Mutates ``heading_map`` in place.
+
+    ``extract_kwargs`` are forwarded to ``page.extract_text`` when
+    present. Rescan-time can pass ``{"x_tolerance": 5, "y_tolerance": 5}``
+    as an aggressive-retry setting to merge nearby characters that the
+    default settings split. Do NOT pass ``layout=False`` — the parser
+    tracks ``pending_door`` through the line sequence and that state
+    machine relies on visual top-to-bottom order.
+    """
+    if extract_kwargs:
+        text = page.extract_text(**extract_kwargs) or ""
+    else:
+        text = page.extract_text() or ""
+    lines = text.split("\n")
+    current_set_id = ""
+    current_batch: list[DoorEntry] = []
+    # The most-recently created door that can still absorb a
+    # location-continuation line. Reset on any structural line.
+    pending_door: DoorEntry | None = None
+
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+
+        heading_match = _HEADING_LINE_PATTERN.match(line.strip())
+        if heading_match:
+            current_set_id = next(
+                (g for g in heading_match.groups() if g), ""
+            )
+            current_batch = []
+            pending_door = None
+            i += 1
+            continue
+
+        door_match = HEADING_DOOR_WITH_NUMBER.search(line)
+        if door_match:
+            door_num = door_match.group(3).strip().rstrip(",;:")
+            if (
+                door_num
+                and door_num not in heading_map
+                and is_valid_door_number(door_num)
+            ):
+                after_door = line[door_match.end(3):]
+                loc, hand = parse_heading_door_metadata(after_door)
+                entry = DoorEntry(
+                    door_number=door_num,
+                    hw_set=current_set_id,
+                    hw_heading=current_set_id,
+                    location=loc,
+                    hand=hand,
+                )
+                heading_map[door_num] = entry
+                current_batch.append(entry)
+                pending_door = entry
+            else:
+                pending_door = None
+            i += 1
+            continue
+
+        # Opening Description: stamp fire rating onto every door
+        # batched so far under this heading.
+        rating = parse_opening_description_fire_rating(line)
+        if rating and current_batch:
+            for d in current_batch:
+                if not (d.fire_rating or "").strip():
+                    d.fire_rating = rating
+            pending_door = None
+            i += 1
+            continue
+
+        # Location continuation: a line with text that isn't a new
+        # structural block. Stitch onto the most recent door's
+        # location (if any), then yield the pending slot so the next
+        # continuation-shaped line can't leak past another blocker.
+        if pending_door is not None and _is_location_continuation_line(line):
+            extra = line.strip()
+            if extra:
+                if pending_door.location:
+                    pending_door.location = (
+                        f"{pending_door.location} {extra}".strip()
+                    )
+                else:
+                    pending_door.location = extra
+            # Only one continuation per door is supported — this is
+            # the observed format in real submittals and keeps the
+            # parser from swallowing unrelated paragraphs below.
+            pending_door = None
+            i += 1
+            continue
+
+        # Any other line resets the pending slot so a later blank-
+        # ish line doesn't accidentally get appended.
+        pending_door = None
+        i += 1
+
+
+def build_heading_page_map(pdf) -> dict[str, DoorEntry]:
+    """Step B of the Opening List ↔ Heading Page join.
+
+    Walks the hardware-schedule pages, collects the per-door lines under
+    each heading, and stamps the heading's Opening-Description fire
+    rating (when any) onto every door that belongs to that heading.
+
+    Returns a ``{door_number: DoorEntry}`` map with location, hand,
+    hw_set, hw_heading, and fire_rating populated.
+
+    Design notes:
+      - Doors are grouped by heading internally so heading-level
+        metadata (fire rating) can propagate before the doors escape
+        into the flat map.
+      - Narrow-column submittals (e.g. Lyft/Waymo) wrap per-door
+        lines:
+
+            1 Single Door #E102 RECEPTION 101 to LARGE RH
+            CONF. ROOM 102
+
+        The hand sits at the end of line 1; the tail of the location
+        sits on the next non-structural line. This parser stitches
+        such continuation lines back onto the most recently added
+        door's location before moving on.
+
+    Per-page line parsing lives in ``_extract_heading_doors_on_page``
+    so the rescan-time single-page path can share it verbatim.
+    """
+    heading_map: dict[str, DoorEntry] = {}
+    for page in pdf.pages:
+        _extract_heading_doors_on_page(page, heading_map)
+    return heading_map
+
+
+def join_opening_list_with_heading_pages(
+    openings: list[DoorEntry],
+    heading_doors: list[DoorEntry],
+) -> dict[str, object]:
+    """Step C of the Opening List ↔ Heading Page join.
+
+    The Opening List table (page 2 of a typical submittal) is the
+    canonical source of truth for door metadata, but it often leaves
+    ``location``, ``hand``, and ``fire_rating`` blank. The per-door
+    lines under each hardware-set heading (pages 4-9) carry those
+    fields; :func:`build_heading_page_map` has already stamped any
+    heading-level fire rating onto them.
+
+    Semantics (non-destructive):
+      - Every Opening-List row whose ``location`` / ``hand`` /
+        ``fire_rating`` / ``hw_heading`` is blank gets filled from its
+        heading-map counterpart.
+      - Heading-only doors (not in the Opening List) are appended.
+      - Opening-List-only doors (no heading-page counterpart) stay
+        unchanged but are counted + logged as an anomaly — they usually
+        mean the heading page was mis-classified or the Opening List
+        row is stale.
+
+    Mutates ``openings`` in place. Returns a stats dict with keys
+    ``added``, ``enriched``, ``opening_list_only``, ``heading_only``,
+    plus up-to-five-sample lists ``opening_list_only_numbers`` and
+    ``heading_only_numbers`` for anomaly logging.
+
+    Total counts are always present so Darrin CP2 sees the true
+    magnitude even when only the first five door numbers are named.
+    """
+    head_by_num: dict[str, DoorEntry] = {d.door_number: d for d in heading_doors}
+    ol_by_num: dict[str, DoorEntry] = {d.door_number: d for d in openings}
+
+    enriched = 0
+    for door in openings:
+        hd = head_by_num.get(door.door_number)
+        if hd is None:
+            continue
+        changed = False
+        # Fill each field only when the Opening List left it blank.
+        if not (door.location or "").strip() and (hd.location or "").strip():
+            door.location = hd.location
+            changed = True
+        if not (door.hand or "").strip() and (hd.hand or "").strip():
+            door.hand = hd.hand
+            changed = True
+        if not (door.fire_rating or "").strip() and (hd.fire_rating or "").strip():
+            door.fire_rating = hd.fire_rating
+            changed = True
+        if not (door.hw_set or "").strip() and (hd.hw_set or "").strip():
+            door.hw_set = hd.hw_set
+            changed = True
+        if not (door.hw_heading or "").strip() and (hd.hw_heading or "").strip():
+            door.hw_heading = hd.hw_heading
+            changed = True
+        if changed:
+            enriched += 1
+
+    # Appended: heading doors that have no Opening-List counterpart.
+    added = 0
+    heading_only_numbers: list[str] = []
+    for hd in heading_doors:
+        if hd.door_number not in ol_by_num:
+            openings.append(hd)
+            ol_by_num[hd.door_number] = hd
+            added += 1
+            heading_only_numbers.append(hd.door_number)
+
+    # ── Filter out likely false-positive "doors" from the Opening List.
+    # These are catalog numbers, finish codes, and model numbers that
+    # the word-position fallback mistakenly extracted as door entries.
+    # The strongest signal: they appear in the Opening List but have NO
+    # counterpart on any heading page. Real doors appear in both.
+    #
+    # We only filter when there IS heading page data to compare against
+    # (heading_doors is non-empty) AND the door has no location, no hand,
+    # and no hw_set — meaning it has zero useful metadata from either source.
+    if heading_doors:
+        before_filter = len(openings)
+        openings[:] = [
+            d for d in openings
+            if d.door_number in head_by_num        # matched a heading page
+            or (d.location or "").strip()           # has location from OL
+            or (d.hand or "").strip()               # has hand from OL
+            or (d.hw_set or "").strip()             # has hw_set from OL
+        ]
+        filtered_count = before_filter - len(openings)
+        if filtered_count > 0:
+            logger.info(
+                f"[extract-tables] OL↔Heading join: filtered {filtered_count} "
+                f"likely false-positive door entries (no heading match, no metadata)"
+            )
+
+    # ── Backfill "NR" (Not Rated) for doors with no fire rating after the
+    # join.  In door-hardware submittals the absence of a fire rating means
+    # the door is non-rated — it is NOT missing data.  Without this backfill
+    # the review UI counts every non-rated door as "Missing fire rating",
+    # inflating error counts dramatically.
+    for door in openings:
+        if not (door.fire_rating or "").strip():
+            door.fire_rating = "NR"
+
+    # Opening-List-only doors: present in the OL table but no heading
+    # page parsed them. Usually a heading-page classifier miss.
+    opening_list_only_numbers = [
+        d.door_number for d in openings if d.door_number not in head_by_num
+    ]
+    # ``added`` doors were just inserted by this function; they are in
+    # head_by_num (they came from heading_doors), so they are already
+    # excluded from opening_list_only_numbers above.
+
+    return {
+        "added": added,
+        "enriched": enriched,
+        "opening_list_only": len(opening_list_only_numbers),
+        "heading_only": len(heading_only_numbers),
+        # Truncated samples for log readability. Totals above carry the
+        # real magnitude so Darrin's context isn't misled by the cap.
+        "opening_list_only_numbers": opening_list_only_numbers[:5],
+        "heading_only_numbers": heading_only_numbers[:5],
+    }
+
+
+def merge_heading_doors_into_openings(
+    openings: list[DoorEntry],
+    heading_doors: list[DoorEntry],
+) -> tuple[int, int]:
+    """Legacy wrapper around :func:`join_opening_list_with_heading_pages`.
+
+    Preserved so the existing unit tests that target ``(added, enriched)``
+    semantics continue to pass. New call sites should use the join
+    function directly and consume the full stats dict.
+    """
+    stats = join_opening_list_with_heading_pages(openings, heading_doors)
+    return (int(stats["added"]), int(stats["enriched"]))
+
+
+# Patterns for extracting door numbers from heading block text.
+# Matches "For Openings: 101, 102, 103" / "Doors: 101, 102A" / "#101, #102"
+_INLINE_DOOR_LIST_RE = re.compile(
+    r"(?:For\s+(?:Openings?|Doors?)\s*[:\-]\s*"      # "For Openings: ..." / "For Doors: ..."
+    r"|Doors?\s*[:\-]\s*"                               # "Door: ..." / "Doors: ..."
+    r"|Openings?\s*[:\-]\s*"                            # "Opening: ..." / "Openings: ..."
+    r"|Assigned\s+(?:to\s+)?(?:Doors?|Openings?)\s*[:\-]\s*"  # "Assigned to Doors: ..."
+    r")"
+    r"(.+)",
+    re.IGNORECASE,
+)
+
+# Pattern for individual door numbers in a comma/space/and-separated list
+# Handles: 101, 102A, 1-101, B1.03, 1.01.A.01A, 101A & 102B
+_DOOR_TOKEN_RE = re.compile(
+    r"#?\s*([A-Z0-9][A-Z0-9.\-]{1,14})",
+    re.IGNORECASE,
+)
+
+# Pattern for doors listed after Pair/Single on heading lines:
+# "1 Pair Doors #101, #102" / "2 Single Doors #103A, #104B, #105C"
+_HEADING_DOOR_NUMBERS_RE = re.compile(
+    r"(?:For\s+|Qty[:\s]+)?(\d+)\s*[-–]?\s*(Pair|Single)\s+Doors?\s*"
+    r"(?:Opening)?s?\s*#?\s*(.+)",
+    re.IGNORECASE,
+)
+
+
+def extract_inline_door_assignments(
+    page_text: str,
+    set_id: str,
+    heading: str = "",
+) -> list[DoorEntry]:
+    """Extract door number assignments from heading block text.
+
+    Handles multiple patterns:
+    1. "N Pair/Single Doors #101, #102, #103"  (extends HEADING_DOOR_LINE)
+    2. "For Openings: 101, 102, 103"
+    3. "Doors: 101, 102A, 103B"
+    4. SpecWorks: "1 SGL DOOR(S)3.01.H.04"  (delegates to existing parser)
+
+    Returns DoorEntry list with hw_set pre-populated from the set heading.
+    """
+    doors: list[DoorEntry] = []
+    seen: set[str] = set()
+
+    def _add_door(door_number: str, door_type: str = "", hand: str = ""):
+        """Add a door if valid and not duplicate."""
+        dn = door_number.strip().strip("#").strip()
+        if not dn or dn.upper() in seen:
+            return
+        if not is_valid_door_number(dn):
+            return
+        seen.add(dn.upper())
+        doors.append(DoorEntry(
+            door_number=dn,
+            hw_set=set_id,
+            hw_heading=heading,
+            door_type=door_type,
+        ))
+
+    # Strategy 1: SpecWorks format ("N SGL DOOR(S)X.XX.Y.ZZ")
+    specworks_doors = _parse_specworks_door_assignments(page_text)
+    if specworks_doors:
+        for sd in specworks_doors:
+            _add_door(
+                sd["door_number"],
+                door_type="PR" if sd.get("door_type") == "PR" else "",
+                hand=sd.get("hand", ""),
+            )
+        # Update hand if available
+        for d in doors:
+            match = next((sd for sd in specworks_doors if sd["door_number"] == d.door_number), None)
+            if match and match.get("hand"):
+                d.hand = match["hand"]
+        return doors
+
+    # Strategy 2: "N Pair/Single Doors #101, #102, #103" pattern
+    for m in _HEADING_DOOR_NUMBERS_RE.finditer(page_text):
+        door_type = "PR" if m.group(2).lower() == "pair" else ""
+        door_list_text = m.group(3)
+        for token in _DOOR_TOKEN_RE.finditer(door_list_text):
+            _add_door(token.group(1), door_type=door_type)
+
+    if doors:
+        return doors
+
+    # Strategy 3: "For Openings: 101, 102" / "Doors: 101, 102" patterns
+    for m in _INLINE_DOOR_LIST_RE.finditer(page_text):
+        door_list_text = m.group(1)
+        for token in _DOOR_TOKEN_RE.finditer(door_list_text):
+            _add_door(token.group(1))
+
+    return doors
+
+
 # Strict pattern for splitting: heading keywords at start of line only.
 # The broader HW_SET_HEADING_PATTERN also matches inside item descriptions,
 # which causes false splits. This pattern is deliberately stricter.
 _HEADING_LINE_PATTERN = re.compile(
     r"(?i)^(?:"
-    r"heading\s+#([A-Z0-9][A-Z0-9.\-:]*)"
+    r"heading\s+#?([A-Z0-9][A-Z0-9.\-:]*)\s*\((?:hw\s*)?set"  # SpecWorks: "Heading XXX (HwSet YYY)" or Himmel: "Heading #X (Set Y)"
+    r"|"
+    r"heading\s+#:\s*([A-Z0-9][A-Z0-9.\-]*)"  # ESC/AKN: "Heading #: E1-XL.1"
+    r"|"
+    r"heading\s+#([A-Z0-9][A-Z0-9.\-:]*)"  # Bare: "Heading #X"
     r"|"
     r"(?:hardware\s+|hw\s+)(?:set|group)\s*[:#\s]\s*([A-Z0-9][A-Z0-9.\-:]*)"
     r"|"
@@ -1775,18 +2719,648 @@ def _split_page_at_headings(page_text: str) -> list[str]:
     return sections
 
 
-def extract_hardware_sets_from_page(page, page_text: str) -> list[HardwareSetDef]:
+# --- SpecWorks / Kinship Format Parsers ---
+
+# SpecWorks item line: "( total) per_opening EA|SET DESCRIPTION CATALOG FINISH MFR"
+_SPECWORKS_ITEM_RE = re.compile(
+    r"^\(\s*(\d+)\)\s+(\d+)\s+(EA|SET|PR)\s+(.+)"
+)
+
+# SpecWorks/ESC door assignment: "N SGL|PR|PRA/PRI Door(S):DOOR_NUM..." or "N SGL Door:DOOR_NUM..."
+_SPECWORKS_DOOR_RE = re.compile(
+    r"^\s*(\d+)\s+(SGL|PRA/PRI|PR)\s+DOOR(?:\(S\)|:)(\d{1,3}\.\d{2}\.[A-Z]\.\S+)",
+    re.IGNORECASE,
+)
+
+# Footer line: "Project: ..." or "SpecWorks..."
+_SPECWORKS_FOOTER_RE = re.compile(
+    r"^(?:Project:|SpecWorks|Supplier:)"
+)
+
+# Known 3-letter SpecWorks manufacturer codes
+_SPECWORKS_MFR_CODES = {
+    "IVE", "SCH", "LCN", "VON", "NGP", "GLY", "ZER", "ECS", "B/O",
+    "ABH", "AME", "BEA", "DON", "HAG", "HES", "KAB", "KEM", "MED",
+    "PEM", "ROC", "SEC", "SIM", "STA", "TRI",
+}
+
+
+def _parse_specworks_items(page_text: str) -> list[HardwareItem]:
+    """Parse hardware items from a SpecWorks-format page.
+
+    SpecWorks item format:
+        ( total) per_opening EA DESCRIPTION CATALOG FINISH MFR
+        CONTINUATION_TEXT
+
+    Items start after "Totals Each Assembly to have:" line.
+    Multi-line wrapping: continuation lines lack the ( total) prefix and
+    extend the DESCRIPTION (e.g., "HVY\\nWT" → "HVY WT").
+    Manufacturer (3-letter) and finish are always on the FIRST line.
+    """
+    items: list[HardwareItem] = []
+    lines = page_text.split("\n")
+    in_items = False
+    current_item: dict | None = None
+
+    for line in lines:
+        stripped = line.strip()
+
+        # Skip empty lines
+        if not stripped:
+            continue
+
+        # Detect items start marker
+        if "totals each assembly" in stripped.lower() or "each assembly to have" in stripped.lower():
+            in_items = True
+            continue
+
+        # Stop at footer
+        if _SPECWORKS_FOOTER_RE.match(stripped):
+            break
+
+        if not in_items:
+            continue
+
+        # Skip HEI notes (SpecWorks editor comments)
+        if stripped.startswith("HEI:"):
+            continue
+
+        # Try to match a new item line
+        m = _SPECWORKS_ITEM_RE.match(stripped)
+        if m:
+            # Save previous item if any
+            if current_item:
+                items.append(_finalize_specworks_item(current_item))
+
+            total_qty = int(m.group(1))
+            per_opening_qty = int(m.group(2))
+            rest = m.group(4).strip()
+
+            current_item = {
+                "qty": per_opening_qty,
+                "qty_total": total_qty,
+                "first_line": rest,   # Mfr and finish are on this line only
+                "continuations": [],  # Continuation lines extend the description
+            }
+        elif current_item:
+            # Continuation line — extends the description, NOT the mfr/finish
+            current_item["continuations"].append(stripped)
+
+    # Save last item
+    if current_item:
+        items.append(_finalize_specworks_item(current_item))
+
+    return items
+
+
+def _finalize_specworks_item(item_data: dict) -> HardwareItem:
+    """Split a SpecWorks item's first line + continuations into name/model/finish/mfr.
+
+    Manufacturer and finish are extracted from the FIRST LINE only.
+    Continuation text is inserted into the description portion.
+    """
+    first_line = item_data["first_line"]
+    continuations = item_data.get("continuations", [])
+
+    # Extract manufacturer from first line: last token if known 3-letter code
+    tokens = first_line.split()
+    manufacturer = ""
+    finish = ""
+
+    if tokens and tokens[-1].upper() in _SPECWORKS_MFR_CODES:
+        manufacturer = tokens[-1].upper()
+        tokens = tokens[:-1]
+
+    # Extract finish from first line: new last token if BHMA pattern
+    if tokens and FINISH_CODE_PATTERN.search(tokens[-1]):
+        finish = tokens[-1]
+        tokens = tokens[:-1]
+
+    # Rejoin first line without mfr/finish
+    first_clean = " ".join(tokens)
+
+    # Find where description ends and catalog number begins in first line
+    name = first_clean
+    model = ""
+    parts = first_clean.split()
+    for i, part in enumerate(parts):
+        # Catalog numbers start with digits: 5BB1HW, 4040XP, 705, 9553
+        if re.match(r"^\d", part) and i > 0:
+            name = " ".join(parts[:i])
+            model = " ".join(parts[i:])
+            break
+        # Letter-digit codes: L9010, QEL-9849, EPT
+        if re.match(r"^[A-Z]+\d", part) and i > 0 and len(part) >= 3:
+            name = " ".join(parts[:i])
+            model = " ".join(parts[i:])
+            break
+
+    # Append continuation text to the description (name) part
+    if continuations:
+        name = name + " " + " ".join(continuations)
+
+    return HardwareItem(
+        qty=item_data["qty"],
+        qty_total=item_data["qty_total"],
+        qty_source="parsed",
+        name=name.strip(",. "),
+        manufacturer=manufacturer,
+        model=model,
+        finish=finish,
+    )
+
+
+def _count_specworks_doors(page_text: str) -> tuple[int, int]:
+    """Count door assignments in a SpecWorks-format page.
+
+    Returns (opening_count, leaf_count).
+
+    SpecWorks format: "1 SGL DOOR(S)3.01.H.04..."  or "1 PR DOOR(S)3.01.E.02..."
+    """
+    opening_count = 0
+    leaf_count = 0
+    for line in page_text.split("\n"):
+        m = _SPECWORKS_DOOR_RE.match(line.strip())
+        if m:
+            count = int(m.group(1))
+            door_type = m.group(2).upper()
+            opening_count += count
+            leaf_count += count * (2 if door_type in ("PR", "PRA/PRI") else 1)
+    return opening_count, leaf_count
+
+
+def _parse_specworks_door_assignments(page_text: str) -> list[dict]:
+    """Extract door assignments from a SpecWorks/ESC-format set page.
+
+    Returns list of dicts with door_number, hand, door_type.
+    """
+    doors = []
+    for line in page_text.split("\n"):
+        m = _SPECWORKS_DOOR_RE.match(line.strip())
+        if m:
+            raw_type = m.group(2).upper()
+            door_type = "PR" if raw_type in ("PR", "PRA/PRI") else "SGL"
+            # Door number is concatenated — extract up to the location text
+            raw_door = m.group(3)
+            # Door number is 4-part dot notation: X.XX.Y.ZZ[A]
+            dn_match = re.match(r"(\d{1,3}\.\d{2}\.[A-Z]\.\d{2}[A-Z]?)", raw_door)
+            door_number = dn_match.group(1) if dn_match else raw_door
+
+            # Extract handing from the line
+            hand = ""
+            hand_match = re.search(r"\b(LH|RH|LHR|RHR|LHRA|RHRA|LHA|RHA)\b", line)
+            if hand_match:
+                hand = hand_match.group(1)
+
+            doors.append({
+                "door_number": door_number,
+                "hand": hand,
+                "door_type": door_type,
+            })
+    return doors
+
+
+# --- ESC/AKN Format Item Parser ---
+#
+# ESC/AKN item format (different from SpecWorks dual-quantity):
+#   QTY EA Description CatalogNumber FinishCode (RefCode) Manufacturer
+#   CONTINUATION_TEXT
+#
+# Examples:
+#   3 EA Hinge, Full Mortise, Hvy 5BB1HW 4-1/2" x 4-1/2" NRP 630 (HI-1) Ives
+#   Wt                          ← continuation of description
+#   1 EA Threshold 625A x 36" (TH-10) Zero
+#   International               ← continuation of manufacturer
+#   0 EA Door Position Switch Tane Alarm SD-72C By Security (EC-7) Miscellaneous
+
+# Match: "QTY EA|SET|PR <rest>"
+_ESC_ITEM_RE = re.compile(r"^\s*(\d+)\s+(EA|SET|PR)\s+(.+)", re.IGNORECASE)
+
+# Reference code pattern in parentheses: (HI-1), (ED-3), (CL-3), (TH-10), (GA-40)
+_ESC_REF_CODE_RE = re.compile(r"\(([A-Z]{2,4}-\d{1,3})\)")
+
+# Lines that are NOT hardware items or continuations — they're notes, comments, door sizes
+_ESC_SKIP_LINE_RE = re.compile(
+    r"(?i)^(?:"
+    r"\d+['-]"                  # Door size: 3' 0" x 7' 0" or 2-3' 0"
+    r"|Phase:"                  # Phase header
+    r"|Project\s*ID:"           # Project ID header
+    r"|Hardware\s*Schedule"     # Page title
+    r"|Engineering\s*Special"   # Footer
+    r"|Heading\s*#"             # Heading line
+    r"|HEI:"                    # SpecWorks editor notes
+    r"|Page\s+\d"               # Page number
+    r"|\d+\s+(?:SGL|PR)"       # Door assignment line
+    r")"
+)
+
+# Footer line for ESC format (at bottom of page, NOT headers at top)
+_ESC_FOOTER_RE = re.compile(
+    r"^(?:Engineering\s*Special|SpecWorks|Supplier:)"
+)
+
+
+def _is_esc_format(page_text: str) -> bool:
+    """Detect if page uses ESC/AKN format (Heading #: ID with QTY EA items).
+
+    Distinguishes from SpecWorks dual-quantity format which uses (total) per_opening EA.
+    """
+    return bool(re.search(r"(?i)heading\s*#:\s*[A-Z0-9]", page_text))
+
+
+def _parse_esc_items(section_text: str) -> list[HardwareItem]:
+    """Parse hardware items from an ESC/AKN-format section.
+
+    ESC item format:
+        QTY EA Description CatalogNumber Finish (RefCode) Manufacturer
+        CONTINUATION_TEXT
+
+    Items appear after door assignments and door size line.
+    Multi-line wrapping: continuation lines lack the QTY EA prefix.
+    Reference code (XX-N) in parentheses is used as anchor to split
+    finish and manufacturer from the description.
+    """
+    items: list[HardwareItem] = []
+    lines = section_text.split("\n")
+    current_item: dict | None = None
+    past_doors = False  # Track when we're past the door assignment section
+
+    for line in lines:
+        stripped = line.strip()
+
+        if not stripped:
+            continue
+
+        # Skip page headers/footers
+        if _ESC_FOOTER_RE.match(stripped):
+            break
+
+        # Skip heading line itself
+        if re.match(r"(?i)^Heading\s*#", stripped):
+            continue
+
+        # Skip door assignment lines
+        if _SPECWORKS_DOOR_RE.match(stripped):
+            past_doors = True
+            continue
+
+        # Skip door size lines (e.g., "3' 0\" x 7' 0\" x 1 3/4\" HMD/HMF")
+        if re.match(r"^\d+['\u2032-]", stripped):
+            past_doors = True
+            continue
+
+        # Skip "Phase:" and "Project ID:" headers
+        if re.match(r"(?i)^(?:Phase:|Project\s*ID:|Hardware\s*Schedule)", stripped):
+            continue
+
+        # Try to match a new item line: "QTY EA Description..."
+        m = _ESC_ITEM_RE.match(stripped)
+        if m:
+            past_doors = True
+            # Save previous item
+            if current_item:
+                items.append(_finalize_esc_item(current_item))
+
+            qty = int(m.group(1))
+            rest = m.group(3).strip()
+
+            current_item = {
+                "qty": qty,
+                "first_line": rest,
+                "continuations": [],
+            }
+        elif current_item and past_doors:
+            # Continuation line — could extend description or manufacturer
+            # Skip lines that are standalone notes/annotations, not item continuations
+            if (
+                not re.match(r"(?i)^(?:Phase:|Project\s*ID:|Hardware\s*Schedule|Heading\s*#)", stripped)
+                and not _SPECWORKS_DOOR_RE.match(stripped)
+                # Skip installation note annotations like "At header only", "At jamb legs only"
+                and not re.match(r"(?i)^at\s+(?:header|jamb|hinge|lock|latch|pull)", stripped)
+            ):
+                current_item["continuations"].append(stripped)
+
+    # Save last item
+    if current_item:
+        items.append(_finalize_esc_item(current_item))
+
+    return items
+
+
+def _finalize_esc_item(item_data: dict) -> HardwareItem:
+    """Split an ESC/AKN item's first line + continuations into name/model/finish/mfr.
+
+    Uses the reference code (XX-N) in parentheses as an anchor point.
+    Format: Description CatalogNumber Finish (RefCode) Manufacturer
+    """
+    first_line = item_data["first_line"]
+    continuations = item_data.get("continuations", [])
+    qty = item_data["qty"]
+
+    # Join first line with continuations for full text analysis
+    # But manufacturer name wraps are handled specially
+    full_text = first_line
+
+    # Check if first_line has a reference code
+    ref_match = _ESC_REF_CODE_RE.search(first_line)
+
+    manufacturer = ""
+    finish = ""
+    name = ""
+    model = ""
+    ref_code = ""
+
+    if ref_match:
+        ref_code = ref_match.group(1)
+        before_ref = first_line[:ref_match.start()].strip()
+        after_ref = first_line[ref_match.end():].strip()
+
+        # Manufacturer is after the ref code on the first line
+        manufacturer = after_ref
+
+        # If manufacturer wraps to continuation lines, join them
+        # (but only if first line had no manufacturer text after ref code)
+        mfr_continuations = []
+        desc_continuations = []
+        for cont in continuations:
+            # Only consider manufacturer continuation if the first line
+            # had no manufacturer text (e.g., "Zero\nInternational" where
+            # "Zero" is the last word before line break)
+            if (
+                not desc_continuations
+                and not mfr_continuations
+                and not _ESC_ITEM_RE.match(cont)
+                and not manufacturer  # No mfr on first line → this continues it
+            ):
+                # Check if this looks like a manufacturer continuation
+                if (
+                    re.match(r"^[A-Z][a-z]", cont)
+                    and not re.match(r"(?i)^(?:at\s|per\s|extended|mortise\s*door|concealed|gasketing\s*change|please|EU\s*=|permanent|length|coordinator|closer)", cont)
+                    and len(cont.split()) <= 3
+                ):
+                    mfr_continuations.append(cont)
+                    continue
+            # If manufacturer IS present and continuation is a known company
+            # name suffix (e.g., "International", "Closers", "Builders Hardware")
+            elif (
+                not desc_continuations
+                and not mfr_continuations
+                and manufacturer
+                and re.match(r"^(?:International|Closers|Builders\s*Hardware|Products|Industries|Corp|Inc)$", cont, re.IGNORECASE)
+            ):
+                mfr_continuations.append(cont)
+                continue
+            desc_continuations.append(cont)
+
+        if mfr_continuations:
+            manufacturer = (manufacturer + " " + " ".join(mfr_continuations)).strip()
+
+        # Parse the before-ref part: Description CatalogNumber Finish
+        # Work backwards from the end: finish is the last BHMA-pattern token
+        tokens = before_ref.split()
+
+        # Extract finish: last token(s) that match finish pattern
+        while tokens and FINISH_CODE_PATTERN.match(tokens[-1]):
+            finish = (tokens.pop() + " " + finish).strip() if finish else tokens.pop()
+
+        # Rejoin and split into name/model
+        before_finish = " ".join(tokens)
+
+        # Find where description ends and catalog number begins
+        name = before_finish
+        model = ""
+        parts = before_finish.split()
+        for i, part in enumerate(parts):
+            # Catalog numbers start with digits: 5BB1HW, 4040XP, 705, 9553
+            if re.match(r"^\d", part) and i > 0:
+                name = " ".join(parts[:i])
+                model = " ".join(parts[i:])
+                break
+            # Letter-digit codes: L9010, QEL-9849, FB51T
+            if re.match(r"^[A-Z]+\d", part) and i > 0 and len(part) >= 3:
+                name = " ".join(parts[:i])
+                model = " ".join(parts[i:])
+                break
+
+        # Prepend description continuations to name
+        if desc_continuations:
+            # Filter out obvious note lines from description continuations
+            hw_conts = []
+            for dc in desc_continuations:
+                # Stop at note-like lines
+                if re.match(r"(?i)^(?:gasketing\s*change|please|ESC\s|per\s|EU\s*=|permanent|length|coordinator|closer\s*mounted|mortise\s*door\s*bottom|concealed\s*OH|extended\s*lip)", dc):
+                    break
+                hw_conts.append(dc)
+            if hw_conts:
+                name = name + " " + " ".join(hw_conts)
+
+    else:
+        # No reference code — simpler parsing
+        # Join continuations
+        if continuations:
+            full_text = first_line + " " + " ".join(continuations)
+
+        # Try to find name/model split
+        parts = full_text.split()
+        name = full_text
+        for i, part in enumerate(parts):
+            if re.match(r"^\d", part) and i > 0:
+                name = " ".join(parts[:i])
+                model = " ".join(parts[i:])
+                break
+            if re.match(r"^[A-Z]+\d", part) and i > 0 and len(part) >= 3:
+                name = " ".join(parts[:i])
+                model = " ".join(parts[i:])
+                break
+
+    return HardwareItem(
+        qty=qty,
+        qty_source="parsed",
+        name=name.strip(",. "),
+        manufacturer=manufacturer.strip(),
+        model=model.strip(),
+        finish=finish.strip(),
+    )
+
+
+def parse_items_from_raw_tables(tables: list) -> list[HardwareItem]:
+    """
+    Parse hardware items from raw pdfplumber table output.
+    Extracted as a reusable helper for both full-page and region extraction.
+    Handles column detection by header text or positional inference.
+    """
+    items: list[HardwareItem] = []
+
+    for table in tables:
+        if not table or len(table) < 2:
+            continue
+
+        header_row = [clean_cell(c) for c in table[0]]
+
+        # Skip door list tables
+        if is_opening_list_table(header_row):
+            continue
+
+        # Detect columns
+        qty_col = None
+        total_qty_col = None
+        name_col = None
+        mfr_col = None
+        model_col = None
+        finish_col = None
+
+        for i, h in enumerate(header_row):
+            hl = h.lower()
+            if re.search(r"(?i)(total|ext|extended)\s*(qty|quantity)", hl):
+                total_qty_col = i
+            elif re.match(r"(?i)^(qty\.?|quantity|#|qty\s*/?\s*ea|ea\.?\s*qty)$", hl):
+                qty_col = i
+            elif re.search(r"(?i)(item|description|hardware|product)", hl):
+                name_col = i
+            elif re.search(r"(?i)(mfr|mfg|manufacturer|vendor)", hl):
+                mfr_col = i
+            elif re.search(r"(?i)(model|catalog|cat\.?\s*#?|product\s*#?|series)", hl):
+                model_col = i
+            elif re.search(r"(?i)(finish|fin\.?|color)", hl):
+                finish_col = i
+
+        is_aggregate_qty = False
+        if qty_col is None and total_qty_col is not None:
+            qty_col = total_qty_col
+            is_aggregate_qty = True
+        elif qty_col is not None:
+            data_rows = table[1:6]
+            qty_values = []
+            for row in data_rows:
+                cells = [clean_cell(c) for c in row]
+                if qty_col < len(cells):
+                    m = re.match(r"(\d+)", cells[qty_col])
+                    if m:
+                        qty_values.append(int(m.group(1)))
+            if qty_values:
+                over_threshold = sum(1 for v in qty_values if v > 6)
+                if over_threshold / len(qty_values) > 0.6:
+                    is_aggregate_qty = True
+
+        # Positional inference fallback
+        if qty_col is None and name_col is None and len(header_row) >= 3:
+            data_rows = table[1:6]
+            first_col_is_qty = all(
+                re.match(r"^\d{1,2}$", clean_cell(row[0]))
+                for row in data_rows
+                if row and clean_cell(row[0])
+            )
+            if first_col_is_qty and len(header_row) >= 4:
+                qty_col = 0
+                name_col = 1
+                mfr_col = 2 if len(header_row) > 2 else None
+                model_col = 3 if len(header_row) > 3 else None
+                finish_col = 4 if len(header_row) > 4 else None
+
+        if name_col is None and qty_col is None:
+            continue
+        if name_col is None and qty_col is not None:
+            name_col = qty_col + 1
+
+        for row in table[1:]:
+            cells = [clean_cell(c) for c in row]
+            name_val = cells[name_col] if name_col is not None and name_col < len(cells) else ""
+            if not name_val:
+                continue
+            name_lower = name_val.lower()
+            if name_lower in ("total", "totals", "note", "notes", ""):
+                continue
+            if name_lower.startswith("note:") or name_lower.startswith("*"):
+                continue
+            if not HARDWARE_ITEM_NAMES.search(name_val) and len(name_val) < 3:
+                continue
+
+            qty_val = 1
+            if qty_col is not None and qty_col < len(cells):
+                raw_qty = cells[qty_col].strip()
+                if re.match(r"^(EA|PR|SET|PAIR|EACH)\.?$", raw_qty, re.IGNORECASE):
+                    qty_val = 1
+                else:
+                    qty_match = re.match(r"-?(\d+)", raw_qty)
+                    if qty_match:
+                        qty_val = int(qty_match.group(1))
+                        if qty_val == 0:
+                            qty_val = 1
+
+            mfr_val = cells[mfr_col] if mfr_col is not None and mfr_col < len(cells) else ""
+            model_val = cells[model_col] if model_col is not None and model_col < len(cells) else ""
+            finish_val = cells[finish_col] if finish_col is not None and finish_col < len(cells) else ""
+
+            items.append(HardwareItem(
+                qty=qty_val,
+                name=name_val,
+                manufacturer=mfr_val,
+                model=model_val,
+                finish=finish_val,
+            ))
+
+    return items
+
+
+def extract_hardware_sets_from_page(page, page_text: str, heading_format: str = "") -> list[HardwareSetDef]:
     """
     Extract hardware set definitions from a single page using text-alignment
     table detection (for transparent/invisible grid lines).
 
     For pages with multiple headings, splits at heading boundaries and
     extracts each set independently via text-line parsing.
+
+    If heading_format is "specworks", uses the SpecWorks-specific parser
+    which handles dual quantities, multi-line wrapping, and 3-letter mfr codes.
     """
     sets: list[HardwareSetDef] = []
 
     heading_id, generic_set_id, heading = parse_hw_set_id_from_text(page_text)
     if not heading_id:
+        return sets
+
+    # SpecWorks format: use dedicated parser (one set per page, no table extraction)
+    if heading_format == "specworks" or re.search(
+        r"(?i)heading\s+\S+\s*\(hw\s*set", page_text
+    ):
+        door_count, leaf_count = _count_specworks_doors(page_text)
+        items = _parse_specworks_items(page_text)
+        if items:
+            items = deduplicate_hardware_items(items)
+        sets.append(HardwareSetDef(
+            set_id=heading_id,
+            generic_set_id=generic_set_id,
+            heading=heading,
+            heading_door_count=door_count,
+            heading_leaf_count=leaf_count,
+            heading_doors=extract_heading_door_numbers(page_text),
+            qty_convention=detect_quantity_convention(page_text, door_count),
+            items=items,
+        ))
+        return sets
+
+    # ESC/AKN format: "Heading #: ID" with "QTY EA Description" items.
+    # May have multiple headings per page — split and parse each section.
+    if _is_esc_format(page_text):
+        sections = _split_page_at_headings(page_text)
+        for section_text in sections:
+            sec_id, sec_generic, sec_heading = parse_hw_set_id_from_text(section_text)
+            if not sec_id:
+                continue
+            door_count, leaf_count = _count_specworks_doors(section_text)
+            items = _parse_esc_items(section_text)
+            if items:
+                items = deduplicate_hardware_items(items)
+            sets.append(HardwareSetDef(
+                set_id=sec_id,
+                generic_set_id=sec_generic,
+                heading=sec_heading,
+                heading_door_count=door_count,
+                heading_leaf_count=leaf_count,
+                heading_doors=extract_heading_door_numbers(section_text),
+                qty_convention=detect_quantity_convention(section_text, door_count),
+                items=items,
+            ))
         return sets
 
     # Extract door counts from the FULL page text BEFORE splitting so that
@@ -1840,6 +3414,8 @@ def extract_hardware_sets_from_page(page, page_text: str) -> list[HardwareSetDef
                     heading=sec_heading,
                     heading_door_count=sec_door_count,
                     heading_leaf_count=sec_leaf_count,
+                    heading_doors=extract_heading_door_numbers(section_text),
+                    qty_convention=detect_quantity_convention(section_text, sec_door_count),
                     items=sec_items,
                 ))
         return sets
@@ -1856,10 +3432,10 @@ def extract_hardware_sets_from_page(page, page_text: str) -> list[HardwareSetDef
             "horizontal_strategy": "text",
             "intersection_tolerance": 5,
             "snap_tolerance": 5,
-            "join_tolerance": 5,
+            "join_tolerance": 8,
             "min_words_vertical": 2,
             "min_words_horizontal": 1,
-            "text_x_tolerance": 3,
+            "text_x_tolerance": 5,
             "text_y_tolerance": 3,
         }
     )
@@ -1875,144 +3451,7 @@ def extract_hardware_sets_from_page(page, page_text: str) -> list[HardwareSetDef
             }
         )
 
-    items: list[HardwareItem] = []
-
-    for table in tables:
-        if not table or len(table) < 2:
-            continue
-
-        # Detect which table this is — we want the hardware items table
-        # Hardware items tables typically have columns like:
-        # Qty | Item/Description | Manufacturer | Model/Catalog | Finish
-        header_row = [clean_cell(c) for c in table[0]]
-        header_text_lower = " ".join(header_row).lower()
-
-        # Skip if this looks like a door list table (has door_number column)
-        if is_opening_list_table(header_row):
-            continue
-
-        # Detect hardware items table by looking for qty + item/description columns
-        qty_col = None
-        total_qty_col = None  # "Total Qty" / "Ext Qty" — aggregate, skip this
-        name_col = None
-        mfr_col = None
-        model_col = None
-        finish_col = None
-
-        for i, h in enumerate(header_row):
-            hl = h.lower()
-            # Detect "total qty", "ext qty", "extended qty" — these are aggregate columns
-            if re.search(r"(?i)(total|ext|extended)\s*(qty|quantity)", hl):
-                total_qty_col = i
-            elif re.match(r"(?i)^(qty\.?|quantity|#|qty\s*/?\s*ea|ea\.?\s*qty)$", hl):
-                qty_col = i
-            elif re.search(r"(?i)(item|description|hardware|product)", hl):
-                name_col = i
-            elif re.search(r"(?i)(mfr|mfg|manufacturer|vendor)", hl):
-                mfr_col = i
-            elif re.search(r"(?i)(model|catalog|cat\.?\s*#?|product\s*#?|series)", hl):
-                model_col = i
-            elif re.search(r"(?i)(finish|fin\.?|color)", hl):
-                finish_col = i
-
-        # If we found a total_qty_col but no per-set qty_col, detect which
-        # column type we're dealing with using value heuristics.
-        is_aggregate_qty = False
-        if qty_col is None and total_qty_col is not None:
-            qty_col = total_qty_col
-            is_aggregate_qty = True  # Flag for normalization below
-        elif qty_col is not None:
-            # Validate with heuristics: if >60% of values are >6,
-            # it's likely an aggregate column (total qty, not per-opening)
-            data_rows = table[1:6]
-            qty_values = []
-            for row in data_rows:
-                cells = [clean_cell(c) for c in row]
-                if qty_col < len(cells):
-                    m = re.match(r"(\d+)", cells[qty_col])
-                    if m:
-                        qty_values.append(int(m.group(1)))
-            if qty_values:
-                over_threshold = sum(1 for v in qty_values if v > 6)
-                if over_threshold / len(qty_values) > 0.6:
-                    is_aggregate_qty = True
-                    logger.info(f"Qty column detected as aggregate ({over_threshold}/{len(qty_values)} values > 6)")
-
-        # If we didn't find explicit headers, try positional inference
-        # Many submittals have: Qty | Description | Manufacturer | Catalog No. | Finish
-        if qty_col is None and name_col is None and len(header_row) >= 3:
-            # Check if first column values look like quantities (small integers)
-            data_rows = table[1:6]  # sample first 5 data rows
-            first_col_is_qty = all(
-                re.match(r"^\d{1,2}$", clean_cell(row[0]))
-                for row in data_rows
-                if row and clean_cell(row[0])
-            )
-            if first_col_is_qty and len(header_row) >= 4:
-                qty_col = 0
-                name_col = 1
-                mfr_col = 2 if len(header_row) > 2 else None
-                model_col = 3 if len(header_row) > 3 else None
-                finish_col = 4 if len(header_row) > 4 else None
-
-        # Need at least name to extract items
-        if name_col is None and qty_col is None:
-            continue
-
-        # If we only have qty_col, name is likely the next column
-        if name_col is None and qty_col is not None:
-            name_col = qty_col + 1
-
-        for row in table[1:]:
-            cells = [clean_cell(c) for c in row]
-
-            # Get item name
-            name_val = cells[name_col] if name_col is not None and name_col < len(cells) else ""
-            if not name_val:
-                continue
-
-            # Skip rows that look like notes, totals, or continuation text
-            name_lower = name_val.lower()
-            if name_lower in ("total", "totals", "note", "notes", ""):
-                continue
-            if name_lower.startswith("note:") or name_lower.startswith("*"):
-                continue
-
-            # Validate it looks like a hardware item (or "by others" / "not used")
-            # Be lenient — some items have unusual names
-            if not HARDWARE_ITEM_NAMES.search(name_val) and len(name_val) < 3:
-                continue
-
-            # Get raw qty — pass through as-is; normalization happens in handler
-            # after we know the door count per set.
-            qty_val = 1
-            if qty_col is not None and qty_col < len(cells):
-                raw_qty = cells[qty_col].strip()
-                # Handle text-only units: "EA", "PR", "SET" → default qty 1
-                if re.match(r"^(EA|PR|SET|PAIR|EACH)\.?$", raw_qty, re.IGNORECASE):
-                    qty_val = 1
-                else:
-                    qty_match = re.match(r"-?(\d+)", raw_qty)
-                    if qty_match:
-                        qty_val = int(qty_match.group(1))  # abs via group(1)
-                        # Zero qty → default to 1
-                        if qty_val == 0:
-                            qty_val = 1
-
-            # Handle text wrapping — if name is very long and contains what looks
-            # like a split model/finish, try to separate
-            # e.g. "Lockset Schlage ND50PD RHO 626" when columns collapsed
-            mfr_val = cells[mfr_col] if mfr_col is not None and mfr_col < len(cells) else ""
-            model_val = cells[model_col] if model_col is not None and model_col < len(cells) else ""
-            finish_val = cells[finish_col] if finish_col is not None and finish_col < len(cells) else ""
-
-            items.append(HardwareItem(
-                qty=qty_val,
-                name=name_val,
-                manufacturer=mfr_val,
-                model=model_val,
-                finish=finish_val,
-            ))
+    items = parse_items_from_raw_tables(tables)
 
     # If table extraction found nothing, try text-line parsing
     if not items:
@@ -2027,6 +3466,8 @@ def extract_hardware_sets_from_page(page, page_text: str) -> list[HardwareSetDef
             heading=heading,
             heading_door_count=heading_door_count,
             heading_leaf_count=heading_leaf_count,
+            heading_doors=extract_heading_door_numbers(page_text),
+            qty_convention=detect_quantity_convention(page_text, heading_door_count),
             items=items,
         ))
 
@@ -2079,12 +3520,20 @@ def extract_all_hardware_sets(pdf: pdfplumber.PDF) -> list[HardwareSetDef]:
     Extract all hardware set definitions from the entire PDF.
     Scans each page for hardware set headings and extracts items.
 
-    Sub-headings (.PR4 pair variants, :1 continuations) are merged into
-    their parent set using generic_set_id. The resulting set_id is the
-    generic_set_id (e.g., "04" not "04.PR4").
+    Merge semantics (EXACT set_id matching only):
+    - If the same set_id appears on multiple pages (e.g., "04" continuing
+      from page 5 to page 6), merge them — this is a true continuation.
+    - If DIFFERENT set_ids share a generic_set_id (e.g., "DH4A.0" and
+      "DH4A.1"), keep them as separate sub-variants. Each has its own
+      heading_doors, counts, and items list. The TypeScript layer uses
+      heading_doors to match openings to their specific sub-set.
+
+    This avoids the silent item-loss bug that occurred when the previous
+    generic_set_id-based merge called deduplicate_hardware_items() across
+    sub-variants with different door counts.
     """
     all_sets: list[HardwareSetDef] = []
-    seen_generic_ids: dict[str, int] = {}  # generic_set_id → index in all_sets
+    seen_set_ids: dict[str, int] = {}  # exact set_id → index in all_sets
 
     for page_num, page in enumerate(pdf.pages):
         text = page.extract_text() or ""
@@ -2095,22 +3544,155 @@ def extract_all_hardware_sets(pdf: pdfplumber.PDF) -> list[HardwareSetDef]:
         page_sets = extract_hardware_sets_from_page(page, text)
 
         for hw_set in page_sets:
-            merge_key = hw_set.generic_set_id or hw_set.set_id
-            if merge_key in seen_generic_ids:
-                # Merge items into existing set (continuation or sub-heading)
-                existing = all_sets[seen_generic_ids[merge_key]]
+            # Exact set_id match only (preserves .0/.1/.PR4 suffixes as distinct)
+            if hw_set.set_id in seen_set_ids:
+                # Continuation of the SAME sub-set on a later page
+                existing = all_sets[seen_set_ids[hw_set.set_id]]
                 existing.items.extend(hw_set.items)
                 existing.items = deduplicate_hardware_items(existing.items)
-                # Accumulate door/leaf counts from sub-headings
                 existing.heading_door_count += hw_set.heading_door_count
                 existing.heading_leaf_count += hw_set.heading_leaf_count
+                # Merge heading_doors lists (avoid duplicates)
+                for dn in hw_set.heading_doors:
+                    if dn not in existing.heading_doors:
+                        existing.heading_doors.append(dn)
+                # Merge qty_convention: definitive signals override "unknown"
+                if existing.qty_convention == "unknown" and hw_set.qty_convention != "unknown":
+                    existing.qty_convention = hw_set.qty_convention
             else:
-                # First occurrence — normalize set_id to generic_set_id
-                hw_set.set_id = merge_key
-                seen_generic_ids[merge_key] = len(all_sets)
+                # First occurrence of this specific set_id (preserve suffix)
+                seen_set_ids[hw_set.set_id] = len(all_sets)
                 all_sets.append(hw_set)
 
+    # D1: Drop phantom sets — no heading text, no doors, no items.
+    # pdfplumber occasionally picks up set IDs from TOC/reference tables
+    # and creates empty entries that confuse downstream extraction.
+    phantoms = [
+        s for s in all_sets
+        if not s.heading.strip()
+        and s.heading_door_count == 0
+        and len(s.heading_doors) == 0
+        and len(s.items) == 0
+    ]
+    for p in phantoms:
+        logger.warning(
+            "Dropping phantom set '%s' — no heading, no doors, no items",
+            p.set_id,
+        )
+    if phantoms:
+        phantom_ids = {id(p) for p in phantoms}
+        all_sets = [s for s in all_sets if id(s) not in phantom_ids]
+
+    # D2: Reconcile heading_door_count vs heading_doors when they disagree.
+    # count_heading_doors() and extract_heading_door_numbers() use different
+    # regexes and can get out of sync. Use the larger value as truth.
+    for s in all_sets:
+        actual_doors = len(s.heading_doors)
+        if actual_doors > 0 and s.heading_door_count != actual_doors:
+            logger.warning(
+                "Set '%s': heading_door_count=%d disagrees with len(heading_doors)=%d — using max",
+                s.set_id,
+                s.heading_door_count,
+                actual_doors,
+            )
+            s.heading_door_count = max(s.heading_door_count, actual_doors)
+
+    # Split concatenated fields (BUG-12): MCA-format PDFs merge name,
+    # manufacturer, model, and finish into a single name field.  Run field
+    # splitting here so every caller gets properly-separated fields.
+    reference_codes = extract_reference_tables(pdf)
+    apply_field_splitting(all_sets, reference_codes)
+
     return all_sets
+
+
+def extract_inline_doors_from_sets(
+    pdf: pdfplumber.PDF,
+    hardware_sets: list[HardwareSetDef],
+) -> list[DoorEntry]:
+    """Extract door assignments from hardware set heading blocks.
+
+    Fallback for schedule-format PDFs that have no separate Opening List table.
+    Scans each hardware set page for inline door numbers like:
+    - "1 Pair Doors #101, #102"
+    - "For Openings: 101, 102, 103"
+    - SpecWorks: "1 SGL DOOR(S)3.01.H.04"
+
+    Returns a list of DoorEntry objects with hw_set pre-populated.
+    """
+    all_doors: list[DoorEntry] = []
+    seen: set[str] = set()
+    set_ids_by_page: dict[int, list[tuple[str, str]]] = {}
+
+    # Map pages to their hardware sets
+    for page_num, page in enumerate(pdf.pages):
+        text = page.extract_text() or ""
+        if not is_hardware_set_page(text):
+            continue
+
+        # Get set ID from this page
+        heading_id, generic_id, heading = parse_hw_set_id_from_text(text)
+        if not heading_id:
+            continue
+
+        # Use generic_set_id for matching (consistent with extract_all_hardware_sets)
+        match_id = generic_id or heading_id
+        set_ids_by_page.setdefault(page_num, []).append((match_id, heading))
+
+    # Now scan each page for inline door assignments
+    for page_num, page in enumerate(pdf.pages):
+        if page_num not in set_ids_by_page:
+            continue
+
+        text = page.extract_text() or ""
+
+        # Handle multi-heading pages by splitting at headings
+        sections = _split_page_at_headings(text)
+
+        if len(sections) > 1:
+            # Multi-heading page: extract per-section
+            for section_text in sections:
+                sec_id, sec_generic, sec_heading = parse_hw_set_id_from_text(section_text)
+                if not sec_id:
+                    continue
+                match_id = sec_generic or sec_id
+                # Only extract if this set_id matches one in our hardware_sets
+                matching_set = next(
+                    (s for s in hardware_sets if (s.generic_set_id or s.set_id) == match_id),
+                    None,
+                )
+                if not matching_set:
+                    continue
+                inline_doors = extract_inline_door_assignments(
+                    section_text, matching_set.set_id, matching_set.heading
+                )
+                for d in inline_doors:
+                    if d.door_number.upper() not in seen:
+                        seen.add(d.door_number.upper())
+                        all_doors.append(d)
+        else:
+            # Single heading: use full page text
+            for match_id, heading in set_ids_by_page[page_num]:
+                matching_set = next(
+                    (s for s in hardware_sets if (s.generic_set_id or s.set_id) == match_id),
+                    None,
+                )
+                if not matching_set:
+                    continue
+                inline_doors = extract_inline_door_assignments(
+                    text, matching_set.set_id, matching_set.heading
+                )
+                for d in inline_doors:
+                    if d.door_number.upper() not in seen:
+                        seen.add(d.door_number.upper())
+                        all_doors.append(d)
+
+    if all_doors:
+        logger.info(
+            f"[inline-doors] Extracted {len(all_doors)} doors from "
+            f"hardware set heading blocks (schedule-format fallback)"
+        )
+    return all_doors
 
 
 # --- Opening List Extraction ---
@@ -2696,20 +4278,64 @@ def normalize_quantities(
     hardware_sets: list[HardwareSetDef],
     openings: list[DoorEntry],
 ) -> None:
-    """Normalize item qty from project totals → per-opening/per-leaf.
+    """Annotate items with division context — does NOT mutate item.qty.
 
-    Mutates hardware_sets in place. Sets qty_total, qty_door_count, qty_source
-    on each HardwareItem.
+    # ─── WHY THIS FUNCTION EXISTS AND WHAT IT MUST NOT DO ─────────────────────
+    #
+    # PHILOSOPHY (2026-04-13 overhaul — see PR #fix/qty-normalization-pipeline-overhaul):
+    #
+    #   The user's goal is faithful extraction, not silent quantity adjustment.
+    #   Every number in this system should be traceable back to the PDF.
+    #   Silently changing qty in Python caused cascading bugs:
+    #
+    #     1. Item names like '5BB1 HW 4 1/2 x 4 1/2 NRP' are catalog numbers,
+    #        not English descriptions. _classify_hardware_item() returns None for
+    #        them, so DIVISION_PREFERENCE defaulted to 'opening', dividing
+    #        42 hinges by 6 doors → 7 per leaf instead of ~3-4 per leaf.
+    #
+    #     2. Non-integer division was rounded silently (42 ÷ 12 = 3.5 → 4),
+    #        marked 'flagged', frozen by NEVER_RENORMALIZE in the TS layer,
+    #        and the user had no way to see that the value came from an
+    #        imprecise approximation.
+    #
+    #     3. The TS normalizeQuantities() pass received already-divided values
+    #        and had to use the NEVER_RENORMALIZE guard to avoid double-dividing.
+    #        That guard relies on Python having set qty_source correctly, which
+    #        failed for unclassified items (source stayed 'parsed', not 'divided').
+    #
+    #     4. Darrin CP2 was told "quantities are already per-opening — don't change
+    #        them" but was looking at Python-divided values. It had no way to
+    #        distinguish a faithfully-extracted per-opening qty from a rounded
+    #        approximation, so its domain expertise was effectively disabled.
+    #
+    # NEW CONTRACT:
+    #
+    #   Python's job is: determine HOW to divide (divisor, strategy), record that
+    #   intention in metadata fields, but leave item.qty as the raw PDF number.
+    #
+    #   The single authoritative division pass lives in TS normalizeQuantities()
+    #   in src/lib/parse-pdf-helpers.ts. It runs ONCE, after Darrin CP2 has seen
+    #   the raw PDF values, and uses Python's annotations as hints.
+    #
+    #   qty_source values set here:
+    #     'needs_division'  — Python determined a divisor; TS must divide
+    #     'parsed'          — qty is already per-opening (door_count <= 1,
+    #                         qty is plausible, no division needed)
+    #     'needs_cap'       — single-door set, qty exceeds category max;
+    #                         TS should apply the category cap (not Python)
+    #
+    #   Fields set here (never mutate item.qty):
+    #     qty_total         — set to item.qty (the raw PDF value) when division
+    #                         is recommended, so TS always has the original
+    #     qty_door_count    — the recommended divisor (leaf_count or door_count)
+    #
+    # ─────────────────────────────────────────────────────────────────────────
 
-    Strategy:
+    Strategy for determining the divisor (unchanged from before):
       Primary: heading block door count (most accurate)
       Fallback 1: Opening List hw_heading match
       Fallback 2: Opening List hw_set (generic) match
-      Last resort: category cap
-
-    Division: try leaf count first (per-leaf items: hinges, closers),
-    then opening count (per-opening: coordinators, flush bolts).
-    If neither divides evenly, flag for AI review.
+      Fallback 3: cross-field fuzzy match
     """
     # Build fallback dicts from Opening List
     doors_per_heading: dict[str, int] = {}
@@ -2726,6 +4352,37 @@ def normalize_quantities(
         logger.info(f"Doors per heading (Opening List): {doors_per_heading}")
     if doors_per_set:
         logger.info(f"Doors per set (Opening List): {doors_per_set}")
+
+    # Pre-compute generic set totals for sub-heading normalization.
+    # When multiple sub-headings (e.g., DH3.0, DH3.1) share a generic_set_id
+    # (DH3), item quantities may be set-level totals that should be divided
+    # by the TOTAL door count across all sub-headings, not just one.
+    generic_totals: dict[str, tuple[int, int]] = {}  # gid → (total_doors, total_leaves)
+    for hw_set in hardware_sets:
+        gid = (hw_set.generic_set_id or hw_set.set_id).strip().upper()
+        prev_d, prev_l = generic_totals.get(gid, (0, 0))
+        generic_totals[gid] = (
+            prev_d + hw_set.heading_door_count,
+            prev_l + hw_set.heading_leaf_count,
+        )
+    # Also incorporate Opening List counts for generics (covers cases where
+    # heading block door counts are missing but the Opening List has data)
+    for gid, (total_d, total_l) in list(generic_totals.items()):
+        if total_d == 0:
+            ol_count = _fuzzy_lookup(gid, doors_per_set)
+            if ol_count > 0:
+                ol_leaves = _leaf_count_from_openings(
+                    openings, "hw_set", gid, ol_count
+                )
+                generic_totals[gid] = (ol_count, ol_leaves)
+                logger.info(
+                    f"[qty-norm] Generic '{gid}': heading counts=0, "
+                    f"using Opening List ({ol_count} doors, {ol_leaves} leaves)"
+                )
+
+    for gid, (td, tl) in generic_totals.items():
+        if td > 0:
+            logger.info(f"[qty-norm] Generic total '{gid}': {td} doors, {tl} leaves")
 
     for hw_set in hardware_sets:
         # --- Determine door count and leaf count ---
@@ -2786,7 +4443,48 @@ def normalize_quantities(
                             f"match ({door_count} doors, {leaf_count} leaves)"
                         )
 
-        # --- Single door or unknown: category cap fallback ---
+        # --- Sub-heading detection: check if this set belongs to a larger group ---
+        gid = (hw_set.generic_set_id or hw_set.set_id).strip().upper()
+        generic_doors, generic_leaves = generic_totals.get(gid, (0, 0))
+        is_sub_heading = (
+            hw_set.generic_set_id
+            and hw_set.generic_set_id != hw_set.set_id
+            and generic_doors > door_count
+        )
+        if is_sub_heading:
+            logger.info(
+                f"[qty-norm] {hw_set.set_id}: sub-heading of '{gid}' — "
+                f"sub={door_count}d/{leaf_count}l, "
+                f"generic={generic_doors}d/{generic_leaves}l"
+            )
+
+        # --- Per-heading quantity convention check ---
+        #
+        # When qty_convention is "per_opening" (detected from preamble phrases
+        # like "Each opening to have:"), quantities are already per-opening and
+        # should NOT be divided, regardless of door count.
+        #
+        # When a heading has only 1 door assigned, quantities are inherently
+        # per-opening regardless of the global/detected convention.
+        #
+        # This check runs BEFORE the division logic to short-circuit correctly.
+        convention = hw_set.qty_convention
+        if convention == "per_opening" and door_count > 1:
+            logger.info(
+                f"[qty-norm] {hw_set.set_id}: qty_convention='per_opening' — "
+                f"skipping division (quantities are already per-opening)"
+            )
+            for item in hw_set.items:
+                item.qty_source = "parsed"
+                item.qty_total = item.qty
+                item.qty_door_count = door_count or None
+            continue
+
+        # --- Single door or unknown: annotate as 'needs_cap' if qty looks like an aggregate ---
+        #
+        # We no longer mutate item.qty here. Instead we signal to the TS layer
+        # that it should apply a category cap if the raw value is implausibly high.
+        # This preserves the raw PDF number while still flagging suspicious values.
         if door_count <= 1 and leaf_count <= 1:
             for item in hw_set.items:
                 category = _classify_hardware_item(item.name)
@@ -2794,86 +4492,264 @@ def normalize_quantities(
                 raw_qty = item.qty
                 if raw_qty > max_qty:
                     logger.warning(
-                        f"[qty-cap-fallback] {hw_set.set_id}: '{item.name}' "
-                        f"qty {raw_qty} capped to {max_qty} (no door count)"
+                        f"[qty-norm] {hw_set.set_id}: '{item.name}' "
+                        f"qty {raw_qty} exceeds category max {max_qty} "
+                        f"(no door count available) — annotating needs_cap"
                     )
-                    item.qty = max_qty
-                    item.qty_source = "capped"
-                    item.qty_total = raw_qty
-                    item.qty_door_count = None
+                    # Do NOT mutate item.qty. The TS layer reads 'needs_cap'
+                    # and applies the cap with user-visible logging.
+                    item.qty_source = "needs_cap"
+                    item.qty_total = raw_qty      # preserve raw PDF value
+                    item.qty_door_count = None    # no divisor known
             continue
 
-        # --- Multi-door set: divide quantities (category-aware) ---
+        # --- Multi-door set: annotate with recommended divisor ---
+        #
+        # CRITICAL: we set qty_total, qty_door_count, qty_source='needs_division'
+        # but we do NOT change item.qty. The TS normalizeQuantities() function
+        # reads these annotations and performs the actual division ONCE.
+        #
+        # Rationale: Python can determine the correct divisor (leaf vs opening)
+        # using DIVISION_PREFERENCE and the counts from the heading block, but
+        # it cannot reliably classify items whose names are catalog numbers
+        # (e.g. '5BB1 HW 4 1/2 x 4 1/2 NRP') rather than English descriptions.
+        # Doing the math here silently produces wrong results for those items.
+        # The TS taxonomy has the same limitation, but by deferring the division
+        # to TS we at least ensure:
+        #   1. Darrin CP2 sees the raw PDF qty and can apply domain knowledge
+        #      (e.g. "42 hinges for 6 pair doors is 3-4 per leaf")
+        #   2. The division happens exactly once
+        #   3. The raw value is preserved in qty_total for audit/display
         for item in hw_set.items:
             raw_qty = item.qty
-            item.qty_total = raw_qty
-            divided = False
+            item.qty_total = raw_qty   # always preserve raw PDF value
 
             category = _classify_hardware_item(item.name)
             pref = DIVISION_PREFERENCE.get(category, "opening")
 
-            if pref == "leaf":
-                # Per-leaf items (hinges): try leaves first, then openings
-                divisors = [
-                    (leaf_count, "leaves"),
-                    (door_count, "openings"),
-                ]
-            elif pref == "opening_only":
-                # Per-opening-only items: never divide by leaves
-                divisors = [
-                    (door_count, "openings"),
-                ]
-            else:  # "opening"
-                # Per-opening items: try openings first, then leaves
-                divisors = [
-                    (door_count, "openings"),
-                    (leaf_count, "leaves"),
-                ]
+            # --- Determine the recommended divisor ---
+            recommended_divisor: int | None = None
+            recommended_strategy: str = "unknown"
 
-            for divisor, label in divisors:
-                if divided:
-                    break
-                per_unit, ok = _try_divide(raw_qty, divisor)
-                if ok:
-                    item.qty = per_unit
-                    item.qty_door_count = divisor
-                    item.qty_source = "divided"
-                    divided = True
-                    logger.info(
-                        f"[qty-norm] {hw_set.set_id}: '{item.name}' "
-                        f"{raw_qty} ÷ {divisor} {label} = {item.qty} "
-                        f"(category={category}, pref={pref})"
-                    )
+            if pref == "leaf" and leaf_count > 1:
+                # Per-leaf items (hinges, pivots, continuous hinges):
+                # recommend dividing by leaf count.
+                # If leaf_count is not available, fall back to door_count.
+                recommended_divisor = leaf_count
+                recommended_strategy = "leaf"
+            elif pref == "leaf" and door_count > 1:
+                # Per-leaf item but leaf_count is not available.
+                # Fall back to door_count as best-available divisor.
+                recommended_divisor = door_count
+                recommended_strategy = "door_fallback"
+            elif pref == "opening_only" and door_count > 1:
+                # Items that exist once per opening, never per-leaf.
+                # (coordinators, astragals, seals, thresholds, flush bolts)
+                recommended_divisor = door_count
+                recommended_strategy = "opening_only"
+            elif pref == "opening" and door_count > 1:
+                # Per-opening items (closers, locksets): divide by door count.
+                # Note: the old code tried leaf_count as a fallback here, which
+                # was wrong — a closer is 1 per opening not 1 per leaf.
+                recommended_divisor = door_count
+                recommended_strategy = "opening"
 
-            # Neither worked
-            if not divided:
-                if raw_qty < min(door_count, leaf_count):
-                    # qty smaller than door count → likely already per-unit
-                    item.qty_source = "parsed"
-                    item.qty_door_count = leaf_count
-                else:
-                    # Doesn't divide evenly → flag
-                    item.qty_source = "flagged"
-                    item.qty_door_count = leaf_count
-                    logger.warning(
-                        f"[qty-norm] {hw_set.set_id}: '{item.name}' "
-                        f"qty {raw_qty} doesn't divide evenly by "
-                        f"{leaf_count} leaves or {door_count} openings "
-                        f"(category={category}), flagged"
-                    )
+            if recommended_divisor and recommended_divisor > 1 and raw_qty >= recommended_divisor:
+                # Annotate: TS should divide raw_qty by recommended_divisor.
+                item.qty_door_count = recommended_divisor
+                item.qty_source = "needs_division"
+                logger.info(
+                    f"[qty-norm] {hw_set.set_id}: '{item.name}' "
+                    f"raw={raw_qty}, recommend ÷{recommended_divisor} "
+                    f"(category={category}, strategy={recommended_strategy})"
+                )
+            elif raw_qty < (recommended_divisor or 2):
+                # raw qty is smaller than the divisor — it is likely already
+                # per-opening (e.g. a single closer in a multi-door set).
+                item.qty_source = "parsed"
+                item.qty_door_count = recommended_divisor or door_count or None
+                logger.info(
+                    f"[qty-norm] {hw_set.set_id}: '{item.name}' "
+                    f"raw={raw_qty} < divisor={recommended_divisor} "
+                    f"— treating as already per-opening (parsed)"
+                )
+            else:
+                # No divisor determined (counts unavailable or item is
+                # unclassified with raw qty that doesn't fit any pattern).
+                # Leave qty_source as 'parsed' and let TS/Darrin flag it.
+                item.qty_source = "parsed"
+                item.qty_door_count = None
+                logger.warning(
+                    f"[qty-norm] {hw_set.set_id}: '{item.name}' "
+                    f"raw={raw_qty} — no divisor determined "
+                    f"(category={category}, pref={pref}, "
+                    f"door_count={door_count}, leaf_count={leaf_count})"
+                )
 
-        # Sanity-check: if divided qty still exceeds category max, flag
+        # --- Sub-heading: record generic set context for TS sub-heading logic ---
+        #
+        # If this set is a sub-heading under a larger generic group (e.g. DH3.0
+        # under DH3), the TS layer needs to know the generic total so it can
+        # re-divide items that are set-level totals rather than sub-heading totals.
+        # We do this by stamping qty_door_count with the sub-heading divisor above
+        # and trusting the heading_door_count / heading_leaf_count fields on the
+        # set for the TS sub-heading sanity pass (those are already populated).
+        #
+        # No additional mutation needed here — TS reads hw_set.heading_door_count
+        # and hw_set.generic_set_id to reconstruct the generic total on its own.
+        pass  # sub-heading annotation is implicit via heading metadata fields
+
+    # === Cross-item combination rules ===
+    # These rules catch patterns that single-item normalization can't detect.
+    _RHR_LHR_RE = re.compile(r"(?i)\b(RHR|LHR|RH|LH)\b")
+
+    for hw_set in hardware_sets:
+        # --- Rule: RHR/LHR variant pairing ---
+        # When a set has both RHR and LHR variants of the same item, each
+        # door gets ONE variant based on its hand. The combined qty for both
+        # variants should equal door count, not be divided independently.
+        items_by_base: dict[str, list[HardwareItem]] = {}
         for item in hw_set.items:
-            if item.qty_source == "divided":
-                category = _classify_hardware_item(item.name)
-                max_qty = _max_qty_for_category(category)
-                if item.qty > max_qty:
+            base_name = _RHR_LHR_RE.sub("", item.name).strip()
+            base_model = _RHR_LHR_RE.sub("", item.model).strip() if item.model else ""
+            key = f"{base_name}|{base_model}".lower()
+            items_by_base.setdefault(key, []).append(item)
+
+        for key, variants in items_by_base.items():
+            if len(variants) < 2:
+                continue
+            hands = set()
+            for v in variants:
+                m = _RHR_LHR_RE.search(v.name + " " + (v.model or ""))
+                if m:
+                    hands.add(m.group(1).upper()[:2])  # normalize to RH/LH
+            if len(hands) >= 2:
+                # Both RH and LH present — each variant's qty should be 1
+                # (one per door of that hand). If not 1, annotate so the TS
+                # layer can override.
+                #
+                # We no longer mutate v.qty here; instead we signal via
+                # qty_source='rhr_lhr_pair' so the TS layer can set qty=1
+                # with the user's awareness. The raw PDF total is preserved
+                # in qty_total as always.
+                for v in variants:
+                    if v.qty_source == "needs_division":
+                        logger.info(
+                            f"[qty-norm] {hw_set.set_id}: '{v.name}' "
+                            f"RHR/LHR variant pair detected — annotating "
+                            f"rhr_lhr_pair so TS sets qty=1"
+                        )
+                        v.qty_source = "rhr_lhr_pair"
+
+        # --- Rule: Auto operator + closer conflict ---
+        # When an automatic operator is present, it typically replaces the
+        # closer function. Flag the combination for user review.
+        has_auto_op = any(
+            _classify_hardware_item(item.name) == "auto_operator"
+            for item in hw_set.items
+        )
+        if has_auto_op:
+            for item in hw_set.items:
+                if _classify_hardware_item(item.name) == "closer":
                     logger.warning(
-                        f"[qty-norm] {hw_set.set_id}: '{item.name}' "
-                        f"divided qty {item.qty} exceeds category max "
-                        f"{max_qty}, flagging for review"
+                        f"[qty-norm] {hw_set.set_id}: auto operator AND "
+                        f"closer both present — closer '{item.name}' may "
+                        f"be redundant (operator replaces closer function)"
                     )
-                    item.qty_source = "flagged"
+                    # Don't auto-remove — flag for user review.
+                    # If division was recommended, change to 'needs_review'
+                    # so the TS layer and Darrin both see this as ambiguous.
+                    if item.qty_source == "needs_division":
+                        item.qty_source = "needs_review"
+
+
+# --- Region-extract field-mode helpers ---
+#
+# These reuse _HEADING_DOOR_HAND_RE, _FIRE_RATING_RE, and
+# parse_heading_door_metadata so detection in the rescan path matches
+# extraction-time behavior. If you change the field-parsing rules,
+# update them in Prompt 2's helpers and both paths pick it up.
+
+
+def _detect_field_from_text(raw: str) -> tuple[str, str, float]:
+    """Classify a raw text blob from a rescan region.
+
+    Returns ``(field, value, confidence)`` where ``field`` is one of
+    ``"hand"``, ``"fire_rating"``, ``"location"``, ``"unknown"``.
+    Detection order is hand → fire_rating → location → unknown so the
+    most specific patterns win. Uses ``fullmatch`` for hand and fire
+    rating — a substring match would misread ``"90Min"`` embedded in a
+    longer location string.
+    """
+    text = (raw or "").strip()
+    if not text:
+        return ("unknown", "", 0.0)
+
+    hand_match = _HEADING_DOOR_HAND_RE.fullmatch(text)
+    if hand_match:
+        return ("hand", hand_match.group(1).upper(), 0.95)
+
+    fr_match = _FIRE_RATING_RE.fullmatch(text)
+    if fr_match:
+        return ("fire_rating", fr_match.group(1), 0.9)
+
+    # Treat the blob as the tail of a heading door line. When the user
+    # selected "RECEPTION 101 to LARGE CONF. ROOM 102 LH",
+    # parse_heading_door_metadata splits off the hand for us.
+    loc, hand = parse_heading_door_metadata(text)
+    if loc and hand:
+        # Ambiguous — selection holds both. Prefer location with the hand
+        # stripped; the panel lets the user flip to hand if wrong.
+        return ("location", loc, 0.7)
+    if text:
+        return ("location", text, 0.4)
+    return ("unknown", "", 0.0)
+
+
+def _propagate_field_for_targets(
+    pdf,
+    target_page: int,
+    target_door_numbers: list[str],
+) -> dict[str, dict[str, str]]:
+    """Run ``_extract_heading_doors_on_page`` against the user's page and
+    return sibling_fills for any door in ``target_door_numbers`` the
+    parser could resolve.
+
+    Tries default extraction first, then retries once with wider
+    ``x_tolerance`` / ``y_tolerance`` to merge nearby characters split
+    by the default settings. Does NOT fall back to ``layout=False`` —
+    that flattens visual order and the parser relies on top-to-bottom
+    ``pending_door`` state.
+    """
+    if not target_door_numbers:
+        return {}
+    if target_page < 0 or target_page >= len(pdf.pages):
+        return {}
+
+    page = pdf.pages[target_page]
+    heading_map: dict[str, DoorEntry] = {}
+    _extract_heading_doors_on_page(page, heading_map)
+
+    # Aggressive retry if none of the requested doors landed.
+    if not any(dn in heading_map for dn in target_door_numbers):
+        heading_map = {}
+        _extract_heading_doors_on_page(
+            page,
+            heading_map,
+            extract_kwargs={"x_tolerance": 5, "y_tolerance": 5},
+        )
+
+    fills: dict[str, dict[str, str]] = {}
+    for dn in target_door_numbers:
+        hd = heading_map.get(dn)
+        if hd is None:
+            continue
+        fills[dn] = {
+            "location": hd.location or "",
+            "hand": hd.hand or "",
+            "fire_rating": hd.fire_rating or "",
+        }
+    return fills
 
 
 # --- Vercel Handler ---
@@ -2881,6 +4757,9 @@ def normalize_quantities(
 class handler(BaseHTTPRequestHandler):
     def do_POST(self):
         try:
+            if not require_internal_token(self):
+                return
+
             content_length = int(self.headers.get("Content-Length", 0))
             raw_body = self.rfile.read(content_length)
             try:
@@ -2916,6 +4795,35 @@ class handler(BaseHTTPRequestHandler):
             pdf_bytes = base64.b64decode(pdf_base64)
             pdf_file = io.BytesIO(pdf_bytes)
 
+            # --- Region extraction: bbox + target_page ---
+            bbox_data = data.get("bbox")
+            target_page = data.get("target_page")
+            if bbox_data is not None and target_page is not None:
+                # mode='field' returns the raw text of the cropped region
+                # + server-side detection of hand/fire_rating/location
+                # using the shared Prompt 2 regexes.
+                # mode='items' (default) retains legacy behavior.
+                # propagate=true (field-mode only) additionally re-parses
+                # the target page's heading lines for each of
+                # target_door_numbers and returns sibling_fills.
+                region_mode = data.get("mode") or "items"
+                propagate_flag = bool(data.get("propagate", False))
+                raw_target_doors = data.get("target_door_numbers") or []
+                target_door_numbers: list[str] = (
+                    [str(d) for d in raw_target_doors if isinstance(d, (str, int))]
+                    if isinstance(raw_target_doors, list)
+                    else []
+                )
+                self._handle_region_extract(
+                    pdf_bytes,
+                    target_page,
+                    bbox_data,
+                    mode=region_mode,
+                    propagate=propagate_flag,
+                    target_door_numbers=target_door_numbers,
+                )
+                return
+
             with pdfplumber.open(pdf_file, unicode_norm="NFKC") as pdf:
                 # Phase 1: Extract Hardware Sets (text-alignment detection)
                 hardware_sets = extract_all_hardware_sets(pdf)
@@ -2924,6 +4832,53 @@ class handler(BaseHTTPRequestHandler):
                 # If user provided a confirmed column mapping, use it
                 openings, tables_found = extract_opening_list(pdf, user_column_mapping)
                 logger.info(f"[extract-tables] extract_opening_list: {len(openings)} doors, {tables_found} tables")
+
+                # Phase 2.5: Schedule-format fallback — if no tabular opening
+                # list found but hardware sets exist, extract door assignments
+                # from heading blocks on hardware set pages
+                if len(openings) == 0 and len(hardware_sets) > 0:
+                    logger.info("[extract-tables] No tabular opening list found, trying inline door extraction from heading blocks")
+                    inline_doors = extract_inline_doors_from_sets(pdf, hardware_sets)
+                    if inline_doors:
+                        openings = inline_doors
+                        logger.info(f"[extract-tables] Inline door extraction found {len(openings)} doors")
+
+                # Phase 2.6: Prompt 2 — explicit Opening List ↔ Heading Page join.
+                # The Opening List table is the canonical source for the
+                # door → hw_set mapping but frequently leaves location,
+                # hand, and fire_rating blank. Heading pages carry those
+                # fields on per-door lines (plus a shared heading-level
+                # fire rating on the "Opening Description:" line). The
+                # join fills those blanks BEFORE triage/Darrin run so the
+                # Review step doesn't report data as "missing" when the
+                # PDF actually contained it.
+                heading_map = build_heading_page_map(pdf)
+                heading_doors = list(heading_map.values())
+                join_stats: dict[str, object] | None = None
+                if heading_doors:
+                    join_stats = join_opening_list_with_heading_pages(
+                        openings, heading_doors
+                    )
+                    logger.info(
+                        f"[extract-tables] OL↔Heading join: "
+                        f"+{join_stats['added']} new, "
+                        f"+{join_stats['enriched']} enriched, "
+                        f"{join_stats['opening_list_only']} opening-list-only, "
+                        f"{join_stats['heading_only']} heading-only "
+                        f"(total now {len(openings)})"
+                    )
+                    ol_sample = join_stats["opening_list_only_numbers"]
+                    hd_sample = join_stats["heading_only_numbers"]
+                    if ol_sample:
+                        logger.info(
+                            f"[extract-tables] OL↔Heading join: "
+                            f"opening-list-only samples: {ol_sample}"
+                        )
+                    if hd_sample:
+                        logger.info(
+                            f"[extract-tables] OL↔Heading join: "
+                            f"heading-only samples: {hd_sample}"
+                        )
 
                 # Phase 3: Extract reference tables
                 reference_codes = extract_reference_tables(pdf)
@@ -2957,6 +4912,38 @@ class handler(BaseHTTPRequestHandler):
                     confidence = "medium"
                     notes.append("No structured tables detected — data extracted via text position analysis.")
 
+                # Prompt 2: surface OL↔Heading anomaly totals so Darrin CP2
+                # and the UI reviewer see the true magnitude of each bucket.
+                # Only append when non-zero — the common case is zero and
+                # there's no need to pollute notes. Total counts (not just
+                # the truncated samples) are included so e.g. "47 heading-
+                # only doors" doesn't look like 5 in the prompt context.
+                if join_stats is not None:
+                    ol_only = int(join_stats["opening_list_only"])
+                    hd_only = int(join_stats["heading_only"])
+                    if ol_only:
+                        sample = join_stats["opening_list_only_numbers"]
+                        sample_str = (
+                            f" (first: {', '.join(sample)})" if sample else ""
+                        )
+                        notes.append(
+                            f"{ol_only} door(s) appear in the Opening List but "
+                            f"have no matching heading-page entry — likely a "
+                            f"missed heading page or stale Opening List row."
+                            f"{sample_str}"
+                        )
+                    if hd_only:
+                        sample = join_stats["heading_only_numbers"]
+                        sample_str = (
+                            f" (first: {', '.join(sample)})" if sample else ""
+                        )
+                        notes.append(
+                            f"{hd_only} door(s) appear only on heading pages "
+                            f"with no Opening List row — likely a gap in the "
+                            f"Opening List table extraction."
+                            f"{sample_str}"
+                        )
+
                 result = ExtractionResult(
                     success=len(confirmed_doors) > 0 or len(hardware_sets) > 0,
                     openings=confirmed_doors,
@@ -2980,11 +4967,196 @@ class handler(BaseHTTPRequestHandler):
                 error=f"Extraction failed: {str(e)}"
             ))
 
+    def _handle_region_extract(
+        self,
+        pdf_bytes: bytes,
+        target_page: int,
+        bbox_data: dict,
+        mode: str = "items",
+        propagate: bool = False,
+        target_door_numbers: list[str] | None = None,
+    ):
+        """Extract from a cropped region of a single PDF page.
+
+        mode='items' (legacy): attempt to parse hardware items from the crop.
+
+        mode='field': return the cropped text plus detected field type using
+            the shared Prompt-2 regexes (_HEADING_DOOR_HAND_RE,
+            _FIRE_RATING_RE, parse_heading_door_metadata). Used by the
+            rescan field-assignment flow to fill missing location / hand /
+            fire-rating values on specific doors. Detection lives here —
+            not in TS — so extraction-time and rescan-time share one
+            implementation of the heuristics.
+
+        mode='field' + propagate=True: additionally run
+            _extract_heading_doors_on_page over the target page and return
+            sibling_fills for any of target_door_numbers whose per-door line
+            the parser matched. The TS layer then offers the user a preview.
+        """
+        try:
+            pdf_file = io.BytesIO(pdf_bytes)
+            with pdfplumber.open(pdf_file, unicode_norm="NFKC") as pdf:
+                if target_page < 0 or target_page >= len(pdf.pages):
+                    self._send_region_json(400, RegionExtractionResult(
+                        success=False,
+                        error=f"Page {target_page} out of range (PDF has {len(pdf.pages)} pages)"
+                    ))
+                    return
+
+                page = pdf.pages[target_page]
+                width = float(page.width)
+                height = float(page.height)
+
+                # Convert 0-1 percentage bbox to PDF points
+                x0 = float(bbox_data.get("x0", 0)) * width
+                y0 = float(bbox_data.get("y0", 0)) * height
+                x1 = float(bbox_data.get("x1", 1)) * width
+                y1 = float(bbox_data.get("y1", 1)) * height
+
+                # Clamp to page bounds
+                x0 = max(0, min(x0, width))
+                y0 = max(0, min(y0, height))
+                x1 = max(0, min(x1, width))
+                y1 = max(0, min(y1, height))
+
+                if x1 - x0 < 1 or y1 - y0 < 1:
+                    self._send_region_json(400, RegionExtractionResult(
+                        success=False,
+                        error="Selection region is too small"
+                    ))
+                    return
+
+                logger.info(
+                    f"[region-extract] mode={mode} page={target_page}, "
+                    f"bbox=({x0:.1f}, {y0:.1f}, {x1:.1f}, {y1:.1f}) "
+                    f"page_size=({width:.1f}, {height:.1f})"
+                )
+
+                # pdfplumber crop: (x0, top, x1, bottom)
+                cropped = page.crop((x0, y0, x1, y1))
+                cropped_text = cropped.extract_text() or ""
+
+                # Field mode: return raw text + server-side detection of
+                # hand / fire_rating / location using the SAME regexes
+                # Prompt 2 uses at extraction time. Keeps the heuristics
+                # in one place so they can't drift between extract-time
+                # and rescan-time.
+                if mode == "field":
+                    stripped = cropped_text.strip()
+                    detected_field, detected_value, detection_conf = (
+                        _detect_field_from_text(stripped)
+                    )
+
+                    # Propagation branch: also re-run the heading-page
+                    # parser over JUST this page and report which of
+                    # target_door_numbers it resolved. The TS layer then
+                    # filters to still-missing siblings and surfaces them.
+                    sibling_fills: dict[str, dict[str, str]] = {}
+                    if propagate and target_door_numbers:
+                        try:
+                            sibling_fills = _propagate_field_for_targets(
+                                pdf, target_page, target_door_numbers
+                            )
+                        except Exception as prop_err:
+                            # Propagation is best-effort — never fail the
+                            # primary detection because of a parser hiccup.
+                            logger.warning(
+                                "[region-extract] propagation error: %s",
+                                prop_err,
+                            )
+
+                    logger.info(
+                        "[region-extract] field mode: %d chars, "
+                        "detected=%s conf=%.2f, sibling_fills=%d",
+                        len(stripped),
+                        detected_field,
+                        detection_conf,
+                        len(sibling_fills),
+                    )
+                    self._send_region_json(200, RegionExtractionResult(
+                        success=bool(stripped),
+                        items=[],
+                        raw_text=stripped,
+                        detected_field=detected_field,
+                        detected_value=detected_value,
+                        detection_confidence=detection_conf,
+                        sibling_fills=sibling_fills,
+                        error="" if stripped else "No text found in selected region",
+                    ))
+                    return
+
+                items: list[HardwareItem] = []
+
+                # Strategy 1: Full set extraction (works if heading is in selection)
+                sets = extract_hardware_sets_from_page(cropped, cropped_text)
+                for s in sets:
+                    items.extend(s.items)
+
+                # Strategy 2: Direct table extraction on cropped region
+                if not items:
+                    tables = cropped.extract_tables(
+                        table_settings={
+                            "vertical_strategy": "text",
+                            "horizontal_strategy": "text",
+                            "intersection_tolerance": 5,
+                            "snap_tolerance": 5,
+                            "join_tolerance": 8,
+                            "min_words_vertical": 2,
+                            "min_words_horizontal": 1,
+                            "text_x_tolerance": 5,
+                            "text_y_tolerance": 3,
+                        }
+                    )
+                    if not tables:
+                        tables = cropped.extract_tables(
+                            table_settings={
+                                "vertical_strategy": "lines",
+                                "horizontal_strategy": "lines",
+                                "intersection_tolerance": 5,
+                                "snap_tolerance": 5,
+                            }
+                        )
+                    if tables:
+                        items = parse_items_from_raw_tables(tables)
+
+                # Strategy 3: Text-based fallback
+                if not items:
+                    items = extract_hw_items_from_text(cropped_text)
+
+                # Deduplicate
+                if items:
+                    items = deduplicate_hardware_items(items)
+
+                logger.info(f"[region-extract] Extracted {len(items)} items from cropped region")
+
+                self._send_region_json(200, RegionExtractionResult(
+                    success=len(items) > 0,
+                    items=items,
+                    raw_text=cropped_text.strip(),
+                    error="" if items else "No hardware items found in selected region"
+                ))
+        except Exception as e:
+            traceback.print_exc()
+            self._send_region_json(500, RegionExtractionResult(
+                success=False,
+                error=f"Region extraction failed: {str(e)}"
+            ))
+
     def _send_json(self, status: int, result: ExtractionResult):
         body = result.model_dump_json()
         body_bytes = body.encode()
         logger.info(f"[extract-tables] Sending response: status={status}, body_size={len(body_bytes)} bytes, "
                      f"openings={len(result.openings)}, hw_sets={len(result.hardware_sets)}")
+        self.send_response(status)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body_bytes)))
+        self.end_headers()
+        self.wfile.write(body_bytes)
+
+    def _send_region_json(self, status: int, result: RegionExtractionResult):
+        body = result.model_dump_json()
+        body_bytes = body.encode()
+        logger.info(f"[region-extract] Sending response: status={status}, items={len(result.items)}")
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body_bytes)))
