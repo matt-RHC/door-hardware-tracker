@@ -3,6 +3,7 @@
  * Canonical implementations extracted from chunk/route.ts (S-067 consolidation).
  */
 import Anthropic from '@anthropic-ai/sdk'
+import * as Sentry from '@sentry/nextjs'
 
 /**
  * Construct an Anthropic client tuned for this app's workload.
@@ -2854,6 +2855,38 @@ export function buildPerOpeningItems(
         })
       }
     }
+  }
+
+  // Diagnostic breadcrumb — shape of the per-opening output. Not an error,
+  // so Sentry will only surface it as context when a later event fires on
+  // this request. Capped per-opening counts to stay under breadcrumb size.
+  try {
+    const histogram: Record<string, number> = {}
+    for (const row of rows) {
+      const k = String(row[fkColumn])
+      histogram[k] = (histogram[k] ?? 0) + 1
+    }
+    const doorRowCount = rows.filter(r => /^Door(\s|$|\()/.test(String(r['name'] ?? ''))).length
+    const frameRowCount = rows.filter(r => String(r['name'] ?? '') === 'Frame').length
+    const activeLeafRowCount = rows.filter(r => String(r['name'] ?? '') === 'Door (Active Leaf)').length
+    const inactiveLeafRowCount = rows.filter(r => String(r['name'] ?? '') === 'Door (Inactive Leaf)').length
+    Sentry.addBreadcrumb({
+      category: 'extraction.helpers.buildPerOpeningItems',
+      level: 'info',
+      message: 'buildPerOpeningItems completed',
+      data: {
+        openings: openings.length,
+        items: rows.length,
+        doorRows: doorRowCount,
+        frameRows: frameRowCount,
+        activeLeafRows: activeLeafRowCount,
+        inactiveLeafRows: inactiveLeafRowCount,
+        perOpeningHistogramSample: JSON.stringify(histogram).slice(0, 4000),
+      },
+    })
+  } catch {
+    // Breadcrumb failures must never break the pipeline. Sentry may not be
+    // initialized in unit-test contexts — swallow silently.
   }
 
   return rows

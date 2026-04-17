@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import * as Sentry from '@sentry/nextjs'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { createExtractionRun, updateExtractionRun, writeStagingData, promoteExtraction } from '@/lib/extraction-staging'
 import type { StagingOpening } from '@/lib/extraction-staging'
@@ -11,9 +12,22 @@ import {
   normalizeDoorNumber,
   wouldProduceZeroItems,
 } from '@/lib/parse-pdf-helpers'
+import { validateExtractionRun, summarizeReport } from '@/lib/extraction-invariants'
+import type { InvariantViolation } from '@/lib/extraction-invariants'
 import { logActivity } from '@/lib/activity-log'
 import { validateJson, errorResponse } from '@/lib/api-helpers/validate'
 import { ParsePdfSaveRequestSchema } from '@/lib/schemas/parse-pdf'
+
+// Feature-flag the invariants gate for the first week so we can ship safely
+// and flip the default on by removing the env check. '1' | 'true' enables it.
+// Leaving the flag unset means invariants still RUN (they are cheap and
+// side-effect-free) but only 'warning'-level results reach the client and
+// blockers do not fail the save. This gives us one-click reversibility if
+// the rule set has a false positive we didn't catch.
+function invariantGateEnabled(): boolean {
+  const v = (process.env.DHT_INVARIANT_CHECKS ?? '').toLowerCase()
+  return v === '1' || v === 'true'
+}
 
 // --- Shared: check for unmatched sets ---
 //
@@ -199,6 +213,49 @@ export async function POST(request: NextRequest) {
       { extraction_run_id: runId },
     )
 
+    // Breadcrumbs (not errors) — give us context in Sentry for any later
+    // alert that fires on this run, without adding noise by themselves.
+    const totalHeadingDoors = hardwareSets.reduce(
+      (s, set) => s + (set.heading_doors?.length ?? 0),
+      0,
+    )
+    Sentry.addBreadcrumb({
+      category: 'extraction.save.input',
+      level: 'info',
+      message: 'buildPerOpeningItems input',
+      data: {
+        runId,
+        openings: (stagingOpeningRows ?? []).length,
+        hardwareSets: hardwareSets.length,
+        headingDoorsTotal: totalHeadingDoors,
+      },
+    })
+
+    const doorRowCount = allItems.filter(r => /^Door(\s|$|\()/.test(String(r['name'] ?? ''))).length
+    const frameRowCount = allItems.filter(r => String(r['name'] ?? '') === 'Frame').length
+    const activeLeafRowCount = allItems.filter(r => String(r['name'] ?? '') === 'Door (Active Leaf)').length
+    const inactiveLeafRowCount = allItems.filter(r => String(r['name'] ?? '') === 'Door (Inactive Leaf)').length
+    const perOpeningHistogram: Record<string, number> = {}
+    for (const row of allItems) {
+      const k = String(row['staging_opening_id'])
+      perOpeningHistogram[k] = (perOpeningHistogram[k] ?? 0) + 1
+    }
+    Sentry.addBreadcrumb({
+      category: 'extraction.save.output',
+      level: 'info',
+      message: 'buildPerOpeningItems output',
+      data: {
+        runId,
+        items: allItems.length,
+        doorRows: doorRowCount,
+        frameRows: frameRowCount,
+        activeLeafRows: activeLeafRowCount,
+        inactiveLeafRows: inactiveLeafRowCount,
+        // Truncated to stay under Sentry's ~16kb breadcrumb data cap.
+        perOpeningHistogramSample: JSON.stringify(perOpeningHistogram).slice(0, 4000),
+      },
+    })
+
     // Defensive diagnostic: if any staging opening got zero rows, the orphan
     // filter is out of sync with buildPerOpeningItems. That's a code bug —
     // surface it loudly instead of letting merge_extraction reject with the
@@ -308,6 +365,83 @@ export async function POST(request: NextRequest) {
 
     console.log(`Auto-promote complete: ${promoteResult.openingsPromoted} openings, ${promoteResult.itemsPromoted} items`)
 
+    // 9. Post-promote invariants gate.
+    //
+    // Runs regardless of the feature flag so we always have diagnostic
+    // output; only the *enforcement* is gated on DHT_INVARIANT_CHECKS so
+    // a false positive in a rule doesn't block production saves during
+    // the rollout week. Warnings are always returned to the wizard so the
+    // user sees context toasts.
+    let invariantBlockers: InvariantViolation[] = []
+    let invariantWarnings: InvariantViolation[] = []
+    let invariantSkipped: string[] = []
+    try {
+      const report = await validateExtractionRun(runId, supabase, { hardwareSets })
+      invariantBlockers = report.violations.filter(v => v.severity === 'blocker')
+      invariantWarnings = report.violations.filter(v => v.severity === 'warning')
+      invariantSkipped = report.skippedRules
+
+      console.log(`[save] Invariants: ${summarizeReport(report)}`)
+
+      if (report.blockers > 0) {
+        const ruleNames = Array.from(new Set(report.violations.filter(v => v.severity === 'blocker').map(v => v.rule)))
+        // Mark the run so downstream views (activity log, admin UI) know
+        // this extraction is suspect even though promote_extraction() ran.
+        try {
+          await updateExtractionRun(supabase, runId, { status: 'completed_with_issues' })
+        } catch (e) {
+          console.warn('[save] Failed to mark run as completed_with_issues:', e)
+        }
+
+        // Single Sentry event with the rule names in tags so issues
+        // auto-group by rule instead of producing one event per violation.
+        Sentry.captureMessage('Extraction invariants violated after promotion', {
+          level: 'error',
+          tags: {
+            invariant_violation: 'true',
+            extraction_run_id: runId,
+            project_id: projectId,
+            rules: ruleNames.join(','),
+          },
+          extra: {
+            blockers: report.blockers,
+            warnings: report.warnings,
+            violations: report.violations,
+          },
+        })
+
+        if (invariantGateEnabled()) {
+          return NextResponse.json({
+            success: false,
+            partial: isPartialSave,
+            error: 'Extraction completed with invariant violations.',
+            stagingSuccess: true,
+            openingsCount: promoteResult.openingsPromoted ?? stagingResult.openingsCount,
+            itemsCount: promoteResult.itemsPromoted ?? itemsInserted,
+            expectedItemsCount: allItems.length,
+            hardwareSets: hardwareSets.length,
+            unmatchedSets: unmatchedSets.length > 0 ? unmatchedSets : undefined,
+            failedChunks: isPartialSave ? failedItemChunks : undefined,
+            extraction_run_id: runId,
+            promoted: true,
+            invariantBlockers,
+            invariantWarnings,
+            invariantSkippedRules: invariantSkipped,
+          }, { status: 500 })
+        }
+      }
+    } catch (invariantErr) {
+      // The validator throwing is a bug in the validator itself, not a
+      // data problem. Log it and continue — never block a save because
+      // the invariants layer broke.
+      console.error('[save] Invariant validation errored:', invariantErr)
+      Sentry.captureException(invariantErr, {
+        tags: { invariant_violation: 'false', invariant_validator_error: 'true' },
+      })
+      invariantBlockers = []
+      invariantWarnings = []
+    }
+
     // Audit trail
     await logActivity({
       projectId,
@@ -337,6 +471,9 @@ export async function POST(request: NextRequest) {
       orphanDoorsFiltered: orphanDoors.length > 0
         ? { count: orphanDoors.length, doorNumbers: orphanDoors.map(d => d.door_number) }
         : undefined,
+      invariantBlockers,
+      invariantWarnings,
+      invariantSkippedRules: invariantSkipped.length > 0 ? invariantSkipped : undefined,
     })
   } catch (error) {
     console.error('Save error:', error)

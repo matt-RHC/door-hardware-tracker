@@ -10,7 +10,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:py": "pytest tests/ -v",
-    "tracking": "node --env-file=.env.local scripts/tracking.mjs"
+    "tracking": "node --env-file=.env.local scripts/tracking.mjs",
+    "audit:invariants": "tsx --env-file=.env.local scripts/audit-extraction-invariants.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.82.0",
@@ -37,6 +38,7 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.1",
     "tailwindcss": "^4",
+    "tsx": "^4.21.0",
     "typescript": "^5",
     "vitest": "^4.1.2"
   }
