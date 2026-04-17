@@ -49,22 +49,25 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Look up invitee by email using the admin client (auth.admin.listUsers
-    // is not available on the client SDK, so we query profiles or use the
-    // admin API). Use the admin client to find the user by email.
+    // Look up invitee by email via the admin client. The supabase-js admin
+    // SDK does NOT support an email filter on listUsers (see
+    // /api/auth/resolve for the same note), so we paginate until the user
+    // is found. Previously this used `perPage: 1, page: 1` which returned
+    // only the first user in auth.users pagination order — every invite
+    // for anyone other than that one user silently 404'd.
     const adminSupabase = createAdminSupabaseClient()
-    const { data: { users }, error: lookupError } = await adminSupabase.auth.admin.listUsers({
-      perPage: 1,
-      page: 1,
-    })
-
-    // Filter by email since listUsers doesn't support email filter directly
-    // Use getUserByEmail via the admin API
+    const emailLower = email.toLowerCase()
+    const PER_PAGE = 1000
+    const MAX_PAGES = 50
     let inviteeId: string | null = null
-    // Prefer the direct lookup method
-    const matchedUsers = (users ?? []).filter(u => u.email === email.toLowerCase())
-    if (matchedUsers.length > 0) {
-      inviteeId = matchedUsers[0].id
+    let lookupError: { message: string } | null = null
+    for (let page = 1; page <= MAX_PAGES; page++) {
+      const { data, error } = await adminSupabase.auth.admin.listUsers({ perPage: PER_PAGE, page })
+      if (error) { lookupError = error; break }
+      const users = data?.users ?? []
+      const match = users.find(u => u.email?.toLowerCase() === emailLower)
+      if (match) { inviteeId = match.id; break }
+      if (users.length < PER_PAGE) break
     }
 
     if (lookupError || !inviteeId) {
