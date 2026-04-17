@@ -524,7 +524,7 @@ export default function ImportWizard({
   // ─── Job wizard flow rendering ───
   if (useJobWizard) {
     return (
-      <div className="fixed inset-0 bg-black/80 backdrop-blur-lg flex flex-col z-50">
+      <div className="fixed inset-0 bg-background flex flex-col z-50">
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-border-dim-strong">
           <h2 className="text-lg font-semibold text-primary">
@@ -647,7 +647,7 @@ export default function ImportWizard({
 
   // ─── Legacy wizard flow rendering (feature flag off) ───
   return (
-    <div className="fixed inset-0 bg-black/80 backdrop-blur-lg flex flex-col z-50">
+    <div className="fixed inset-0 bg-background flex flex-col z-50">
       {/* Header */}
       <div className="flex items-center justify-between px-6 py-4 border-b border-border-dim-strong">
         <h2 className="text-lg font-semibold text-primary">

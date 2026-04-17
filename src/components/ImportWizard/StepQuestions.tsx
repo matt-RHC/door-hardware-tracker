@@ -20,24 +20,88 @@ const DEBOUNCE_MS = 1500
 
 // ─── Helpers ───
 
-function formatPageList(pages: number[]): string {
-  if (pages.length === 0) return "none"
-  if (pages.length <= 6) return pages.join(", ")
-  return `${pages.slice(0, 5).join(", ")}, +${pages.length - 5} more`
+/**
+ * Render a list of PDF page numbers as clickable chips. Clicking a page
+ * scrolls the embedded PDF preview to that page. Long lists collapse to
+ * the first 6 with an "+N more" expander.
+ *
+ * Page numbers from the classifier may be 0- or 1-indexed depending on
+ * upstream; we display them as-is but send `page+1` to the PDF anchor
+ * when the value looks 0-indexed (i.e. zero is present).
+ */
+function PageList({
+  pages,
+  onJump,
+}: {
+  pages: number[]
+  onJump: (page: number) => void
+}) {
+  const [expanded, setExpanded] = useState(false)
+  if (pages.length === 0) return <span className="text-tertiary">none</span>
+  const collapseAt = 6
+  const shown = expanded || pages.length <= collapseAt ? pages : pages.slice(0, collapseAt - 1)
+  const hidden = pages.length - shown.length
+  return (
+    <span className="inline-flex flex-wrap items-center gap-1 align-middle">
+      {shown.map((p, i) => (
+        <span key={`${p}-${i}`} className="inline-flex items-center">
+          <button
+            type="button"
+            onClick={() => onJump(p)}
+            className="px-1.5 py-0.5 rounded bg-accent-dim border border-accent/40 text-accent hover:bg-accent/20 hover:border-accent transition-colors text-xs font-medium min-h-6"
+            title={`Jump PDF to page ${p}`}
+          >
+            {p}
+          </button>
+          {i < shown.length - 1 && <span className="text-tertiary">,</span>}
+        </span>
+      ))}
+      {hidden > 0 && (
+        <button
+          type="button"
+          onClick={() => setExpanded(true)}
+          className="px-1.5 py-0.5 rounded border border-border-dim text-secondary hover:text-primary hover:border-accent/40 transition-colors text-xs font-medium min-h-6"
+        >
+          +{hidden} more
+        </button>
+      )}
+    </span>
+  )
 }
 
-function joinWithAnd(items: string[]): string {
-  if (items.length === 0) return ""
-  if (items.length === 1) return items[0]
-  if (items.length === 2) return `${items[0]} and ${items[1]}`
-  return `${items.slice(0, -1).join(", ")}, and ${items[items.length - 1]}`
-}
-
-function compactSetIds(setIds: string[]): string {
-  if (setIds.length === 0) return ""
-  const unique = Array.from(new Set(setIds))
-  if (unique.length <= 6) return unique.join(", ")
-  return `${unique.slice(0, 5).join(", ")}, +${unique.length - 5} more`
+/**
+ * Render a list of text chips (hardware set ids, manufacturer names) with
+ * the same collapse/expand affordance so the user can see everything
+ * without truncation.
+ */
+function ChipList({ items }: { items: string[] }) {
+  const [expanded, setExpanded] = useState(false)
+  if (items.length === 0) return null
+  const unique = Array.from(new Set(items))
+  const collapseAt = 6
+  const shown = expanded || unique.length <= collapseAt ? unique : unique.slice(0, collapseAt - 1)
+  const hidden = unique.length - shown.length
+  return (
+    <span className="inline-flex flex-wrap items-center gap-1 align-middle">
+      {shown.map((item, i) => (
+        <span
+          key={`${item}-${i}`}
+          className="px-1.5 py-0.5 rounded bg-tint border border-border-dim text-secondary text-xs font-medium"
+        >
+          {item}
+        </span>
+      ))}
+      {hidden > 0 && (
+        <button
+          type="button"
+          onClick={() => setExpanded(true)}
+          className="px-1.5 py-0.5 rounded border border-border-dim text-secondary hover:text-primary hover:border-accent/40 transition-colors text-xs font-medium min-h-6"
+        >
+          +{hidden} more
+        </button>
+      )}
+    </span>
+  )
 }
 
 // Map each Darrin question to the constraint question_key the backend triage
@@ -70,7 +134,8 @@ export default function StepQuestions({
 }: StepQuestionsProps) {
   const [answers, setAnswers] = useState<Record<string, unknown>>({})
   const [saving, setSaving] = useState(false)
-  const [pdfOpen, setPdfOpen] = useState(false)
+  const [pdfOpen, setPdfOpen] = useState(true)
+  const [pdfPage, setPdfPage] = useState<number | null>(null)
   const [doorCountInput, setDoorCountInput] = useState("")
   const [manufacturerInput, setManufacturerInput] = useState("")
   const [correctionOpen, setCorrectionOpen] = useState(false)
@@ -78,6 +143,7 @@ export default function StepQuestions({
   const [correctionError, setCorrectionError] = useState<string | null>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const lastSavedRef = useRef<string>("")
+  const pdfFrameRef = useRef<HTMLIFrameElement | null>(null)
 
   const phaseData = job.phaseData
   const { classify, extraction, triage } = phaseData
@@ -126,6 +192,35 @@ export default function StepQuestions({
       if (pdfUrl) URL.revokeObjectURL(pdfUrl)
     }
   }, [pdfUrl])
+
+  // Classifier page numbers may be 0- or 1-indexed. Detect by looking for
+  // a zero anywhere — PDFs shown by the browser's viewer are 1-indexed
+  // via the `#page=N` fragment.
+  const classifierIsZeroIndexed = useMemo(() => {
+    if (!classifyFull) return false
+    const all = [
+      ...classifyFull.schedule_pages,
+      ...classifyFull.hardware_pages,
+      ...classifyFull.reference_pages,
+      ...classifyFull.cover_pages,
+      ...classifyFull.skipped_pages,
+    ]
+    return all.some((p) => p === 0)
+  }, [classifyFull])
+
+  const handleJumpToPage = useCallback(
+    (page: number) => {
+      if (!pdfUrl) return
+      const pdfPageNum = classifierIsZeroIndexed ? page + 1 : page
+      setPdfPage(pdfPageNum)
+      setPdfOpen(true)
+      // Scroll the preview into view so the user sees the jump happen.
+      requestAnimationFrame(() => {
+        pdfFrameRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
+      })
+    },
+    [pdfUrl, classifierIsZeroIndexed],
+  )
 
   // ─── Auto-save answers (debounced) ───
   const saveAnswers = useCallback(
@@ -259,9 +354,10 @@ export default function StepQuestions({
       >
         Guided Questions
       </h3>
-      <p className="text-sm text-tertiary mt-1 mb-5">
-        Darrin walks through findings as he picks them up. Answer inline —
-        your input feeds the final triage pass.
+      <p className="text-sm text-secondary mt-1 mb-5">
+        Darrin walks through what he found. <span className="text-primary">
+        Click any page number</span> to pull it up in the PDF below, then use
+        the chips to confirm each finding or flag it as off.
       </p>
 
       {/* ─── Progress section ─── */}
@@ -302,21 +398,32 @@ export default function StepQuestions({
         )}
       </div>
 
-      {/* ─── PDF Preview toggle ─── */}
+      {/* ─── PDF Preview (open by default so users can verify findings) ─── */}
       {pdfUrl && (
         <div className="mb-6">
-          <button
-            type="button"
-            onClick={() => setPdfOpen((v) => !v)}
-            className="flex items-center gap-2 text-sm text-accent hover:text-accent/80 font-medium transition-colors"
-          >
-            <span className="text-xs">{pdfOpen ? "\u25BC" : "\u25B6"}</span>
-            {pdfOpen ? "Hide PDF" : "View Uploaded PDF"}
-          </button>
+          <div className="flex items-center justify-between gap-2 mb-2">
+            <button
+              type="button"
+              onClick={() => setPdfOpen((v) => !v)}
+              className="flex items-center gap-2 text-sm text-accent hover:text-accent/80 font-medium transition-colors"
+            >
+              <span className="text-xs">{pdfOpen ? "\u25BC" : "\u25B6"}</span>
+              {pdfOpen ? "Hide PDF" : "View Uploaded PDF"}
+              {pdfPage != null && pdfOpen && (
+                <span className="text-tertiary text-xs font-normal">
+                  &mdash; showing page {pdfPage}
+                </span>
+              )}
+            </button>
+            <span className="text-[11px] text-tertiary">
+              Tip: click any <span className="text-accent">page number</span> below to jump here.
+            </span>
+          </div>
           {pdfOpen && (
-            <div className="mt-2 border border-border-dim rounded-lg overflow-hidden">
+            <div className="border border-border-dim rounded-lg overflow-hidden">
               <iframe
-                src={pdfUrl}
+                ref={pdfFrameRef}
+                src={pdfPage != null ? `${pdfUrl}#page=${pdfPage}` : pdfUrl}
                 title="Uploaded PDF preview"
                 className="w-full bg-white"
                 style={{ height: "500px" }}
@@ -362,63 +469,89 @@ export default function StepQuestions({
                   : "scanning"
               }
               message={
-                <>
-                  {classify.total_pages} pages total. I found the{" "}
-                  <span className="text-accent">door schedule</span> on
-                  page{classifyFull.schedule_pages.length === 1 ? "" : "s"}{" "}
-                  <span className="text-accent">
-                    {formatPageList(classifyFull.schedule_pages)}
-                  </span>
-                  ,{" "}
-                  <span className="text-accent">hardware headings</span> on
-                  page{classifyFull.hardware_pages.length === 1 ? "" : "s"}{" "}
-                  <span className="text-accent">
-                    {formatPageList(classifyFull.hardware_pages)}
-                  </span>
-                  {hardwareSetIdsSummary && (
-                    <>
-                      {" "}(
-                      <span className="text-accent/80">
-                        {hardwareSetIdsSummary}
+                <div className="space-y-2">
+                  <div>
+                    I went through all{" "}
+                    <span className="text-primary font-semibold">
+                      {classify.total_pages}
+                    </span>{" "}
+                    pages. Here&apos;s what I found &mdash; click any page number
+                    to check it against the PDF above.
+                  </div>
+                  <ul className="space-y-1.5 text-sm">
+                    <li>
+                      <span className="text-accent font-medium">
+                        Door schedule
                       </span>
-                      )
-                    </>
-                  )}
-                  {classifyFull.reference_pages.length > 0 && (
-                    <>
-                      , and{" "}
-                      <span className="text-secondary">reference tables</span> on
-                      page{classifyFull.reference_pages.length === 1 ? "" : "s"}{" "}
-                      <span className="text-accent">
-                        {formatPageList(classifyFull.reference_pages)}
-                      </span>
-                    </>
-                  )}
-                  .{" "}
-                  {classifyFull.cover_pages.length > 0 && (
-                    <>
-                      Page{classifyFull.cover_pages.length === 1 ? "" : "s"}{" "}
                       <span className="text-tertiary">
-                        {formatPageList(classifyFull.cover_pages)}
-                      </span>{" "}
-                      look
-                      {classifyFull.cover_pages.length === 1 ? "s" : ""} like
-                      cover page{classifyFull.cover_pages.length === 1 ? "" : "s"}{" "}
-                      &mdash; I&apos;ll skip{" "}
-                      {classifyFull.cover_pages.length === 1 ? "it" : "them"}.{" "}
-                    </>
-                  )}
-                  {heuristicFlags.length === 0
-                    ? "Sound right?"
-                    : "A couple things caught my eye:"}
-                </>
+                        {" "}&middot; {classifyFull.schedule_pages.length} page
+                        {classifyFull.schedule_pages.length === 1 ? "" : "s"}:{" "}
+                      </span>
+                      <PageList
+                        pages={classifyFull.schedule_pages}
+                        onJump={handleJumpToPage}
+                      />
+                    </li>
+                    <li>
+                      <span className="text-accent font-medium">
+                        Hardware headings
+                      </span>
+                      <span className="text-tertiary">
+                        {" "}&middot; {classifyFull.hardware_pages.length} page
+                        {classifyFull.hardware_pages.length === 1 ? "" : "s"}:{" "}
+                      </span>
+                      <PageList
+                        pages={classifyFull.hardware_pages}
+                        onJump={handleJumpToPage}
+                      />
+                      {hardwareSetIdsSummary && (
+                        <div className="text-tertiary text-xs mt-0.5 ml-4">
+                          sets detected: {hardwareSetIdsSummary}
+                        </div>
+                      )}
+                    </li>
+                    {classifyFull.reference_pages.length > 0 && (
+                      <li>
+                        <span className="text-secondary font-medium">
+                          Reference tables
+                        </span>
+                        <span className="text-tertiary">
+                          {" "}&middot;{" "}
+                        </span>
+                        <PageList
+                          pages={classifyFull.reference_pages}
+                          onJump={handleJumpToPage}
+                        />
+                      </li>
+                    )}
+                    {classifyFull.cover_pages.length > 0 && (
+                      <li>
+                        <span className="text-tertiary font-medium">
+                          Cover / skip
+                        </span>
+                        <span className="text-tertiary">
+                          {" "}&middot;{" "}
+                        </span>
+                        <PageList
+                          pages={classifyFull.cover_pages}
+                          onJump={handleJumpToPage}
+                        />
+                      </li>
+                    )}
+                  </ul>
+                  <div>
+                    {heuristicFlags.length === 0
+                      ? "Does the breakdown above look right?"
+                      : "A couple things caught my eye:"}
+                  </div>
+                </div>
               }
             >
               <DarrinAction
                 selected={answers[QUESTION_KEYS.classifyCheck] === "ok"}
                 onClick={() => updateAnswer(QUESTION_KEYS.classifyCheck, "ok")}
               >
-                Looks right &#10003;
+                Looks right
               </DarrinAction>
               <DarrinAction
                 selected={
@@ -430,7 +563,7 @@ export default function StepQuestions({
                   setCorrectionOpen(true)
                 }}
               >
-                Something&apos;s off &mdash; let me check
+                Something&apos;s off &mdash; let me fix it
               </DarrinAction>
             </DarrinMessage>
 
@@ -475,21 +608,36 @@ export default function StepQuestions({
           <DarrinMessage
             avatar="excited"
             message={
-              <>
-                First pass done &mdash; I found{" "}
-                <span className="text-accent font-semibold">{extraction.door_count}</span>{" "}
-                openings across{" "}
-                <span className="text-accent font-semibold">{extraction.hw_set_count}</span>{" "}
-                hardware sets ({compactSetIds(extraction.hw_sets)}). Still
-                refining, but does that ballpark match your scope?
-              </>
+              <div className="space-y-2">
+                <div>
+                  First pass done &mdash; I pulled{" "}
+                  <span className="text-accent font-semibold">
+                    {extraction.door_count}
+                  </span>{" "}
+                  openings across{" "}
+                  <span className="text-accent font-semibold">
+                    {extraction.hw_set_count}
+                  </span>{" "}
+                  hardware sets.
+                </div>
+                {extraction.hw_sets.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+                    <span className="text-tertiary">sets:</span>
+                    <ChipList items={extraction.hw_sets} />
+                  </div>
+                )}
+                <div>
+                  Does that ballpark match the scope you uploaded? If you know the
+                  opening count, type it in.
+                </div>
+              </div>
             }
           >
             <DarrinAction
               selected={answers[QUESTION_KEYS.doorCount] === "about_right"}
               onClick={() => updateAnswer(QUESTION_KEYS.doorCount, "about_right")}
             >
-              That&apos;s about right &#10003;
+              That&apos;s about right
             </DarrinAction>
             <div className="flex items-center gap-2">
               <span className="text-xs text-tertiary">Should be closer to</span>
@@ -513,83 +661,161 @@ export default function StepQuestions({
         )}
 
         {/* Message 4 — fire ratings */}
-        {triage && (
-          <DarrinMessage
-            avatar={triageAvatar}
-            message={
-              <>
-                I&apos;m picking up fire ratings on{" "}
-                <span className="text-accent font-semibold">{triage.fire_rated_pct}%</span>{" "}
-                of doors
-                {triage.fire_ratings_found.length > 0 ? (
-                  <>
-                    {" "}&mdash; mostly {joinWithAnd(triage.fire_ratings_found)}
-                  </>
-                ) : null}
-                . Does that sound right for this project?
-              </>
-            }
-          >
-            <DarrinAction
-              selected={answers[QUESTION_KEYS.fireRatedPct] === "yes"}
-              onClick={() => updateAnswer(QUESTION_KEYS.fireRatedPct, "yes")}
+        {triage && (() => {
+          // Values like "NR" / "Non-Rated" mean the door isn't rated. Split
+          // the list so the prompt doesn't say "fire ratings on 100%" when
+          // most doors are actually non-rated.
+          const ratingValues = triage.fire_ratings_found ?? []
+          const isNonRated = (v: string) =>
+            /^\s*(nr|non[-\s]?rated|n\/?a|none|--)\s*$/i.test(v)
+          const ratedValues = ratingValues.filter((v) => !isNonRated(v))
+          const hasNonRated = ratingValues.some(isNonRated)
+          const actualRatedPct =
+            hasNonRated && ratingValues.length > 0
+              ? Math.round(
+                  (ratedValues.length / ratingValues.length) *
+                    triage.fire_rated_pct,
+                )
+              : triage.fire_rated_pct
+          return (
+            <DarrinMessage
+              avatar={triageAvatar}
+              message={
+                <div className="space-y-2">
+                  <div>
+                    Fire-rating field is filled in on{" "}
+                    <span className="text-accent font-semibold">
+                      {triage.fire_rated_pct}%
+                    </span>{" "}
+                    of doors.
+                  </div>
+                  {ratedValues.length > 0 && (
+                    <div className="text-xs flex flex-wrap items-center gap-x-2 gap-y-1">
+                      <span className="text-tertiary">ratings seen:</span>
+                      <ChipList items={ratedValues} />
+                    </div>
+                  )}
+                  <div>
+                    {hasNonRated ? (
+                      <>
+                        About{" "}
+                        <span className="text-primary font-semibold">
+                          {actualRatedPct}%
+                        </span>{" "}
+                        carry an actual rating &mdash; the rest read{" "}
+                        <span className="text-tertiary">NR (non-rated)</span>.
+                      </>
+                    ) : (
+                      <>Every door I checked has a real rating.</>
+                    )}{" "}
+                    Does that split look right?
+                  </div>
+                </div>
+              }
             >
-              Yes &#10003;
-            </DarrinAction>
-            <DarrinAction
-              selected={answers[QUESTION_KEYS.fireRatedPct] === "most_rated"}
-              onClick={() => updateAnswer(QUESTION_KEYS.fireRatedPct, "most_rated")}
-            >
-              Most doors are rated
-            </DarrinAction>
-            <DarrinAction
-              selected={answers[QUESTION_KEYS.fireRatedPct] === "few_rated"}
-              onClick={() => updateAnswer(QUESTION_KEYS.fireRatedPct, "few_rated")}
-            >
-              Very few are rated
-            </DarrinAction>
-          </DarrinMessage>
-        )}
+              <DarrinAction
+                selected={answers[QUESTION_KEYS.fireRatedPct] === "yes"}
+                onClick={() => updateAnswer(QUESTION_KEYS.fireRatedPct, "yes")}
+              >
+                Looks right
+              </DarrinAction>
+              <DarrinAction
+                selected={answers[QUESTION_KEYS.fireRatedPct] === "most_rated"}
+                onClick={() => updateAnswer(QUESTION_KEYS.fireRatedPct, "most_rated")}
+              >
+                Actually, most should be rated
+              </DarrinAction>
+              <DarrinAction
+                selected={answers[QUESTION_KEYS.fireRatedPct] === "few_rated"}
+                onClick={() => updateAnswer(QUESTION_KEYS.fireRatedPct, "few_rated")}
+              >
+                Actually, most should be non-rated
+              </DarrinAction>
+            </DarrinMessage>
+          )
+        })()}
 
         {/* Message 5 — manufacturers */}
-        {triage && triage.manufacturers_found.length > 0 && (
-          <DarrinMessage
-            avatar="excited"
-            message={
-              <>
-                Manufacturers I&apos;m seeing:{" "}
-                <span className="text-accent">
-                  {joinWithAnd(triage.manufacturers_found)}
-                </span>
-                . Anyone I&apos;m missing?
-              </>
-            }
-          >
-            <DarrinAction
-              selected={answers[QUESTION_KEYS.manufacturers] === "complete"}
-              onClick={() => updateAnswer(QUESTION_KEYS.manufacturers, "complete")}
+        {triage && triage.manufacturers_found.length > 0 && (() => {
+          // If a lot of "manufacturer" entries look like part codes (digits,
+          // dashes, measurements) instead of brand names, warn the user —
+          // the extractor may have grabbed the wrong column.
+          const looksLikePartCode = (v: string) => {
+            const s = v.trim()
+            if (s.length === 0) return true
+            if (s.length <= 3 && /^[A-Z]+$/i.test(s)) return true
+            if (/^[\d.\-/]/.test(s)) return true
+            if (/["']|\b\d+\s*(mm|in|")/i.test(s)) return true
+            return false
+          }
+          const suspicious = triage.manufacturers_found.filter(looksLikePartCode)
+          const noisy =
+            triage.manufacturers_found.length >= 5 &&
+            suspicious.length / triage.manufacturers_found.length >= 0.4
+          return (
+            <DarrinMessage
+              avatar={noisy ? "concerned" : "excited"}
+              message={
+                <div className="space-y-2">
+                  <div>
+                    I pulled{" "}
+                    <span className="text-accent font-semibold">
+                      {triage.manufacturers_found.length}
+                    </span>{" "}
+                    unique values from the manufacturer column:
+                  </div>
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
+                    <ChipList items={triage.manufacturers_found} />
+                  </div>
+                  {noisy ? (
+                    <div className="text-warning text-xs">
+                      Heads up &mdash; a lot of these look like part codes or
+                      measurements, not brand names. The column mapping may
+                      need a tweak.
+                    </div>
+                  ) : null}
+                  <div>
+                    {noisy
+                      ? "Does this look like a list of manufacturers to you?"
+                      : "Is anyone missing from this list?"}
+                  </div>
+                </div>
+              }
             >
-              Looks complete &#10003;
-            </DarrinAction>
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-tertiary">Also check for</span>
-              <input
-                type="text"
-                value={manufacturerInput}
-                onChange={(e) => {
-                  const v = e.target.value
-                  setManufacturerInput(v)
-                  updateAnswer(
-                    QUESTION_KEYS.manufacturers,
-                    v.trim() === "" ? null : `also:${v.trim()}`,
-                  )
-                }}
-                placeholder="e.g. Sargent"
-                className="w-40 bg-tint border border-border-dim rounded-lg px-2 py-1.5 text-xs text-primary placeholder:text-tertiary/50 focus:outline-none focus:border-accent/50 transition-colors"
-              />
-            </div>
-          </DarrinMessage>
-        )}
+              <DarrinAction
+                selected={answers[QUESTION_KEYS.manufacturers] === "complete"}
+                onClick={() => updateAnswer(QUESTION_KEYS.manufacturers, "complete")}
+              >
+                Looks right
+              </DarrinAction>
+              <DarrinAction
+                selected={answers[QUESTION_KEYS.manufacturers] === "wrong_column"}
+                onClick={() =>
+                  updateAnswer(QUESTION_KEYS.manufacturers, "wrong_column")
+                }
+              >
+                These aren&apos;t manufacturers
+              </DarrinAction>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-tertiary">Also add</span>
+                <input
+                  type="text"
+                  value={manufacturerInput}
+                  onChange={(e) => {
+                    const v = e.target.value
+                    setManufacturerInput(v)
+                    updateAnswer(
+                      QUESTION_KEYS.manufacturers,
+                      v.trim() === "" ? null : `also:${v.trim()}`,
+                    )
+                  }}
+                  placeholder="e.g. Sargent"
+                  className="w-40 bg-tint border border-border-dim rounded-lg px-2 py-1.5 text-xs text-primary placeholder:text-tertiary/50 focus:outline-none focus:border-accent/50 transition-colors"
+                />
+              </div>
+            </DarrinMessage>
+          )
+        })()}
 
         {/* Message 6 — pair doors */}
         {triage && triage.pair_doors_detected.length > 0 && (
@@ -601,8 +827,12 @@ export default function StepQuestions({
                 <span className="text-accent font-semibold">
                   {triage.pair_doors_detected.length}
                 </span>{" "}
-                pair doors (e.g., {pairDoorExample}). Want me to handle
-                leaf-specific hardware?
+                pair doors
+                {pairDoorExample ? (
+                  <> (e.g., <span className="text-primary">{pairDoorExample}</span>)</>
+                ) : null}
+                . Some hardware is specific to the active leaf. Want me to split
+                it out automatically?
               </>
             }
           >
@@ -646,7 +876,7 @@ export default function StepQuestions({
               selected={answers[QUESTION_KEYS.orphans] === "exclude"}
               onClick={() => updateAnswer(QUESTION_KEYS.orphans, "exclude")}
             >
-              Sounds good &#10003;
+              Sounds good
             </DarrinAction>
             <DarrinAction
               selected={answers[QUESTION_KEYS.orphans] === "keep"}
