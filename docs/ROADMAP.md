@@ -2,7 +2,7 @@
 
 > **Guiding principle:** Hardware counts coming out of PDFs must be accurate before we build features on top of them. Scope is DFH only — door, frame, hardware submittals. All other submittal types, trade data, and non-DFH features go to the Parking Lot.
 
-Last updated: 2026-04-16 (restructure around 3-track framing — DFH-only scope)
+Last updated: 2026-04-17 (extraction-invariants layer landed; see Track 1 §1C)
 
 ---
 
@@ -25,6 +25,37 @@ See: `docs/architecture/extraction-pipeline.md` for pipeline detail.
 
 Status: **IN PROGRESS**  
 Remaining gaps: populate from metrics log (sheet 2206493777547140) after next corpus run.
+
+#### 1C. Extraction Invariants Layer
+
+Post-promote structural gate that refuses silent garbage. Catches the four
+bug classes behind the 2026-04-17 Radius DC regression:
+
+- Opening with > 2 `Door*` rows
+- Opening with both bare `Door` AND a `Door (Active/Inactive Leaf)` row
+- Opening with > 1 `Frame` row
+- `leaf_count=1` with ≠ 1 `Door*` row / `leaf_count=2` with ≠ 2 Door rows
+- `openings.location` that matches a fire-rating regex
+- A door listed under a sub-set's `heading_doors[]` promoted to the generic
+  set token
+- Per-leaf item qty-sum outside the expected band on pair openings
+
+Status: **DONE** — 2026-04-17
+
+- [x] `src/lib/extraction-invariants.ts` with `validateExtractionRun(runId, supabase)`
+- [x] Unit tests per rule in `src/lib/extraction-invariants.test.ts`
+- [x] Post-promote gate in `src/app/api/parse-pdf/save/route.ts` behind
+      `DHT_INVARIANT_CHECKS=1` feature flag (warnings always returned to
+      wizard; blockers only 500 when flag is on)
+- [x] Audit script `scripts/audit-extraction-invariants.ts` + npm script
+      `npm run audit:invariants -- --project <id> | --all`
+- [x] Sentry breadcrumbs in `save/route.ts` and `buildPerOpeningItems` for
+      input/output size + per-opening histogram context
+- [x] Golden PDF smoke assertion in `parse-pdf-helpers.test.ts`
+
+Rollout: flag stays `0` for one week after merge; flip default on after
+the audit report confirms no false positives on the Grid-RR + Radius DC
+corpus.
 
 #### 1B. Darrin Review Layer
 

@@ -2468,3 +2468,106 @@ describe('buildPerOpeningItems — zero-item opening', () => {
     expect(rows).toHaveLength(0)
   })
 })
+
+// ─── Golden PDF smoke: buildPerOpeningItems → invariants zero blockers ──────
+//
+// Integration smoke test that exercises the happy-path fixture from the
+// pair-detection regression suite above, then passes the output through
+// runInvariants() to assert zero blocker-level violations.
+//
+// This is the CI stand-in for the `scripts/run-golden-suite.mjs` save-run
+// — any regression that would have caught the 2026-04-17 Radius DC bug
+// (pair openings missing their inactive-leaf Door row, or bare "Door"
+// alongside leaf-specific rows) fails here before it can reach prod.
+
+import { runInvariants } from './extraction-invariants'
+
+describe('golden PDF smoke — buildPerOpeningItems emits invariant-clean rows', () => {
+  function makeOpening(
+    id: string,
+    door_number: string,
+    hw_set: string | null,
+    leaf_count: number,
+  ) {
+    return { id, door_number, hw_set, leaf_count, location: 'Corridor' }
+  }
+
+  it('Radius DC DH4A.1 pair opening passes all invariants after build', () => {
+    const hwSet: HardwareSet = {
+      set_id: 'DH4A.1',
+      generic_set_id: 'DH4A',
+      heading: 'Heading #DH4A.1',
+      heading_door_count: 8,
+      heading_leaf_count: 16,
+      heading_doors: ['120-02A'],
+      items: [
+        { qty: 4, qty_total: 56, qty_door_count: 16, qty_source: 'flagged', name: 'Hinges 5BB1 4.5x4.5 NRP', model: '', finish: '', manufacturer: '' },
+        { qty: 1, qty_total: 8, qty_door_count: 16, qty_source: 'divided', name: 'Hinges 5BB1 4.5x4.5 CON TW8', model: '', finish: '', manufacturer: '' },
+        { qty: 1, qty_total: 8, qty_door_count: 8, qty_source: 'divided', name: 'Flush Bolt Kit FB32', model: '', finish: '', manufacturer: '' },
+        { qty: 1, qty_total: 8, qty_door_count: 8, qty_source: 'divided', name: 'Exit Device 9875L-F', model: '', finish: '', manufacturer: '' },
+        { qty: 2, qty_total: 16, qty_door_count: 8, qty_source: 'divided', name: 'Closer 4040XP EDA', model: '', finish: '', manufacturer: '' },
+        { qty: 2, qty_total: 16, qty_door_count: 8, qty_source: 'divided', name: 'Smoke Seal 5075', model: '', finish: '', manufacturer: '' },
+      ],
+    }
+    // Pass the specific sub-set id as the opening's hw_set — this is what
+    // the wizard should promote for a door listed under DH4A.1's heading.
+    const openings = [makeOpening('op-pair-1', '120-02A', 'DH4A.1', 2)]
+    const doorInfoMap = new Map<string, { door_type: string; frame_type: string }>([
+      ['120-02A', { door_type: 'A', frame_type: 'F2' }],
+    ])
+    const setMap = new Map<string, HardwareSet>([
+      ['DH4A', hwSet],
+      ['DH4A.1', hwSet],
+    ])
+    const doorToSetMap = new Map<string, HardwareSet>([['120-02A', hwSet]])
+
+    const builtRows = buildPerOpeningItems(openings, doorInfoMap, setMap, doorToSetMap)
+
+    const hwItems = builtRows.map((r, idx) => ({
+      id: `item-${idx}`,
+      opening_id: String(r['opening_id'] ?? 'op-pair-1'),
+      name: String(r['name'] ?? ''),
+      qty: typeof r['qty'] === 'number' ? (r['qty'] as number) : null,
+      leaf_side: (r['leaf_side'] as string | null) ?? null,
+      model: (r['model'] as string | null) ?? null,
+    }))
+
+    const violations = runInvariants(openings, hwItems, [hwSet])
+    const blockers = violations.filter(v => v.severity === 'blocker')
+    expect(blockers).toEqual([])
+  })
+
+  it('single-door opening passes all invariants', () => {
+    const hwSet: HardwareSet = {
+      set_id: 'H01',
+      generic_set_id: 'H01',
+      heading: 'Set H01',
+      heading_door_count: 1,
+      heading_leaf_count: 1,
+      heading_doors: ['101'],
+      items: [
+        { qty: 1, name: 'Lockset', model: 'L9080', finish: '626', manufacturer: 'Schlage' },
+        { qty: 3, name: 'Hinges 5BB1', model: '4.5x4.5', finish: '626', manufacturer: 'Ives' },
+      ],
+    }
+    const openings = [makeOpening('op-single-1', '101', 'H01', 1)]
+    const doorInfoMap = new Map<string, { door_type: string; frame_type: string }>([
+      ['101', { door_type: 'A', frame_type: 'HM' }],
+    ])
+    const setMap = new Map<string, HardwareSet>([['H01', hwSet]])
+    const doorToSetMap = new Map<string, HardwareSet>([['101', hwSet]])
+
+    const builtRows = buildPerOpeningItems(openings, doorInfoMap, setMap, doorToSetMap)
+    const hwItems = builtRows.map((r, idx) => ({
+      id: `item-${idx}`,
+      opening_id: String(r['opening_id'] ?? 'op-single-1'),
+      name: String(r['name'] ?? ''),
+      qty: typeof r['qty'] === 'number' ? (r['qty'] as number) : null,
+      leaf_side: (r['leaf_side'] as string | null) ?? null,
+      model: (r['model'] as string | null) ?? null,
+    }))
+
+    const violations = runInvariants(openings, hwItems, [hwSet])
+    expect(violations.filter(v => v.severity === 'blocker')).toEqual([])
+  })
+})
