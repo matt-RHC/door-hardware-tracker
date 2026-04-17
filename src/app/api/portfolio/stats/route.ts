@@ -69,9 +69,12 @@ export async function GET() {
       })
     }
 
-    const admin = createAdminSupabaseClient()
-
-    const { data: projectsRaw, error: projectsError } = await admin
+    // Use the RLS-restricted client so we only count projects the caller
+    // can actually see. Using the admin client here would surface projects
+    // whose company_id no longer matches the user's company membership
+    // (dangling project_members rows), which makes the portfolio overview
+    // disagree with the projects list that /api/projects returns.
+    const { data: projectsRaw, error: projectsError } = await supabase
       .from('projects')
       .select('id, name, job_number, general_contractor, architect, address')
       .in('id', projectIds)
@@ -83,6 +86,37 @@ export async function GET() {
     }
 
     const projects = (projectsRaw ?? []) as unknown as ProjectRow[]
+    const visibleProjectIds = projects.map((p) => p.id)
+
+    if (visibleProjectIds.length === 0) {
+      // User has project_members rows but none of those projects are visible
+      // under RLS — typically a dangling membership after a company tenancy
+      // change. Log it so the state is observable in prod instead of
+      // invisibly healing.
+      if (projectIds.length > 0) {
+        console.warn(
+          'Portfolio stats: user has project_members but no visible projects',
+          { user_id: user.id, dangling_membership_count: projectIds.length },
+        )
+      }
+      return NextResponse.json({
+        projects: [],
+        totals: {
+          projects: 0,
+          openings: 0,
+          openings_complete: 0,
+          items_total: 0,
+          items_checked: 0,
+          completion_pct: 0,
+        },
+      })
+    }
+
+    // Admin client here because openings RLS requires direct project
+    // membership checks that don't cascade cleanly through the joined
+    // hardware_items / checklist_progress selects. visibleProjectIds
+    // already gates visibility to projects the caller can see via RLS.
+    const admin = createAdminSupabaseClient()
 
     const { data: openingsRaw, error: openingsError } = await admin
       .from('openings')
@@ -92,7 +126,8 @@ export async function GET() {
         hardware_items(id),
         checklist_progress(checked)
       `)
-      .in('project_id', projectIds)
+      .in('project_id', visibleProjectIds)
+      .eq('is_active', true)
 
     if (openingsError) {
       console.error('Portfolio stats: openings query failed', openingsError)
