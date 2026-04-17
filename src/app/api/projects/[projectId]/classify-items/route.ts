@@ -44,13 +44,31 @@ export async function POST(
 
     const adminSupabase = createAdminSupabaseClient()
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: openings, error: openingsError } = await (adminSupabase as any)
+      .from('openings')
+      .select('id')
+      .eq('project_id', projectId)
+
+    if (openingsError) {
+      console.error('Error fetching openings:', openingsError)
+      return NextResponse.json({ error: 'Failed to fetch openings' }, { status: 500 })
+    }
+
+    if (!openings || openings.length === 0) {
+      return NextResponse.json({ updated: 0, items: [] })
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const openingIds = openings.map((o: any) => o.id)
+
     if (item_ids && item_ids.length > 0) {
-      // Update only specific items
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const { data, error } = await (adminSupabase as any)
         .from('hardware_items')
         .update({ install_type } as any)
         .in('id', item_ids)
+        .in('opening_id', openingIds)
         .select('id, name, install_type')
 
       if (error) {
@@ -73,25 +91,6 @@ export async function POST(
 
       return NextResponse.json({ updated: data?.length || 0, items: data })
     }
-
-    // Get all openings in this project
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: openings, error: openingsError } = await (adminSupabase as any)
-      .from('openings')
-      .select('id')
-      .eq('project_id', projectId)
-
-    if (openingsError) {
-      console.error('Error fetching openings:', openingsError)
-      return NextResponse.json({ error: 'Failed to fetch openings' }, { status: 500 })
-    }
-
-    if (!openings || openings.length === 0) {
-      return NextResponse.json({ updated: 0, items: [] })
-    }
-
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const openingIds = openings.map((o: any) => o.id)
 
     // Update all hardware items with matching name across all openings in the project
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
