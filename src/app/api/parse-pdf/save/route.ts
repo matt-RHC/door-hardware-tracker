@@ -69,15 +69,6 @@ export async function POST(request: NextRequest) {
       doors: DoorEntry[]
     }
 
-    // Temporary diagnostic capture for the Radius-DC "double structural rows"
-    // investigation (2026-04-17). Emit the full request payload so the
-    // repro harness can replay it. DO NOT enable this in normal prod — it
-    // writes full extractor output to Vercel logs. Flip DHT_LOG_SAVE_PAYLOAD
-    // off once a capture is pulled back into the test fixture.
-    if (process.env.DHT_LOG_SAVE_PAYLOAD === '1') {
-      console.log('[save][DHT_LOG_SAVE_PAYLOAD]', JSON.stringify({ projectId, hardwareSets, doors }))
-    }
-
     // Project membership check (finding #9): verify the authenticated user is
     // a member of projectId before writing any staging data. Auth alone is not
     // sufficient — an authenticated user could supply any projectId they know.
