@@ -3,11 +3,14 @@
 import { useEffect, useState, FormEvent, use } from "react";
 import Link from "next/link";
 
+type PreferredProvider = "google" | "azure" | null;
+
 interface DomainRow {
   id: string;
   domain: string;
   verified_at: string | null;
   created_at: string;
+  preferred_provider: PreferredProvider;
 }
 
 interface MemberRow {
@@ -76,6 +79,23 @@ export default function AdminCompanyDetailPage({ params }: { params: Promise<{ i
     void reload();
   }
 
+  async function updateDomainProvider(domainId: string, value: string) {
+    // "" from the <select> means "auto-detect" → clear the override (null).
+    const preferred_provider: PreferredProvider =
+      value === "google" || value === "azure" ? value : null;
+    const res = await fetch(`/api/admin/companies/${id}/domains`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ domain_id: domainId, preferred_provider }),
+    });
+    if (!res.ok) {
+      const payload = (await res.json().catch(() => ({}))) as { error?: string };
+      setError(payload.error ?? `HTTP ${res.status}`);
+      return;
+    }
+    void reload();
+  }
+
   async function updateRole(userId: string, role: "owner" | "admin" | "member") {
     await fetch(`/api/admin/companies/${id}/members`, {
       method: "PATCH",
@@ -133,12 +153,24 @@ export default function AdminCompanyDetailPage({ params }: { params: Promise<{ i
               {domains.map((d) => (
                 <li key={d.id} className="flex items-center justify-between py-2">
                   <code className="text-primary">{d.domain}</code>
-                  <button
-                    onClick={() => removeDomain(d.id)}
-                    className="text-danger text-xs hover:underline"
-                  >
-                    remove
-                  </button>
+                  <div className="flex items-center gap-3">
+                    <select
+                      value={d.preferred_provider ?? ""}
+                      onChange={(e) => updateDomainProvider(d.id, e.target.value)}
+                      className="input-field py-1 text-xs"
+                      aria-label={`OAuth provider for ${d.domain}`}
+                    >
+                      <option value="">Auto-detect (default)</option>
+                      <option value="google">Google Workspace</option>
+                      <option value="azure">Microsoft 365</option>
+                    </select>
+                    <button
+                      onClick={() => removeDomain(d.id)}
+                      className="text-danger text-xs hover:underline"
+                    >
+                      remove
+                    </button>
+                  </div>
                 </li>
               ))}
             </ul>
