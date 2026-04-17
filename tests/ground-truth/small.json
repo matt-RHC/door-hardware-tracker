@@ -1,0 +1,16 @@
+{
+  "pdf_name": "SMALL_081113.pdf",
+  "catalog_key": "SMALL",
+  "format": "grid",
+  "expected_door_count": 6,
+  "expected_set_count": 6,
+  "verified": true,
+  "expected_set_ids": [
+    "04",
+    "06",
+    "26.1",
+    "12.R1",
+    "12.1.R1",
+    "21"
+  ]
+}

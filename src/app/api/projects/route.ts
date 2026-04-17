@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerSupabaseClient, createAdminSupabaseClient } from '@/lib/supabase/server'
+import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { createAdminSupabaseClient } from '@/lib/supabase/admin'
+import { getActiveCompanyId } from '@/lib/companies'
 
 interface CreateProjectRequest {
   name: string
@@ -96,7 +98,19 @@ export async function POST(request: NextRequest) {
     // We've already verified authentication above via getUser(), so this is safe
     const adminSupabase = createAdminSupabaseClient()
 
-    // Create project
+    // Resolve the caller's active company — v1 has no switcher, so this
+    // is always the JWT/default company. Reject if the user has no
+    // membership (middleware normally redirects them to /auth/no-company
+    // first, but defend-in-depth here).
+    const companyId = await getActiveCompanyId(supabase)
+    if (!companyId) {
+      return NextResponse.json(
+        { error: 'No company assigned to this account' },
+        { status: 403 },
+      )
+    }
+
+    // Create project, tagged with company_id so tenant RLS applies.
     const { data: project, error: projectError } = await (adminSupabase as any)
       .from('projects')
       .insert([{
@@ -107,6 +121,7 @@ export async function POST(request: NextRequest) {
         address: address || null,
         submittal_date: submittal_date || null,
         created_by: user.id,
+        company_id: companyId,
       }] as any)
       .select()
       .single()

@@ -1,0 +1,111 @@
+name: CI
+
+on:
+  push:
+    paths:
+      - 'api/**'
+      - 'tests/**'
+      - 'supabase/**'
+      - 'requirements.txt'
+      - 'src/**'
+      - 'package.json'
+      - 'tsconfig.json'
+      - 'eslint.config.mjs'
+      - 'next.config.ts'
+      - 'vercel.json'
+      - 'vitest.config.ts'
+  pull_request:
+    paths:
+      - 'api/**'
+      - 'tests/**'
+      - 'supabase/**'
+      - 'requirements.txt'
+      - 'src/**'
+      - 'package.json'
+      - 'tsconfig.json'
+      - 'eslint.config.mjs'
+      - 'next.config.ts'
+      - 'vercel.json'
+      - 'vitest.config.ts'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip install -r requirements.txt
+          pip install pytest
+
+      - name: Run extraction tests
+        run: pytest tests/ -v --tb=short
+
+      - name: Report accuracy summary
+        if: always()
+        run: pytest tests/test_extraction.py -v -s --tb=long 2>&1 | tail -50 || true
+
+  lint-and-types:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - run: npm run lint
+      - run: npx tsc --noEmit
+
+  test-ts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - run: npm ci
+      - name: Run TypeScript unit tests
+        run: npm run test
+
+  rls-tenancy:
+    # Stands up a local Supabase (Postgres + GoTrue + Storage), applies
+    # every migration, then runs tests/rls/company-isolation.test.ts
+    # against it. This is the only CI check that exercises the real RLS
+    # policies end-to-end.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - name: Start local Supabase stack (includes Postgres 17)
+        run: supabase start --ignore-health-check
+      - name: Capture connection info
+        id: sb
+        run: |
+          echo "api_url=$(supabase status --output env | grep '^API_URL=' | cut -d= -f2- | tr -d '\"')" >> "$GITHUB_OUTPUT"
+          echo "anon_key=$(supabase status --output env | grep '^ANON_KEY=' | cut -d= -f2- | tr -d '\"')" >> "$GITHUB_OUTPUT"
+          echo "service_key=$(supabase status --output env | grep '^SERVICE_ROLE_KEY=' | cut -d= -f2- | tr -d '\"')" >> "$GITHUB_OUTPUT"
+      - run: npm ci
+      - name: Run RLS isolation tests
+        env:
+          RLS_TEST_SUPABASE_URL: ${{ steps.sb.outputs.api_url }}
+          RLS_TEST_ANON_KEY: ${{ steps.sb.outputs.anon_key }}
+          RLS_TEST_SERVICE_ROLE_KEY: ${{ steps.sb.outputs.service_key }}
+        run: npx vitest run tests/rls/company-isolation.test.ts
+      - name: Tear down
+        if: always()
+        run: supabase stop --no-backup

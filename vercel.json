@@ -2,12 +2,12 @@
   "framework": "nextjs",
   "crons": [
     {
-      "path": "/api/cron/sync-smartsheet",
-      "schedule": "0 6 * * *"
-    },
-    {
       "path": "/api/cron/cleanup-staging",
       "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/cron/process-jobs",
+      "schedule": "*/2 * * * *"
     }
   ],
   "functions": {
@@ -29,11 +29,38 @@
     "src/app/api/parse-pdf/apply-revision/route.ts": {
       "maxDuration": 120
     },
-    "src/app/api/projects/[projectId]/sync-smartsheet/route.ts": {
+    "src/app/api/parse-pdf/region-extract/route.ts": {
       "maxDuration": 120
     },
-    "src/app/api/cron/sync-smartsheet/route.ts": {
+    "src/app/api/parse-pdf/classify-pages/route.ts": {
+      "maxDuration": 120
+    },
+    "src/app/api/parse-pdf/detect-mapping/route.ts": {
+      "maxDuration": 120
+    },
+    "src/app/api/parse-pdf/deep-extract/route.ts": {
       "maxDuration": 300
+    },
+    "src/app/api/parse-pdf/vision-extract/route.ts": {
+      "maxDuration": 300
+    },
+    "src/app/api/jobs/route.ts": {
+      "maxDuration": 30
+    },
+    "src/app/api/jobs/[id]/route.ts": {
+      "maxDuration": 10
+    },
+    "src/app/api/jobs/[id]/run/route.ts": {
+      "maxDuration": 800
+    },
+    "src/app/api/jobs/[id]/results/route.ts": {
+      "maxDuration": 30
+    },
+    "src/app/api/jobs/[id]/answers/route.ts": {
+      "maxDuration": 10
+    },
+    "src/app/api/cron/process-jobs/route.ts": {
+      "maxDuration": 30
     },
     "api/extract-tables.py": {
       "maxDuration": 800,

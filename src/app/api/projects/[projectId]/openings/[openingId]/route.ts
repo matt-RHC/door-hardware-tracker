@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerSupabaseClient, createAdminSupabaseClient } from '@/lib/supabase/server'
+import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { createAdminSupabaseClient } from '@/lib/supabase/admin'
 import { OpeningUpdate } from '@/lib/types/database'
+import { OPENING_DETAIL_SELECT } from '@/lib/supabase-selects'
 
 interface UpdateOpeningRequest {
   door_number?: string
@@ -48,51 +50,7 @@ export async function GET(
     const { data: opening, error: openingError } = await supabase
       .from('openings')
       .select(`
-        id,
-        project_id,
-        door_number,
-        hw_set,
-        hw_heading,
-        location,
-        door_type,
-        frame_type,
-        fire_rating,
-        hand,
-        notes,
-        created_at,
-        hardware_items(
-          id,
-          name,
-          qty,
-          manufacturer,
-          model,
-          finish,
-          options,
-          sort_order,
-          install_type,
-          created_at
-        ),
-        checklist_progress(
-          id,
-          item_id,
-          checked,
-          checked_by,
-          checked_at,
-          received,
-          received_by,
-          received_at,
-          pre_install,
-          pre_install_by,
-          pre_install_at,
-          installed,
-          installed_by,
-          installed_at,
-          qa_qc,
-          qa_qc_by,
-          qa_qc_at,
-          notes,
-          created_at
-        ),
+        ${OPENING_DETAIL_SELECT},
         attachments(
           id,
           file_name,
@@ -100,7 +58,12 @@ export async function GET(
           file_type,
           category,
           uploaded_by,
-          uploaded_at
+          uploaded_at,
+          damage_flag,
+          damage_notes,
+          delivery_id,
+          progress_id,
+          leaf_index
         )
       `)
       .eq('id', openingId)
@@ -121,14 +84,17 @@ export async function GET(
       )
     }
 
-    // Merge hardware items with their progress
+    // Merge hardware items with their progress (per-leaf aware)
     const hardware_items = (opening as any).hardware_items?.map((item: any) => {
-      const progress = (opening as any).checklist_progress?.find(
+      const progressEntries = (opening as any).checklist_progress?.filter(
         (p: any) => p.item_id === item.id
-      )
+      ) ?? []
       return {
         ...item,
-        progress,
+        // Backward compat: single progress object (first entry or undefined)
+        progress: progressEntries.length > 0 ? progressEntries[0] : undefined,
+        // Per-leaf progress: array of all checklist_progress rows for this item
+        progress_by_leaf: progressEntries.length > 0 ? progressEntries : undefined,
       }
     }) || []
 

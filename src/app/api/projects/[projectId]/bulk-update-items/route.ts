@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerSupabaseClient, createAdminSupabaseClient } from '@/lib/supabase/server'
+import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { createAdminSupabaseClient } from '@/lib/supabase/admin'
+import { logActivity } from '@/lib/activity-log'
 
 interface BulkUpdateRequest {
   original_name: string
@@ -47,6 +49,7 @@ export async function POST(
     const adminSupabase = createAdminSupabaseClient()
 
     // Get all openings in this project
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: openings, error: openingsError } = await (adminSupabase as any)
       .from('openings')
       .select('id')
@@ -60,9 +63,11 @@ export async function POST(
       return NextResponse.json({ updated: 0, items: [] })
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const openingIds = openings.map((o: any) => o.id)
 
     // Update all hardware items with matching original name across all openings
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: updatedItems, error: updateError } = await (adminSupabase as any)
       .from('hardware_items')
       .update(updates as any)
@@ -74,6 +79,18 @@ export async function POST(
       console.error('Error bulk updating items:', updateError)
       return NextResponse.json({ error: 'Failed to update items' }, { status: 500 })
     }
+
+    logActivity({
+      projectId,
+      userId: user.id,
+      action: 'batch_update',
+      entityType: 'hardware_item',
+      details: {
+        original_name,
+        updates,
+        updated_count: updatedItems?.length ?? 0,
+      },
+    })
 
     return NextResponse.json({
       updated: updatedItems?.length || 0,

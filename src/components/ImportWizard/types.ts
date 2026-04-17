@@ -3,21 +3,138 @@
 // Domain types imported from canonical source
 import type {
   DoorEntry,
-  HardwareItem,
+  ExtractedHardwareItem,
   HardwareSet,
   FlaggedDoor,
   PageClassification,
 } from '@/lib/types';
+import type {
+  ClassifyPageDetail,
+  ClassifyOverride,
+} from '@/lib/schemas/classify';
 
-export type { DoorEntry, HardwareItem, HardwareSet, FlaggedDoor, PageClassification };
+export type { DoorEntry, ExtractedHardwareItem, HardwareSet, FlaggedDoor, PageClassification };
+export type { ClassifyPageDetail, ClassifyOverride };
 
-/** The five steps the wizard progresses through. */
+/** The steps the wizard progresses through. Compare is only shown for revisions. */
 export enum WizardStep {
   Upload = 0,
-  MapColumns = 1,
-  Triage = 2,
-  Review = 3,
-  Confirm = 4,
+  ScanResults = 1,
+  MapColumns = 2,
+  Triage = 3,
+  Review = 4,
+  Products = 5,
+  Compare = 6,
+  Confirm = 7,
+}
+
+/**
+ * Steps for the job-based wizard flow (feature-flagged).
+ * Upload → Questions → Review → Products → Compare? → Confirm
+ */
+export enum JobWizardStep {
+  Upload = 0,
+  Questions = 1,
+  Review = 2,
+  Products = 3,
+  Compare = 4,
+  Confirm = 5,
+}
+
+// ─── Job-related types ───
+
+export type JobStatus =
+  | 'queued'
+  | 'processing'
+  | 'classifying'
+  | 'detecting_columns'
+  | 'extracting'
+  | 'triaging'
+  | 'validating'
+  | 'writing_staging'
+  | 'completed'
+  | 'failed'
+  | 'cancelled'
+
+/** Per-phase findings published by the job orchestrator so the UI can drive
+ *  progressive, data-aware questions while extraction runs. Every sub-object
+ *  is optional — each appears once its phase has completed. */
+export interface PhaseData {
+  classify?: {
+    total_pages: number
+    schedule_pages: number[]
+    hardware_pages: number[]
+    /**
+     * `reference_pages` (cut sheets, legends, manufacturer lists) and
+     * `cover_pages` (title / TOC / project info) are surfaced
+     * separately from `skipped_pages` since Prompt 4 — StepQuestions
+     * renders each bucket in Darrin's classification message. Older
+     * jobs written before this change may omit these arrays; the UI
+     * defaults them to [] when missing.
+     */
+    reference_pages?: number[]
+    cover_pages?: number[]
+    /** Pages classified as `other`. Pre-Prompt-4 this also included cover pages. */
+    skipped_pages: number[]
+    /**
+     * Per-page classification detail (page number, type, confidence,
+     * labels, hw_set_ids). Drives the correction panel and the
+     * heuristic checks. Absent on jobs written before Prompt 4.
+     */
+    page_details?: ClassifyPageDetail[]
+    /**
+     * User-provided corrections that the orchestrator re-applies
+     * before extraction starts. Writing an override also rewrites the
+     * derived arrays above, so downstream readers see the corrected
+     * classification without needing to re-apply.
+     */
+    user_overrides?: ClassifyOverride[]
+  }
+  extraction?: {
+    door_count: number
+    hw_set_count: number
+    hw_sets: string[]
+    sample_doors: Array<{
+      door_number: string
+      hw_set: string | null
+      fire_rating: string | null
+    }>
+  }
+  triage?: {
+    fire_rated_count: number
+    fire_rated_pct: number
+    fire_ratings_found: string[]
+    manufacturers_found: string[]
+    pair_doors_detected: Array<{ door_a: string; door_b: string | null }>
+    orphan_doors: Array<{ door_number: string; reason: string }>
+  }
+}
+
+export interface JobStatusResponse {
+  id: string
+  projectId: string
+  status: JobStatus
+  progress: number
+  statusMessage: string | null
+  extractionRunId: string | null
+  constraintFlags: Record<string, unknown> | null
+  classifyResult: ClassifyPagesResponse | null
+  extractionSummary: Record<string, unknown> | null
+  phaseData: PhaseData
+  error: { message: string; phase: string } | null
+  startedAt: string | null
+  completedAt: string | null
+  durationMs: number | null
+  createdAt: string
+}
+
+export interface JobResultsResponse {
+  doors: import('@/lib/types').DoorEntry[]
+  hardwareSets: import('@/lib/types').HardwareSet[]
+  triageResult: TriageResult | null
+  constraintFlags: Record<string, unknown> | null
+  classifyResult: ClassifyPagesResponse | null
+  extractionRunId: string | null
 }
 
 // ─── API response types ───
@@ -30,7 +147,9 @@ export interface ClassifyPagesResponse {
     door_schedule_pages: number[];
     hardware_set_pages: number[];
     submittal_pages: number[];
+    cover_pages: number[];
     other_pages: number[];
+    scanned_pages?: number;
   };
   profile?: {
     source: string;
@@ -41,6 +160,7 @@ export interface ClassifyPagesResponse {
     door_schedule_pages: number;
     has_reference_tables: boolean;
   };
+  extraction_strategy?: string;
 }
 
 /** Response from /api/detect-mapping */
@@ -72,6 +192,7 @@ export interface TriageResult {
   flagged: FlaggedDoor[];
   triage_error?: boolean;
   triage_error_message?: string;
+  retryable?: boolean;
 }
 
 // ─── Staging / extraction run types ───
@@ -90,6 +211,9 @@ export interface WizardState {
 
   // Step 1: Upload
   file: File | null;
+  pdfStoragePath: string | null;
+  /** PDF bytes — cached once for use in PDFPagePreview (StepReview, DarrinReview). */
+  pdfBuffer: ArrayBuffer | null;
   classifyResult: ClassifyPagesResponse | null;
   profile?: ClassifyPagesResponse['profile'];
   hasExistingData: boolean;
@@ -119,6 +243,8 @@ export interface WizardState {
 export const INITIAL_WIZARD_STATE: WizardState = {
   currentStep: WizardStep.Upload,
   file: null,
+  pdfStoragePath: null,
+  pdfBuffer: null,
   classifyResult: null,
   hasExistingData: false,
   detectResult: null,

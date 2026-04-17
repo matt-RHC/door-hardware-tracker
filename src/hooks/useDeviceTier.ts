@@ -13,6 +13,7 @@ export function useDeviceTier(): DeviceTier {
     const prefersReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
     if (prefersReduced || (cores <= 4 && memory <= 4)) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- detect device capabilities on mount
       setTier("low");
     } else if (cores <= 6 || memory <= 6) {
       setTier("mid");

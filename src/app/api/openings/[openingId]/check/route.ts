@@ -1,14 +1,20 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServerSupabaseClient, createAdminSupabaseClient } from '@/lib/supabase/server'
-import { v4 as uuidv4 } from 'uuid'
+import { createServerSupabaseClient } from '@/lib/supabase/server'
+import { createAdminSupabaseClient } from '@/lib/supabase/admin'
+import { logActivity, type ActivityAction } from '@/lib/activity-log'
 
 type WorkflowStep = 'received' | 'pre_install' | 'installed' | 'qa_qc' | 'checked'
 
 interface CheckItemRequest {
   item_id: string
+  leaf_index?: number  // 1 = Leaf 1 / single door, 2 = Leaf 2 (pair doors)
   checked?: boolean  // legacy support
   step?: WorkflowStep
   value?: boolean
+  // Offline reconciliation fields
+  client_id?: string        // Device fingerprint
+  client_updated_at?: string // When the client made the change (ISO timestamp)
+  idempotency_key?: string  // UUID to prevent duplicate replays
 }
 
 export async function POST(
@@ -50,6 +56,7 @@ export async function POST(
     }
 
     // Verify user has access to project
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: projectMember, error: memberError } = await supabase
       .from('project_members')
       .select('role')
@@ -68,13 +75,15 @@ export async function POST(
     const now = new Date().toISOString()
 
     // Determine what to update
-    let step: WorkflowStep = body.step || 'checked'
-    let value: boolean = body.value !== undefined ? body.value : (body.checked !== undefined ? body.checked : true)
+    const step: WorkflowStep = body.step || 'checked'
+    const value: boolean = body.value !== undefined ? body.value : (body.checked !== undefined ? body.checked : true)
 
     // Build update payload based on step
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const updatePayload: Record<string, any> = {
       opening_id: openingId,
       item_id,
+      leaf_index: body.leaf_index ?? 1,
     }
 
     if (step === 'checked') {
@@ -100,16 +109,50 @@ export async function POST(
       updatePayload.qa_qc_at = value ? now : null
     }
 
+    // Include offline reconciliation fields if provided
+    if (body.client_id) {
+      updatePayload.client_id = body.client_id
+    }
+    if (body.client_updated_at) {
+      updatePayload.client_updated_at = body.client_updated_at
+    }
+
+    // LWW conflict check: if client_updated_at is provided, compare with server
+    if (body.client_updated_at) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: existing } = await (adminSupabase as any)
+        .from('checklist_progress')
+        .select('server_updated_at')
+        .eq('opening_id', openingId)
+        .eq('item_id', item_id)
+        .eq('leaf_index', body.leaf_index ?? 1)
+        .single()
+
+      if (existing?.server_updated_at &&
+          new Date(body.client_updated_at) < new Date(existing.server_updated_at)) {
+        return NextResponse.json(
+          { error: 'Conflict: server version is newer', server_updated_at: existing.server_updated_at },
+          { status: 409 }
+        )
+      }
+    }
+
+    // Log idempotency key for debugging if provided
+    if (body.idempotency_key) {
+      console.log(`Check upsert idempotency_key=${body.idempotency_key} opening=${openingId} item=${item_id}`)
+    }
+
     // Upsert checklist progress
+    // Note: do NOT include `id` in the payload — it has a DB default
+    // (gen_random_uuid). Including a new UUID would overwrite the existing
+    // row's primary key on conflict, breaking foreign-key references.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: result, error: upsertError } = await (adminSupabase as any)
       .from('checklist_progress')
       .upsert(
-        [{
-          id: uuidv4(),
-          ...updatePayload,
-        }],
+        [updatePayload],
         {
-          onConflict: 'opening_id,item_id',
+          onConflict: 'opening_id,item_id,leaf_index',
         }
       )
       .select()
@@ -123,14 +166,23 @@ export async function POST(
       )
     }
 
-    // Auto-push to Smartsheet (fire-and-forget)
-    const projectId = (opening as any).project_id
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
-    fetch(`${baseUrl}/api/projects/${projectId}/sync-smartsheet`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-    }).catch(() => {
-      // Ignore errors — sync is best-effort
+    // Log workflow activity
+    const actionMap: Record<string, ActivityAction> = {
+      received: value ? 'item_received' : 'item_receive_undone',
+      pre_install: value ? 'item_pre_installed' : 'item_pre_install_undone',
+      installed: value ? 'item_installed' : 'item_install_undone',
+      qa_qc: value ? 'item_qa_passed' : 'item_qa_undone',
+      checked: value ? 'item_checked' : 'item_unchecked',
+    }
+
+    logActivity({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      projectId: (opening as any).project_id,
+      userId: user.id,
+      action: actionMap[step],
+      entityType: 'checklist_progress',
+      entityId: result.id,
+      details: { opening_id: openingId, item_id, leaf_index: body.leaf_index ?? 1, step, value },
     })
 
     return NextResponse.json(result)

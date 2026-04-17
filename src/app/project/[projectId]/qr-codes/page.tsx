@@ -37,7 +37,7 @@ export default function QRCodesPrintPage() {
   };
 
   return (
-    <div className="min-h-screen bg-black p-8">
+    <div className="min-h-screen bg-background p-8">
       <style>{`
         @media print {
           body { margin: 0; padding: 0; background: white; }
@@ -49,17 +49,17 @@ export default function QRCodesPrintPage() {
       `}</style>
 
       <div className="no-print flex justify-between items-center mb-8 max-w-7xl mx-auto">
-        <h1 className="text-3xl font-bold text-[#f5f5f7]">QR Codes</h1>
+        <h1 className="text-3xl font-bold text-primary">QR Codes</h1>
         <div className="flex gap-4">
           <button
             onClick={() => router.push(`/project/${projectId}`)}
-            className="px-4 py-2 bg-white/[0.04] hover:bg-white/[0.1] border border-white/[0.08] text-[#a1a1a6] rounded-lg transition-colors"
+            className="px-4 py-2 bg-tint hover:bg-tint-strong border border-border-dim text-secondary rounded-lg transition-colors"
           >
             Back
           </button>
           <button
             onClick={handlePrint}
-            className="px-4 py-2 bg-[#0a84ff] hover:bg-[#0a84ff]/90 text-[#f5f5f7] rounded-lg transition-colors"
+            className="px-4 py-2 bg-accent hover:bg-accent/90 text-white rounded-lg transition-colors"
           >
             Print
           </button>
@@ -67,7 +67,7 @@ export default function QRCodesPrintPage() {
       </div>
 
       {loading ? (
-        <div className="text-center py-12 text-[#a1a1a6]">Loading...</div>
+        <div className="text-center py-12 text-secondary">Loading...</div>
       ) : (
         <div className="max-w-7xl mx-auto grid grid-cols-4 gap-6">
           {openings.map((opening) => {
@@ -75,7 +75,7 @@ export default function QRCodesPrintPage() {
             return (
               <div
                 key={opening.id}
-                className="qr-code-item bg-white/[0.04] border border-white/[0.08] p-4 rounded-xl flex flex-col items-center"
+                className="qr-code-item bg-tint border border-border-dim p-4 rounded-md flex flex-col items-center"
               >
                 <QRCodeSVG
                   value={qrUrl}
@@ -83,10 +83,10 @@ export default function QRCodesPrintPage() {
                   level="H"
                   includeMargin={true}
                 />
-                <div className="text-center mt-4 text-xs text-[#a1a1a6]">
-                  <p className="font-bold text-[#f5f5f7]">Door {opening.door_number}</p>
+                <div className="text-center mt-4 text-xs text-secondary">
+                  <p className="font-bold text-primary">Door {opening.door_number}</p>
                   {opening.location && (
-                    <p className="text-[#6e6e73]">{opening.location}</p>
+                    <p className="text-tertiary">{opening.location}</p>
                   )}
                 </div>
               </div>

@@ -1,178 +1,66 @@
 "use client";
 
-import { useState, FormEvent, ChangeEvent } from "react";
-import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
-import { playClick, playSuccess } from "@/lib/sounds";
+import Link from "next/link";
 
+/**
+ * Post-SSO-rollout signup page.
+ *
+ * Self-serve email/password signup is retired: new users must be invited
+ * via a company's registered SSO domain, or the Rabbit Hole admin has to
+ * register a new company. Sending casual visitors to a mailto: is the
+ * simplest path that keeps the support queue clean.
+ */
 export default function SignupPage() {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [fullName, setFullName] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
-  const router = useRouter();
-  const supabase = createClient();
-
-  const handleSignup = async (e: FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setError(null);
-    setLoading(true);
-    playClick();
-
-    try {
-      const { error: signUpError } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            full_name: fullName,
-          },
-        },
-      });
-
-      if (signUpError) {
-        setError(signUpError.message);
-        return;
-      }
-
-      playSuccess();
-      setSuccess(true);
-    } catch (err) {
-      setError("An unexpected error occurred");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  if (success) {
-    return (
-      <div className="min-h-screen w-full bg-black flex items-center justify-center px-4 py-12">
-        <div className="w-full max-w-md">
-          <div className="bg-white/[0.04] border border-white/[0.08] rounded-xl shadow-xl p-6 md:p-8 text-center">
-            <div className="mb-4 text-[#30d158] text-4xl">✓</div>
-            <h2 className="text-2xl font-bold text-[#f5f5f7] mb-2">
-              Check your email
-            </h2>
-            <p className="text-[#a1a1a6] mb-6">
-              We've sent a confirmation link to {email}. Please check your email
-              to verify your account.
-            </p>
-            <a
-              href="/"
-              className="text-[#0a84ff] hover:text-[#0a84ff]/80 font-medium"
-            >
-              Back to login
-            </a>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  const mailto =
+    "mailto:support@rabbitholesystems.com?subject=Request%20access%20to%20Door%20Hardware%20Tracker" +
+    "&body=Hi%2C%20I%27d%20like%20to%20request%20access%20for%20my%20company.%20%0A%0ACompany%20name%3A%20%0ACorporate%20email%20domain%3A%20%0A";
 
   return (
-    <div className="min-h-screen w-full bg-black flex items-center justify-center px-4 py-12">
-      <div className="w-full max-w-md">
-        <div className="text-center mb-8">
-          <h1 className="comic-heading text-3xl md:text-4xl font-bold text-glow-cyan mb-2">
-            Create Account
-          </h1>
-          <p className="text-[#a1a1a6]">
-            Join Door Hardware Tracker
-          </p>
-        </div>
+    <div
+      className="min-h-screen w-full flex items-center justify-center px-4 py-8 relative overflow-hidden"
+      style={{ background: "var(--background)" }}
+    >
+      <div
+        className="absolute -top-40 -left-40 w-[600px] h-[600px] rounded-full"
+        style={{
+          background:
+            "radial-gradient(circle, color-mix(in srgb, var(--blue) 6%, transparent) 0%, transparent 65%)",
+        }}
+      />
 
-        <form
-          onSubmit={handleSignup}
-          className="panel corner-brackets p-6 md:p-8"
-        >
-          {error && (
-            <div className="mb-4 p-3 bg-[#ff453a]/20 border border-[#ff453a]/40 rounded-lg text-[#ff453a] text-sm">
-              {error}
-            </div>
-          )}
-
-          <div className="mb-4">
-            <label
-              htmlFor="fullName"
-              className="block text-sm font-medium text-[#f5f5f7] mb-2"
-            >
-              Full Name
-            </label>
-            <input
-              id="fullName"
-              type="text"
-              value={fullName}
-              onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                setFullName(e.target.value)
-              }
-              placeholder="John Doe"
-              required
-              className="input-field"
-            />
-          </div>
-
-          <div className="mb-4">
-            <label
-              htmlFor="email"
-              className="block text-sm font-medium text-[#f5f5f7] mb-2"
-            >
-              Email
-            </label>
-            <input
-              id="email"
-              type="email"
-              value={email}
-              onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                setEmail(e.target.value)
-              }
-              placeholder="you@example.com"
-              required
-              className="input-field"
-            />
-          </div>
-
-          <div className="mb-6">
-            <label
-              htmlFor="password"
-              className="block text-sm font-medium text-[#f5f5f7] mb-2"
-            >
-              Password
-            </label>
-            <input
-              id="password"
-              type="password"
-              value={password}
-              onChange={(e: ChangeEvent<HTMLInputElement>) =>
-                setPassword(e.target.value)
-              }
-              placeholder="••••••••"
-              required
-              className="input-field"
-            />
-          </div>
-
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full glow-btn--primary"
+      <div className="w-full max-w-[460px] relative z-10">
+        <div className="text-center mb-6">
+          <h1
+            className="text-2xl sm:text-3xl font-bold text-primary mb-2 tracking-tight"
+            style={{ fontFamily: "var(--font-display)", letterSpacing: "0.06em" }}
           >
-            {loading ? "Creating account..." : "Sign Up"}
-          </button>
-        </form>
-
-        <div className="mt-6 text-center">
-          <p className="text-[#a1a1a6] text-sm">
-            Already have an account?{" "}
-            <a
-              href="/"
-              className="text-[#0a84ff] hover:text-[#0a84ff]/80 font-medium"
-            >
-              Sign in
-            </a>
-          </p>
+            RABBIT HOLE
+          </h1>
         </div>
+
+        <div className="panel corner-brackets p-6 sm:p-8">
+          <h2 className="text-[18px] font-semibold text-primary mb-3">
+            Your company must be registered.
+          </h2>
+          <p className="text-secondary text-[14px] leading-relaxed mb-6">
+            Door Hardware Tracker is provisioned per company. Ask your internal admin to
+            invite you, or drop us a line and we&apos;ll onboard your company.
+          </p>
+
+          <a
+            href={mailto}
+            className="glow-btn--primary w-full rounded py-3 text-[14px] font-semibold tracking-wide block text-center"
+          >
+            Request access
+          </a>
+        </div>
+
+        <p className="mt-6 text-center text-tertiary text-[13px]">
+          Already have an account?{" "}
+          <Link href="/" className="text-accent hover:text-accent/80 font-medium">
+            Sign in
+          </Link>
+        </p>
       </div>
     </div>
   );

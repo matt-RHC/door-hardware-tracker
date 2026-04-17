@@ -1,8 +1,17 @@
 -- Seed data for Radius DC Project Smash
+--
+-- Migration 039 made projects.company_id NOT NULL. Any seed that inserts a
+-- project now has to stamp a company or the insert fails. We create a
+-- fixed "Seed Company" row so the seed is deterministic and idempotent —
+-- a literal UUID means re-running the seed doesn't create duplicates and
+-- downstream tests can reference the company by ID if they ever need to.
+INSERT INTO companies (id, name, slug)
+VALUES ('00000000-0000-0000-0000-000000000001', 'Seed Company', 'seed-company')
+ON CONFLICT (id) DO NOTHING;
 
 WITH project AS (
-  INSERT INTO projects (id, name, job_number, general_contractor, architect, address, submittal_date)
-  VALUES (gen_random_uuid(), 'Radius DC Project Smash', '306169', 'DPR Construction', 'Highland Associates', '2902 Brick Church Pike, Nashville, TN 37207', '2026-03-20')
+  INSERT INTO projects (id, name, job_number, general_contractor, architect, address, submittal_date, company_id)
+  VALUES (gen_random_uuid(), 'Radius DC Project Smash', '306169', 'DPR Construction', 'Highland Associates', '2902 Brick Church Pike, Nashville, TN 37207', '2026-03-20', '00000000-0000-0000-0000-000000000001')
   RETURNING id
 )
 INSERT INTO openings (id, project_id, door_number, hw_set, hw_heading, fire_rating, door_type, frame_type)

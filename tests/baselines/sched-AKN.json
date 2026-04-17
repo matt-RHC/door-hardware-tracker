@@ -1,604 +1,4828 @@
 {
   "pdf_name": "sched-AKN.pdf",
-  "door_count": 180,
+  "door_count": 177,
   "confirmed_count": 175,
-  "flagged_count": 5,
-  "hw_set_count": 3,
-  "tables_found": 16,
+  "flagged_count": 2,
+  "hw_set_count": 47,
+  "tables_found": 7,
   "reference_code_count": 0,
   "hardware_sets": [
     {
-      "set_id": "EL-XL1",
-      "heading": "33. HW XL1 & EL-XL.1 - Doors 001.01.C.02A, 001.01.D.01, 002.01.C.02A, 002.01.D.06, 104.01.W.01A, 104.02.W.01A -",
-      "item_count": 32,
+      "set_id": "E1-XL.1",
+      "heading": "3 X 7 IWM",
+      "item_count": 8,
       "items": [
         {
-          "name": "10.",
+          "name": "Mortise Exit Device",
           "qty": 1,
           "qty_source": "parsed",
           "qty_total": null,
           "qty_door_count": null,
-          "manufacturer": "001.01.N.09C",
-          "model": "",
+          "manufacturer": "Von Duprin",
+          "model": "9875.LBE .4' .996L-BExM Lever .03 .630",
           "finish": ""
         },
         {
-          "name": "11.",
+          "name": "Surface Closer",
           "qty": 1,
           "qty_source": "parsed",
           "qty_total": null,
           "qty_door_count": null,
-          "manufacturer": "001.01.N.09D",
-          "model": "",
+          "manufacturer": "LCN Closers",
+          "model": "4040XP .SCUSH .689",
           "finish": ""
         },
         {
-          "name": "12.",
+          "name": "Threshold",
           "qty": 1,
           "qty_source": "parsed",
           "qty_total": null,
           "qty_door_count": null,
-          "manufacturer": "001.01.N.10B",
-          "model": "",
+          "manufacturer": "Zero International",
+          "model": "625A x 36\"",
           "finish": ""
         },
         {
-          "name": "13.",
+          "name": "Gasketing",
           "qty": 1,
           "qty_source": "parsed",
           "qty_total": null,
           "qty_door_count": null,
-          "manufacturer": "001.01.N.35A",
-          "model": "",
+          "manufacturer": "Pemko",
+          "model": "S88BL x 36\"",
           "finish": ""
         },
         {
-          "name": "14.",
+          "name": "Gasketing",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "Zero International",
+          "model": "328AA x 84\"",
+          "finish": ""
+        },
+        {
+          "name": "Sweep",
           "qty": 1,
           "qty_source": "parsed",
           "qty_total": null,
           "qty_door_count": null,
-          "manufacturer": "001.01.N.35B",
+          "manufacturer": "Zero International",
+          "model": "8197AA x 36\"",
+          "finish": ""
+        },
+        {
+          "name": "Door Position Switch Tane Alarm SD-72C By Security",
+          "qty": 0,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "Miscellaneous",
           "model": "",
           "finish": ""
         },
         {
-          "name": "15.",
+          "name": "Lock Guard",
           "qty": 1,
           "qty_source": "parsed",
           "qty_total": null,
           "qty_door_count": null,
-          "manufacturer": "001.01.N.36A",
-          "model": "",
+          "manufacturer": "Ives",
+          "model": "LG10",
+          "finish": "630"
+        }
+      ]
+    },
+    {
+      "set_id": "E1-XL1",
+      "heading": "3'6\"x7'",
+      "item_count": 8,
+      "items": [
+        {
+          "name": "Mortise Exit Device",
+          "qty": 2,
+          "qty_source": "needs_division",
+          "qty_total": 2,
+          "qty_door_count": 2,
+          "manufacturer": "Von Duprin",
+          "model": "9875.LBE .4' .996L-BExM Lever .03 .630",
           "finish": ""
         },
         {
-          "name": "16.",
-          "qty": 1,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
-          "manufacturer": "002.01.A.05D",
-          "model": "",
+          "name": "Surface Closer",
+          "qty": 2,
+          "qty_source": "needs_division",
+          "qty_total": 2,
+          "qty_door_count": 2,
+          "manufacturer": "LCN Closers",
+          "model": "4040XP .SCUSH .689",
           "finish": ""
         },
         {
-          "name": "17.",
-          "qty": 1,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
-          "manufacturer": "002.01.A.05C",
-          "model": "",
+          "name": "Threshold",
+          "qty": 2,
+          "qty_source": "needs_division",
+          "qty_total": 2,
+          "qty_door_count": 2,
+          "manufacturer": "Zero International",
+          "model": "625A x 42\"",
           "finish": ""
         },
         {
-          "name": "18.",
-          "qty": 1,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
-          "manufacturer": "002.01.B.04A",
-          "model": "",
+          "name": "Gasketing",
+          "qty": 2,
+          "qty_source": "needs_division",
+          "qty_total": 2,
+          "qty_door_count": 2,
+          "manufacturer": "Pemko",
+          "model": "S88BL x 42\"",
           "finish": ""
         },
         {
-          "name": "19.",
-          "qty": 1,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
-          "manufacturer": "002.01.B.04B",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "20.",
-          "qty": 1,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
-          "manufacturer": "002.01.C.07C",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "21.",
-          "qty": 1,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
-          "manufacturer": "002.01.C.07D",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "22.",
-          "qty": 1,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
-          "manufacturer": "002.01.D.04A",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "23.",
-          "qty": 1,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
-          "manufacturer": "002.01.D.04B",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "All r",
+          "name": "Gasketing",
           "qty": 4,
-          "qty_source": "capped",
-          "qty_total": 31,
-          "qty_door_count": null,
-          "manufacturer": "estroom locks",
-          "model": "with",
-          "finish": "occupancy indic"
+          "qty_source": "needs_division",
+          "qty_total": 4,
+          "qty_door_count": 2,
+          "manufacturer": "Zero International",
+          "model": "328AA x 84\"",
+          "finish": ""
         },
         {
-          "name": "cato",
-          "qty": 1,
+          "name": "Sweep",
+          "qty": 2,
+          "qty_source": "needs_division",
+          "qty_total": 2,
+          "qty_door_count": 2,
+          "manufacturer": "Zero International",
+          "model": "8197AA x 42\"",
+          "finish": ""
+        },
+        {
+          "name": "Door Position Switch Tane Alarm SD-72C By Security",
+          "qty": 0,
           "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
-          "manufacturer": "r does not wo",
-          "model": "rk on",
-          "finish": "the 1.75\" width"
-        },
-        {
-          "name": "PLEA",
-          "qty": 4,
-          "qty_source": "capped",
-          "qty_total": 32,
-          "qty_door_count": null,
-          "manufacturer": "SE NOTE HAR",
-          "model": "DWA",
-          "finish": "RE SPEC ISSUED"
-        },
-        {
-          "name": "ICES",
-          "qty": 1,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
-          "manufacturer": "ON A PAIRED",
-          "model": "OPE",
-          "finish": "NING. ADDITION"
-        },
-        {
-          "name": "BAB",
-          "qty": 1,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
-          "manufacturer": "LY BE STORER",
-          "model": "OOM",
-          "finish": "FUNCTION CON"
-        },
-        {
-          "name": "CTIV",
-          "qty": 1,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
-          "manufacturer": "E LEAF. PLEAS",
-          "model": "E AD",
-          "finish": "VISE"
-        },
-        {
-          "name": "e ar",
-          "qty": 1,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
-          "manufacturer": "e exterior doo",
-          "model": "rs &",
-          "finish": "the exit device is"
-        },
-        {
-          "name": "rior",
-          "qty": 1,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
-          "manufacturer": "?",
+          "qty_total": 0,
+          "qty_door_count": 2,
+          "manufacturer": "Miscellaneous",
           "model": "",
           "finish": ""
         },
         {
-          "name": "Schl",
-          "qty": 4,
-          "qty_source": "capped",
-          "qty_total": 34,
-          "qty_door_count": null,
-          "manufacturer": "age CON-6 wir",
-          "model": "ing h",
-          "finish": "arness requeste"
-        },
+          "name": "Lock Guard",
+          "qty": 2,
+          "qty_source": "needs_division",
+          "qty_total": 2,
+          "qty_door_count": 2,
+          "manufacturer": "Ives",
+          "model": "LG10",
+          "finish": "630"
+        }
+      ]
+    },
+    {
+      "set_id": "E1-XO1",
+      "heading": "3'x7'",
+      "item_count": 8,
+      "items": [
         {
-          "name": "be t",
+          "name": "Mortise Exit Device .LD",
           "qty": 1,
           "qty_source": "parsed",
           "qty_total": null,
           "qty_door_count": null,
-          "manufacturer": "urned over to",
-          "model": "secui",
-          "finish": "rty for connecti"
-        },
-        {
-          "name": "GC t",
-          "qty": 4,
-          "qty_source": "capped",
-          "qty_total": 35,
-          "qty_door_count": null,
-          "manufacturer": "o confirm with",
-          "model": "secu",
-          "finish": "rity & electrical"
-        },
-        {
-          "name": "curr",
-          "qty": 1,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
-          "manufacturer": "ently has TW8",
-          "model": "inclu",
-          "finish": "ded, but TW12"
-        },
-        {
-          "name": "Arch",
-          "qty": 1,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
-          "manufacturer": "itect to confir",
-          "model": "m ap",
-          "finish": "propriate hardw"
-        },
-        {
-          "name": "Doo",
-          "qty": 4,
-          "qty_source": "capped",
-          "qty_total": 38,
-          "qty_door_count": null,
-          "manufacturer": "rs in the hardw",
-          "model": "are",
-          "finish": "sets - SSI1-F-0-X"
-        },
-        {
-          "name": "ical",
-          "qty": 1,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
-          "manufacturer": "rod exit devic",
-          "model": "e con",
-          "finish": "flicts with morti"
-        },
-        {
-          "name": "urfa",
-          "qty": 1,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
-          "manufacturer": "ce applied doo",
-          "model": "r bot",
-          "finish": "tom, or mortise"
-        },
-        {
-          "name": "reac",
-          "qty": 1,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
-          "manufacturer": "h full door wi",
-          "model": "dth.",
+          "manufacturer": "Von Duprin",
+          "model": "9875.EO .630",
           "finish": ""
         },
         {
-          "name": "neeri",
+          "name": "Surface Closer",
           "qty": 1,
           "qty_source": "parsed",
           "qty_total": null,
           "qty_door_count": null,
-          "manufacturer": "ng Specialties Co.,",
-          "model": "Inc.",
+          "manufacturer": "LCN Closers",
+          "model": "4040XP .SCUSH .689",
+          "finish": ""
+        },
+        {
+          "name": "Threshold",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "Zero International",
+          "model": "625A x 36\"",
+          "finish": ""
+        },
+        {
+          "name": "Gasketing",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "Pemko",
+          "model": "S88BL x 36\"",
+          "finish": ""
+        },
+        {
+          "name": "Gasketing",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "Zero International",
+          "model": "328AA x 84\"",
+          "finish": ""
+        },
+        {
+          "name": "Sweep",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "Zero International",
+          "model": "8197AA x 36\"",
+          "finish": ""
+        },
+        {
+          "name": "Door Position Switch Tane Alarm SD-72C By Security",
+          "qty": 0,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "Miscellaneous",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Lock Guard Door position switch monitors door status. Alarm will sound if opening is being used",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "Ives",
+          "model": "LG10",
+          "finish": "630"
+        }
+      ]
+    },
+    {
+      "set_id": "E2-XL.2",
+      "heading": "6X9 IWM",
+      "item_count": 10,
+      "items": [
+        {
+          "name": "Flush Bolt",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": 1,
+          "qty_door_count": 1,
+          "manufacturer": "Ives",
+          "model": "FB51T-36",
+          "finish": "630"
+        },
+        {
+          "name": "Mortise Exit Device",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": 1,
+          "qty_door_count": 1,
+          "manufacturer": "Von Duprin",
+          "model": "9875.L .CON .M .996LxM Lever .03 .630",
+          "finish": ""
+        },
+        {
+          "name": "Coordinator",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": 1,
+          "qty_door_count": 1,
+          "manufacturer": "Architectural Builders Hardware",
+          "model": "3780",
+          "finish": "US28"
+        },
+        {
+          "name": "Surface Closer",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": 2,
+          "qty_door_count": null,
+          "manufacturer": "LCN Closers",
+          "model": "4040XP .SCUSH .689",
+          "finish": ""
+        },
+        {
+          "name": "Threshold",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": 1,
+          "qty_door_count": 1,
+          "manufacturer": "Zero International",
+          "model": "625A x 72\"",
+          "finish": ""
+        },
+        {
+          "name": "Gasketing",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": 1,
+          "qty_door_count": 1,
+          "manufacturer": "Pemko",
+          "model": "S88BL x 72\"",
+          "finish": ""
+        },
+        {
+          "name": "Gasketing",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": 2,
+          "qty_door_count": null,
+          "manufacturer": "Zero International",
+          "model": "328AA x 108\"",
+          "finish": ""
+        },
+        {
+          "name": "Sweep",
+          "qty": 2,
+          "qty_source": "needs_division",
+          "qty_total": 2,
+          "qty_door_count": 2,
+          "manufacturer": "Zero International",
+          "model": "8197AA x 36\"",
+          "finish": ""
+        },
+        {
+          "name": "Door Position Switch Tane Alarm SD-72C By Security",
+          "qty": 0,
+          "qty_source": "parsed",
+          "qty_total": 0,
+          "qty_door_count": 1,
+          "manufacturer": "Miscellaneous",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Lock Guard",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": 1,
+          "qty_door_count": 1,
+          "manufacturer": "Ives",
+          "model": "LG10",
+          "finish": "630"
+        }
+      ]
+    },
+    {
+      "set_id": "I1-B3",
+      "heading": "3'x7'",
+      "item_count": 4,
+      "items": [
+        {
+          "name": "Mortise Lock",
+          "qty": 4,
+          "qty_source": "needs_division",
+          "qty_total": 4,
+          "qty_door_count": 4,
+          "manufacturer": "Schlage",
+          "model": "L9040 .03N .L283-722 .09-509x.L583-363 .626",
+          "finish": ""
+        },
+        {
+          "name": "Surface Closer",
+          "qty": 4,
+          "qty_source": "needs_division",
+          "qty_total": 4,
+          "qty_door_count": 4,
+          "manufacturer": "LCN Closers",
+          "model": "4040XPT-Pull .STDTRK .689",
+          "finish": ""
+        },
+        {
+          "name": "Kick Plate",
+          "qty": 4,
+          "qty_source": "needs_division",
+          "qty_total": 4,
+          "qty_door_count": 4,
+          "manufacturer": "Ives",
+          "model": "8400 B-CS 24\" x 34\"",
+          "finish": "US32D"
+        },
+        {
+          "name": "Wall Stop",
+          "qty": 4,
+          "qty_source": "needs_division",
+          "qty_total": 4,
+          "qty_door_count": 4,
+          "manufacturer": "Ives",
+          "model": "WS406CVX",
+          "finish": "630"
+        }
+      ]
+    },
+    {
+      "set_id": "I1-G-P1",
+      "heading": "4'x8'",
+      "item_count": 6,
+      "items": [
+        {
+          "name": "Mortise Lock",
+          "qty": 2,
+          "qty_source": "needs_division",
+          "qty_total": 2,
+          "qty_door_count": 2,
+          "manufacturer": "Schlage",
+          "model": "L9010 .03N .630",
+          "finish": ""
+        },
+        {
+          "name": "Surface Closer",
+          "qty": 2,
+          "qty_source": "needs_division",
+          "qty_total": 2,
+          "qty_door_count": 2,
+          "manufacturer": "LCN Closers",
+          "model": "4040XP .SCUSH .689",
+          "finish": ""
+        },
+        {
+          "name": "Kick Plate",
+          "qty": 2,
+          "qty_source": "needs_division",
+          "qty_total": 2,
+          "qty_door_count": 2,
+          "manufacturer": "Ives",
+          "model": "8400 B-CS 24\" x 46\"",
+          "finish": "US32D"
+        },
+        {
+          "name": "Gasketing",
+          "qty": 2,
+          "qty_source": "needs_division",
+          "qty_total": 2,
+          "qty_door_count": 2,
+          "manufacturer": "Pemko",
+          "model": "S88BL x 48\"",
+          "finish": ""
+        },
+        {
+          "name": "Gasketing",
+          "qty": 4,
+          "qty_source": "needs_division",
+          "qty_total": 4,
+          "qty_door_count": 2,
+          "manufacturer": "Zero International",
+          "model": "328AA x 96\"",
+          "finish": ""
+        },
+        {
+          "name": "Door Bottom",
+          "qty": 2,
+          "qty_source": "needs_division",
+          "qty_total": 2,
+          "qty_door_count": 2,
+          "manufacturer": "Zero International",
+          "model": "355AA 48\"",
           "finish": ""
         }
       ]
     },
     {
-      "set_id": "added",
-      "heading": "HW Set added in CCD 042 for doors 001.01.A.14 & 002.01.A.14",
+      "set_id": "I1-G-P1.1",
+      "heading": "3'6\"x7'",
+      "item_count": 6,
+      "items": [
+        {
+          "name": "Mortise Lock",
+          "qty": 2,
+          "qty_source": "needs_division",
+          "qty_total": 2,
+          "qty_door_count": 2,
+          "manufacturer": "Schlage",
+          "model": "L9010 .03N .630",
+          "finish": ""
+        },
+        {
+          "name": "Surface Closer",
+          "qty": 2,
+          "qty_source": "needs_division",
+          "qty_total": 2,
+          "qty_door_count": 2,
+          "manufacturer": "LCN Closers",
+          "model": "4040XP .SCUSH .689",
+          "finish": ""
+        },
+        {
+          "name": "Kick Plate",
+          "qty": 2,
+          "qty_source": "needs_division",
+          "qty_total": 2,
+          "qty_door_count": 2,
+          "manufacturer": "Ives",
+          "model": "8400 B-CS 24\" x 40\"",
+          "finish": "US32D"
+        },
+        {
+          "name": "Gasketing",
+          "qty": 2,
+          "qty_source": "needs_division",
+          "qty_total": 2,
+          "qty_door_count": 2,
+          "manufacturer": "Pemko",
+          "model": "S88BL x 42\"",
+          "finish": ""
+        },
+        {
+          "name": "Gasketing",
+          "qty": 4,
+          "qty_source": "needs_division",
+          "qty_total": 4,
+          "qty_door_count": 2,
+          "manufacturer": "Zero International",
+          "model": "328AA x 84\"",
+          "finish": ""
+        },
+        {
+          "name": "Door Bottom",
+          "qty": 2,
+          "qty_source": "needs_division",
+          "qty_total": 2,
+          "qty_door_count": 2,
+          "manufacturer": "Zero International",
+          "model": "355AA 42\"",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "I1-G-P3.1",
+      "heading": "3'x7'",
+      "item_count": 5,
+      "items": [
+        {
+          "name": "Mortise Lock strike",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "Schlage",
+          "model": "L9010 .03N 1-3/8\" lip to center .630 special",
+          "finish": ""
+        },
+        {
+          "name": "Surface Closer",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "LCN Closers",
+          "model": "4040XPT-Pull .STDTRK .689",
+          "finish": ""
+        },
+        {
+          "name": "Wall Stop",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "Ives",
+          "model": "WS406CVX",
+          "finish": "630"
+        },
+        {
+          "name": "Gasketing",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "Zero International",
+          "model": "328AA x 36\" x 84\"",
+          "finish": ""
+        },
+        {
+          "name": "Door Bottom",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "Zero International",
+          "model": "355AA 36\"",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "I1-P3.1",
+      "heading": "3'x7'",
+      "item_count": 5,
+      "items": [
+        {
+          "name": "Mortise Lock strike",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "Schlage",
+          "model": "L9010 .03N 1-3/8\" lip to center .630 special",
+          "finish": ""
+        },
+        {
+          "name": "Surface Closer",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "LCN Closers",
+          "model": "4040XPT-Pull .STDTRK .689",
+          "finish": ""
+        },
+        {
+          "name": "Wall Stop",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "Ives",
+          "model": "WS406CVX",
+          "finish": "630"
+        },
+        {
+          "name": "Gasketing",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "Zero International",
+          "model": "328AA x 36\" x 84\"",
+          "finish": ""
+        },
+        {
+          "name": "Door Bottom",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "Zero International",
+          "model": "355AA 36\"",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "I1-R3.1",
+      "heading": "3'x7'",
+      "item_count": 6,
+      "items": [
+        {
+          "name": "Mortise Lock strike",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "Schlage",
+          "model": "L9080 .J .L .03N 1-3/8\" lip to center .630 special",
+          "finish": ""
+        },
+        {
+          "name": "Interchangeable Core",
+          "qty": 0,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "Medeco",
+          "model": "320201N S 26",
+          "finish": ""
+        },
+        {
+          "name": "Surface Closer",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "LCN Closers",
+          "model": "4040XPT-Pull .STDTRK .689",
+          "finish": ""
+        },
+        {
+          "name": "Kick Plate",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "Ives",
+          "model": "8400 B-CS 24\" x 34\"",
+          "finish": "US32D"
+        },
+        {
+          "name": "Wall Stop",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "Ives",
+          "model": "WS406CVX",
+          "finish": "630"
+        },
+        {
+          "name": "Gasketing",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "Zero International",
+          "model": "488S-BK 17'",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "I1-SF-P4.1",
+      "heading": "3'x7'",
+      "item_count": 4,
+      "items": [
+        {
+          "name": "Continuous Hinge",
+          "qty": 6,
+          "qty_source": "needs_division",
+          "qty_total": 6,
+          "qty_door_count": 6,
+          "manufacturer": "Ives",
+          "model": "026XY 83\" TEKWD",
+          "finish": "628"
+        },
+        {
+          "name": "Mortise Lock strike",
+          "qty": 6,
+          "qty_source": "needs_division",
+          "qty_total": 6,
+          "qty_door_count": 6,
+          "manufacturer": "Schlage",
+          "model": "L9010 .03N 1-3/8\" lip to center .630 special",
+          "finish": ""
+        },
+        {
+          "name": "Floor Stop",
+          "qty": 6,
+          "qty_source": "needs_division",
+          "qty_total": 6,
+          "qty_door_count": 6,
+          "manufacturer": "Ives",
+          "model": "FS410",
+          "finish": "626"
+        },
+        {
+          "name": "Door Bottom",
+          "qty": 6,
+          "qty_source": "needs_division",
+          "qty_total": 6,
+          "qty_door_count": 6,
+          "manufacturer": "Zero International",
+          "model": "355AA 36\"",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "I1-SF-XL4",
+      "heading": "By Others",
+      "item_count": 0,
+      "items": []
+    },
+    {
+      "set_id": "I1-T3",
+      "heading": "3'x7'",
+      "item_count": 6,
+      "items": [
+        {
+          "name": "Pull Plate",
+          "qty": 2,
+          "qty_source": "needs_division",
+          "qty_total": 2,
+          "qty_door_count": 2,
+          "manufacturer": "Ives",
+          "model": "8302-0-4x16",
+          "finish": "630"
+        },
+        {
+          "name": "Push Plate",
+          "qty": 2,
+          "qty_source": "needs_division",
+          "qty_total": 2,
+          "qty_door_count": 2,
+          "manufacturer": "Ives",
+          "model": "8200-4x16",
+          "finish": "630"
+        },
+        {
+          "name": "Surface Closer",
+          "qty": 2,
+          "qty_source": "needs_division",
+          "qty_total": 2,
+          "qty_door_count": 2,
+          "manufacturer": "LCN Closers",
+          "model": "4040XPT-Pull .STDTRK .689",
+          "finish": ""
+        },
+        {
+          "name": "Kick Plate",
+          "qty": 2,
+          "qty_source": "needs_division",
+          "qty_total": 2,
+          "qty_door_count": 2,
+          "manufacturer": "Ives",
+          "model": "8400 B-CS 24\" x 34\"",
+          "finish": "US32D"
+        },
+        {
+          "name": "Wall Stop",
+          "qty": 2,
+          "qty_source": "needs_division",
+          "qty_total": 2,
+          "qty_door_count": 2,
+          "manufacturer": "Ives",
+          "model": "WS406CVX",
+          "finish": "630"
+        },
+        {
+          "name": "Gasketing",
+          "qty": 2,
+          "qty_source": "needs_division",
+          "qty_total": 2,
+          "qty_door_count": 2,
+          "manufacturer": "Zero International",
+          "model": "488S-BK 17'",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "I2-F-G-XM35",
+      "heading": "8'3\"x9'6\"",
+      "item_count": 9,
+      "items": [
+        {
+          "name": "Fire Rated Surf Vert Rod .WS",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": 2,
+          "qty_door_count": null,
+          "manufacturer": "Von Duprin",
+          "model": "9827.L.F .996L(Std) .03 .626",
+          "finish": ""
+        },
+        {
+          "name": "Interchangeable Core",
+          "qty": 0,
+          "qty_source": "parsed",
+          "qty_total": 0,
+          "qty_door_count": 1,
+          "manufacturer": "Medeco",
+          "model": "320201N S 26",
+          "finish": ""
+        },
+        {
+          "name": "Cylinder LFIC Rim Cylinder Housing",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": 2,
+          "qty_door_count": null,
+          "manufacturer": "Schlage",
+          "model": "20-079 .626",
+          "finish": ""
+        },
+        {
+          "name": "Surface Closer",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": 2,
+          "qty_door_count": null,
+          "manufacturer": "LCN Closers",
+          "model": "4040XP .EDA .689",
+          "finish": ""
+        },
+        {
+          "name": "Kick Plate",
+          "qty": 2,
+          "qty_source": "needs_division",
+          "qty_total": 2,
+          "qty_door_count": 2,
+          "manufacturer": "Ives",
+          "model": "8402 B-CS 24\" x 48 1/2\"",
+          "finish": "US32D"
+        },
+        {
+          "name": "Electromagnetic Holder",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": 2,
+          "qty_door_count": null,
+          "manufacturer": "LCN Closers",
+          "model": "SEM7850 .689",
+          "finish": ""
+        },
+        {
+          "name": "Gasketing",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": 1,
+          "qty_door_count": 1,
+          "manufacturer": "Pemko",
+          "model": "S88BL x 99\"",
+          "finish": ""
+        },
+        {
+          "name": "Gasketing",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": 2,
+          "qty_door_count": null,
+          "manufacturer": "Zero International",
+          "model": "328AA x 114\"",
+          "finish": ""
+        },
+        {
+          "name": "Door Bottom",
+          "qty": 2,
+          "qty_source": "needs_division",
+          "qty_total": 2,
+          "qty_door_count": 2,
+          "manufacturer": "Zero International",
+          "model": "355AA 49.5\"",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "I2-F-G-XO",
+      "heading": "6'x7'",
+      "item_count": 5,
+      "items": [
+        {
+          "name": "Fire Rated Conc Vert Rod",
+          "qty": 4,
+          "qty_source": "needs_division",
+          "qty_total": 4,
+          "qty_door_count": 2,
+          "manufacturer": "Von Duprin",
+          "model": "9847.EO.F .630",
+          "finish": ""
+        },
+        {
+          "name": "Overhead Stop",
+          "qty": 4,
+          "qty_source": "needs_division",
+          "qty_total": 4,
+          "qty_door_count": 4,
+          "manufacturer": "Glynn-Johnson",
+          "model": "",
+          "finish": "104S 630"
+        },
+        {
+          "name": "Surface Closer Pull side mounted",
+          "qty": 4,
+          "qty_source": "needs_division",
+          "qty_total": 4,
+          "qty_door_count": 2,
+          "manufacturer": "LCN Closers",
+          "model": "4040XP .REGARM .689",
+          "finish": ""
+        },
+        {
+          "name": "Kick Plate",
+          "qty": 4,
+          "qty_source": "needs_division",
+          "qty_total": 4,
+          "qty_door_count": 4,
+          "manufacturer": "Ives",
+          "model": "8402 B-CS 24\" x 35\"",
+          "finish": "US32D"
+        },
+        {
+          "name": "Gasketing",
+          "qty": 2,
+          "qty_source": "needs_division",
+          "qty_total": 2,
+          "qty_door_count": 2,
+          "manufacturer": "Zero International",
+          "model": "328AA x 72\" x 84\"",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "I2-G-P1",
+      "heading": "6'x9'",
+      "item_count": 9,
+      "items": [
+        {
+          "name": "Flush Bolt",
+          "qty": 2,
+          "qty_source": "needs_division",
+          "qty_total": 2,
+          "qty_door_count": 2,
+          "manufacturer": "Ives",
+          "model": "FB51T-36",
+          "finish": "630"
+        },
+        {
+          "name": "Mortise Lock",
+          "qty": 2,
+          "qty_source": "needs_division",
+          "qty_total": 2,
+          "qty_door_count": 2,
+          "manufacturer": "Schlage",
+          "model": "L9010 .03N .630",
+          "finish": ""
+        },
+        {
+          "name": "Coordinator",
+          "qty": 0,
+          "qty_source": "parsed",
+          "qty_total": 0,
+          "qty_door_count": 2,
+          "manufacturer": "Ives",
+          "model": "COR52 FL20",
+          "finish": "628"
+        },
+        {
+          "name": "Mounting Bracket",
+          "qty": 0,
+          "qty_source": "parsed",
+          "qty_total": 0,
+          "qty_door_count": 2,
+          "manufacturer": "Ives",
+          "model": "MB1",
+          "finish": "689"
+        },
+        {
+          "name": "Coordinator",
+          "qty": 2,
+          "qty_source": "needs_division",
+          "qty_total": 2,
+          "qty_door_count": 2,
+          "manufacturer": "Architectural Builders Hardware",
+          "model": "3780",
+          "finish": "US28"
+        },
+        {
+          "name": "Surface Closer",
+          "qty": 4,
+          "qty_source": "needs_division",
+          "qty_total": 4,
+          "qty_door_count": 2,
+          "manufacturer": "LCN Closers",
+          "model": "4040XP .SCUSH .689",
+          "finish": ""
+        },
+        {
+          "name": "Kick Plate",
+          "qty": 4,
+          "qty_source": "needs_division",
+          "qty_total": 4,
+          "qty_door_count": 4,
+          "manufacturer": "Ives",
+          "model": "8400 B-CS 24\" x 35\"",
+          "finish": "US32D"
+        },
+        {
+          "name": "Gasketing",
+          "qty": 2,
+          "qty_source": "needs_division",
+          "qty_total": 2,
+          "qty_door_count": 2,
+          "manufacturer": "Zero International",
+          "model": "488S-BK 25'",
+          "finish": ""
+        },
+        {
+          "name": "Door Bottom",
+          "qty": 4,
+          "qty_source": "needs_division",
+          "qty_total": 4,
+          "qty_door_count": 4,
+          "manufacturer": "Zero International",
+          "model": "355AA 36\"",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "SI1-E3",
+      "heading": "3'x7'",
+      "item_count": 9,
+      "items": [
+        {
+          "name": "Electrified Mortise Lock",
+          "qty": 5,
+          "qty_source": "needs_division",
+          "qty_total": 5,
+          "qty_door_count": 5,
+          "manufacturer": "Schlage",
+          "model": "L9092EU .J .L .03N .RX .630",
+          "finish": ""
+        },
+        {
+          "name": "Interchangeable Core",
+          "qty": 0,
+          "qty_source": "parsed",
+          "qty_total": 0,
+          "qty_door_count": 5,
+          "manufacturer": "Medeco",
+          "model": "320201N S 26",
+          "finish": ""
+        },
+        {
+          "name": "Surface Closer",
+          "qty": 5,
+          "qty_source": "needs_division",
+          "qty_total": 5,
+          "qty_door_count": 5,
+          "manufacturer": "LCN Closers",
+          "model": "4040XPT-Pull .STDTRK .689",
+          "finish": ""
+        },
+        {
+          "name": "Kick Plate",
+          "qty": 5,
+          "qty_source": "needs_division",
+          "qty_total": 5,
+          "qty_door_count": 5,
+          "manufacturer": "Ives",
+          "model": "8400 B-CS 24\" x 34\"",
+          "finish": "US32D"
+        },
+        {
+          "name": "Wall Stop",
+          "qty": 5,
+          "qty_source": "needs_division",
+          "qty_total": 5,
+          "qty_door_count": 5,
+          "manufacturer": "Ives",
+          "model": "WS406CVX",
+          "finish": "630"
+        },
+        {
+          "name": "Gasketing",
+          "qty": 5,
+          "qty_source": "needs_division",
+          "qty_total": 5,
+          "qty_door_count": 5,
+          "manufacturer": "Zero International",
+          "model": "488S-BK 17'",
+          "finish": ""
+        },
+        {
+          "name": "Wire Harness CON-6",
+          "qty": 5,
+          "qty_source": "needs_division",
+          "qty_total": 5,
+          "qty_door_count": 5,
+          "manufacturer": "Schlage",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Wire Harness CON-32",
+          "qty": 5,
+          "qty_source": "needs_division",
+          "qty_total": 5,
+          "qty_door_count": 5,
+          "manufacturer": "Schlage",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Door Position Switch Tane Alarm SD-72C By Security",
+          "qty": 0,
+          "qty_source": "parsed",
+          "qty_total": 0,
+          "qty_door_count": 5,
+          "manufacturer": "Miscellaneous",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "SI1-F-G-E13",
+      "heading": "4'x9'",
+      "item_count": 10,
+      "items": [
+        {
+          "name": "Electrified Mortise Lock",
+          "qty": 2,
+          "qty_source": "needs_division",
+          "qty_total": 2,
+          "qty_door_count": 2,
+          "manufacturer": "Schlage",
+          "model": "L9092EU .J .L .03N .RX .630",
+          "finish": ""
+        },
+        {
+          "name": "Interchangeable Core",
+          "qty": 0,
+          "qty_source": "parsed",
+          "qty_total": 0,
+          "qty_door_count": 2,
+          "manufacturer": "Medeco",
+          "model": "320201N S 26",
+          "finish": ""
+        },
+        {
+          "name": "Surface Closer",
+          "qty": 2,
+          "qty_source": "needs_division",
+          "qty_total": 2,
+          "qty_door_count": 2,
+          "manufacturer": "LCN Closers",
+          "model": "4040XP .SCUSH .689",
+          "finish": ""
+        },
+        {
+          "name": "Kick Plate",
+          "qty": 4,
+          "qty_source": "needs_division",
+          "qty_total": 4,
+          "qty_door_count": 2,
+          "manufacturer": "Ives",
+          "model": "8402 B-CS 24\" x 46\"",
+          "finish": "US32D"
+        },
+        {
+          "name": "Wall Stop",
+          "qty": 2,
+          "qty_source": "needs_division",
+          "qty_total": 2,
+          "qty_door_count": 2,
+          "manufacturer": "Ives",
+          "model": "WS406CVX",
+          "finish": "630"
+        },
+        {
+          "name": "Gasketing",
+          "qty": 2,
+          "qty_source": "needs_division",
+          "qty_total": 2,
+          "qty_door_count": 2,
+          "manufacturer": "Zero International",
+          "model": "328AA x 48\" x 108\"",
+          "finish": ""
+        },
+        {
+          "name": "Door Bottom",
+          "qty": 2,
+          "qty_source": "needs_division",
+          "qty_total": 2,
+          "qty_door_count": 2,
+          "manufacturer": "Zero International",
+          "model": "355AA 48\"",
+          "finish": ""
+        },
+        {
+          "name": "Wire Harness CON-44",
+          "qty": 2,
+          "qty_source": "needs_division",
+          "qty_total": 2,
+          "qty_door_count": 2,
+          "manufacturer": "Schlage",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Wire Harness CON-6",
+          "qty": 2,
+          "qty_source": "needs_division",
+          "qty_total": 2,
+          "qty_door_count": 2,
+          "manufacturer": "Schlage",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Door Position Switch Tane Alarm SD-72C By Security",
+          "qty": 0,
+          "qty_source": "parsed",
+          "qty_total": 0,
+          "qty_door_count": 2,
+          "manufacturer": "Miscellaneous",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "SI1-G-E13",
+      "heading": "4'x8'",
+      "item_count": 11,
+      "items": [
+        {
+          "name": "Electrified Mortise Lock",
+          "qty": 4,
+          "qty_source": "needs_division",
+          "qty_total": 4,
+          "qty_door_count": 4,
+          "manufacturer": "Schlage",
+          "model": "L9092EU .J .L .03N .RX .630",
+          "finish": ""
+        },
+        {
+          "name": "Interchangeable Core",
+          "qty": 0,
+          "qty_source": "parsed",
+          "qty_total": 0,
+          "qty_door_count": 4,
+          "manufacturer": "Medeco",
+          "model": "320201N S 26",
+          "finish": ""
+        },
+        {
+          "name": "Surface Closer",
+          "qty": 4,
+          "qty_source": "needs_division",
+          "qty_total": 4,
+          "qty_door_count": 4,
+          "manufacturer": "LCN Closers",
+          "model": "4040XP .SCUSH .689",
+          "finish": ""
+        },
+        {
+          "name": "Kick Plate",
+          "qty": 4,
+          "qty_source": "needs_division",
+          "qty_total": 4,
+          "qty_door_count": 4,
+          "manufacturer": "Ives",
+          "model": "8400 B-CS 24\" x 46\"",
+          "finish": "US32D"
+        },
+        {
+          "name": "Wall Stop",
+          "qty": 4,
+          "qty_source": "needs_division",
+          "qty_total": 4,
+          "qty_door_count": 4,
+          "manufacturer": "Ives",
+          "model": "WS406CVX",
+          "finish": "630"
+        },
+        {
+          "name": "Gasketing",
+          "qty": 4,
+          "qty_source": "needs_division",
+          "qty_total": 4,
+          "qty_door_count": 4,
+          "manufacturer": "Pemko",
+          "model": "S88BL x 48\"",
+          "finish": ""
+        },
+        {
+          "name": "Gasketing",
+          "qty": 8,
+          "qty_source": "needs_division",
+          "qty_total": 8,
+          "qty_door_count": 4,
+          "manufacturer": "Zero International",
+          "model": "328AA x 96\"",
+          "finish": ""
+        },
+        {
+          "name": "Door Bottom",
+          "qty": 4,
+          "qty_source": "needs_division",
+          "qty_total": 4,
+          "qty_door_count": 4,
+          "manufacturer": "Zero International",
+          "model": "355AA 48\"",
+          "finish": ""
+        },
+        {
+          "name": "Wire Harness CON-44",
+          "qty": 4,
+          "qty_source": "needs_division",
+          "qty_total": 4,
+          "qty_door_count": 4,
+          "manufacturer": "Schlage",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Wire Harness CON-6",
+          "qty": 4,
+          "qty_source": "needs_division",
+          "qty_total": 4,
+          "qty_door_count": 4,
+          "manufacturer": "Schlage",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Door Position Switch Tane Alarm SD-72C By Security",
+          "qty": 0,
+          "qty_source": "parsed",
+          "qty_total": 0,
+          "qty_door_count": 4,
+          "manufacturer": "Miscellaneous",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "SI1-G-E13.1",
+      "heading": "4'x9'",
+      "item_count": 10,
+      "items": [
+        {
+          "name": "Electrified Mortise Lock",
+          "qty": 6,
+          "qty_source": "needs_division",
+          "qty_total": 6,
+          "qty_door_count": 6,
+          "manufacturer": "Schlage",
+          "model": "L9092EU .J .L .03N .RX .630",
+          "finish": ""
+        },
+        {
+          "name": "Interchangeable Core",
+          "qty": 0,
+          "qty_source": "parsed",
+          "qty_total": 0,
+          "qty_door_count": 6,
+          "manufacturer": "Medeco",
+          "model": "320201N S 26",
+          "finish": ""
+        },
+        {
+          "name": "Surface Closer",
+          "qty": 6,
+          "qty_source": "needs_division",
+          "qty_total": 6,
+          "qty_door_count": 6,
+          "manufacturer": "LCN Closers",
+          "model": "4040XP .SCUSH .689",
+          "finish": ""
+        },
+        {
+          "name": "Kick Plate",
+          "qty": 6,
+          "qty_source": "needs_division",
+          "qty_total": 6,
+          "qty_door_count": 6,
+          "manufacturer": "Ives",
+          "model": "8400 B-CS 24\" x 46\"",
+          "finish": "US32D"
+        },
+        {
+          "name": "Wall Stop",
+          "qty": 6,
+          "qty_source": "needs_division",
+          "qty_total": 6,
+          "qty_door_count": 6,
+          "manufacturer": "Ives",
+          "model": "WS406CVX",
+          "finish": "630"
+        },
+        {
+          "name": "Gasketing",
+          "qty": 6,
+          "qty_source": "needs_division",
+          "qty_total": 6,
+          "qty_door_count": 6,
+          "manufacturer": "Zero International",
+          "model": "328AA x 48\" x 108\"",
+          "finish": ""
+        },
+        {
+          "name": "Door Bottom",
+          "qty": 6,
+          "qty_source": "needs_division",
+          "qty_total": 6,
+          "qty_door_count": 6,
+          "manufacturer": "Zero International",
+          "model": "355AA 48\"",
+          "finish": ""
+        },
+        {
+          "name": "Wire Harness CON-44",
+          "qty": 6,
+          "qty_source": "needs_division",
+          "qty_total": 6,
+          "qty_door_count": 6,
+          "manufacturer": "Schlage",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Wire Harness CON-6",
+          "qty": 6,
+          "qty_source": "needs_division",
+          "qty_total": 6,
+          "qty_door_count": 6,
+          "manufacturer": "Schlage",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Door Position Switch Tane Alarm SD-72C By Security",
+          "qty": 0,
+          "qty_source": "parsed",
+          "qty_total": 0,
+          "qty_door_count": 6,
+          "manufacturer": "Miscellaneous",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "SI1-G-E2",
+      "heading": "3'x7'",
+      "item_count": 10,
+      "items": [
+        {
+          "name": "Electrified Mortise Lock",
+          "qty": 4,
+          "qty_source": "needs_division",
+          "qty_total": 4,
+          "qty_door_count": 4,
+          "manufacturer": "Schlage",
+          "model": "L9092EU .J .L .03N .RX .630",
+          "finish": ""
+        },
+        {
+          "name": "Interchangeable Core",
+          "qty": 0,
+          "qty_source": "parsed",
+          "qty_total": 0,
+          "qty_door_count": 4,
+          "manufacturer": "Medeco",
+          "model": "320201N S 26",
+          "finish": ""
+        },
+        {
+          "name": "Overhead Stop",
+          "qty": 4,
+          "qty_source": "needs_division",
+          "qty_total": 4,
+          "qty_door_count": 4,
+          "manufacturer": "Glynn-Johnson",
+          "model": "",
+          "finish": "104S 630"
+        },
+        {
+          "name": "Surface Closer",
+          "qty": 4,
+          "qty_source": "needs_division",
+          "qty_total": 4,
+          "qty_door_count": 4,
+          "manufacturer": "LCN Closers",
+          "model": "4040XPT-Pull .STDTRK .689",
+          "finish": ""
+        },
+        {
+          "name": "Kick Plate",
+          "qty": 4,
+          "qty_source": "needs_division",
+          "qty_total": 4,
+          "qty_door_count": 4,
+          "manufacturer": "Ives",
+          "model": "8400 B-CS 24\" x 34\"",
+          "finish": "US32D"
+        },
+        {
+          "name": "Gasketing",
+          "qty": 4,
+          "qty_source": "needs_division",
+          "qty_total": 4,
+          "qty_door_count": 4,
+          "manufacturer": "Zero International",
+          "model": "328AA x 36\" x 84\"",
+          "finish": ""
+        },
+        {
+          "name": "Door Bottom",
+          "qty": 4,
+          "qty_source": "needs_division",
+          "qty_total": 4,
+          "qty_door_count": 4,
+          "manufacturer": "Zero International",
+          "model": "355AA 36\"",
+          "finish": ""
+        },
+        {
+          "name": "Wire Harness CON-6",
+          "qty": 4,
+          "qty_source": "needs_division",
+          "qty_total": 4,
+          "qty_door_count": 4,
+          "manufacturer": "Schlage",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Wire Harness CON-32",
+          "qty": 4,
+          "qty_source": "needs_division",
+          "qty_total": 4,
+          "qty_door_count": 4,
+          "manufacturer": "Schlage",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Door Position Switch Tane Alarm SD-72C By Security",
+          "qty": 0,
+          "qty_source": "parsed",
+          "qty_total": 0,
+          "qty_door_count": 4,
+          "manufacturer": "Miscellaneous",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "SI1-G-E3",
+      "heading": "3'x7'",
+      "item_count": 10,
+      "items": [
+        {
+          "name": "Electrified Mortise Lock",
+          "qty": 4,
+          "qty_source": "needs_division",
+          "qty_total": 4,
+          "qty_door_count": 4,
+          "manufacturer": "Schlage",
+          "model": "L9092EU .J .L .03N .RX .630",
+          "finish": ""
+        },
+        {
+          "name": "Interchangeable Core",
+          "qty": 0,
+          "qty_source": "parsed",
+          "qty_total": 0,
+          "qty_door_count": 4,
+          "manufacturer": "Medeco",
+          "model": "320201N S 26",
+          "finish": ""
+        },
+        {
+          "name": "Surface Closer",
+          "qty": 4,
+          "qty_source": "needs_division",
+          "qty_total": 4,
+          "qty_door_count": 4,
+          "manufacturer": "LCN Closers",
+          "model": "4040XPT-Pull .STDTRK .689",
+          "finish": ""
+        },
+        {
+          "name": "Kick Plate",
+          "qty": 4,
+          "qty_source": "needs_division",
+          "qty_total": 4,
+          "qty_door_count": 4,
+          "manufacturer": "Ives",
+          "model": "8400 B-CS 24\" x 34\"",
+          "finish": "US32D"
+        },
+        {
+          "name": "Wall Stop",
+          "qty": 4,
+          "qty_source": "needs_division",
+          "qty_total": 4,
+          "qty_door_count": 4,
+          "manufacturer": "Ives",
+          "model": "WS406CVX",
+          "finish": "630"
+        },
+        {
+          "name": "Gasketing",
+          "qty": 4,
+          "qty_source": "needs_division",
+          "qty_total": 4,
+          "qty_door_count": 4,
+          "manufacturer": "Zero International",
+          "model": "328AA x 36\" x 84\"",
+          "finish": ""
+        },
+        {
+          "name": "Door Bottom",
+          "qty": 4,
+          "qty_source": "needs_division",
+          "qty_total": 4,
+          "qty_door_count": 4,
+          "manufacturer": "Zero International",
+          "model": "355AA 36\"",
+          "finish": ""
+        },
+        {
+          "name": "Wire Harness CON-6",
+          "qty": 4,
+          "qty_source": "needs_division",
+          "qty_total": 4,
+          "qty_door_count": 4,
+          "manufacturer": "Schlage",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Wire Harness CON-32",
+          "qty": 4,
+          "qty_source": "needs_division",
+          "qty_total": 4,
+          "qty_door_count": 4,
+          "manufacturer": "Schlage",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Door Position Switch Tane Alarm SD-72C By Security",
+          "qty": 0,
+          "qty_source": "parsed",
+          "qty_total": 0,
+          "qty_door_count": 4,
+          "manufacturer": "Miscellaneous",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "SI1-G-E3.1",
+      "heading": "3'6\"x7'",
+      "item_count": 10,
+      "items": [
+        {
+          "name": "Electrified Mortise Lock",
+          "qty": 3,
+          "qty_source": "needs_division",
+          "qty_total": 3,
+          "qty_door_count": 3,
+          "manufacturer": "Schlage",
+          "model": "L9092EU .J .L .03N .RX .630",
+          "finish": ""
+        },
+        {
+          "name": "Interchangeable Core",
+          "qty": 0,
+          "qty_source": "parsed",
+          "qty_total": 0,
+          "qty_door_count": 3,
+          "manufacturer": "Medeco",
+          "model": "320201N S 26",
+          "finish": ""
+        },
+        {
+          "name": "Surface Closer",
+          "qty": 3,
+          "qty_source": "needs_division",
+          "qty_total": 3,
+          "qty_door_count": 3,
+          "manufacturer": "LCN Closers",
+          "model": "4040XPT-Pull .STDTRK .689",
+          "finish": ""
+        },
+        {
+          "name": "Kick Plate",
+          "qty": 3,
+          "qty_source": "needs_division",
+          "qty_total": 3,
+          "qty_door_count": 3,
+          "manufacturer": "Ives",
+          "model": "8400 B-CS 24\" x 40\"",
+          "finish": "US32D"
+        },
+        {
+          "name": "Wall Stop",
+          "qty": 3,
+          "qty_source": "needs_division",
+          "qty_total": 3,
+          "qty_door_count": 3,
+          "manufacturer": "Ives",
+          "model": "WS406CVX",
+          "finish": "630"
+        },
+        {
+          "name": "Gasketing",
+          "qty": 3,
+          "qty_source": "needs_division",
+          "qty_total": 3,
+          "qty_door_count": 3,
+          "manufacturer": "Zero International",
+          "model": "328AA x 42\" x 84\"",
+          "finish": ""
+        },
+        {
+          "name": "Door Bottom",
+          "qty": 3,
+          "qty_source": "needs_division",
+          "qty_total": 3,
+          "qty_door_count": 3,
+          "manufacturer": "Zero International",
+          "model": "355AA 42\"",
+          "finish": ""
+        },
+        {
+          "name": "Wire Harness CON-6",
+          "qty": 3,
+          "qty_source": "needs_division",
+          "qty_total": 3,
+          "qty_door_count": 3,
+          "manufacturer": "Schlage",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Wire Harness CON-38",
+          "qty": 3,
+          "qty_source": "needs_division",
+          "qty_total": 3,
+          "qty_door_count": 3,
+          "manufacturer": "Schlage",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Door Position Switch Tane Alarm SD-72C By Security",
+          "qty": 0,
+          "qty_source": "parsed",
+          "qty_total": 0,
+          "qty_door_count": 3,
+          "manufacturer": "Miscellaneous",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "SI1-G-E3.3",
+      "heading": "3'x7'",
+      "item_count": 10,
+      "items": [
+        {
+          "name": "Electrified Mortise Lock strike",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "Schlage",
+          "model": "L9092EU .J .L .03N .RX 1-3/8\" lip to center .630 special",
+          "finish": ""
+        },
+        {
+          "name": "Interchangeable Core",
+          "qty": 0,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "Medeco",
+          "model": "320201N S 26",
+          "finish": ""
+        },
+        {
+          "name": "Surface Closer",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "LCN Closers",
+          "model": "4040XPT-Pull .STDTRK .689",
+          "finish": ""
+        },
+        {
+          "name": "Kick Plate",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "Ives",
+          "model": "8400 B-CS 24\" x 34\"",
+          "finish": "US32D"
+        },
+        {
+          "name": "Wall Stop",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "Ives",
+          "model": "WS406CVX",
+          "finish": "630"
+        },
+        {
+          "name": "Gasketing",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "Zero International",
+          "model": "328AA x 36\" x 84\"",
+          "finish": ""
+        },
+        {
+          "name": "Door Bottom",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "Zero International",
+          "model": "355AA 36\"",
+          "finish": ""
+        },
+        {
+          "name": "Wire Harness CON-6",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "Schlage",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Wire Harness CON-32",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "Schlage",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Door Position Switch Tane Alarm SD-72C By Security",
+          "qty": 0,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "Miscellaneous",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "SI2-F-G-XL1",
+      "heading": "6'x9'",
       "item_count": 14,
       "items": [
         {
-          "name": "Hin",
+          "name": "Electric Power Transfer",
+          "qty": 2,
+          "qty_source": "needs_division",
+          "qty_total": 2,
+          "qty_door_count": 2,
+          "manufacturer": "Von Duprin",
+          "model": "EPT10 .CON .689",
+          "finish": ""
+        },
+        {
+          "name": "Flush Bolt",
+          "qty": 2,
+          "qty_source": "needs_division",
+          "qty_total": 2,
+          "qty_door_count": 2,
+          "manufacturer": "Ives",
+          "model": "FB51T-36",
+          "finish": "630"
+        },
+        {
+          "name": "Fire Rated Mortise Exit .RX .LD FSE = Fail Secure",
+          "qty": 2,
+          "qty_source": "needs_division",
+          "qty_total": 2,
+          "qty_door_count": 2,
+          "manufacturer": "Von Duprin",
+          "model": "9875.L.F .CON .FSE .M .996LxM Lever .03 .630",
+          "finish": ""
+        },
+        {
+          "name": "Interchangeable Core",
+          "qty": 0,
+          "qty_source": "parsed",
+          "qty_total": 0,
+          "qty_door_count": 2,
+          "manufacturer": "Medeco",
+          "model": "320201N S 26",
+          "finish": ""
+        },
+        {
+          "name": "Housing LFIC Mortise Cylinder Housing",
+          "qty": 2,
+          "qty_source": "needs_division",
+          "qty_total": 2,
+          "qty_door_count": 2,
+          "manufacturer": "Schlage",
+          "model": "26-094 .626",
+          "finish": ""
+        },
+        {
+          "name": "Coordinator",
+          "qty": 0,
+          "qty_source": "parsed",
+          "qty_total": 0,
+          "qty_door_count": 2,
+          "manufacturer": "Ives",
+          "model": "COR52 FL20",
+          "finish": "628"
+        },
+        {
+          "name": "Mounting Bracket",
+          "qty": 0,
+          "qty_source": "parsed",
+          "qty_total": 0,
+          "qty_door_count": 2,
+          "manufacturer": "Ives",
+          "model": "MB1",
+          "finish": "689"
+        },
+        {
+          "name": "Coordinator",
+          "qty": 2,
+          "qty_source": "needs_division",
+          "qty_total": 2,
+          "qty_door_count": 2,
+          "manufacturer": "Architectural Builders Hardware",
+          "model": "3780",
+          "finish": "US28"
+        },
+        {
+          "name": "Surface Closer",
           "qty": 4,
-          "qty_source": "capped",
-          "qty_total": 6,
-          "qty_door_count": null,
-          "manufacturer": "ge, Full Morti",
-          "model": "se",
-          "finish": ", Hvy"
-        },
-        {
-          "name": "Pul",
-          "qty": 2,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
-          "manufacturer": "l Plate",
-          "model": "",
+          "qty_source": "needs_division",
+          "qty_total": 4,
+          "qty_door_count": 2,
+          "manufacturer": "LCN Closers",
+          "model": "4040XP .SCUSH .689",
           "finish": ""
         },
         {
-          "name": "Sur",
-          "qty": 2,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
-          "manufacturer": "face Closer",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Kic",
-          "qty": 2,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
-          "manufacturer": "k Plate",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "4' 1",
-          "qty": 2,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
-          "manufacturer": "1/2\" x 9' 6\" x",
-          "model": "1",
-          "finish": "3/4\" HM"
-        },
-        {
-          "name": "Fire",
-          "qty": 2,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
-          "manufacturer": "Rated Surf V",
-          "model": "e",
-          "finish": "rt Rod"
-        },
-        {
-          "name": "Inte",
-          "qty": 1,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
-          "manufacturer": "rchangeable",
-          "model": "C",
-          "finish": "ore"
-        },
-        {
-          "name": "Cyl",
-          "qty": 2,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
-          "manufacturer": "inder",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Ele",
-          "qty": 2,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
-          "manufacturer": "ctromagnetic",
-          "model": "H",
-          "finish": "older"
-        },
-        {
-          "name": "Ast",
-          "qty": 1,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
-          "manufacturer": "ragal",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "ask",
-          "qty": 1,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
-          "manufacturer": "eting change",
-          "model": "at",
-          "finish": "header t"
-        },
-        {
-          "name": "3' 0",
-          "qty": 2,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
-          "manufacturer": "\" x 7' 0\" x 1 3",
-          "model": "/4",
-          "finish": "\" HMD/H"
-        },
-        {
-          "name": "Fire",
+          "name": "Kick Plate",
           "qty": 4,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
-          "manufacturer": "Rated Conc",
-          "model": "V",
-          "finish": "ert Rod"
+          "qty_source": "needs_division",
+          "qty_total": 4,
+          "qty_door_count": 4,
+          "manufacturer": "Ives",
+          "model": "8402 B-CS 24\" x 35\"",
+          "finish": "US32D"
         },
         {
-          "name": "los",
-          "qty": 1,
+          "name": "Gasketing",
+          "qty": 2,
+          "qty_source": "needs_division",
+          "qty_total": 2,
+          "qty_door_count": 2,
+          "manufacturer": "Zero International",
+          "model": "328AA x 72\" x 108\"",
+          "finish": ""
+        },
+        {
+          "name": "Door Bottom",
+          "qty": 4,
+          "qty_source": "needs_division",
+          "qty_total": 4,
+          "qty_door_count": 4,
+          "manufacturer": "Zero International",
+          "model": "355AA 36\"",
+          "finish": ""
+        },
+        {
+          "name": "Wire Harness CON-6",
+          "qty": 4,
+          "qty_source": "needs_division",
+          "qty_total": 4,
+          "qty_door_count": 4,
+          "manufacturer": "Schlage",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Door Position Switch Tane Alarm SD-72C By Security",
+          "qty": 0,
           "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
-          "manufacturer": "er mounted on",
-          "model": "t",
-          "finish": "he pull si"
+          "qty_total": 0,
+          "qty_door_count": 2,
+          "manufacturer": "Miscellaneous",
+          "model": "",
+          "finish": ""
         }
       ]
     },
     {
       "set_id": "SI2-G-E2",
-      "heading": "HW Set is built for pair of doors but single doors 001.01.F.13 & 002.01.E.10 are assigned to this set.",
+      "heading": "6'x9'",
+      "item_count": 15,
+      "items": [
+        {
+          "name": "Flush Bolt",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": 1,
+          "qty_door_count": 1,
+          "manufacturer": "Ives",
+          "model": "FB51T-36",
+          "finish": "630"
+        },
+        {
+          "name": "Electrified Mortise Lock",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": 1,
+          "qty_door_count": 1,
+          "manufacturer": "Schlage",
+          "model": "L9092EU .J .L .03N .RX .630",
+          "finish": ""
+        },
+        {
+          "name": "Interchangeable Core",
+          "qty": 0,
+          "qty_source": "parsed",
+          "qty_total": 0,
+          "qty_door_count": 1,
+          "manufacturer": "Medeco",
+          "model": "320201N S 26",
+          "finish": ""
+        },
+        {
+          "name": "Coordinator",
+          "qty": 0,
+          "qty_source": "parsed",
+          "qty_total": 0,
+          "qty_door_count": 1,
+          "manufacturer": "Ives",
+          "model": "COR52 FL20",
+          "finish": "628"
+        },
+        {
+          "name": "Mounting Bracket",
+          "qty": 0,
+          "qty_source": "parsed",
+          "qty_total": 0,
+          "qty_door_count": 1,
+          "manufacturer": "Ives",
+          "model": "MB1",
+          "finish": "689"
+        },
+        {
+          "name": "Coordinator",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": 1,
+          "qty_door_count": 1,
+          "manufacturer": "Architectural Builders Hardware",
+          "model": "3780",
+          "finish": "US28"
+        },
+        {
+          "name": "Overhead Stop",
+          "qty": 2,
+          "qty_source": "needs_division",
+          "qty_total": 2,
+          "qty_door_count": 2,
+          "manufacturer": "Glynn-Johnson",
+          "model": "",
+          "finish": "104S 630"
+        },
+        {
+          "name": "Surface Closer",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": 2,
+          "qty_door_count": null,
+          "manufacturer": "LCN Closers",
+          "model": "4040XPT-Pull .STDTRK .689",
+          "finish": ""
+        },
+        {
+          "name": "Kick Plate",
+          "qty": 2,
+          "qty_source": "needs_division",
+          "qty_total": 2,
+          "qty_door_count": 2,
+          "manufacturer": "Ives",
+          "model": "8400 B-CS 24\" x 35\"",
+          "finish": "US32D"
+        },
+        {
+          "name": "Gasketing",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": 1,
+          "qty_door_count": 1,
+          "manufacturer": "Zero International",
+          "model": "328AA x 72\" x 108\"",
+          "finish": ""
+        },
+        {
+          "name": "Door Bottom",
+          "qty": 2,
+          "qty_source": "needs_division",
+          "qty_total": 2,
+          "qty_door_count": 2,
+          "manufacturer": "Zero International",
+          "model": "355AA 36\"",
+          "finish": ""
+        },
+        {
+          "name": "Astragal",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": 1,
+          "qty_door_count": 1,
+          "manufacturer": "Zero International",
+          "model": "328AA x 108\"",
+          "finish": ""
+        },
+        {
+          "name": "Wire Harness CON-6",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": 1,
+          "qty_door_count": 2,
+          "manufacturer": "Schlage",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Wire Harness CON-32",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": 1,
+          "qty_door_count": 2,
+          "manufacturer": "Schlage",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Door Position Switch Tane Alarm SD-72C By Security",
+          "qty": 0,
+          "qty_source": "parsed",
+          "qty_total": 0,
+          "qty_door_count": 1,
+          "manufacturer": "Miscellaneous",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "SI2-G-E2.1",
+      "heading": "3'x7' - HW INCORRECT",
+      "item_count": 12,
+      "items": [
+        {
+          "name": "Flush Bolt",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "Ives",
+          "model": "FB51T",
+          "finish": "630"
+        },
+        {
+          "name": "Electrified Mortise Lock",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "Schlage",
+          "model": "L9092EU .J .L .03N .RX .630",
+          "finish": ""
+        },
+        {
+          "name": "Interchangeable Core",
+          "qty": 0,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "Medeco",
+          "model": "320201N S 26",
+          "finish": ""
+        },
+        {
+          "name": "Coordinator",
+          "qty": 0,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "Ives",
+          "model": "COR52 FL20",
+          "finish": "628"
+        },
+        {
+          "name": "Coordinator",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "Architectural Builders Hardware",
+          "model": "3780",
+          "finish": "US28"
+        },
+        {
+          "name": "Overhead Stop",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "Glynn-Johnson",
+          "model": "",
+          "finish": "104S 630"
+        },
+        {
+          "name": "Surface Closer",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "LCN Closers",
+          "model": "4040XPT-Pull .STDTRK .689",
+          "finish": ""
+        },
+        {
+          "name": "Kick Plate",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "Ives",
+          "model": "8400 B-CS 24\" x 35\"",
+          "finish": "US32D"
+        },
+        {
+          "name": "Gasketing",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "Zero International",
+          "model": "328AA x 36\" x 84\"",
+          "finish": ""
+        },
+        {
+          "name": "Door Bottom",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "Zero International",
+          "model": "355AA 36\"",
+          "finish": ""
+        },
+        {
+          "name": "Astragal",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "Zero International",
+          "model": "328AA x 84\"",
+          "finish": ""
+        },
+        {
+          "name": "Wire Harness CON-6",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "Schlage",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "SI2-G-XL1",
+      "heading": "6'x9'",
+      "item_count": 15,
+      "items": [
+        {
+          "name": "Electric Power Transfer",
+          "qty": 10,
+          "qty_source": "needs_division",
+          "qty_total": 10,
+          "qty_door_count": 10,
+          "manufacturer": "Von Duprin",
+          "model": "EPT10 .CON .689",
+          "finish": ""
+        },
+        {
+          "name": "Flush Bolt",
+          "qty": 10,
+          "qty_source": "needs_division",
+          "qty_total": 10,
+          "qty_door_count": 10,
+          "manufacturer": "Ives",
+          "model": "FB51T-36",
+          "finish": "630"
+        },
+        {
+          "name": "Mortise Exit Device .RX .LD FSE = Fail Secure",
+          "qty": 10,
+          "qty_source": "needs_division",
+          "qty_total": 10,
+          "qty_door_count": 10,
+          "manufacturer": "Von Duprin",
+          "model": "9875.L .CON .FSE .M .996LxM Lever .03 .630",
+          "finish": ""
+        },
+        {
+          "name": "Interchangeable Core",
+          "qty": 0,
+          "qty_source": "parsed",
+          "qty_total": 0,
+          "qty_door_count": 10,
+          "manufacturer": "Medeco",
+          "model": "320201N S 26",
+          "finish": ""
+        },
+        {
+          "name": "Housing LFIC Mortise Cylinder Housing",
+          "qty": 10,
+          "qty_source": "needs_division",
+          "qty_total": 10,
+          "qty_door_count": 10,
+          "manufacturer": "Schlage",
+          "model": "26-094 .626",
+          "finish": ""
+        },
+        {
+          "name": "Coordinator",
+          "qty": 0,
+          "qty_source": "parsed",
+          "qty_total": 0,
+          "qty_door_count": 10,
+          "manufacturer": "Ives",
+          "model": "COR52 FL20",
+          "finish": "628"
+        },
+        {
+          "name": "Mounting Bracket",
+          "qty": 0,
+          "qty_source": "parsed",
+          "qty_total": 0,
+          "qty_door_count": 10,
+          "manufacturer": "Ives",
+          "model": "MB1",
+          "finish": "689"
+        },
+        {
+          "name": "Coordinator",
+          "qty": 10,
+          "qty_source": "needs_division",
+          "qty_total": 10,
+          "qty_door_count": 10,
+          "manufacturer": "Architectural Builders Hardware",
+          "model": "3780",
+          "finish": "US28"
+        },
+        {
+          "name": "Surface Closer",
+          "qty": 20,
+          "qty_source": "needs_division",
+          "qty_total": 20,
+          "qty_door_count": 10,
+          "manufacturer": "LCN Closers",
+          "model": "4040XP .SCUSH .689",
+          "finish": ""
+        },
+        {
+          "name": "Kick Plate",
+          "qty": 20,
+          "qty_source": "needs_division",
+          "qty_total": 20,
+          "qty_door_count": 20,
+          "manufacturer": "Ives",
+          "model": "8400 B-CS 24\" x 35\"",
+          "finish": "US32D"
+        },
+        {
+          "name": "Gasketing",
+          "qty": 10,
+          "qty_source": "needs_division",
+          "qty_total": 10,
+          "qty_door_count": 10,
+          "manufacturer": "Zero International",
+          "model": "488S-BK 25'",
+          "finish": ""
+        },
+        {
+          "name": "Door Bottom",
+          "qty": 20,
+          "qty_source": "needs_division",
+          "qty_total": 20,
+          "qty_door_count": 20,
+          "manufacturer": "Zero International",
+          "model": "355AA 36\"",
+          "finish": ""
+        },
+        {
+          "name": "Astragal DPRrequesteda Zastragal however we cannotuse that as it will interfere withthe specified hollow door astragals supplied",
+          "qty": 10,
+          "qty_source": "needs_division",
+          "qty_total": 10,
+          "qty_door_count": 10,
+          "manufacturer": "Zero International",
+          "model": "328AA x 108\"",
+          "finish": ""
+        },
+        {
+          "name": "Wire Harness CON-6",
+          "qty": 20,
+          "qty_source": "needs_division",
+          "qty_total": 20,
+          "qty_door_count": 20,
+          "manufacturer": "Schlage",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Door Position Switch Tane Alarm SD-72C By Security",
+          "qty": 0,
+          "qty_source": "parsed",
+          "qty_total": 0,
+          "qty_door_count": 10,
+          "manufacturer": "Miscellaneous",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "SSE1-SF-XL",
+      "heading": "By Others",
+      "item_count": 0,
+      "items": []
+    },
+    {
+      "set_id": "SSE1-XL1",
+      "heading": "3'6\"x7'",
+      "item_count": 12,
+      "items": [
+        {
+          "name": "Electric Power Transfer",
+          "qty": 11,
+          "qty_source": "needs_division",
+          "qty_total": 11,
+          "qty_door_count": 11,
+          "manufacturer": "Von Duprin",
+          "model": "EPT10 .CON .689",
+          "finish": ""
+        },
+        {
+          "name": "Mortise Exit Device .LD FSE = Fail Secure",
+          "qty": 11,
+          "qty_source": "needs_division",
+          "qty_total": 11,
+          "qty_door_count": 11,
+          "manufacturer": "Von Duprin",
+          "model": "9875.L .CON .FSE .M .996LxM Lever .03 .626",
+          "finish": ""
+        },
+        {
+          "name": "Interchangeable Core",
+          "qty": 0,
+          "qty_source": "parsed",
+          "qty_total": 0,
+          "qty_door_count": 11,
+          "manufacturer": "Medeco",
+          "model": "320201N S 26",
+          "finish": ""
+        },
+        {
+          "name": "Housing LFIC Mortise Cylinder Housing",
+          "qty": 11,
+          "qty_source": "needs_division",
+          "qty_total": 11,
+          "qty_door_count": 11,
+          "manufacturer": "Schlage",
+          "model": "26-094 .626",
+          "finish": ""
+        },
+        {
+          "name": "Surface Closer",
+          "qty": 11,
+          "qty_source": "needs_division",
+          "qty_total": 11,
+          "qty_door_count": 11,
+          "manufacturer": "LCN Closers",
+          "model": "4040XP .SCUSH .689",
+          "finish": ""
+        },
+        {
+          "name": "Threshold",
+          "qty": 11,
+          "qty_source": "needs_division",
+          "qty_total": 11,
+          "qty_door_count": 11,
+          "manufacturer": "Zero International",
+          "model": "625A x 42\"",
+          "finish": ""
+        },
+        {
+          "name": "Rain Drip",
+          "qty": 11,
+          "qty_source": "needs_division",
+          "qty_total": 11,
+          "qty_door_count": 11,
+          "manufacturer": "Zero International",
+          "model": "142AA x 46\"",
+          "finish": ""
+        },
+        {
+          "name": "Gasketing",
+          "qty": 11,
+          "qty_source": "needs_division",
+          "qty_total": 11,
+          "qty_door_count": 11,
+          "manufacturer": "Pemko",
+          "model": "S88BL x 42\"",
+          "finish": ""
+        },
+        {
+          "name": "Gasketing",
+          "qty": 22,
+          "qty_source": "needs_division",
+          "qty_total": 22,
+          "qty_door_count": 11,
+          "manufacturer": "Zero International",
+          "model": "328AA x 84\"",
+          "finish": ""
+        },
+        {
+          "name": "Wire Harness CON-6",
+          "qty": 22,
+          "qty_source": "needs_division",
+          "qty_total": 22,
+          "qty_door_count": 11,
+          "manufacturer": "Schlage",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Door Position Switch Tane Alarm SD-72C By Security",
+          "qty": 0,
+          "qty_source": "parsed",
+          "qty_total": 0,
+          "qty_door_count": 11,
+          "manufacturer": "Miscellaneous",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Lock Guard",
+          "qty": 11,
+          "qty_source": "needs_division",
+          "qty_total": 11,
+          "qty_door_count": 11,
+          "manufacturer": "Ives",
+          "model": "LG10",
+          "finish": "630"
+        }
+      ]
+    },
+    {
+      "set_id": "SSE1-XL1.1",
+      "heading": "3'x7'",
+      "item_count": 12,
+      "items": [
+        {
+          "name": "Electric Power Transfer",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "Von Duprin",
+          "model": "EPT10 .CON .689",
+          "finish": ""
+        },
+        {
+          "name": "Mortise Exit Device .LD FSE = Fail Secure",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "Von Duprin",
+          "model": "9875.L .CON .FSE .M .996LxM Lever .03 .626",
+          "finish": ""
+        },
+        {
+          "name": "Interchangeable Core",
+          "qty": 0,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "Medeco",
+          "model": "320201N S 26",
+          "finish": ""
+        },
+        {
+          "name": "Housing LFIC Mortise Cylinder Housing",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "Schlage",
+          "model": "26-094 .626",
+          "finish": ""
+        },
+        {
+          "name": "Surface Closer",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "LCN Closers",
+          "model": "4040XP .SCUSH .689",
+          "finish": ""
+        },
+        {
+          "name": "Threshold",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "Zero International",
+          "model": "625A x 36\"",
+          "finish": ""
+        },
+        {
+          "name": "Rain Drip",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "Zero International",
+          "model": "142AA x 40\"",
+          "finish": ""
+        },
+        {
+          "name": "Gasketing",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "Pemko",
+          "model": "S88BL x 36\"",
+          "finish": ""
+        },
+        {
+          "name": "Gasketing",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "Zero International",
+          "model": "328AA x 84\"",
+          "finish": ""
+        },
+        {
+          "name": "Wire Harness CON-6",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "Schlage",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Door Position Switch Tane Alarm SD-72C By Security",
+          "qty": 0,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "Miscellaneous",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Lock Guard",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "Ives",
+          "model": "LG10",
+          "finish": "630"
+        }
+      ]
+    },
+    {
+      "set_id": "SSE2-XL1",
+      "heading": "6'x8'",
+      "item_count": 15,
+      "items": [
+        {
+          "name": "Flush Bolt",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": 1,
+          "qty_door_count": 1,
+          "manufacturer": "Ives",
+          "model": "FB51T-24",
+          "finish": "630"
+        },
+        {
+          "name": "Mortise Exit Device .LD FSE = Fail Secure",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": 1,
+          "qty_door_count": 1,
+          "manufacturer": "Von Duprin",
+          "model": "9875.L .CON .FSE .M .996LxM Lever .03 .630",
+          "finish": ""
+        },
+        {
+          "name": "Interchangeable Core",
+          "qty": 0,
+          "qty_source": "parsed",
+          "qty_total": 0,
+          "qty_door_count": 1,
+          "manufacturer": "Medeco",
+          "model": "320201N S 26",
+          "finish": ""
+        },
+        {
+          "name": "Housing LFIC Mortise Cylinder Housing",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": 1,
+          "qty_door_count": 1,
+          "manufacturer": "Schlage",
+          "model": "26-094 .626",
+          "finish": ""
+        },
+        {
+          "name": "Coordinator",
+          "qty": 0,
+          "qty_source": "parsed",
+          "qty_total": 0,
+          "qty_door_count": 1,
+          "manufacturer": "Ives",
+          "model": "COR52 FL20",
+          "finish": "628"
+        },
+        {
+          "name": "Mounting Bracket",
+          "qty": 0,
+          "qty_source": "parsed",
+          "qty_total": 0,
+          "qty_door_count": 1,
+          "manufacturer": "Ives",
+          "model": "MB1",
+          "finish": "689"
+        },
+        {
+          "name": "Coordinator",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": 1,
+          "qty_door_count": 1,
+          "manufacturer": "Architectural Builders Hardware",
+          "model": "3780",
+          "finish": "US28"
+        },
+        {
+          "name": "Surface Closer",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": 2,
+          "qty_door_count": null,
+          "manufacturer": "LCN Closers",
+          "model": "4040XP .SCUSH .689",
+          "finish": ""
+        },
+        {
+          "name": "Kick Plate",
+          "qty": 2,
+          "qty_source": "needs_division",
+          "qty_total": 2,
+          "qty_door_count": 2,
+          "manufacturer": "Ives",
+          "model": "8400 B-CS 24\" x 35\"",
+          "finish": "US32D"
+        },
+        {
+          "name": "Threshold",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": 1,
+          "qty_door_count": 1,
+          "manufacturer": "Zero International",
+          "model": "625A x 72\"",
+          "finish": ""
+        },
+        {
+          "name": "Rain Drip",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": 1,
+          "qty_door_count": 1,
+          "manufacturer": "Zero International",
+          "model": "142AA x 76\"",
+          "finish": ""
+        },
+        {
+          "name": "Gasketing",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": 1,
+          "qty_door_count": 1,
+          "manufacturer": "Pemko",
+          "model": "S88BL x 72\"",
+          "finish": ""
+        },
+        {
+          "name": "Gasketing",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": 2,
+          "qty_door_count": null,
+          "manufacturer": "Zero International",
+          "model": "328AA x 96\"",
+          "finish": ""
+        },
+        {
+          "name": "Wire Harness CON-6",
+          "qty": 2,
+          "qty_source": "needs_division",
+          "qty_total": 2,
+          "qty_door_count": 2,
+          "manufacturer": "Schlage",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Door Position Switch Tane Alarm SD-72C By Security",
+          "qty": 0,
+          "qty_source": "parsed",
+          "qty_total": 0,
+          "qty_door_count": 1,
+          "manufacturer": "Miscellaneous",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "SSI1-F-G-XL",
+      "heading": "3'x7'",
       "item_count": 9,
       "items": [
         {
-          "name": "Hin",
+          "name": "Fire Rated Mortise Exit FSE = Fail Secure",
+          "qty": 4,
+          "qty_source": "needs_division",
+          "qty_total": 4,
+          "qty_door_count": 4,
+          "manufacturer": "Von Duprin",
+          "model": "9875.L.F .CON .FSE .996LxM Lever .03 .630",
+          "finish": ""
+        },
+        {
+          "name": "Interchangeable Core",
+          "qty": 0,
+          "qty_source": "parsed",
+          "qty_total": 0,
+          "qty_door_count": 4,
+          "manufacturer": "Medeco",
+          "model": "320201N S 26",
+          "finish": ""
+        },
+        {
+          "name": "Housing LFIC Mortise Cylinder Housing",
+          "qty": 4,
+          "qty_source": "needs_division",
+          "qty_total": 4,
+          "qty_door_count": 4,
+          "manufacturer": "Schlage",
+          "model": "26-094 .626",
+          "finish": ""
+        },
+        {
+          "name": "Surface Closer",
+          "qty": 4,
+          "qty_source": "needs_division",
+          "qty_total": 4,
+          "qty_door_count": 4,
+          "manufacturer": "LCN Closers",
+          "model": "4040XP .SCUSH .689",
+          "finish": ""
+        },
+        {
+          "name": "Kick Plate",
+          "qty": 4,
+          "qty_source": "needs_division",
+          "qty_total": 4,
+          "qty_door_count": 4,
+          "manufacturer": "Ives",
+          "model": "8402 B-CS 24\" x 34\"",
+          "finish": "US32D"
+        },
+        {
+          "name": "Gasketing",
+          "qty": 4,
+          "qty_source": "needs_division",
+          "qty_total": 4,
+          "qty_door_count": 4,
+          "manufacturer": "Pemko",
+          "model": "S88BL x 36\"",
+          "finish": ""
+        },
+        {
+          "name": "Gasketing",
+          "qty": 8,
+          "qty_source": "needs_division",
+          "qty_total": 8,
+          "qty_door_count": 4,
+          "manufacturer": "Zero International",
+          "model": "328AA x 84\"",
+          "finish": ""
+        },
+        {
+          "name": "Wire Harness CON-6",
+          "qty": 8,
+          "qty_source": "needs_division",
+          "qty_total": 8,
+          "qty_door_count": 4,
+          "manufacturer": "Schlage",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Door Position Switch Tane Alarm SD-72C By Security",
+          "qty": 0,
+          "qty_source": "parsed",
+          "qty_total": 0,
+          "qty_door_count": 4,
+          "manufacturer": "Miscellaneous",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "SSI1-F-O-XM3",
+      "heading": "Heading #: SSI1-F-O-XM3'6\"x7'",
+      "item_count": 12,
+      "items": [
+        {
+          "name": "Continuous Hinge",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": 1,
+          "qty_door_count": 2,
+          "manufacturer": "Ives",
+          "model": "705 83\" EPT",
+          "finish": "630"
+        },
+        {
+          "name": "Electric Power Transfer",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": 1,
+          "qty_door_count": 2,
+          "manufacturer": "Von Duprin",
+          "model": "EPT10 .CON .689",
+          "finish": ""
+        },
+        {
+          "name": "Fire Rated Conc Vert Rod .QEL",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": 1,
+          "qty_door_count": 2,
+          "manufacturer": "Von Duprin",
+          "model": "9447.L.F .LBR .940L(Std) .03 .626",
+          "finish": ""
+        },
+        {
+          "name": "Interchangeable Core",
+          "qty": 0,
+          "qty_source": "parsed",
+          "qty_total": 0,
+          "qty_door_count": 2,
+          "manufacturer": "Medeco",
+          "model": "320201N S 26",
+          "finish": ""
+        },
+        {
+          "name": "Housing LFIC Mortise Cylinder Housing",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": 1,
+          "qty_door_count": 2,
+          "manufacturer": "Schlage",
+          "model": "26-094 .626",
+          "finish": ""
+        },
+        {
+          "name": "Automatic Opener Provided By GC -not in ourscope",
+          "qty": 0,
+          "qty_source": "parsed",
+          "qty_total": 0,
+          "qty_door_count": 2,
+          "manufacturer": "LCN Closers",
+          "model": "9542 .REGARM .HDR .HLD .628",
+          "finish": ""
+        },
+        {
+          "name": "Kick Plate",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": 1,
+          "qty_door_count": 2,
+          "manufacturer": "Ives",
+          "model": "8402 B-CS 24\" x 40\"",
+          "finish": "US32D"
+        },
+        {
+          "name": "Gasketing",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": 1,
+          "qty_door_count": 2,
+          "manufacturer": "Zero International",
+          "model": "328AA x 42\" x 84\"",
+          "finish": ""
+        },
+        {
+          "name": "Door Bottom",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": 1,
+          "qty_door_count": 2,
+          "manufacturer": "Zero International",
+          "model": "355AA 42\"",
+          "finish": ""
+        },
+        {
+          "name": "Wire Harness CON-6",
+          "qty": 2,
+          "qty_source": "needs_division",
+          "qty_total": 2,
+          "qty_door_count": 2,
+          "manufacturer": "Schlage",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Door Position Switch Tane Alarm SD-72C By Security",
+          "qty": 0,
+          "qty_source": "parsed",
+          "qty_total": 0,
+          "qty_door_count": 2,
+          "manufacturer": "Miscellaneous",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Wall Stop",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": 1,
+          "qty_door_count": 2,
+          "manufacturer": "Ives",
+          "model": "WS406CVX",
+          "finish": "630"
+        }
+      ]
+    },
+    {
+      "set_id": "SSI1-G-E1",
+      "heading": "3'6\"x7'",
+      "item_count": 10,
+      "items": [
+        {
+          "name": "Electrified Mortise Lock",
+          "qty": 2,
+          "qty_source": "needs_division",
+          "qty_total": 2,
+          "qty_door_count": 2,
+          "manufacturer": "Schlage",
+          "model": "L9092EU .J .L .03N .630",
+          "finish": ""
+        },
+        {
+          "name": "Interchangeable Core",
+          "qty": 0,
+          "qty_source": "parsed",
+          "qty_total": 0,
+          "qty_door_count": 2,
+          "manufacturer": "Medeco",
+          "model": "320201N S 26",
+          "finish": ""
+        },
+        {
+          "name": "Surface Closer",
+          "qty": 2,
+          "qty_source": "needs_division",
+          "qty_total": 2,
+          "qty_door_count": 2,
+          "manufacturer": "LCN Closers",
+          "model": "4040XP .REGARM .689",
+          "finish": ""
+        },
+        {
+          "name": "Kick Plate",
+          "qty": 2,
+          "qty_source": "needs_division",
+          "qty_total": 2,
+          "qty_door_count": 2,
+          "manufacturer": "Ives",
+          "model": "8400 B-CS 24\" x 40\"",
+          "finish": "US32D"
+        },
+        {
+          "name": "Wall Stop",
+          "qty": 2,
+          "qty_source": "needs_division",
+          "qty_total": 2,
+          "qty_door_count": 2,
+          "manufacturer": "Ives",
+          "model": "WS406CVX",
+          "finish": "630"
+        },
+        {
+          "name": "Gasketing",
+          "qty": 2,
+          "qty_source": "needs_division",
+          "qty_total": 2,
+          "qty_door_count": 2,
+          "manufacturer": "Pemko",
+          "model": "S88BL x 42\"",
+          "finish": ""
+        },
+        {
+          "name": "Gasketing",
+          "qty": 4,
+          "qty_source": "needs_division",
+          "qty_total": 4,
+          "qty_door_count": 2,
+          "manufacturer": "Zero International",
+          "model": "328AA x 84\"",
+          "finish": ""
+        },
+        {
+          "name": "Door Bottom",
+          "qty": 2,
+          "qty_source": "needs_division",
+          "qty_total": 2,
+          "qty_door_count": 2,
+          "manufacturer": "Zero International",
+          "model": "355AA 42\"",
+          "finish": ""
+        },
+        {
+          "name": "Wire Harness CON-6",
+          "qty": 2,
+          "qty_source": "needs_division",
+          "qty_total": 2,
+          "qty_door_count": 2,
+          "manufacturer": "Schlage",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Wire Harness CON-38",
+          "qty": 2,
+          "qty_source": "needs_division",
+          "qty_total": 2,
+          "qty_door_count": 2,
+          "manufacturer": "Schlage",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "SSI1-G-E2",
+      "heading": "3'x7'",
+      "item_count": 10,
+      "items": [
+        {
+          "name": "Electrified Mortise Lock",
+          "qty": 3,
+          "qty_source": "needs_division",
+          "qty_total": 3,
+          "qty_door_count": 3,
+          "manufacturer": "Schlage",
+          "model": "L9092EU .J .L .03N .630",
+          "finish": ""
+        },
+        {
+          "name": "Interchangeable Core",
+          "qty": 0,
+          "qty_source": "parsed",
+          "qty_total": 0,
+          "qty_door_count": 3,
+          "manufacturer": "Medeco",
+          "model": "320201N S 26",
+          "finish": ""
+        },
+        {
+          "name": "Overhead Stop",
+          "qty": 3,
+          "qty_source": "needs_division",
+          "qty_total": 3,
+          "qty_door_count": 3,
+          "manufacturer": "Glynn-Johnson",
+          "model": "",
+          "finish": "104S 630"
+        },
+        {
+          "name": "Surface Closer",
+          "qty": 3,
+          "qty_source": "needs_division",
+          "qty_total": 3,
+          "qty_door_count": 3,
+          "manufacturer": "LCN Closers",
+          "model": "4040XPT-Pull .STDTRK .689",
+          "finish": ""
+        },
+        {
+          "name": "Kick Plate",
+          "qty": 3,
+          "qty_source": "needs_division",
+          "qty_total": 3,
+          "qty_door_count": 3,
+          "manufacturer": "Ives",
+          "model": "8400 B-CS 24\" x 34\"",
+          "finish": "US32D"
+        },
+        {
+          "name": "Gasketing DPRrequesteda Zastragal however we cannotuse that as it will interfere withthe specified hollow door astragals supplied",
+          "qty": 3,
+          "qty_source": "needs_division",
+          "qty_total": 3,
+          "qty_door_count": 3,
+          "manufacturer": "Zero International",
+          "model": "328AA x 36\" x 84\"",
+          "finish": ""
+        },
+        {
+          "name": "Door Bottom",
+          "qty": 3,
+          "qty_source": "needs_division",
+          "qty_total": 3,
+          "qty_door_count": 3,
+          "manufacturer": "Zero International",
+          "model": "355AA 36\"",
+          "finish": ""
+        },
+        {
+          "name": "Wire Harness CON-6",
+          "qty": 3,
+          "qty_source": "needs_division",
+          "qty_total": 3,
+          "qty_door_count": 3,
+          "manufacturer": "Schlage",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Wire Harness CON-32",
+          "qty": 3,
+          "qty_source": "needs_division",
+          "qty_total": 3,
+          "qty_door_count": 3,
+          "manufacturer": "Schlage",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Door Position Switch Tane Alarm SD-72C By Security",
+          "qty": 0,
+          "qty_source": "parsed",
+          "qty_total": 0,
+          "qty_door_count": 3,
+          "manufacturer": "Miscellaneous",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "SSI1-G-E3",
+      "heading": "3'6\"x7'",
+      "item_count": 8,
+      "items": [
+        {
+          "name": "Electrified Mortise Lock",
+          "qty": 11,
+          "qty_source": "needs_division",
+          "qty_total": 11,
+          "qty_door_count": 11,
+          "manufacturer": "Schlage",
+          "model": "L9092EU .J .L .03N .630",
+          "finish": ""
+        },
+        {
+          "name": "Interchangeable Core",
+          "qty": 0,
+          "qty_source": "parsed",
+          "qty_total": 0,
+          "qty_door_count": 11,
+          "manufacturer": "Medeco",
+          "model": "320201N S 26",
+          "finish": ""
+        },
+        {
+          "name": "Surface Closer",
+          "qty": 11,
+          "qty_source": "needs_division",
+          "qty_total": 11,
+          "qty_door_count": 11,
+          "manufacturer": "LCN Closers",
+          "model": "4040XPT-Pull .STDTRK .689",
+          "finish": ""
+        },
+        {
+          "name": "Wall Stop",
+          "qty": 11,
+          "qty_source": "needs_division",
+          "qty_total": 11,
+          "qty_door_count": 11,
+          "manufacturer": "Ives",
+          "model": "WS406CVX",
+          "finish": "630"
+        },
+        {
+          "name": "Gasketing",
+          "qty": 11,
+          "qty_source": "needs_division",
+          "qty_total": 11,
+          "qty_door_count": 11,
+          "manufacturer": "Zero International",
+          "model": "328AA x 42\" x 84\"",
+          "finish": ""
+        },
+        {
+          "name": "Door Bottom",
+          "qty": 11,
+          "qty_source": "needs_division",
+          "qty_total": 11,
+          "qty_door_count": 11,
+          "manufacturer": "Zero International",
+          "model": "355AA 42\"",
+          "finish": ""
+        },
+        {
+          "name": "Wire Harness CON-6",
+          "qty": 11,
+          "qty_source": "needs_division",
+          "qty_total": 11,
+          "qty_door_count": 11,
+          "manufacturer": "Schlage",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Wire Harness CON-38",
+          "qty": 11,
+          "qty_source": "needs_division",
+          "qty_total": 11,
+          "qty_door_count": 11,
+          "manufacturer": "Schlage",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "SSI1-G-E3.1",
+      "heading": "3'x7'",
+      "item_count": 8,
+      "items": [
+        {
+          "name": "Electrified Mortise Lock",
+          "qty": 4,
+          "qty_source": "needs_division",
+          "qty_total": 4,
+          "qty_door_count": 4,
+          "manufacturer": "Schlage",
+          "model": "L9092EU .J .L .03N .630",
+          "finish": ""
+        },
+        {
+          "name": "Interchangeable Core",
+          "qty": 0,
+          "qty_source": "parsed",
+          "qty_total": 0,
+          "qty_door_count": 4,
+          "manufacturer": "Medeco",
+          "model": "320201N S 26",
+          "finish": ""
+        },
+        {
+          "name": "Surface Closer",
+          "qty": 4,
+          "qty_source": "needs_division",
+          "qty_total": 4,
+          "qty_door_count": 4,
+          "manufacturer": "LCN Closers",
+          "model": "4040XPT-Pull .STDTRK .689",
+          "finish": ""
+        },
+        {
+          "name": "Wall Stop",
+          "qty": 4,
+          "qty_source": "needs_division",
+          "qty_total": 4,
+          "qty_door_count": 4,
+          "manufacturer": "Ives",
+          "model": "WS406CVX",
+          "finish": "630"
+        },
+        {
+          "name": "Gasketing",
+          "qty": 4,
+          "qty_source": "needs_division",
+          "qty_total": 4,
+          "qty_door_count": 4,
+          "manufacturer": "Zero International",
+          "model": "328AA x 36\" x 84\"",
+          "finish": ""
+        },
+        {
+          "name": "Door Bottom",
+          "qty": 4,
+          "qty_source": "needs_division",
+          "qty_total": 4,
+          "qty_door_count": 4,
+          "manufacturer": "Zero International",
+          "model": "355AA 36\"",
+          "finish": ""
+        },
+        {
+          "name": "Wire Harness CON-6",
+          "qty": 4,
+          "qty_source": "needs_division",
+          "qty_total": 4,
+          "qty_door_count": 4,
+          "manufacturer": "Schlage",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Wire Harness CON-32",
+          "qty": 4,
+          "qty_source": "needs_division",
+          "qty_total": 4,
+          "qty_door_count": 4,
+          "manufacturer": "Schlage",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "SSI1-G-E3.4",
+      "heading": "4'x9'",
+      "item_count": 8,
+      "items": [
+        {
+          "name": "Electrified Mortise Lock",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "Schlage",
+          "model": "L9092EU .J .L .03N .630",
+          "finish": ""
+        },
+        {
+          "name": "Interchangeable Core",
+          "qty": 0,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "Medeco",
+          "model": "320201N S 26",
+          "finish": ""
+        },
+        {
+          "name": "Surface Closer",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "LCN Closers",
+          "model": "4040XPT-Pull .STDTRK .689",
+          "finish": ""
+        },
+        {
+          "name": "Wall Stop",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "Ives",
+          "model": "WS406CVX",
+          "finish": "630"
+        },
+        {
+          "name": "Gasketing",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "Zero International",
+          "model": "328AA x 48\" x 108\"",
+          "finish": ""
+        },
+        {
+          "name": "Door Bottom",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "Zero International",
+          "model": "355AA 48\"",
+          "finish": ""
+        },
+        {
+          "name": "Wire Harness CON-44",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "Schlage",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Wire Harness CON-6",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "Schlage",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "SSI1-G-XL133",
+      "heading": "Heading #: SSI1-G-XL133'x7'",
+      "item_count": 11,
+      "items": [
+        {
+          "name": "Mortise Exit Device .LD FSE = Fail Secure",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "Von Duprin",
+          "model": "9875.L .CON .FSE .M .996LxM Lever .03 Sp. strike. .630",
+          "finish": ""
+        },
+        {
+          "name": "Interchangeable Core",
+          "qty": 0,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "Medeco",
+          "model": "320201N S 26",
+          "finish": ""
+        },
+        {
+          "name": "Housing LFIC Mortise Cylinder Housing",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "Schlage",
+          "model": "26-094 .626",
+          "finish": ""
+        },
+        {
+          "name": "Surface Closer",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "LCN Closers",
+          "model": "4040XP .SCUSH .689",
+          "finish": ""
+        },
+        {
+          "name": "Kick Plate Kickplate downsized to work with full glass door",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "Ives",
+          "model": "8400 B-CS 8\" x 34\"",
+          "finish": "US32D"
+        },
+        {
+          "name": "Wall Stop",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "Ives",
+          "model": "WS406CVX",
+          "finish": "630"
+        },
+        {
+          "name": "Gasketing",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": null,
+          "qty_door_count": null,
+          "manufacturer": "Pemko",
+          "model": "S88BL x 36\"",
+          "finish": ""
+        },
+        {
+          "name": "Gasketing",
           "qty": 2,
           "qty_source": "parsed",
           "qty_total": null,
           "qty_door_count": null,
-          "manufacturer": "ge, Full Morti",
-          "model": "se,",
-          "finish": "Hvy"
-        },
-        {
-          "name": "Flu",
-          "qty": 1,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
-          "manufacturer": "sh Bolt",
-          "model": "",
+          "manufacturer": "Zero International",
+          "model": "328AA x 84\"",
           "finish": ""
         },
         {
-          "name": "Ele",
-          "qty": 1,
-          "qty_source": "parsed",
-          "qty_total": null,
+          "name": "Door Bottom",
+          "qty": 2,
+          "qty_source": "needs_cap",
+          "qty_total": 2,
           "qty_door_count": null,
-          "manufacturer": "ctrified Mortis",
-          "model": "e L",
-          "finish": "ock"
-        },
-        {
-          "name": "Inte",
-          "qty": 1,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
-          "manufacturer": "rchangeable",
-          "model": "Co",
-          "finish": "re"
-        },
-        {
-          "name": "Sur",
-          "qty": 1,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
-          "manufacturer": "face Closer",
-          "model": "",
+          "manufacturer": "Zero International",
+          "model": "254A x 36\"",
           "finish": ""
         },
         {
-          "name": "Kic",
-          "qty": 1,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
-          "manufacturer": "k Plate",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Ast",
-          "qty": 1,
-          "qty_source": "parsed",
-          "qty_total": null,
-          "qty_door_count": null,
-          "manufacturer": "ragal",
-          "model": "",
-          "finish": ""
-        },
-        {
-          "name": "Wir",
+          "name": "Wire Harness CON-6",
           "qty": 2,
           "qty_source": "parsed",
           "qty_total": null,
           "qty_door_count": null,
-          "manufacturer": "e Harness",
+          "manufacturer": "Schlage",
           "model": "",
           "finish": ""
         },
         {
-          "name": "C/A",
-          "qty": 1,
+          "name": "Door Position Switch Tane Alarm SD-72C By Security",
+          "qty": 0,
           "qty_source": "parsed",
           "qty_total": null,
           "qty_door_count": null,
-          "manufacturer": "rchitect to co",
-          "model": "nfir",
-          "finish": "m appro"
+          "manufacturer": "Miscellaneous",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "SSI1-O-XM",
+      "heading": "3'6\"x7'",
+      "item_count": 11,
+      "items": [
+        {
+          "name": "Continuous Hinge",
+          "qty": 10,
+          "qty_source": "needs_division",
+          "qty_total": 10,
+          "qty_door_count": 10,
+          "manufacturer": "Ives",
+          "model": "705 83\" EPT",
+          "finish": "630"
+        },
+        {
+          "name": "Electric Power Transfer",
+          "qty": 10,
+          "qty_source": "needs_division",
+          "qty_total": 10,
+          "qty_door_count": 10,
+          "manufacturer": "Von Duprin",
+          "model": "EPT10 .CON .689",
+          "finish": ""
+        },
+        {
+          "name": "Concealed Vert Rod Exit .QEL",
+          "qty": 10,
+          "qty_source": "needs_division",
+          "qty_total": 10,
+          "qty_door_count": 10,
+          "manufacturer": "Von Duprin",
+          "model": "9447.L .LBR .940L(Std) .626",
+          "finish": ""
+        },
+        {
+          "name": "Interchangeable Core",
+          "qty": 0,
+          "qty_source": "parsed",
+          "qty_total": 0,
+          "qty_door_count": 10,
+          "manufacturer": "Medeco",
+          "model": "320201N S 26",
+          "finish": ""
+        },
+        {
+          "name": "Cylinder LFIC Rim Cylinder Housing",
+          "qty": 10,
+          "qty_source": "needs_division",
+          "qty_total": 10,
+          "qty_door_count": 10,
+          "manufacturer": "Schlage",
+          "model": "20-079 .626",
+          "finish": ""
+        },
+        {
+          "name": "Automatic Opener Provided By GC -not in ourscope",
+          "qty": 0,
+          "qty_source": "parsed",
+          "qty_total": 0,
+          "qty_door_count": 10,
+          "manufacturer": "LCN Closers",
+          "model": "9542 .REGARM .HDR .HLD .628",
+          "finish": ""
+        },
+        {
+          "name": "Kick Plate",
+          "qty": 10,
+          "qty_source": "needs_division",
+          "qty_total": 10,
+          "qty_door_count": 10,
+          "manufacturer": "Ives",
+          "model": "8400 B-CS 24\" x 40\"",
+          "finish": "US32D"
+        },
+        {
+          "name": "Gasketing",
+          "qty": 10,
+          "qty_source": "needs_division",
+          "qty_total": 10,
+          "qty_door_count": 10,
+          "manufacturer": "Zero International",
+          "model": "328AA x 42\" x 84\"",
+          "finish": ""
+        },
+        {
+          "name": "Door Bottom",
+          "qty": 10,
+          "qty_source": "needs_division",
+          "qty_total": 10,
+          "qty_door_count": 10,
+          "manufacturer": "Zero International",
+          "model": "355AA 42\"",
+          "finish": ""
+        },
+        {
+          "name": "Wire Harness CON-6",
+          "qty": 10,
+          "qty_source": "needs_division",
+          "qty_total": 10,
+          "qty_door_count": 10,
+          "manufacturer": "Schlage",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Door Position Switch Tane Alarm SD-72C By Security",
+          "qty": 0,
+          "qty_source": "parsed",
+          "qty_total": 0,
+          "qty_door_count": 10,
+          "manufacturer": "Miscellaneous",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "SSI2-F-G-XL",
+      "heading": "6'x9'",
+      "item_count": 16,
+      "items": [
+        {
+          "name": "Electric Power Transfer",
+          "qty": 14,
+          "qty_source": "needs_division",
+          "qty_total": 14,
+          "qty_door_count": 14,
+          "manufacturer": "Von Duprin",
+          "model": "EPT10 .CON .689",
+          "finish": ""
+        },
+        {
+          "name": "Flush Bolt",
+          "qty": 14,
+          "qty_source": "needs_division",
+          "qty_total": 14,
+          "qty_door_count": 14,
+          "manufacturer": "Ives",
+          "model": "FB52",
+          "finish": "630"
+        },
+        {
+          "name": "Fire Rated Mortise Exit FSE = Fail Secure",
+          "qty": 14,
+          "qty_source": "needs_division",
+          "qty_total": 14,
+          "qty_door_count": 14,
+          "manufacturer": "Von Duprin",
+          "model": "9875.L.F .CON .FSE .M .996LxM Lever .03 .630",
+          "finish": ""
+        },
+        {
+          "name": "Interchangeable Core",
+          "qty": 0,
+          "qty_source": "parsed",
+          "qty_total": 0,
+          "qty_door_count": 14,
+          "manufacturer": "Medeco",
+          "model": "320201N S 26",
+          "finish": ""
+        },
+        {
+          "name": "Housing LFIC Mortise Cylinder Housing",
+          "qty": 14,
+          "qty_source": "needs_division",
+          "qty_total": 14,
+          "qty_door_count": 14,
+          "manufacturer": "Schlage",
+          "model": "26-094 .626",
+          "finish": ""
+        },
+        {
+          "name": "Coordinator",
+          "qty": 0,
+          "qty_source": "parsed",
+          "qty_total": 0,
+          "qty_door_count": 14,
+          "manufacturer": "Ives",
+          "model": "COR52 FL20",
+          "finish": "628"
+        },
+        {
+          "name": "Mounting Bracket",
+          "qty": 0,
+          "qty_source": "parsed",
+          "qty_total": 0,
+          "qty_door_count": 14,
+          "manufacturer": "Ives",
+          "model": "MB1",
+          "finish": "689"
+        },
+        {
+          "name": "Coordinator",
+          "qty": 14,
+          "qty_source": "needs_division",
+          "qty_total": 14,
+          "qty_door_count": 14,
+          "manufacturer": "Architectural Builders Hardware",
+          "model": "3780",
+          "finish": "US28"
+        },
+        {
+          "name": "Surface Closer",
+          "qty": 28,
+          "qty_source": "needs_division",
+          "qty_total": 28,
+          "qty_door_count": 14,
+          "manufacturer": "LCN Closers",
+          "model": "4040XP .SCUSH .689",
+          "finish": ""
+        },
+        {
+          "name": "Kick Plate",
+          "qty": 28,
+          "qty_source": "needs_division",
+          "qty_total": 28,
+          "qty_door_count": 28,
+          "manufacturer": "Ives",
+          "model": "8402 B-CS 24\" x 35\"",
+          "finish": "US32D"
+        },
+        {
+          "name": "Gasketing",
+          "qty": 14,
+          "qty_source": "needs_division",
+          "qty_total": 14,
+          "qty_door_count": 14,
+          "manufacturer": "Zero International",
+          "model": "488S-BK 25'",
+          "finish": ""
+        },
+        {
+          "name": "Gasketing",
+          "qty": 14,
+          "qty_source": "needs_division",
+          "qty_total": 14,
+          "qty_door_count": 14,
+          "manufacturer": "Pemko",
+          "model": "S88BL x 72\"",
+          "finish": ""
+        },
+        {
+          "name": "Gasketing",
+          "qty": 28,
+          "qty_source": "needs_division",
+          "qty_total": 28,
+          "qty_door_count": 14,
+          "manufacturer": "Zero International",
+          "model": "328AA x 108\"",
+          "finish": ""
+        },
+        {
+          "name": "Door Bottom",
+          "qty": 28,
+          "qty_source": "needs_division",
+          "qty_total": 28,
+          "qty_door_count": 28,
+          "manufacturer": "Zero International",
+          "model": "355AA 36\"",
+          "finish": ""
+        },
+        {
+          "name": "Wire Harness CON-6",
+          "qty": 28,
+          "qty_source": "needs_division",
+          "qty_total": 28,
+          "qty_door_count": 28,
+          "manufacturer": "Schlage",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Door Position Switch Tane Alarm SD-72C By Security",
+          "qty": 0,
+          "qty_source": "parsed",
+          "qty_total": 0,
+          "qty_door_count": 14,
+          "manufacturer": "Miscellaneous",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "SSI2-F-O-XM8",
+      "heading": "Heading #: SSI2-F-O-XM8'3\"x9'6\"",
+      "item_count": 14,
+      "items": [
+        {
+          "name": "Continuous Hinge",
+          "qty": 4,
+          "qty_source": "needs_division",
+          "qty_total": 4,
+          "qty_door_count": 4,
+          "manufacturer": "Ives",
+          "model": "705 113\" EPT",
+          "finish": "630"
+        },
+        {
+          "name": "Electric Power Transfer",
+          "qty": 4,
+          "qty_source": "needs_division",
+          "qty_total": 4,
+          "qty_door_count": 2,
+          "manufacturer": "Von Duprin",
+          "model": "EPT10 .CON .689",
+          "finish": ""
+        },
+        {
+          "name": "Fire Rated Conc Vert Rod .QEL",
+          "qty": 2,
+          "qty_source": "needs_division",
+          "qty_total": 2,
+          "qty_door_count": 2,
+          "manufacturer": "Von Duprin",
+          "model": "9447.EO.F .LBR .626",
+          "finish": ""
+        },
+        {
+          "name": "Extension Rod Kit ER-ADJ10-33A/99 .626",
+          "qty": 4,
+          "qty_source": "needs_division",
+          "qty_total": 4,
+          "qty_door_count": 2,
+          "manufacturer": "Von Duprin",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Fire Rated Conc Vert Rod .QEL",
+          "qty": 2,
+          "qty_source": "needs_division",
+          "qty_total": 2,
+          "qty_door_count": 2,
+          "manufacturer": "Von Duprin",
+          "model": "9447.L.F .LBR .940L(Std) .03 .626",
+          "finish": ""
+        },
+        {
+          "name": "Interchangeable Core",
+          "qty": 0,
+          "qty_source": "parsed",
+          "qty_total": 0,
+          "qty_door_count": 2,
+          "manufacturer": "Medeco",
+          "model": "320201N S 26",
+          "finish": ""
+        },
+        {
+          "name": "Cylinder LFIC Rim Cylinder Housing",
+          "qty": 2,
+          "qty_source": "needs_division",
+          "qty_total": 2,
+          "qty_door_count": 2,
+          "manufacturer": "Schlage",
+          "model": "20-079 .626",
+          "finish": ""
+        },
+        {
+          "name": "Automatic Opener Provided By GC -not in ourscope",
+          "qty": 0,
+          "qty_source": "parsed",
+          "qty_total": 0,
+          "qty_door_count": 2,
+          "manufacturer": "LCN Closers",
+          "model": "9553 .REGARM2 .HDR2 .SPCLHDR .HLD .628",
+          "finish": ""
+        },
+        {
+          "name": "Kick Plate",
+          "qty": 4,
+          "qty_source": "needs_division",
+          "qty_total": 4,
+          "qty_door_count": 4,
+          "manufacturer": "Ives",
+          "model": "8402 B-CS 24\" x 47\"",
+          "finish": "US32D"
+        },
+        {
+          "name": "Gasketing",
+          "qty": 2,
+          "qty_source": "needs_division",
+          "qty_total": 2,
+          "qty_door_count": 2,
+          "manufacturer": "Zero International",
+          "model": "328AA x 99\" x 114\"",
+          "finish": ""
+        },
+        {
+          "name": "Door Bottom",
+          "qty": 4,
+          "qty_source": "needs_division",
+          "qty_total": 4,
+          "qty_door_count": 4,
+          "manufacturer": "Zero International",
+          "model": "355AA 49.5\"",
+          "finish": ""
+        },
+        {
+          "name": "Astragal DPRrequested Zastragal which interferes witha pair of doors with exit deviceand is notallowed",
+          "qty": 2,
+          "qty_source": "parsed",
+          "qty_total": 2,
+          "qty_door_count": 4,
+          "manufacturer": "Zero International",
+          "model": "328AA x 114\"",
+          "finish": ""
+        },
+        {
+          "name": "Wire Harness CON-6",
+          "qty": 8,
+          "qty_source": "needs_division",
+          "qty_total": 8,
+          "qty_door_count": 4,
+          "manufacturer": "Schlage",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Laser Scanner BEA Sensors LZR-FLATSCAN By Security -part of power operator scope",
+          "qty": 0,
+          "qty_source": "parsed",
+          "qty_total": 0,
+          "qty_door_count": 2,
+          "manufacturer": "Miscellaneous",
+          "model": "3D SW",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "SSI2-G-E2",
+      "heading": "6'x9'",
+      "item_count": 14,
+      "items": [
+        {
+          "name": "Flush Bolt",
+          "qty": 9,
+          "qty_source": "needs_division",
+          "qty_total": 9,
+          "qty_door_count": 9,
+          "manufacturer": "Ives",
+          "model": "FB51T-36",
+          "finish": "630"
+        },
+        {
+          "name": "Electrified Mortise Lock",
+          "qty": 9,
+          "qty_source": "needs_division",
+          "qty_total": 9,
+          "qty_door_count": 9,
+          "manufacturer": "Schlage",
+          "model": "L9092EU .J .L .03N .630",
+          "finish": ""
+        },
+        {
+          "name": "Interchangeable Core",
+          "qty": 0,
+          "qty_source": "parsed",
+          "qty_total": 0,
+          "qty_door_count": 9,
+          "manufacturer": "Medeco",
+          "model": "320201N S 26",
+          "finish": ""
+        },
+        {
+          "name": "Coordinator",
+          "qty": 0,
+          "qty_source": "parsed",
+          "qty_total": 0,
+          "qty_door_count": 9,
+          "manufacturer": "Ives",
+          "model": "COR52 FL20",
+          "finish": "628"
+        },
+        {
+          "name": "Coordinator",
+          "qty": 9,
+          "qty_source": "needs_division",
+          "qty_total": 9,
+          "qty_door_count": 9,
+          "manufacturer": "Architectural Builders Hardware",
+          "model": "3780",
+          "finish": "US28"
+        },
+        {
+          "name": "Overhead Stop",
+          "qty": 18,
+          "qty_source": "needs_division",
+          "qty_total": 18,
+          "qty_door_count": 18,
+          "manufacturer": "Glynn-Johnson",
+          "model": "",
+          "finish": "104S 630"
+        },
+        {
+          "name": "Surface Closer",
+          "qty": 18,
+          "qty_source": "needs_division",
+          "qty_total": 18,
+          "qty_door_count": 9,
+          "manufacturer": "LCN Closers",
+          "model": "4040XPT-Pull .STDTRK .689",
+          "finish": ""
+        },
+        {
+          "name": "Kick Plate",
+          "qty": 18,
+          "qty_source": "needs_division",
+          "qty_total": 18,
+          "qty_door_count": 18,
+          "manufacturer": "Ives",
+          "model": "8400 B-CS 24\" x 35\"",
+          "finish": "US32D"
+        },
+        {
+          "name": "Gasketing DPRrequesteda Zastragal however we cannotuse that as it will interfere withthe specified hollow door astragals supplied",
+          "qty": 9,
+          "qty_source": "needs_division",
+          "qty_total": 9,
+          "qty_door_count": 9,
+          "manufacturer": "Zero International",
+          "model": "328AA x 72\" x 108\"",
+          "finish": ""
+        },
+        {
+          "name": "Door Bottom",
+          "qty": 18,
+          "qty_source": "needs_division",
+          "qty_total": 18,
+          "qty_door_count": 18,
+          "manufacturer": "Zero International",
+          "model": "355AA 36\"",
+          "finish": ""
+        },
+        {
+          "name": "Astragal",
+          "qty": 9,
+          "qty_source": "needs_division",
+          "qty_total": 9,
+          "qty_door_count": 9,
+          "manufacturer": "Zero International",
+          "model": "328AA x 108\"",
+          "finish": ""
+        },
+        {
+          "name": "Wire Harness CON-6",
+          "qty": 9,
+          "qty_source": "parsed",
+          "qty_total": 9,
+          "qty_door_count": 18,
+          "manufacturer": "Schlage",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Wire Harness CON-32",
+          "qty": 9,
+          "qty_source": "parsed",
+          "qty_total": 9,
+          "qty_door_count": 18,
+          "manufacturer": "Schlage",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Door Position Switch Tane Alarm SD-72C By Security",
+          "qty": 0,
+          "qty_source": "parsed",
+          "qty_total": 0,
+          "qty_door_count": 9,
+          "manufacturer": "Miscellaneous",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "SSI2-G-E2.2",
+      "heading": "6'x7'",
+      "item_count": 14,
+      "items": [
+        {
+          "name": "Flush Bolt",
+          "qty": 3,
+          "qty_source": "needs_division",
+          "qty_total": 3,
+          "qty_door_count": 3,
+          "manufacturer": "Ives",
+          "model": "FB51T",
+          "finish": "630"
+        },
+        {
+          "name": "Electrified Mortise Lock",
+          "qty": 3,
+          "qty_source": "needs_division",
+          "qty_total": 3,
+          "qty_door_count": 3,
+          "manufacturer": "Schlage",
+          "model": "L9092EU .J .L .03N .630",
+          "finish": ""
+        },
+        {
+          "name": "Interchangeable Core",
+          "qty": 0,
+          "qty_source": "parsed",
+          "qty_total": 0,
+          "qty_door_count": 3,
+          "manufacturer": "Medeco",
+          "model": "320201N S 26",
+          "finish": ""
+        },
+        {
+          "name": "Coordinator",
+          "qty": 0,
+          "qty_source": "parsed",
+          "qty_total": 0,
+          "qty_door_count": 3,
+          "manufacturer": "Ives",
+          "model": "COR52 FL20",
+          "finish": "628"
+        },
+        {
+          "name": "Coordinator",
+          "qty": 3,
+          "qty_source": "needs_division",
+          "qty_total": 3,
+          "qty_door_count": 3,
+          "manufacturer": "Architectural Builders Hardware",
+          "model": "3780",
+          "finish": "US28"
+        },
+        {
+          "name": "Overhead Stop",
+          "qty": 6,
+          "qty_source": "needs_division",
+          "qty_total": 6,
+          "qty_door_count": 6,
+          "manufacturer": "Glynn-Johnson",
+          "model": "",
+          "finish": "104S 630"
+        },
+        {
+          "name": "Surface Closer",
+          "qty": 6,
+          "qty_source": "needs_division",
+          "qty_total": 6,
+          "qty_door_count": 3,
+          "manufacturer": "LCN Closers",
+          "model": "4040XPT-Pull .STDTRK .689",
+          "finish": ""
+        },
+        {
+          "name": "Kick Plate",
+          "qty": 6,
+          "qty_source": "needs_division",
+          "qty_total": 6,
+          "qty_door_count": 6,
+          "manufacturer": "Ives",
+          "model": "8400 B-CS 24\" x 35\"",
+          "finish": "US32D"
+        },
+        {
+          "name": "Gasketing",
+          "qty": 3,
+          "qty_source": "needs_division",
+          "qty_total": 3,
+          "qty_door_count": 3,
+          "manufacturer": "Zero International",
+          "model": "328AA x 72\" x 84\"",
+          "finish": ""
+        },
+        {
+          "name": "Door Bottom",
+          "qty": 6,
+          "qty_source": "needs_division",
+          "qty_total": 6,
+          "qty_door_count": 6,
+          "manufacturer": "Zero International",
+          "model": "355AA 36\"",
+          "finish": ""
+        },
+        {
+          "name": "Astragal DPRrequesteda Zastragal however we cannotuse that as it will interfere withthe specified hollow door astragals supplied",
+          "qty": 3,
+          "qty_source": "needs_division",
+          "qty_total": 3,
+          "qty_door_count": 3,
+          "manufacturer": "Zero International",
+          "model": "328AA x 84\"",
+          "finish": ""
+        },
+        {
+          "name": "Wire Harness CON-6",
+          "qty": 3,
+          "qty_source": "parsed",
+          "qty_total": 3,
+          "qty_door_count": 6,
+          "manufacturer": "Schlage",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Wire Harness CON-32",
+          "qty": 3,
+          "qty_source": "parsed",
+          "qty_total": 3,
+          "qty_door_count": 6,
+          "manufacturer": "Schlage",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Door Position Switch Tane Alarm SD-72C By Security 001.01.N.16 & 001.01.N.41 Changed from 9' to 7' in CCD 042",
+          "qty": 0,
+          "qty_source": "parsed",
+          "qty_total": 0,
+          "qty_door_count": 3,
+          "manufacturer": "Miscellaneous",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "SSI2-G-XL1",
+      "heading": "6'x9'",
+      "item_count": 15,
+      "items": [
+        {
+          "name": "Electric Power Transfer",
+          "qty": 6,
+          "qty_source": "needs_division",
+          "qty_total": 6,
+          "qty_door_count": 6,
+          "manufacturer": "Von Duprin",
+          "model": "EPT10 .CON .689",
+          "finish": ""
+        },
+        {
+          "name": "Flush Bolt",
+          "qty": 6,
+          "qty_source": "needs_division",
+          "qty_total": 6,
+          "qty_door_count": 6,
+          "manufacturer": "Ives",
+          "model": "FB51T-36",
+          "finish": "630"
+        },
+        {
+          "name": "Mortise Exit Device .LD FSE = Fail Secure",
+          "qty": 6,
+          "qty_source": "needs_division",
+          "qty_total": 6,
+          "qty_door_count": 6,
+          "manufacturer": "Von Duprin",
+          "model": "9875.L .CON .FSE .M .996LxM Lever .03 .630",
+          "finish": ""
+        },
+        {
+          "name": "Interchangeable Core",
+          "qty": 0,
+          "qty_source": "parsed",
+          "qty_total": 0,
+          "qty_door_count": 6,
+          "manufacturer": "Medeco",
+          "model": "320201N S 26",
+          "finish": ""
+        },
+        {
+          "name": "Housing LFIC Mortise Cylinder Housing",
+          "qty": 6,
+          "qty_source": "needs_division",
+          "qty_total": 6,
+          "qty_door_count": 6,
+          "manufacturer": "Schlage",
+          "model": "26-094 .626",
+          "finish": ""
+        },
+        {
+          "name": "Coordinator",
+          "qty": 0,
+          "qty_source": "parsed",
+          "qty_total": 0,
+          "qty_door_count": 6,
+          "manufacturer": "Ives",
+          "model": "COR52 FL20",
+          "finish": "628"
+        },
+        {
+          "name": "Mounting Bracket",
+          "qty": 0,
+          "qty_source": "parsed",
+          "qty_total": 0,
+          "qty_door_count": 6,
+          "manufacturer": "Ives",
+          "model": "MB1",
+          "finish": "689"
+        },
+        {
+          "name": "Coordinator",
+          "qty": 6,
+          "qty_source": "needs_division",
+          "qty_total": 6,
+          "qty_door_count": 6,
+          "manufacturer": "Architectural Builders Hardware",
+          "model": "3780",
+          "finish": "US28"
+        },
+        {
+          "name": "Surface Closer",
+          "qty": 12,
+          "qty_source": "needs_division",
+          "qty_total": 12,
+          "qty_door_count": 6,
+          "manufacturer": "LCN Closers",
+          "model": "4040XP .SCUSH .689",
+          "finish": ""
+        },
+        {
+          "name": "Kick Plate",
+          "qty": 12,
+          "qty_source": "needs_division",
+          "qty_total": 12,
+          "qty_door_count": 12,
+          "manufacturer": "Ives",
+          "model": "8400 B-CS 24\" x 35\"",
+          "finish": "US32D"
+        },
+        {
+          "name": "Gasketing",
+          "qty": 6,
+          "qty_source": "needs_division",
+          "qty_total": 6,
+          "qty_door_count": 6,
+          "manufacturer": "Pemko",
+          "model": "S88BL x 72\"",
+          "finish": ""
+        },
+        {
+          "name": "Gasketing",
+          "qty": 12,
+          "qty_source": "needs_division",
+          "qty_total": 12,
+          "qty_door_count": 6,
+          "manufacturer": "Zero International",
+          "model": "328AA x 108\"",
+          "finish": ""
+        },
+        {
+          "name": "Door Bottom",
+          "qty": 12,
+          "qty_source": "needs_division",
+          "qty_total": 12,
+          "qty_door_count": 12,
+          "manufacturer": "Zero International",
+          "model": "355AA 36\"",
+          "finish": ""
+        },
+        {
+          "name": "Wire Harness CON-6",
+          "qty": 12,
+          "qty_source": "needs_division",
+          "qty_total": 12,
+          "qty_door_count": 12,
+          "manufacturer": "Schlage",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Door Position Switch Tane Alarm SD-72C By Security",
+          "qty": 0,
+          "qty_source": "parsed",
+          "qty_total": 0,
+          "qty_door_count": 6,
+          "manufacturer": "Miscellaneous",
+          "model": "",
+          "finish": ""
+        }
+      ]
+    },
+    {
+      "set_id": "SSI2-O-XM",
+      "heading": "8'3x9'6\"",
+      "item_count": 14,
+      "items": [
+        {
+          "name": "Continuous Hinge",
+          "qty": 26,
+          "qty_source": "needs_division",
+          "qty_total": 26,
+          "qty_door_count": 26,
+          "manufacturer": "Ives",
+          "model": "705 113\" EPT",
+          "finish": "630"
+        },
+        {
+          "name": "Electric Power Transfer",
+          "qty": 26,
+          "qty_source": "needs_division",
+          "qty_total": 26,
+          "qty_door_count": 13,
+          "manufacturer": "Von Duprin",
+          "model": "EPT10 .CON .689",
+          "finish": ""
+        },
+        {
+          "name": "Concealed Vert Rod Exit .QEL",
+          "qty": 13,
+          "qty_source": "needs_division",
+          "qty_total": 13,
+          "qty_door_count": 13,
+          "manufacturer": "Von Duprin",
+          "model": "9447.EO .LBR .626",
+          "finish": ""
+        },
+        {
+          "name": "Extension Rod Kit ER-ADJ10-33A/99 .626",
+          "qty": 26,
+          "qty_source": "needs_division",
+          "qty_total": 26,
+          "qty_door_count": 13,
+          "manufacturer": "Von Duprin",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Concealed Vert Rod Exit .QEL",
+          "qty": 13,
+          "qty_source": "needs_division",
+          "qty_total": 13,
+          "qty_door_count": 13,
+          "manufacturer": "Von Duprin",
+          "model": "9447.L .LBR .940L(Std) .626",
+          "finish": ""
+        },
+        {
+          "name": "Interchangeable Core",
+          "qty": 0,
+          "qty_source": "parsed",
+          "qty_total": 0,
+          "qty_door_count": 13,
+          "manufacturer": "Medeco",
+          "model": "320201N S 26",
+          "finish": ""
+        },
+        {
+          "name": "Cylinder LFIC Rim Cylinder Housing",
+          "qty": 13,
+          "qty_source": "needs_division",
+          "qty_total": 13,
+          "qty_door_count": 13,
+          "manufacturer": "Schlage",
+          "model": "20-079 .626",
+          "finish": ""
+        },
+        {
+          "name": "Automatic Opener Provided By GC -not in ourscope",
+          "qty": 0,
+          "qty_source": "parsed",
+          "qty_total": 0,
+          "qty_door_count": 13,
+          "manufacturer": "LCN Closers",
+          "model": "9553 .REGARM2 .HDR2 .SPCLHDR .HLD .628",
+          "finish": ""
+        },
+        {
+          "name": "Kick Plate",
+          "qty": 26,
+          "qty_source": "needs_division",
+          "qty_total": 26,
+          "qty_door_count": 26,
+          "manufacturer": "Ives",
+          "model": "8400 B-CS 24\" x 48\"",
+          "finish": "US32D"
+        },
+        {
+          "name": "Gasketing DPRrequested Zastragals -not allowed on apair with exit devices",
+          "qty": 13,
+          "qty_source": "parsed",
+          "qty_total": 13,
+          "qty_door_count": 26,
+          "manufacturer": "Zero International",
+          "model": "328AA x 99\" x 114\"",
+          "finish": ""
+        },
+        {
+          "name": "Door Bottom",
+          "qty": 26,
+          "qty_source": "needs_division",
+          "qty_total": 26,
+          "qty_door_count": 26,
+          "manufacturer": "Zero International",
+          "model": "355AA 49.5\"",
+          "finish": ""
+        },
+        {
+          "name": "Astragal",
+          "qty": 13,
+          "qty_source": "needs_division",
+          "qty_total": 13,
+          "qty_door_count": 13,
+          "manufacturer": "Zero International",
+          "model": "328AA x 114\"",
+          "finish": ""
+        },
+        {
+          "name": "Wire Harness CON-6",
+          "qty": 52,
+          "qty_source": "needs_division",
+          "qty_total": 52,
+          "qty_door_count": 26,
+          "manufacturer": "Schlage",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Laser Scanner BEA Sensors LZR-FLATSCAN By Security -part of power operator scope",
+          "qty": 0,
+          "qty_source": "parsed",
+          "qty_total": 0,
+          "qty_door_count": 13,
+          "manufacturer": "Miscellaneous",
+          "model": "3D SW",
+          "finish": ""
         }
       ]
     }
   ],
   "flagged_doors": [
     {
-      "door_number": "26-094",
-      "reason": "Pattern 'D-D' doesn't match dominant pattern(s) (D.D.L.D, D.D.L.DL). May be a hardware set ID, reference code, or extraction artifact."
+      "door_number": "F-G-XL1",
+      "reason": "Pattern 'L-L-LD' doesn't match dominant pattern(s) (D.D.L.D, D.D.L.DL). May be a hardware set ID, reference code, or extraction artifact."
     },
     {
-      "door_number": "3780",
-      "reason": "Pattern 'D' doesn't match dominant pattern(s) (D.D.L.D, D.D.L.DL). May be a hardware set ID, reference code, or extraction artifact."
-    },
-    {
-      "door_number": "WS406C",
-      "reason": "Pattern 'LDL' doesn't match dominant pattern(s) (D.D.L.D, D.D.L.DL). May be a hardware set ID, reference code, or extraction artifact."
-    },
-    {
-      "door_number": "20-079",
-      "reason": "Pattern 'D-D' doesn't match dominant pattern(s) (D.D.L.D, D.D.L.DL). May be a hardware set ID, reference code, or extraction artifact."
-    },
-    {
-      "door_number": "ER-ADJ10",
-      "reason": "Pattern 'L-LD' doesn't match dominant pattern(s) (D.D.L.D, D.D.L.DL). May be a hardware set ID, reference code, or extraction artifact."
+      "door_number": "F-G-XL1.1",
+      "reason": "Pattern 'L-L-LD.D' doesn't match dominant pattern(s) (D.D.L.D, D.D.L.DL). May be a hardware set ID, reference code, or extraction artifact."
     }
   ]
 }
