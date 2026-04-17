@@ -44,6 +44,28 @@ CREATE TABLE IF NOT EXISTS issues (
   resolved_at  TIMESTAMPTZ
 );
 
+-- Migration-drift reconciliation: migration 002_smartsheet_integration.sql
+-- also creates a table called `issues` with an older, smaller column set.
+-- When 002 runs first (every fresh environment — CI via `supabase start`,
+-- any restored backup), the `CREATE TABLE IF NOT EXISTS` above becomes a
+-- no-op and the columns below would never land, causing the next
+-- `CREATE INDEX … ON issues(due_at)` to fail with 42703. These inline
+-- ADD COLUMN IF NOT EXISTS statements make 032 self-healing in both
+-- directions: on fresh-from-001 databases they fill in the delta; on
+-- production (where the table already matches) they no-op. Order matches
+-- the CREATE TABLE declaration for easy diffing.
+ALTER TABLE issues ADD COLUMN IF NOT EXISTS category           TEXT;
+ALTER TABLE issues ADD COLUMN IF NOT EXISTS issue_type         TEXT;
+ALTER TABLE issues ADD COLUMN IF NOT EXISTS awaiting_from      TEXT;
+ALTER TABLE issues ADD COLUMN IF NOT EXISTS due_at             TIMESTAMPTZ;
+ALTER TABLE issues ADD COLUMN IF NOT EXISTS awaited_since      TIMESTAMPTZ;
+ALTER TABLE issues ADD COLUMN IF NOT EXISTS title              TEXT;
+ALTER TABLE issues ADD COLUMN IF NOT EXISTS resolution_summary TEXT;
+ALTER TABLE issues ADD COLUMN IF NOT EXISTS source             TEXT DEFAULT 'form';
+ALTER TABLE issues ADD COLUMN IF NOT EXISTS source_data        JSONB DEFAULT '{}'::jsonb;
+ALTER TABLE issues ADD COLUMN IF NOT EXISTS parse_confidence   NUMERIC(4,3) DEFAULT 1.000;
+ALTER TABLE issues ADD COLUMN IF NOT EXISTS resolved_at        TIMESTAMPTZ;
+
 CREATE INDEX IF NOT EXISTS idx_issues_project_created ON issues(project_id, created_at DESC);
 CREATE INDEX IF NOT EXISTS idx_issues_opening ON issues(opening_id);
 CREATE INDEX IF NOT EXISTS idx_issues_project_status ON issues(project_id, status);

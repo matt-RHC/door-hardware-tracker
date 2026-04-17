@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import { v4 as uuidv4 } from 'uuid'
 import { summarizeTranscript } from '@/lib/ai/issue-parser'
+import { assertProjectInUserCompany, CompanyAccessError } from '@/lib/companies'
 
-const SIGNED_URL_EXPIRES_IN = 3600
+const SIGNED_URL_EXPIRES_IN = 600
 const MAX_VOICE_SIZE_BYTES = 10 * 1024 * 1024 // 10 MB
 const ALLOWED_AUDIO_TYPES = [
   'audio/wav', 'audio/wave', 'audio/x-wav',
@@ -23,15 +24,13 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     const { projectId, issueId } = await params
 
-    const { data: membership } = await supabase
-      .from('project_members')
-      .select('role')
-      .eq('project_id', projectId)
-      .eq('user_id', user.id)
-      .single()
-
-    if (!membership) {
-      return NextResponse.json({ error: 'Access denied' }, { status: 403 })
+    try {
+      await assertProjectInUserCompany(supabase, projectId)
+    } catch (err) {
+      if (err instanceof CompanyAccessError) {
+        return NextResponse.json({ error: err.message }, { status: err.status })
+      }
+      throw err
     }
 
     // Verify issue belongs to project
@@ -79,7 +78,10 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
     const fileId = uuidv4()
     const timestamp = Date.now()
-    const storagePath = `issue-evidence/${projectId}/${issueId}/voice-${timestamp}-${fileId}.${ext}`
+    // Path layout: <project_id>/<issue_id>/voice-<ts>-<id>.<ext>
+    // Segment 1 must be the project UUID so storage RLS in 043 can cast
+    // (storage.foldername(name))[1]::uuid and join through to companies.
+    const storagePath = `${projectId}/${issueId}/voice-${timestamp}-${fileId}.${ext}`
 
     // Upload to Supabase Storage
     const buffer = await file.arrayBuffer()
