@@ -8,7 +8,7 @@
  * All functions are pure and synchronous — no API calls, no React dependency.
  */
 
-import type { HardwareSet, ExtractedHardwareItem } from '@/lib/types'
+import type { HardwareSet } from '@/lib/types'
 import { classifyItem, HARDWARE_TAXONOMY } from '@/lib/hardware-taxonomy'
 
 // ── Types ──────────────────────────────────────────────────────────

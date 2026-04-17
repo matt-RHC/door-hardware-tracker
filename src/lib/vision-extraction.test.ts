@@ -3,8 +3,6 @@ import {
   VISION_EXTRACTION_PROMPT,
   callVisionExtraction,
   filterSchedulePages,
-  type VisionExtractionResult,
-  type VisionHardwareSet,
 } from './parse-pdf-helpers'
 import type { PageClassification } from '@/lib/types'
 
