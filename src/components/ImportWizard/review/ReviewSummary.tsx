@@ -95,7 +95,7 @@ export default function ReviewSummary({
       {/* ── Summary Stats Bar ── */}
       <div className="mb-4 p-3 bg-tint border border-border-dim rounded-md">
         <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
-          <span className="text-sm text-primary font-medium">
+          <span className="text-sm text-primary font-medium tabular-nums">
             {totalDoors} doors extracted
           </span>
           <div className="flex items-center gap-2">
@@ -162,7 +162,7 @@ export default function ReviewSummary({
         </div>
 
         {/* Human labels */}
-        <div className="flex items-center gap-4 text-xs mb-3">
+        <div className="flex items-center gap-4 text-xs mb-3 tabular-nums">
           <span className="text-success">{highCount} ready</span>
           <span className="text-warning">{medCount} need{medCount === 1 ? 's' : ''} attention</span>
           <span className="text-danger">{lowCount} missing data</span>

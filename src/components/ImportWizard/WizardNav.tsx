@@ -42,7 +42,7 @@ export default function WizardNav({
     <div className="sticky bottom-0 z-10 mt-auto -mx-6 px-6 pt-6 pb-2 bg-gradient-to-t from-[var(--bg-base)] via-[var(--bg-base)]/95 to-transparent pointer-events-none">
       <div className="flex items-center justify-between pointer-events-auto">
         {/* Left side: Back + optional secondary */}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           {onBack ? (
             <button
               onClick={onBack}
