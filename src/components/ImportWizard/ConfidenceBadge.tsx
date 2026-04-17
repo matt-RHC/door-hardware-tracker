@@ -1,31 +1,50 @@
 "use client";
 
 import type { ConfidenceLevel } from "@/lib/types/confidence";
+import { getConfidenceStyle } from "@/lib/confidence";
 
 interface ConfidenceBadgeProps {
   level: ConfidenceLevel;
   tooltip?: string;
+  /** `dot` (default) is the quiet per-field indicator used inline next to
+   *  extracted values on HardwareItemRow — `high` returns null so clean
+   *  fields stay visually clean. `pill` is the row-level aggregate used at
+   *  the end of DoorRow: it shows for every level (including `high`) with
+   *  a leading icon and label, because the row-level confidence IS the
+   *  hierarchy signal. */
+  variant?: "dot" | "pill";
   size?: "sm" | "md";
 }
 
-const DOT_COLORS: Record<ConfidenceLevel, string> = {
-  high: "bg-success",
-  medium: "bg-warning",
-  low: "bg-danger",
-  unverified: "bg-tertiary",
-};
-
 /**
- * Small inline confidence dot. High confidence is hidden by default
- * (clean UI when everything is fine). Medium/low/unverified show a
- * colored dot with an optional hover tooltip.
+ * Confidence indicator. Two variants share the same semantic-token mapping
+ * (via getConfidenceStyle) so we never duplicate the level → color logic.
  */
 export default function ConfidenceBadge({
   level,
   tooltip,
+  variant = "dot",
   size = "sm",
 }: ConfidenceBadgeProps) {
-  // High confidence = no indicator (clean by default)
+  const style = getConfidenceStyle(level);
+
+  if (variant === "pill") {
+    const Icon = style.Icon;
+    return (
+      <span
+        className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium shrink-0 ${style.pillClass}`}
+        title={tooltip ?? style.label}
+        aria-label={`${style.label}${tooltip ? ` — ${tooltip}` : ""}`}
+      >
+        <Icon className="h-3 w-3 shrink-0" />
+        <span>{style.label}</span>
+      </span>
+    );
+  }
+
+  // dot variant: `high` is deliberately hidden — the absence of a dot IS
+  // the signal that the field is clean. This is the existing convention
+  // across per-field indicators (HardwareItemRow) and must not change.
   if (level === "high") return null;
 
   const px = size === "sm" ? "w-1.5 h-1.5" : "w-2 h-2";
@@ -33,7 +52,7 @@ export default function ConfidenceBadge({
   return (
     <span className="relative group inline-flex items-center ml-1 shrink-0">
       <span
-        className={`${px} rounded-full ${DOT_COLORS[level]} inline-block`}
+        className={`${px} rounded-full ${style.dotClass} inline-block`}
         aria-label={`${level} confidence`}
       />
       {tooltip && (

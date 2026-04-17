@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useEffect, useMemo } from "react";
+import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { usePunchHighlight } from "./usePunchHighlight";
 import type { DoorEntry, HardwareSet, ClassifyPagesResponse } from "./types";
 import type { ReconciliationResult, ReconciledHardwareSet } from "@/lib/types/reconciliation";
@@ -97,6 +97,22 @@ export default function StepReview({
 
   const [editingCell, setEditingCell] = useState<EditingCell | null>(null);
   const [editValue, setEditValue] = useState("");
+  // `recentlyEdited` drives the 1.5s success-dim flash that confirms a
+  // client-side commit landed in state. These edits don't round-trip to an
+  // API (see StepConfirm for the actual async save), so the flash is the
+  // only feedback the user gets that their keystroke "took". Paired with a
+  // ref-held timeout so a rapid second edit cancels the prior fade.
+  const [recentlyEdited, setRecentlyEdited] = useState<EditingCell | null>(
+    null,
+  );
+  const editFlashTimeoutRef = useRef<number | null>(null);
+  useEffect(() => {
+    return () => {
+      if (editFlashTimeoutRef.current != null) {
+        window.clearTimeout(editFlashTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // ─── View mode (door-centric vs set-centric) ───
   const [viewMode, setViewMode] = useState<ViewMode>(loadInitialViewMode);
@@ -189,16 +205,30 @@ export default function StepReview({
 
   const commitEdit = useCallback(() => {
     if (!editingCell) return;
+    const cell = editingCell;
     setDoors((prev) => {
       const next = [...prev];
-      next[editingCell.row] = {
-        ...next[editingCell.row],
-        [editingCell.field]: editValue,
+      next[cell.row] = {
+        ...next[cell.row],
+        [cell.field]: editValue,
       };
       return next;
     });
     setEditingCell(null);
     setEditValue("");
+    // Trigger the "just edited" flash and schedule its decay.
+    setRecentlyEdited(cell);
+    if (editFlashTimeoutRef.current != null) {
+      window.clearTimeout(editFlashTimeoutRef.current);
+    }
+    editFlashTimeoutRef.current = window.setTimeout(() => {
+      setRecentlyEdited((cur) => {
+        if (cur && cur.row === cell.row && cur.field === cell.field) {
+          return null;
+        }
+        return cur;
+      });
+    }, 1500);
   }, [editingCell, editValue]);
 
   const cancelEdit = useCallback(() => {
@@ -656,6 +686,7 @@ export default function StepReview({
             onSort={handleSort}
             editingCell={editingCell}
             editValue={editValue}
+            recentlyEdited={recentlyEdited}
             onStartEdit={startEdit}
             onEditValueChange={setEditValue}
             onCommitEdit={commitEdit}

@@ -998,7 +998,7 @@ export default function StepTriage({
         <>
           <div className="grid grid-cols-3 gap-3 mb-4">
             <div className="bg-tint border border-border-dim rounded-md p-3 text-center">
-              <div className="text-xl font-bold text-success">
+              <div className="text-xl font-bold text-success tabular-nums">
                 {triageResult.doors_found}
               </div>
               <div className="text-[9px] text-tertiary uppercase">
@@ -1006,7 +1006,7 @@ export default function StepTriage({
               </div>
             </div>
             <div className="bg-tint border border-border-dim rounded-md p-3 text-center">
-              <div className="text-xl font-bold text-warning">
+              <div className="text-xl font-bold text-warning tabular-nums">
                 {triageResult.by_others}
               </div>
               <div className="text-[9px] text-tertiary uppercase">
@@ -1014,7 +1014,7 @@ export default function StepTriage({
               </div>
             </div>
             <div className="bg-tint border border-border-dim rounded-md p-3 text-center">
-              <div className="text-xl font-bold text-danger">
+              <div className="text-xl font-bold text-danger tabular-nums">
                 {triageResult.rejected}
               </div>
               <div className="text-[9px] text-tertiary uppercase">
@@ -1042,7 +1042,7 @@ export default function StepTriage({
                       {flag.reason}
                     </span>
                     <span
-                      className={`text-[10px] px-1.5 py-0.5 rounded ${
+                      className={`text-[10px] px-1.5 py-0.5 rounded tabular-nums ${
                         flag.confidence >= 0.8
                           ? "bg-success-dim text-success"
                           : flag.confidence >= 0.5

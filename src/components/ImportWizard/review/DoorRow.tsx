@@ -1,6 +1,7 @@
 "use client";
 
 import type { DoorEntry } from "../types";
+import ConfidenceBadge from "../ConfidenceBadge";
 import { getConfidence, getDoorIssues, confBorder } from "./utils";
 import { ISSUE_LABELS } from "./types";
 
@@ -24,16 +25,23 @@ export default function DoorRow({
     .filter((i) => !i.startsWith('missing_door_number') && !i.startsWith('missing_hw_set'))
     .slice(0, 2);
 
+  // Auto-approved rows recede (opacity-70) so the eye lands on rows that
+  // still need a human. The confidence pill still reads at 70% opacity,
+  // which is exactly the "quiet when fine" signal we want.
+  const isAutoApproved = conf === 'high';
+
   return (
     <div
       ref={(el) => {
         if (door.door_number) registerRef(door.door_number, el);
       }}
-      className={`${confBorder(door)} border-t border-border-dim bg-tint transition-colors duration-150`}
+      className={`${confBorder(door)} border-t border-border-dim bg-tint transition-colors duration-150 ${
+        isAutoApproved ? 'opacity-70' : ''
+      }`}
     >
       <button
         onClick={onToggle}
-        className="w-full text-left px-3 py-2 flex items-center gap-3 min-h-11 hover:bg-tint-strong focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+        className="w-full text-left px-4 py-3 flex items-center gap-3 min-h-11 hover:bg-tint-strong focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent transition-colors"
         aria-expanded={isExpanded}
       >
         <span
@@ -43,7 +51,7 @@ export default function DoorRow({
         >
           {'\u25B8'}
         </span>
-        <span className="font-mono text-[13px] text-primary shrink-0 min-w-[3.5rem]">
+        <span className="font-mono text-sm font-semibold text-primary tabular-nums shrink-0 min-w-[3.5rem]">
           {door.door_number || '—'}
         </span>
         <span className="text-accent text-[12px] font-mono shrink-0 min-w-[4.5rem]">
@@ -53,7 +61,7 @@ export default function DoorRow({
           {door.location || <span className="text-tertiary">no location</span>}
         </span>
         {door.fire_rating && (
-          <span className="text-tertiary text-[11px] shrink-0">
+          <span className="text-tertiary text-[11px] shrink-0 tabular-nums">
             {door.fire_rating}
           </span>
         )}
@@ -62,11 +70,7 @@ export default function DoorRow({
             {topIssues.map((i) => ISSUE_LABELS[i] ?? i.replace(/_/g, ' ')).join(', ')}
           </span>
         )}
-        <span className="flex items-center gap-1 shrink-0" aria-label={`confidence ${conf}`}>
-          {conf === 'high' && <span className="w-2 h-2 rounded-full bg-success" />}
-          {conf === 'medium' && <span className="w-2 h-2 rounded-full bg-warning" />}
-          {conf === 'low' && <span className="w-2 h-2 rounded-full bg-danger" />}
-        </span>
+        <ConfidenceBadge level={conf} variant="pill" />
       </button>
     </div>
   );
