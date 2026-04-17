@@ -197,7 +197,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Portfolio summary */}
-        {!statsLoading && totals && totals.projects > 0 && (
+        {!statsLoading && !error && totals && totals.projects > 0 && (
           <div className="panel corner-brackets p-4 sm:p-5 rounded-md mb-5 animate-fade-in-up">
             <div className="flex items-center justify-between mb-3">
               <span
