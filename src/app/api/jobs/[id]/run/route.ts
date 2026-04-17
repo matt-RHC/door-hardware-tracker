@@ -1021,8 +1021,8 @@ export async function POST(
 
     // Build filtered PDF for triage (door schedule + hw set pages only)
     let filteredPdfBase64: string | undefined
-    const schedulePages: number[] = classifyResult?.summary?.door_schedule_pages ?? []
-    const hwPages: number[] = classifyResult?.summary?.hardware_set_pages ?? []
+    const schedulePages: number[] = effectiveSummary.door_schedule_pages ?? []
+    const hwPages: number[] = effectiveSummary.hardware_set_pages ?? []
     const relevantPages = [...schedulePages, ...hwPages]
     if (relevantPages.length > 0) {
       try {
