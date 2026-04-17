@@ -1225,6 +1225,7 @@ def extract_base_series(model: str, manufacturer: str) -> str:
 # Non-hardware item patterns — used to filter garbage from extraction.
 NON_HARDWARE_PATTERN = re.compile(
     r"^(Single Door|Pair Doors|Opening\b|Properties:|Notes:|Description:)"  # Non-items
+    r"|^\s*(Door|Frame)\s*$"                               # Bare column-header tokens
     r"|(?:REVISED|CHECKED|REVIEWED)\s+BY:"                # Revision stamps
     r"|_{5,}"                                              # Section dividers
     r"|^(January|February|March|April|May|June|July|August|September|October|November|December)\b"
