@@ -51,6 +51,23 @@ import { extractJSON } from '@/lib/extractJSON'
 import { TAXONOMY_REGEX_CACHE, classifyItem, scanElectricHinges, isAsymmetricHingeSplit, getPairLeafPlacement, PAIR_LEAF_PLACEMENT, type InstallScope } from '@/lib/hardware-taxonomy'
 import { createAdminSupabaseClient } from '@/lib/supabase/admin'
 
+/**
+ * Match Python-emitted structural rows like "Door (Active Leaf)" /
+ * "Door (Inactive Leaf)". These rows are the PRIMARY pair-detection
+ * signal (see `detectIsPair` below) — the extractor passes them through
+ * verbatim when the PDF schedule literally contains that text, and two or
+ * more of them in a hardware set deterministically settles pair detection.
+ *
+ * Hoisted to the top of the file because `applyCorrections` also needs it
+ * to refuse Darrin edits that would strip or rename these rows before
+ * `detectIsPair` runs. The corresponding Python filter is at
+ * `api/extract-tables.py:1228` (NON_HARDWARE_PATTERN) — note the Python
+ * regex only filters BARE "Door"/"Frame" tokens and passes the
+ * parenthesized leaf-named variants through.
+ */
+const _PAIR_LEAF_NAMED_DOOR_RE =
+  /^Door\s*\([^)]*(active|inactive)\s+leaf[^)]*\)\s*$/i
+
 // --- Darrin observation logging (fire-and-forget) ---
 
 /**
@@ -1447,16 +1464,66 @@ export function applyCorrections(
       for (const set of targets) {
         if (corr.heading) set.heading = corr.heading
 
-        // Remove items (exact + case-insensitive only, never substring)
+        // Remove items (exact + case-insensitive only, never substring).
+        //
+        // Guard: never remove rows matching _PAIR_LEAF_NAMED_DOOR_RE. They
+        // are the PRIMARY signal for detectIsPair (which runs AFTER
+        // applyCorrections in the save + jobs pipelines). Darrin can
+        // legitimately flag "Door (Active Leaf)" as a non-hardware row per
+        // the CP2 prompt's items_to_remove semantics — we refuse the
+        // removal here and emit a breadcrumb so misfires surface in Sentry.
         if (corr.items_to_remove) {
-          const removeLower = new Set(corr.items_to_remove.map(n => (n ?? '').toLowerCase()))
+          const removeLower = new Set<string>()
+          const skipped: string[] = []
+          for (const rawName of corr.items_to_remove) {
+            const name = (rawName ?? '').trim()
+            if (_PAIR_LEAF_NAMED_DOOR_RE.test(name)) {
+              skipped.push(name)
+              continue
+            }
+            removeLower.add(name.toLowerCase())
+          }
+          if (skipped.length > 0) {
+            Sentry.addBreadcrumb({
+              category: 'extraction.corrections.skip_remove_leaf_row',
+              level: 'warning',
+              message: 'Refused to apply items_to_remove on leaf-named Door row',
+              data: { set_id: set.set_id, skipped },
+            })
+          }
           set.items = (set.items ?? []).filter(
             item => !removeLower.has((item.name ?? '').toLowerCase()),
           )
         }
 
-        // Fix items (exact + case-insensitive)
+        // Fix items (exact + case-insensitive).
+        //
+        // Guard: drop any items_to_fix entry whose *target* row name matches
+        // _PAIR_LEAF_NAMED_DOOR_RE AND whose field is 'name'. Without this,
+        // Darrin could rename "Door (Active Leaf)" → "Door" and collapse the
+        // PRIMARY signal the same way items_to_remove would. Other fields
+        // (qty, manufacturer, model, finish) on the leaf-named row remain
+        // editable — the guard is specifically about preserving the name.
         if (corr.items_to_fix) {
+          const skippedFixes: Array<{ name: string; field: string }> = []
+          corr.items_to_fix = corr.items_to_fix.filter(fix => {
+            if (
+              fix.field === 'name'
+              && _PAIR_LEAF_NAMED_DOOR_RE.test((fix.name ?? '').trim())
+            ) {
+              skippedFixes.push({ name: fix.name, field: fix.field })
+              return false
+            }
+            return true
+          })
+          if (skippedFixes.length > 0) {
+            Sentry.addBreadcrumb({
+              category: 'extraction.corrections.skip_fix_leaf_row',
+              level: 'warning',
+              message: 'Refused to apply items_to_fix.name rewrite on leaf-named Door row',
+              data: { set_id: set.set_id, skipped: skippedFixes },
+            })
+          }
           for (const fix of corr.items_to_fix) {
             const item = findItemFuzzy(
               set.items ?? [],
@@ -2583,24 +2650,6 @@ export function parseOpeningSize(
 }
 
 /**
- * Matches a leaf-named structural Door row emitted by the Python extractor
- * for pair openings — e.g. "Door (Active Leaf)", "Door (Inactive Leaf)",
- * "Door (active leaf — swing)". Used by detectIsPair's primary signal.
- *
- * Shape: bare "Door " then a parenthetical that contains the word
- * "active" or "inactive" adjacent to "leaf" (whitespace-insensitive). The
- * `$` anchor ensures we don't match item rows that happen to start with
- * "Door ( … leaf …)" followed by trailing model/finish text.
- *
- * Why ≥ 2 occurrences are required at the call site: a single "Door
- * (Active Leaf)" row with no counterpart is suspicious (Python mis-emit)
- * and shouldn't by itself flip an opening to pair. A true pair opening
- * produces both Active AND Inactive leaf rows.
- */
-const _PAIR_LEAF_NAMED_DOOR_RE =
-  /^Door\s*\([^)]*(active|inactive)\s+leaf[^)]*\)\s*$/i
-
-/**
  * Detect whether an opening is a pair door based on the hardware set and
  * door info. Uses a layered signal strategy so the detection is robust
  * across different PDF formats:
@@ -2654,22 +2703,28 @@ const _PAIR_LEAF_NAMED_DOOR_RE =
  * identical across both call sites for the same `hwSet`, so determinism
  * is preserved.
  */
-export function detectIsPair(
+export type PairSignalTier = 'primary' | 'secondary' | 'tertiary' | 'quaternary' | 'none'
+
+export type PairSignalResult = {
+  isPair: boolean
+  tier: PairSignalTier
+  evidence: Record<string, unknown>
+}
+
+function detectPairSignal(
   hwSet: HardwareSet | undefined,
   doorInfo: { door_type?: string | null; location?: string | null } | undefined,
-): boolean {
+): PairSignalResult {
   // --- Primary: Python already emitted leaf-named Door rows ---
-  // Ground truth from the extractor. If Active+Inactive Leaf rows are
-  // present, the upstream pair decision is settled. Added 2026-04-18 to
-  // close the PR #311 Radius DC regression — see JSDoc above for the
-  // full incident chain and why this signal ranks above heading parsing.
   const items = hwSet?.items ?? []
   let leafNamedCount = 0
   for (const item of items) {
     const name = (item.name ?? '').trim()
     if (_PAIR_LEAF_NAMED_DOOR_RE.test(name)) {
       leafNamedCount++
-      if (leafNamedCount >= 2) return true
+      if (leafNamedCount >= 2) {
+        return { isPair: true, tier: 'primary', evidence: { leafNamedCount } }
+      }
     }
   }
 
@@ -2677,35 +2732,96 @@ export function detectIsPair(
   const leafCount = hwSet?.heading_leaf_count ?? 0
   const doorCount = hwSet?.heading_door_count ?? 0
   if (doorCount >= 1 && leafCount > doorCount) {
-    return true
+    return {
+      isPair: true,
+      tier: 'secondary',
+      evidence: { heading_door_count: doorCount, heading_leaf_count: leafCount },
+    }
   }
 
   // --- Tertiary: parse opening size from door_type or heading text ---
-  const sizeSources: Array<string | null | undefined> = [
-    doorInfo?.door_type,
-    doorInfo?.location,
-    hwSet?.heading,
+  const sizeSources: Array<{ src: string | null | undefined; label: string }> = [
+    { src: doorInfo?.door_type, label: 'door_type' },
+    { src: doorInfo?.location, label: 'location' },
+    { src: hwSet?.heading, label: 'heading' },
   ]
-  for (const src of sizeSources) {
+  for (const { src, label } of sizeSources) {
     const parsed = parseOpeningSize(src)
     if (parsed && parsed.widthIn >= _PAIR_MIN_WIDTH_IN) {
-      return true
+      return {
+        isPair: true,
+        tier: 'tertiary',
+        evidence: { parsed_width_in: parsed.widthIn, source: label },
+      }
     }
   }
 
   // --- Quaternary: keyword scan (legacy fallback) ---
   const heading = (hwSet?.heading ?? '').toLowerCase()
   const doorType = (doorInfo?.door_type ?? '').toLowerCase()
-  if (
-    heading.includes('pair') ||
-    heading.includes('double') ||
-    doorType.includes('pr') ||
-    doorType.includes('pair')
-  ) {
-    return true
+  const keywordChecks: Array<[string, boolean]> = [
+    ['heading:pair', heading.includes('pair')],
+    ['heading:double', heading.includes('double')],
+    ['door_type:pr', doorType.includes('pr')],
+    ['door_type:pair', doorType.includes('pair')],
+  ]
+  const matched = keywordChecks.find(([, hit]) => hit)
+  if (matched) {
+    return {
+      isPair: true,
+      tier: 'quaternary',
+      evidence: { matched_keyword: matched[0] },
+    }
   }
 
-  return false
+  return { isPair: false, tier: 'none', evidence: {} }
+}
+
+export function detectIsPair(
+  hwSet: HardwareSet | undefined,
+  doorInfo: { door_type?: string | null; location?: string | null } | undefined,
+): boolean {
+  return detectPairSignal(hwSet, doorInfo).isPair
+}
+
+/**
+ * Traced variant of detectIsPair. Call this from the canonical staging
+ * write sites (save/route.ts, jobs/run/route.ts) — exactly once per door
+ * per run — to emit a structured log line carrying the winning signal
+ * tier. Vercel's log drain aggregates stdout; we can then histogram tier
+ * distribution across all extractions.
+ *
+ * We do NOT use Sentry.addBreadcrumb for this because breadcrumbs only
+ * attach to events that actually fire (exceptions), and pair detection
+ * succeeds silently in the common case — we'd see nothing in production.
+ * Sentry.metrics is not configured for this project (see
+ * sentry.server.config.ts); revisit if metrics is wired up later.
+ *
+ * The other 5 detectIsPair call sites (inside buildPerOpeningItems, the
+ * apply-revision fallbacks, and SetPanel's UI preview) intentionally
+ * stay untraced — they recompute the same decision deterministically on
+ * the same inputs, so tracing every site would flood the logs with
+ * duplicates.
+ */
+export function detectIsPairWithTrace(
+  hwSet: HardwareSet | undefined,
+  doorInfo: { door_type?: string | null; location?: string | null } | undefined,
+  context: { runId?: string; set_id?: string | null; door_number?: string | null; source: 'save' | 'jobs_run' },
+): boolean {
+  const result = detectPairSignal(hwSet, doorInfo)
+  console.log(
+    JSON.stringify({
+      event: 'extraction.pair_detection.signal',
+      source: context.source,
+      runId: context.runId,
+      set_id: context.set_id ?? hwSet?.set_id ?? null,
+      door_number: context.door_number ?? null,
+      isPair: result.isPair,
+      tier: result.tier,
+      evidence: result.evidence,
+    }),
+  )
+  return result.isPair
 }
 
 /**

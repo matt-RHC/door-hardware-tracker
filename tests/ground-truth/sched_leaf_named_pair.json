@@ -1,0 +1,11 @@
+{
+  "pdf_name": "sched-leaf-named-pair.synthetic.pdf",
+  "catalog_key": "SCHED_LEAF_NAMED_PAIR",
+  "format": "synthetic",
+  "expected_door_count": 2,
+  "expected_set_count": 1,
+  "expected_leaf_count_per_door": 2,
+  "expected_pair_signal_tier": "primary",
+  "verified": true,
+  "notes": "Synthetic fixture — not a real PDF extraction. Exists to seat PR #312's PRIMARY pair-detection signal in CI so a future refactor can't silently regress detectIsPair. See tests/baselines/sched-leaf-named-pair.json and src/lib/detectIsPair.primary-signal.test.ts."
+}

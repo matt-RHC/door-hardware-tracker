@@ -154,6 +154,9 @@ export async function GET() {
       })
     }
 
+    // itemCount counts per-leaf rows on pair doors (split-placement items
+    // emit one row per leaf). See PAIR_LEAF_PLACEMENT in hardware-taxonomy.ts
+    // and the projects/[id]/summary route for the full rationale.
     for (const opening of openings) {
       const stats = byProject.get(opening.project_id)
       if (!stats) continue
