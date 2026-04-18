@@ -393,3 +393,70 @@ describe('extraction-invariants — Radius DC regression canary', () => {
     expect(blockers).toBeGreaterThanOrEqual(4)
   })
 })
+
+// ── Rule (i): leaf_count_consistency ────────────────────────────────────────
+//
+// 2026-04-18 Radius DC regression guard. Triggers whenever an opening has
+// leaf_count<2 but any hardware_item carries leaf_side='active'|'inactive'.
+// Always emits a 'blocker' severity; the save/route.ts wiring treats this
+// specific rule as enforce-always (can be disabled via
+// LEAF_COUNT_CONSISTENCY_ENFORCE=false env var).
+
+describe('invariant (i) leaf_count_consistency', () => {
+  it('fails when leaf_count=1 but an item has leaf_side="inactive" (Radius DC bug shape)', () => {
+    const opening = makeOpening({ leaf_count: 1 })
+    const items: ItemFixture[] = [
+      makeItem({ id: 'i1', name: 'Door (Active Leaf)', leaf_side: 'active' }),
+      makeItem({ id: 'i2', name: 'Door (Inactive Leaf)', leaf_side: 'inactive' }),
+    ]
+    const v = runInvariants([opening], items, [])
+    const hit = v.find(x => x.rule === 'leaf_count_consistency')
+    expect(hit).toBeDefined()
+    expect(hit?.severity).toBe('blocker')
+    expect(hit?.opening_id).toBe('op-1')
+    expect(hit?.details).toMatch(/opening\.leaf_count=1/)
+    expect(hit?.details).toMatch(/leaf_side="inactive"/)
+  })
+
+  it('does NOT fire when leaf_count=1 and only leaf_side="active" is present (single-door shape)', () => {
+    // Critical: buildPerOpeningItems stamps single-door bare "Door" rows
+    // with leaf_side='active' (parse-pdf-helpers.ts:2746). 'active' alone
+    // MUST NOT trigger this rule, or every single-door extraction would
+    // falsely block.
+    const opening = makeOpening({ leaf_count: 1 })
+    const items: ItemFixture[] = [
+      makeItem({ id: 'i1', name: 'Door', leaf_side: 'active' }),
+    ]
+    const v = runInvariants([opening], items, [])
+    expect(v.filter(x => x.rule === 'leaf_count_consistency')).toHaveLength(0)
+  })
+
+  it('passes when leaf_count=2 and items carry active/inactive (agreement)', () => {
+    const opening = makeOpening({ leaf_count: 2 })
+    const items: ItemFixture[] = [
+      makeItem({ id: 'i1', name: 'Door (Active Leaf)', leaf_side: 'active' }),
+      makeItem({ id: 'i2', name: 'Door (Inactive Leaf)', leaf_side: 'inactive' }),
+    ]
+    const v = runInvariants([opening], items, [])
+    expect(v.filter(x => x.rule === 'leaf_count_consistency')).toHaveLength(0)
+  })
+
+  it('passes when leaf_count=1 and all items are shared/active (legitimate single-door)', () => {
+    const opening = makeOpening({ leaf_count: 1 })
+    const items: ItemFixture[] = [
+      makeItem({ id: 'i1', name: 'Door', leaf_side: 'active' }),
+      makeItem({ id: 'i2', name: 'Frame', leaf_side: 'shared' }),
+    ]
+    const v = runInvariants([opening], items, [])
+    expect(v.filter(x => x.rule === 'leaf_count_consistency')).toHaveLength(0)
+  })
+
+  it('passes when leaf_count=1 and items carry leaf_side="both" (not a pair signal)', () => {
+    const opening = makeOpening({ leaf_count: 1 })
+    const items: ItemFixture[] = [
+      makeItem({ id: 'i1', name: 'Wire', leaf_side: 'both' }),
+    ]
+    const v = runInvariants([opening], items, [])
+    expect(v.filter(x => x.rule === 'leaf_count_consistency')).toHaveLength(0)
+  })
+})

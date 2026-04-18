@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { groupItemsByLeaf, type LeafGroupableItem } from './classify-leaf-items'
+import { groupItemsByLeaf, itemsIndicatePair, type LeafGroupableItem } from './classify-leaf-items'
 
 function makeItem(
   name: string,
@@ -265,5 +265,102 @@ describe('groupItemsByLeaf — real PDF data with split name/model fields', () =
     expect(leaf1[0].qty).toBe(3)   // unchanged on single doors
     expect(leaf1[1].qty).toBe(1)
     expect(leaf2).toHaveLength(0)
+  })
+})
+
+// ── itemsIndicatePair — door detail UI fail-safe ─────────────────────────────
+//
+// The door detail page (src/app/project/[projectId]/door/[doorId]/page.tsx)
+// uses this helper to detect when `opening.hardware_items` carry the
+// unambiguous pair signal (leaf_side='inactive') despite
+// `opening.leaf_count=1`. When true, the UI renders Shared/Leaf-1/Leaf-2
+// tabs as a fail-safe and logs a disagreement breadcrumb to Sentry. See
+// 2026-04-18 Radius DC regression.
+//
+// 'active' is deliberately NOT a trigger: single doors carry a bare "Door"
+// row with leaf_side='active' by design (parse-pdf-helpers.ts:2746).
+
+describe('itemsIndicatePair — door detail UI fail-safe', () => {
+  it('returns true only when at least one item is leaf_side="inactive"', () => {
+    const items = [
+      makeItem('Door (Inactive Leaf)', { leaf_side: 'inactive' }),
+    ]
+    expect(itemsIndicatePair(items)).toBe(true)
+  })
+
+  it('returns false when only leaf_side="active" items are present (single-door shape)', () => {
+    // CRITICAL: single-door bare "Door" rows are stamped leaf_side='active'.
+    // If this returned true, every single-door page would wrongly show
+    // Shared/Leaf-1/Leaf-2 tabs.
+    const items = [makeItem('Door', { leaf_side: 'active' })]
+    expect(itemsIndicatePair(items)).toBe(false)
+  })
+
+  it('returns false when all items are "shared" or "active" (single-door shape)', () => {
+    const items = [
+      makeItem('Door', { leaf_side: 'active' }),
+      makeItem('Frame', { leaf_side: 'shared' }),
+    ]
+    expect(itemsIndicatePair(items)).toBe(false)
+  })
+
+  it('returns true on the canonical Radius DC bug shape (Active + Inactive pair)', () => {
+    const items = [
+      makeItem('Door (Active Leaf)', { leaf_side: 'active' }),
+      makeItem('Door (Inactive Leaf)', { leaf_side: 'inactive' }),
+    ]
+    expect(itemsIndicatePair(items)).toBe(true)
+  })
+
+  it('treats "both" as not a pair signal', () => {
+    const items = [makeItem('Wire', { leaf_side: 'both' })]
+    expect(itemsIndicatePair(items)).toBe(false)
+  })
+
+  it('empty items array returns false', () => {
+    expect(itemsIndicatePair([])).toBe(false)
+  })
+})
+
+// ── Door detail page: leafCount derivation fail-safe ────────────────────────
+//
+// The door detail page computes:
+//   leafCount = Math.max(backendLeafCount, itemsSuggestPair ? 2 : 1)
+// This test locks down the derivation so a single backend miscompute
+// (2026-04-18 Radius DC regression) can never hide Shared/Leaf-1/Leaf-2.
+
+describe('door detail page: leafCount derivation locks out Radius DC regression', () => {
+  // Pure extract of the one-line derivation in page.tsx so unit tests can
+  // pin it down without booting jsdom/RTL (not installed in this repo).
+  function deriveLeafCount(backendLeafCount: number, hardwareItems: LeafGroupableItem[]): number {
+    return Math.max(backendLeafCount, itemsIndicatePair(hardwareItems) ? 2 : 1)
+  }
+
+  it('backend says 1 AND inactive-leaf item exists → UI treats as pair (Radius DC fail-safe)', () => {
+    const items = [
+      makeItem('Door (Active Leaf)', { leaf_side: 'active' }),
+      makeItem('Door (Inactive Leaf)', { leaf_side: 'inactive' }),
+    ]
+    expect(deriveLeafCount(1, items)).toBe(2)
+  })
+
+  it('backend says 1 AND only a bare Door with leaf_side=active → UI renders single-door view', () => {
+    // This is the shape buildPerOpeningItems emits for single doors. Must
+    // NOT be promoted to pair or every single door breaks.
+    const items = [makeItem('Door', { leaf_side: 'active' })]
+    expect(deriveLeafCount(1, items)).toBe(1)
+  })
+
+  it('backend says 2 AND items carry active/inactive → UI renders pair (agreement)', () => {
+    const items = [
+      makeItem('Door (Active Leaf)', { leaf_side: 'active' }),
+      makeItem('Door (Inactive Leaf)', { leaf_side: 'inactive' }),
+    ]
+    expect(deriveLeafCount(2, items)).toBe(2)
+  })
+
+  it('backend says 2 AND no leaf_side items → UI still trusts backend pair signal', () => {
+    const items = [makeItem('Hinge', { leaf_side: undefined })]
+    expect(deriveLeafCount(2, items)).toBe(2)
   })
 })
