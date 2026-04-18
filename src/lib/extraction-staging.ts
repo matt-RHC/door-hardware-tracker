@@ -141,6 +141,39 @@ export async function updateExtractionRun(
   if (error) throw new Error(`Failed to update extraction run: ${error.message}`)
 }
 
+/**
+ * Mark extraction_runs rows that have been stuck in 'extracting' for too
+ * long as 'failed'. Defends against the case where a Vercel function times
+ * out (or the worker crashes) before the orchestrator's catch handler can
+ * fire updateExtractionRun({ status: 'failed' }).
+ *
+ * The job-orchestrator route has maxDuration=800s in vercel.json (~13 min),
+ * so any run still in 'extracting' beyond ~30 minutes is definitively
+ * stuck — its function instance is long gone.
+ *
+ * Returns ids and started_at of reaped rows so the caller can log the
+ * sweep result. Single round-trip; no per-row work.
+ */
+export async function reapStuckExtractionRuns(
+  supabase: SupabaseClient,
+  ageMinutes: number,
+): Promise<Array<{ id: string; started_at: string | null }>> {
+  const cutoff = new Date(Date.now() - ageMinutes * 60 * 1000).toISOString()
+  const { data, error } = await supabase
+    .from('extraction_runs')
+    .update({
+      status: 'failed',
+      completed_at: new Date().toISOString(),
+      error_message: `reaped by stuck-run sweep — extraction did not complete within ${ageMinutes} minutes`,
+    })
+    .eq('status', 'extracting')
+    .lt('started_at', cutoff)
+    .select('id, started_at')
+
+  if (error) throw new Error(`Failed to reap stuck extraction runs: ${error.message}`)
+  return data ?? []
+}
+
 // --- Staging Data ---
 
 export async function writeStagingData(
