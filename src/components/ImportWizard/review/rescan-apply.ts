@@ -13,6 +13,25 @@ import type { PropagationSuggestion } from "@/lib/types";
  * already guards against offering door_number; this is a belt-and-braces
  * check so callers can trust the output.
  */
+
+/**
+ * PR-E: confidence bump applied on every manual field apply.
+ *
+ * getDoorIssues in utils.ts surfaces `low_confidence_{field}` whenever
+ * door.field_confidence[field] < 0.6. If the user MANUALLY confirms a
+ * value through the rescan flow, they are asserting ground truth — a
+ * stale low-confidence score should not keep the door flagged for review.
+ *
+ * We set the confidence to 1.0 rather than deleting the key so downstream
+ * code that assumes numeric scores (e.g. export pipelines that aggregate
+ * averages) never sees an undefined. See utils.ts:20-27 for the consumer.
+ *
+ * If the caller passes a door with no prior field_confidence map, we
+ * initialize a minimal one rather than creating a full map — we only
+ * know the user affirmed THIS field; other fields stay unset.
+ */
+const MANUAL_APPLY_CONFIDENCE = 1.0;
+
 export function applyFieldToDoors(
   doors: DoorEntry[],
   field: RegionExtractField,
@@ -25,9 +44,25 @@ export function applyFieldToDoors(
   let changed = false;
   const next = doors.map((d) => {
     if (!targets.has(d.door_number)) return d;
-    if ((d[field] ?? "") === value) return d;
+    const currentValue = d[field] ?? "";
+    const currentConfidence = d.field_confidence?.[field];
+    // No-op guard: skip only when BOTH value and confidence would be
+    // unchanged. Previously we short-circuited on value match alone,
+    // so a user re-confirming the same (already-correct) value still
+    // left the low-confidence flag in place — the exact bug the demo
+    // video exposed on door 110-07B's hand field.
+    if (
+      currentValue === value &&
+      currentConfidence === MANUAL_APPLY_CONFIDENCE
+    ) {
+      return d;
+    }
     changed = true;
-    return { ...d, [field]: value };
+    const updatedConfidence: Record<string, number> = {
+      ...(d.field_confidence ?? {}),
+      [field]: MANUAL_APPLY_CONFIDENCE,
+    };
+    return { ...d, [field]: value, field_confidence: updatedConfidence };
   });
   return changed ? next : doors;
 }
@@ -74,14 +109,29 @@ export function applyPropagationSuggestions(
     const hits = byDoor.get(d.door_number);
     if (!hits || hits.size === 0) return d;
     let rowChanged = false;
+    // PR-E: propagation suggestions originate from the same user
+    // gesture (accept in PropagationModal), so we treat them the same
+    // as a manual apply — bump field_confidence so the review surface
+    // stops flagging them. Accumulates a new confidence map because
+    // multiple fields can update in one pass.
+    const nextConfidence: Record<string, number> = { ...(d.field_confidence ?? {}) };
     const updated: DoorEntry = { ...d };
     for (const [field, value] of hits) {
-      if ((updated[field] ?? "") === value) continue;
+      const currentValue = updated[field] ?? "";
+      const currentConfidence = nextConfidence[field];
+      if (
+        currentValue === value &&
+        currentConfidence === MANUAL_APPLY_CONFIDENCE
+      ) {
+        continue;
+      }
       updated[field] = value;
+      nextConfidence[field] = MANUAL_APPLY_CONFIDENCE;
       rowChanged = true;
     }
     if (!rowChanged) return d;
     changed = true;
+    updated.field_confidence = nextConfidence;
     return updated;
   });
   return changed ? next : doors;
