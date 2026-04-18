@@ -56,3 +56,4 @@ tests/darrin-cache/
 /.claude/
 .env*.local
 /supabase/.temp
+CLAUDE.local.md
