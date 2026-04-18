@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import type { DoorEntry } from "../types";
 import type { RegionExtractField } from "@/lib/schemas/parse-pdf";
 import DarrinMessage, { DarrinAction } from "../DarrinMessage";
+import { sanitizeFieldValue } from "./sanitizeFieldValue";
 
 interface FieldAssignmentPanelProps {
   rawText: string;
@@ -77,7 +78,23 @@ export default function FieldAssignmentPanel({
   }, [detectedField]);
 
   const [field, setField] = useState<RegionExtractField>(initialField);
-  const [value, setValue] = useState<string>(detectedValue || rawText.trim());
+
+  // PR-D: derive a sanitized value FOR THE CURRENT FIELD from the raw
+  // region-extract text. Per-field because the same raw text ("R)\nROOM
+  // 101") strips differently under "location" vs. "hand". When the user
+  // retargets the field chip, this memo re-runs and the input reflects
+  // the new sanitization — unless the user has hand-edited the input.
+  const sanitizedFromRaw = useMemo(
+    () => sanitizeFieldValue(field, detectedValue || rawText),
+    [field, detectedValue, rawText],
+  );
+
+  // `userValue` is null until the user hand-edits the input; once they do,
+  // their value takes precedence over the sanitized-from-raw derivation.
+  // This avoids the common "useEffect + setState" anti-pattern that
+  // react-hooks/set-state-in-effect flags.
+  const [userValue, setUserValue] = useState<string | null>(null);
+  const value = userValue ?? sanitizedFromRaw;
 
   // Always include the trigger door, and pre-check any other door that's
   // missing this field. User can toggle freely.
@@ -110,9 +127,14 @@ export default function FieldAssignmentPanel({
   const clearSelection = () => setSelectedDoors(new Set());
 
   const handleConfirm = () => {
-    if (!value.trim()) return;
+    // Defense-in-depth: sanitize once more on confirm. Idempotent, so
+    // running it twice costs nothing, but it catches the case where a
+    // user pasted noisy text into the input box (e.g. drag-copied from
+    // the "Extracted text" preview) or typed their own leaf marker.
+    const clean = sanitizeFieldValue(field, value);
+    if (!clean) return;
     if (selectedDoors.size === 0) return;
-    onConfirm(field, value.trim(), Array.from(selectedDoors));
+    onConfirm(field, clean, Array.from(selectedDoors));
   };
 
   const detectionPct = Math.round(detectionConfidence * 100);
@@ -172,7 +194,10 @@ export default function FieldAssignmentPanel({
             id="rescan-field-value"
             type="text"
             value={value}
-            onChange={(e) => setValue(e.target.value)}
+            // Any edit flips userValue to a non-null string; the derived
+            // value then reads from userValue instead of sanitizedFromRaw,
+            // so retargeting the field no longer clobbers the user's input.
+            onChange={(e) => setUserValue(e.target.value)}
             className="w-full bg-tint border border-border-dim rounded px-3 py-2 text-primary text-sm focus:border-accent focus:outline-none min-h-11"
           />
         </div>
