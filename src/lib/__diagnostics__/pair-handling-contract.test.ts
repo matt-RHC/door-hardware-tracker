@@ -143,19 +143,22 @@ describe('pair-handling contract', () => {
 
   // ─── Test 7 — caller's leafCount wins (P1 contract) ───────────────────────
   //
-  // UNSKIP AFTER PR-C (P1 REFACTOR) LANDS.
+  // STILL FAILING after the 2026-04-18 "item-presence" PR. That PR added a
+  // new PRIMARY signal to detectIsPair (≥2 leaf-named Door rows in
+  // hwSet.items → pair) which fixed the Radius DC grid-RR regression, but
+  // this fixture's items contain only a Butt Hinge — no leaf-named Door
+  // rows — so the new signal is also blind. This test exercises a
+  // different scenario: the CALLER knows the door is a pair even when
+  // Python's extractor produced zero pair evidence (neither heading
+  // signals nor leaf-named items). Unsoak requires the original P1
+  // refactor (thread leafCountByDoor through buildPerOpeningItems).
   //
-  // Contract: when buildPerOpeningItems receives a leafCountByDoor map from the
-  // caller (P1 refactor), it should use that value instead of recomputing via
-  // detectIsPair. This test exercises the case where heading_leaf_count=0
-  // (primary detection blind) but the caller knows the door is a pair
-  // (leafCountByDoor.get('D1') === 2). After P1, the function should emit
-  // "Door (Active Leaf)" + "Door (Inactive Leaf)" rather than bare "Door".
-  //
-  // Currently FAILS because buildPerOpeningItems has no leafCountByDoor param
-  // and detectIsPair returns false (heading_leaf_count=0, no keywords, no size).
+  // PR #306 attempted P1 and was reverted for map/detectIsPair
+  // disagreement on sub-headings that round-tripped through the DB. Any
+  // future P1 must preserve determinism across the twin call sites in
+  // save/route.ts and jobs/[id]/run/route.ts.
 
-  it.fails('Test 7 — caller leafCountByDoor=2 overrides heading_leaf_count=0 (P1 contract — PR-C)', () => {
+  it.fails('Test 7 — caller leafCountByDoor=2 overrides heading_leaf_count=0 (P1 contract, deferred)', () => {
     const hwSet: HardwareSet = {
       set_id: 'DH4A.0',
       // No "pair"/"double"/"pr" keyword → tertiary detection blind.

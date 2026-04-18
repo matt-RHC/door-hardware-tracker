@@ -1072,13 +1072,96 @@ describe('parseOpeningSize', () => {
 
 // ─── detectIsPair ───
 //
-// Tests the 3-tier layered pair detection used by buildPerOpeningItems.
-// The primary signal (heading_leaf_count > heading_door_count) is the
-// Radius DC regression case — the other tiers are fallbacks for PDFs
-// where the primary signal is missing.
+// Tests the 4-tier layered pair detection used by buildPerOpeningItems.
+// Signal ranking (strongest first): item-presence → heading_leaf_count →
+// opening size → keyword scan. The PRIMARY (item-presence) signal was
+// added 2026-04-18 to close the PR #311 Radius DC regression where 25
+// pair openings collapsed to single-leaf because all three heading-based
+// signals missed but Python had emitted leaf-named rows in hwSet.items.
 
 describe('detectIsPair', () => {
-  it('PRIMARY: returns true when heading_leaf_count > heading_door_count', () => {
+  // ── PRIMARY: item-presence signal ────────────────────────────────────
+  // Radius DC grid-RR shape: heading_leaf_count=1, door_type='A', no
+  // keyword — all secondary/tertiary/quaternary signals blind — but
+  // Python emitted Door (Active Leaf) + Door (Inactive Leaf) in items.
+  // Must flip to true. This is the 25-opening regression from PR #311.
+  it('PRIMARY: returns true when items contain >=2 leaf-named Door rows', () => {
+    const set: HardwareSet = {
+      set_id: 'DH-RADIUS',
+      heading: 'Heading #DH-RADIUS', // no keyword
+      heading_door_count: 1,
+      heading_leaf_count: 1, // heading signal blind
+      items: [
+        { name: 'Door (Active Leaf)', qty: 1, model: '', finish: '', manufacturer: '' },
+        { name: 'Door (Inactive Leaf)', qty: 1, model: '', finish: '', manufacturer: '' },
+        { name: 'Butt Hinge 5BB1', qty: 4, model: '5BB1', finish: '652', manufacturer: 'Ives' },
+      ],
+    }
+    const doorInfo = { door_type: 'A' } // size + keyword signals blind
+    expect(detectIsPair(set, doorInfo)).toBe(true)
+  })
+
+  it('PRIMARY: case/whitespace insensitive on leaf-named rows', () => {
+    const set: HardwareSet = {
+      set_id: 'X',
+      heading: 'H',
+      heading_door_count: 1,
+      heading_leaf_count: 1,
+      items: [
+        { name: 'door (ACTIVE leaf)', qty: 1, model: '', finish: '', manufacturer: '' },
+        { name: 'Door  (inactive  Leaf)', qty: 1, model: '', finish: '', manufacturer: '' },
+      ],
+    }
+    expect(detectIsPair(set, { door_type: 'A' })).toBe(true)
+  })
+
+  // Guards against a false flip: a single leaf-named row (e.g., Python
+  // mis-emit or partial extraction) must not by itself indicate a pair.
+  // True pair openings produce Active + Inactive in tandem.
+  it('PRIMARY: returns false when only 1 leaf-named row present', () => {
+    const set: HardwareSet = {
+      set_id: 'X',
+      heading: 'H',
+      heading_door_count: 1,
+      heading_leaf_count: 1,
+      items: [
+        { name: 'Door (Active Leaf)', qty: 1, model: '', finish: '', manufacturer: '' },
+        { name: 'Butt Hinge', qty: 3, model: '', finish: '', manufacturer: '' },
+      ],
+    }
+    expect(detectIsPair(set, { door_type: 'A' })).toBe(false)
+  })
+
+  // Anchored regex: we only match when the parenthetical is the end of
+  // the row. Item rows that happen to mention "leaf" in their description
+  // (e.g., "Flush Bolt for Inactive Leaf 12FB") must not trigger.
+  it('PRIMARY: does not match non-Door items that mention "leaf"', () => {
+    const set: HardwareSet = {
+      set_id: 'X',
+      heading: 'H',
+      heading_door_count: 1,
+      heading_leaf_count: 1,
+      items: [
+        { name: 'Flush Bolt for Inactive Leaf 12FB', qty: 2, model: '12FB', finish: '626', manufacturer: 'Rockwood' },
+        { name: 'Coordinator Active Leaf Bracket', qty: 1, model: '', finish: '', manufacturer: '' },
+      ],
+    }
+    expect(detectIsPair(set, { door_type: 'A' })).toBe(false)
+  })
+
+  it('PRIMARY: handles missing items array', () => {
+    const set: HardwareSet = {
+      set_id: 'X',
+      heading: 'H',
+      heading_door_count: 1,
+      heading_leaf_count: 1,
+      items: [],
+    }
+    expect(detectIsPair(set, { door_type: 'A' })).toBe(false)
+  })
+
+  // ── SECONDARY: heading_leaf_count > heading_door_count ───────────────
+  it('SECONDARY: returns true when heading_leaf_count > heading_door_count', () => {
     // The exact Radius DC DH4A.1 shape: 8 pair doors = 16 leaves
     const set: HardwareSet = {
       set_id: 'DH4A.1',
@@ -1091,7 +1174,7 @@ describe('detectIsPair', () => {
     expect(detectIsPair(set, doorInfo)).toBe(true)
   })
 
-  it('PRIMARY: returns false when heading_leaf_count equals heading_door_count', () => {
+  it('SECONDARY: returns false when heading_leaf_count equals heading_door_count', () => {
     const set: HardwareSet = {
       set_id: 'DH1',
       heading: 'Heading #DH1',
@@ -1102,7 +1185,7 @@ describe('detectIsPair', () => {
     expect(detectIsPair(set, { door_type: 'A' })).toBe(false)
   })
 
-  it('SECONDARY: returns true when opening size width >= 48" via door_type', () => {
+  it('TERTIARY: returns true when opening size width >= 48" via door_type', () => {
     // The set has no leaf_count info; the door_type field contains a
     // 6070 size code which parses to 72" wide (pair range).
     const set: HardwareSet = {
@@ -1114,7 +1197,7 @@ describe('detectIsPair', () => {
     expect(detectIsPair(set, doorInfo)).toBe(true)
   })
 
-  it('SECONDARY: returns true for explicit "6\'0\" x 7\'0\"" in heading text', () => {
+  it('TERTIARY: returns true for explicit "6\'0\" x 7\'0\"" in heading text', () => {
     const set: HardwareSet = {
       set_id: 'X',
       heading: 'Heading #X 6\'0" x 7\'0" HMD',
@@ -1123,12 +1206,12 @@ describe('detectIsPair', () => {
     expect(detectIsPair(set, { door_type: 'A' })).toBe(true)
   })
 
-  it('SECONDARY: returns false for 3070 single door width', () => {
+  it('TERTIARY: returns false for 3070 single door width', () => {
     const set: HardwareSet = { set_id: 'X', heading: 'H', items: [] }
     expect(detectIsPair(set, { door_type: '3070' })).toBe(false)
   })
 
-  it('TERTIARY: keyword match on heading', () => {
+  it('QUATERNARY: keyword match on heading', () => {
     const set: HardwareSet = {
       set_id: 'X',
       heading: 'Pair Doors Heading',
@@ -1137,7 +1220,7 @@ describe('detectIsPair', () => {
     expect(detectIsPair(set, { door_type: 'A' })).toBe(true)
   })
 
-  it('TERTIARY: keyword match on door_type "PR"', () => {
+  it('QUATERNARY: keyword match on door_type "PR"', () => {
     const set: HardwareSet = { set_id: 'X', heading: 'H', items: [] }
     expect(detectIsPair(set, { door_type: 'PR' })).toBe(true)
   })
