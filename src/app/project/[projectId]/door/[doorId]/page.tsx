@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { QRCodeSVG } from "qrcode.react";
+import * as Sentry from "@sentry/nextjs";
 import OfflineIndicator from "@/components/OfflineIndicator";
 import ProgressBar from "@/components/ProgressBar";
 import FileViewer from "@/components/FileViewer";
@@ -18,7 +19,7 @@ import { useOpeningEditing } from "@/hooks/useOpeningEditing";
 import { useClassification } from "@/hooks/useClassification";
 import { useToast } from "@/components/ToastProvider";
 import { openProjectPdfAtPage } from "@/lib/pdf-page-link";
-import { groupItemsByLeaf, getLeafDisplayQty, getLeafProgress } from "@/lib/classify-leaf-items";
+import { groupItemsByLeaf, getLeafDisplayQty, getLeafProgress, itemsIndicatePair } from "@/lib/classify-leaf-items";
 import { classifyItemScope } from "@/lib/parse-pdf-helpers";
 import PDFRegionSelector from "@/components/ImportWizard/PDFRegionSelector";
 import SyncStatusDot from "@/components/SyncStatusDot";
@@ -755,8 +756,31 @@ export default function DoorDetailPage() {
   if (!opening) return null;
 
   // --- Per-leaf grouping ---
-  const leafCount = (opening as any).leaf_count ?? 1;
+  // Fail-safe: if backend says leaf_count=1 but items already carry
+  // leaf_side='active'|'inactive', trust the items and render the pair UI.
+  // A single backend miscompute (2026-04-18 Radius DC regression) must never
+  // hide all per-leaf views. Disagreement is surfaced via console + Sentry
+  // so backend bugs get flagged.
+  const backendLeafCount = (opening as any).leaf_count ?? 1;
+  const itemsSuggestPair = itemsIndicatePair(opening.hardware_items);
+  const leafCountDisagreement = backendLeafCount === 1 && itemsSuggestPair;
+  const leafCount = Math.max(backendLeafCount, itemsSuggestPair ? 2 : 1);
   const isPair = leafCount >= 2;
+  if (leafCountDisagreement) {
+    console.warn(
+      `[door-detail] leaf_count/hardware_items disagreement for ${opening.door_number}: backend=${backendLeafCount}, inferred=2`,
+    );
+    Sentry.addBreadcrumb({
+      category: "door.leaf_count.mismatch",
+      level: "warning",
+      message: "Door detail inferred pair from hardware_items leaf_side despite leaf_count=1",
+      data: {
+        door_number: opening.door_number,
+        backend_leaf_count: backendLeafCount,
+        inferred_leaf_count: 2,
+      },
+    });
+  }
   const { shared, leaf1, leaf2 } = groupItemsByLeaf(opening.hardware_items, leafCount);
 
   // Progress: count each leaf section's items independently
@@ -1665,7 +1689,17 @@ export default function DoorDetailPage() {
                 {isPair ? (
                   <>
                     {/* Leaf sub-tabs for pair doors */}
-                    <div className="flex gap-0.5 mb-5 bg-surface rounded-md p-1">
+                    <div className="flex gap-0.5 mb-5 bg-surface rounded-md p-1" data-testid="leaf-tabs">
+                      {leafCountDisagreement && (
+                        <span
+                          title="Backend reported 1 leaf; hardware items indicate a pair. Rendering pair view as a fail-safe."
+                          aria-label="leaf count mismatch"
+                          className="flex items-center px-2 text-[12px] text-warning"
+                          data-testid="leaf-count-mismatch-indicator"
+                        >
+                          ⓘ
+                        </span>
+                      )}
                       {([
                         { key: 'shared' as const, label: 'Shared', count: shared.length, color: 'var(--text-tertiary)' },
                         { key: 'leaf1' as const, label: 'Leaf 1', count: leaf1.length, color: 'var(--blue)' },

@@ -113,6 +113,27 @@ export function getItemScope(name: string): InstallScope | 'structural' | null {
 }
 
 /**
+ * True when the item set carries an unambiguous pair signal.
+ *
+ * Only `leaf_side='inactive'` is used as the signal. `'active'` alone is
+ * NOT enough: buildPerOpeningItems stamps a bare "Door" row on SINGLE
+ * doors with `leaf_side='active'` (see parse-pdf-helpers.ts), so keying
+ * off 'active' would flip every single-door opening into the pair UI.
+ * An 'inactive' row is only ever emitted from the pair branch of
+ * buildPerOpeningItems, making it the correct unambiguous signal.
+ *
+ * Used by the door detail page as a fail-safe: if the parent opening
+ * claims leaf_count=1 but the items indicate a pair, render the pair UI
+ * anyway so a single backend miscompute (2026-04-18 Radius DC regression)
+ * can't hide all per-leaf views.
+ */
+export function itemsIndicatePair(
+  items: ReadonlyArray<{ leaf_side?: string | null }>,
+): boolean {
+  return items.some(i => i.leaf_side === 'inactive')
+}
+
+/**
  * Group hardware items into Shared / Leaf 1 / Leaf 2 arrays.
  *
  * For single doors (leafCount=1), leaf2 is always empty.
