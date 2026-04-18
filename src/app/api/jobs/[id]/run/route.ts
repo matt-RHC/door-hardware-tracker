@@ -686,8 +686,9 @@ export async function POST(
 
     // Create the extraction_runs row up front so its id is available to
     // Darrin call sites in processChunk. Status starts as 'extracting' and
-    // is updated to its terminal value during Phase 7. Linking the run to
-    // the job here too — same single round-trip we used to make later.
+    // is advanced to 'reviewing' / 'completed_with_issues' / 'failed' in
+    // Phase 7 (or the catch block). Linking the run to the job here too —
+    // same single round-trip we used to make later.
     runId = await createExtractionRun(adminSupabase, {
       projectId,
       userId: claimed.created_by,
@@ -1484,7 +1485,7 @@ export async function POST(
     // computed score (extractionConfidence). Failures are warned, not
     // thrown — a finalize error must not stop a successful job from
     // returning success to the caller.
-    const finalConfidence: 'high' | 'medium' | 'low' | undefined =
+    const finalConfidence: DarrinConfidence | undefined =
       darrinWorstConfidence
         ?? toDarrinConfidence(extractionConfidence?.overall, 'medium')
     try {
@@ -1613,7 +1614,9 @@ async function processChunk(
   confidence: ExtractionConfidence
   referenceCodes: Array<{ code_type: string; code: string; full_name: string }>
   /** Darrin's self-reported confidence on this chunk's CP2 review.
-   *  null when Darrin omitted the field (older responses) or the call failed. */
+   *  null when Darrin omitted the field (older responses return corrections
+   *  without overall_confidence). A hard failure of callDarrinPostExtraction
+   *  throws out of processChunk, so this field is only reached on success. */
   darrinPostExtractionConfidence: DarrinConfidence | null
 }> {
   // Step 1: Pdfplumber extraction
@@ -1709,7 +1712,8 @@ async function processChunk(
 
   // Darrin's self-reported overall_confidence from CP2. The schema permits
   // omission (older Darrin responses), so this returns null in that case so
-  // the orchestrator can distinguish "no signal" from "low".
+  // the orchestrator can distinguish "no signal" from "low". If the CP2 call
+  // itself fails, the throw propagates — we never reach this line.
   const darrinPostExtractionConfidence: DarrinConfidence | null =
     corrections.overall_confidence === 'high'
       || corrections.overall_confidence === 'medium'
