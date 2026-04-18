@@ -1,0 +1,1727 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Review — Attention-first (Rabbit Hole)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;600;700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+/* Tokens lifted from src/app/globals.css (light theme default; dark toggleable). */
+:root {
+  --font-inter: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+  --font-display: 'Orbitron', 'Inter', monospace;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+
+  --background: #F7F8FA;
+  --foreground: #1A1D23;
+  --surface: #FFFFFF;
+  --surface-hover: #F0F2F5;
+  --surface-raised: #F5F6F8;
+  --border: #D8DCE2;
+  --border-hover: #B8BEC8;
+  --text-primary: #1A1D23;
+  --text-secondary: #5C6370;
+  --text-tertiary: #8B919E;
+
+  --blue: #1B6EB5;
+  --blue-dim: color-mix(in srgb, var(--blue) 8%, transparent);
+  --green: #1A8754;
+  --green-dim: color-mix(in srgb, var(--green) 8%, transparent);
+  --orange: #AD5B00;
+  --orange-dim: color-mix(in srgb, var(--orange) 8%, transparent);
+  --red: #CC2D37;
+  --red-dim: color-mix(in srgb, var(--red) 8%, transparent);
+  --yellow: #926C00;
+  --yellow-dim: color-mix(in srgb, var(--yellow) 8%, transparent);
+  --purple: #7C4DBC;
+  --tint: rgba(0,0,0,0.03);
+  --border-dim: rgba(0,0,0,0.06);
+  --radius: 6px;
+  --radius-sm: 4px;
+  --radius-pill: 20px;
+}
+[data-theme="dark"] {
+  --background: #0F1117;
+  --foreground: #E4E6EB;
+  --surface: #1A1D25;
+  --surface-hover: #252830;
+  --surface-raised: #1F222B;
+  --border: #2E323C;
+  --border-hover: #3E434F;
+  --text-primary: #F2F4F8;
+  --text-secondary: #B5BBC6;
+  --text-tertiary: #8A93A3;
+  --blue: #4BA3E3;
+  --blue-dim: color-mix(in srgb, var(--blue) 12%, transparent);
+  --green: #2ECC71;
+  --green-dim: color-mix(in srgb, var(--green) 12%, transparent);
+  --orange: #E8811A;
+  --orange-dim: color-mix(in srgb, var(--orange) 12%, transparent);
+  --red: #E04850;
+  --red-dim: color-mix(in srgb, var(--red) 12%, transparent);
+  --yellow: #E8A817;
+  --yellow-dim: color-mix(in srgb, var(--yellow) 12%, transparent);
+  --tint: rgba(255,255,255,0.04);
+  --border-dim: rgba(255,255,255,0.06);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { background: var(--background); color: var(--foreground); font-family: var(--font-inter); font-size: 14px; line-height: 1.5; -webkit-font-smoothing: antialiased; }
+button { font-family: inherit; cursor: pointer; }
+
+/* ── Chrome ── */
+.navbar {
+  position: sticky; top: 0; z-index: 40;
+  display: flex; align-items: center; gap: 20px;
+  padding: 12px 24px; background: var(--surface); border-bottom: 1px solid var(--border);
+}
+.brand { display: flex; align-items: baseline; gap: 10px; }
+.brand .logo { font-family: var(--font-display); font-weight: 700; letter-spacing: 0.12em; font-size: 13px; color: var(--text-primary); }
+.brand .logo .dot { color: var(--blue); }
+.brand .sub { font-family: var(--font-mono); font-size: 10px; color: var(--text-tertiary); letter-spacing: 0.16em; text-transform: uppercase; }
+.crumbs { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text-tertiary); }
+.crumbs a { color: var(--text-secondary); text-decoration: none; }
+.crumbs .sep { color: var(--text-tertiary); opacity: 0.5; }
+.crumbs .cur { color: var(--text-primary); font-weight: 500; }
+.spacer { flex: 1; }
+.navbar .save-status {
+  display: flex; align-items: center; gap: 8px;
+  font-size: 12px; color: var(--text-secondary);
+  padding: 5px 10px; border-radius: var(--radius-sm); background: var(--tint);
+}
+.navbar .save-status .pulse {
+  width: 6px; height: 6px; border-radius: 50%; background: var(--green);
+}
+.navbar .theme-btn {
+  background: var(--tint); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  color: var(--text-secondary); padding: 6px 10px; font-size: 12px;
+}
+
+/* ── Step rail (wizard) ── */
+.steps {
+  display: flex; align-items: center; gap: 0; padding: 14px 24px;
+  background: var(--surface-raised); border-bottom: 1px solid var(--border);
+  overflow-x: auto;
+}
+.step { display: flex; align-items: center; gap: 8px; color: var(--text-tertiary); font-size: 12px; white-space: nowrap; }
+.step .num { width: 20px; height: 20px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: var(--tint); font-family: var(--font-mono); font-size: 11px; }
+.step.done { color: var(--text-secondary); }
+.step.done .num { background: var(--green-dim); color: var(--green); }
+.step.cur { color: var(--text-primary); font-weight: 600; }
+.step.cur .num { background: var(--blue); color: white; }
+.step .label { letter-spacing: 0.04em; }
+.step-sep { width: 28px; height: 1px; background: var(--border); margin: 0 10px; }
+
+/* ── Page ── */
+.page { display: grid; grid-template-columns: 1fr 6px var(--rail-w, 520px); gap: 0; min-height: calc(100vh - 112px); }
+.main { padding: 24px 28px 200px; overflow-y: auto; max-height: calc(100vh - 112px); }
+.rail { background: var(--surface); border-left: 1px solid var(--border); max-height: calc(100vh - 112px); overflow: hidden; display: flex; flex-direction: column; }
+.rail-grip {
+  cursor: col-resize; background: transparent; position: relative;
+  border-left: 1px solid var(--border); border-right: 1px solid var(--border);
+  transition: background 0.15s;
+}
+.rail-grip:hover, .rail-grip.dragging { background: var(--blue-dim); }
+.rail-grip::after {
+  content: ""; position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  width: 2px; height: 32px; background: var(--border-hover); border-radius: 2px; opacity: 0.6;
+}
+.rail-grip:hover::after { background: var(--blue); opacity: 1; }
+
+/* Page header */
+.page-head { margin-bottom: 18px; }
+.page-head .eyebrow { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--blue); opacity: 0.85; margin-bottom: 6px; }
+.page-head h1 { font-family: var(--font-display); font-size: 22px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-primary); }
+.page-head .meta { margin-top: 4px; font-size: 12px; color: var(--text-tertiary); font-family: var(--font-mono); }
+.page-head .meta span { margin-right: 14px; }
+.page-head .meta .k { color: var(--text-secondary); }
+
+/* View toggles row */
+.toggles-row { display: flex; align-items: center; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+.seg-toggle {
+  display: inline-flex; background: var(--tint); padding: 3px; border-radius: var(--radius);
+  border: 1px solid var(--border);
+}
+.seg-toggle button {
+  border: 0; background: transparent; color: var(--text-secondary);
+  padding: 7px 14px; font-size: 13px; font-weight: 500; border-radius: 4px;
+  letter-spacing: 0.02em; display: inline-flex; align-items: center; gap: 6px;
+}
+.seg-toggle button.active {
+  background: var(--surface); color: var(--text-primary);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.08);
+}
+.seg-toggle.sm button { padding: 5px 10px; font-size: 12px; }
+
+/* Set card (Set View) */
+.set-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.set-head { display: flex; align-items: center; gap: 14px; padding: 14px 18px; cursor: pointer; }
+.set-head:hover { background: var(--surface-hover); }
+.set-head .set-name { font-family: var(--font-display); font-size: 14px; letter-spacing: 0.06em; color: var(--text-primary); }
+.set-head .set-stats { font-family: var(--font-mono); font-size: 11px; color: var(--text-tertiary); letter-spacing: 0.06em; }
+.set-head .set-stats .bad { color: var(--red); }
+.set-head .set-stats .ok { color: var(--green); }
+.set-body { display: none; border-top: 1px solid var(--border); background: var(--surface-raised); }
+.set-card.open .set-body { display: block; }
+
+/* Attention progress bar */
+.progress-panel {
+  padding: 16px 18px; background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); margin-bottom: 22px;
+  position: relative;
+}
+.progress-panel .corner-tl, .progress-panel .corner-br {
+  position: absolute; width: 12px; height: 12px; pointer-events: none; opacity: 0.4;
+}
+.progress-panel .corner-tl { top: -1px; left: -1px; border-top: 2px solid var(--blue); border-left: 2px solid var(--blue); border-radius: 3px 0 0 0; }
+.progress-panel .corner-br { bottom: -1px; right: -1px; border-bottom: 2px solid var(--blue); border-right: 2px solid var(--blue); border-radius: 0 0 3px 0; }
+
+.progress-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.progress-head .title { font-family: var(--font-display); font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-secondary); }
+.progress-head .count { font-family: var(--font-mono); font-size: 13px; color: var(--text-primary); font-weight: 600; }
+.progress-head .count .of { color: var(--text-tertiary); font-weight: 400; }
+
+.bar {
+  height: 8px; background: var(--tint); border-radius: 4px; overflow: hidden;
+  position: relative;
+}
+.bar .fill { height: 100%; background: linear-gradient(90deg, var(--blue), color-mix(in srgb, var(--blue) 70%, var(--green))); transition: width 0.4s ease; }
+.bar .fill.done { background: var(--green); }
+
+.progress-foot {
+  display: flex; align-items: center; justify-content: space-between; margin-top: 10px;
+  font-size: 12px; color: var(--text-tertiary);
+}
+
+/* Attention group cards */
+.groups { display: flex; flex-direction: column; gap: 14px; }
+.group {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  overflow: hidden; transition: border-color 0.2s;
+}
+.group.sev-high { border-left: 3px solid var(--red); }
+.group.sev-med  { border-left: 3px solid var(--orange); }
+.group.sev-soft { border-left: 3px solid var(--yellow); }
+.group.resolved { border-left: 3px solid var(--green); opacity: 0.78; }
+
+.group-head {
+  display: flex; align-items: center; gap: 14px;
+  padding: 14px 18px;
+  cursor: pointer; user-select: none;
+}
+.group-head:hover { background: var(--surface-hover); }
+.group-head .sev-dot { width: 10px; height: 10px; border-radius: 50%; flex: 0 0 auto; }
+.sev-high .sev-dot { background: var(--red); }
+.sev-med .sev-dot { background: var(--orange); }
+.sev-soft .sev-dot { background: var(--yellow); }
+.resolved .sev-dot { background: var(--green); }
+.group-head .title-wrap { flex: 1; min-width: 0; }
+.group-head .title {
+  font-size: 14px; font-weight: 600; color: var(--text-primary);
+  display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+}
+.group-head .count-pill {
+  font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.04em;
+  padding: 2px 8px; background: var(--tint); color: var(--text-secondary);
+  border-radius: var(--radius-pill); border: 1px solid var(--border-dim);
+}
+.group-head .darrin {
+  margin-top: 4px; font-size: 12.5px; color: var(--text-secondary); line-height: 1.45;
+}
+.group-head .darrin .avatar {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 16px; height: 16px; border-radius: 50%; background: var(--blue); color: white;
+  font-family: var(--font-display); font-size: 9px; letter-spacing: 0; margin-right: 7px;
+  vertical-align: -3px;
+}
+
+.group-head .actions { display: flex; align-items: center; gap: 10px; flex: 0 0 auto; }
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 7px 12px; border-radius: var(--radius-sm); font-size: 13px; font-weight: 500;
+  border: 1px solid transparent; transition: all 0.15s;
+}
+.btn-primary {
+  background: var(--blue); color: white;
+  border-color: color-mix(in srgb, var(--blue) 40%, transparent);
+}
+.btn-primary:hover { filter: brightness(1.05); box-shadow: 0 0 0 3px var(--blue-dim); }
+.btn-ghost {
+  background: var(--surface); color: var(--text-secondary); border-color: var(--border);
+}
+.btn-ghost:hover { background: var(--surface-hover); color: var(--text-primary); }
+.btn-link {
+  background: transparent; color: var(--text-secondary); border: 0; padding: 6px 4px;
+  font-size: 12px;
+}
+.btn-link:hover { color: var(--blue); }
+.btn svg { width: 14px; height: 14px; }
+
+.chevron { transition: transform 0.2s; color: var(--text-tertiary); }
+.group.open .chevron { transform: rotate(90deg); }
+
+.group-body {
+  border-top: 1px solid var(--border);
+  background: var(--surface-raised);
+  display: none;
+}
+.group.open .group-body { display: block; }
+
+/* Door row inside group */
+.door-row {
+  display: grid;
+  grid-template-columns: 68px 72px 1fr auto auto;
+  align-items: center;
+  gap: 14px;
+  padding: 11px 18px;
+  border-bottom: 1px solid var(--border-dim);
+  transition: background 0.12s;
+}
+.door-row:last-child { border-bottom: 0; }
+.door-row:hover { background: var(--surface-hover); }
+.door-row.cleared {
+  background: color-mix(in srgb, var(--green) 5%, var(--surface-raised));
+}
+.door-row .cb { display: flex; align-items: center; justify-content: center; }
+.door-row .cb input { width: 16px; height: 16px; accent-color: var(--blue); }
+.door-row .dno { font-family: var(--font-mono); font-weight: 600; font-size: 13px; color: var(--text-primary); }
+.door-row .info { font-size: 13px; color: var(--text-secondary); min-width: 0; }
+.door-row .info .hw { color: var(--text-primary); font-weight: 500; margin-right: 8px; }
+.door-row .info .loc { color: var(--text-tertiary); }
+.door-row .conf {
+  display: flex; gap: 2px; align-items: center;
+}
+.door-row .conf .seg { width: 10px; height: 6px; border-radius: 1px; background: var(--tint); }
+.door-row .conf .seg.h { background: var(--green); }
+.door-row .conf .seg.m { background: var(--orange); }
+.door-row .conf .seg.l { background: var(--red); }
+.door-row .fix-one {
+  font-size: 12px; color: var(--text-tertiary); padding: 4px 8px; border-radius: var(--radius-sm);
+  background: transparent; border: 1px solid transparent;
+}
+.door-row:hover .fix-one { color: var(--blue); border-color: var(--blue-dim); background: var(--surface); }
+.door-row.cleared .cleared-badge {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: var(--green); padding: 3px 7px; background: var(--green-dim);
+  border-radius: var(--radius-pill); border: 1px solid color-mix(in srgb, var(--green) 20%, transparent);
+}
+
+.group-foot {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 18px; background: var(--surface); border-top: 1px solid var(--border-dim);
+  font-size: 12px; color: var(--text-tertiary);
+}
+
+/* Auto-approved disclosure */
+.disclosure {
+  margin-top: 22px; background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 14px 18px;
+  display: flex; align-items: center; gap: 14px; cursor: pointer; transition: background 0.15s;
+}
+.disclosure:hover { background: var(--surface-hover); }
+.disclosure .icon {
+  width: 28px; height: 28px; border-radius: 50%;
+  background: var(--green-dim); color: var(--green);
+  display: flex; align-items: center; justify-content: center;
+  flex: 0 0 auto;
+}
+.disclosure .lbl { flex: 1; }
+.disclosure .lbl .t { font-size: 13.5px; color: var(--text-primary); font-weight: 500; }
+.disclosure .lbl .d { font-size: 12px; color: var(--text-tertiary); margin-top: 2px; }
+.disclosure .chev { color: var(--text-tertiary); transition: transform 0.2s; }
+.disclosure.open .chev { transform: rotate(90deg); }
+.disclosure-body {
+  display: none;
+  background: var(--surface-raised); border: 1px solid var(--border); border-top: 0;
+  border-radius: 0 0 var(--radius) var(--radius);
+  margin-top: -8px; padding: 4px 0;
+}
+.disclosure-body.open { display: block; }
+
+/* Bottom nav — scrolls with the page */
+.wizard-nav {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 28px;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+  margin: 40px -28px 0;
+}
+.wizard-nav .left, .wizard-nav .right { display: flex; align-items: center; gap: 10px; }
+.wizard-nav .soft-warn {
+  font-size: 12px; color: var(--orange); display: inline-flex; align-items: center; gap: 6px;
+}
+
+/* ── PDF Rail ── */
+.rail-head {
+  padding: 14px 18px; border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; justify-content: space-between;
+  background: var(--surface);
+}
+.rail-head .title { font-family: var(--font-display); font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-secondary); }
+.rail-head .page-pill {
+  font-family: var(--font-mono); font-size: 11px; color: var(--blue);
+  padding: 3px 8px; background: var(--blue-dim); border-radius: var(--radius-pill);
+  border: 1px solid color-mix(in srgb, var(--blue) 20%, transparent);
+}
+.rail-body { flex: 1; padding: 20px; overflow-y: auto; background: var(--surface-raised); }
+
+/* Fake PDF page */
+.pdf-page {
+  background: white; border: 1px solid var(--border); border-radius: 3px;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+  padding: 22px 20px; font-family: var(--font-mono); font-size: 10.5px; color: #1a1d23;
+  line-height: 1.55;
+}
+.pdf-page .hdr { text-align: center; font-weight: 600; margin-bottom: 12px; font-size: 11px; letter-spacing: 0.04em; }
+.pdf-page .sub { text-align: center; font-size: 9px; color: #666; margin-bottom: 16px; border-bottom: 1px solid #ddd; padding-bottom: 8px; }
+.pdf-table { border-collapse: collapse; width: 100%; font-size: 9.5px; }
+.pdf-table th, .pdf-table td { border: 1px solid #c8cdd4; padding: 4px 5px; text-align: left; vertical-align: top; }
+.pdf-table th { background: #eef1f5; font-weight: 600; font-size: 9px; }
+.pdf-table tr.highlight td { background: color-mix(in srgb, var(--blue) 18%, white); }
+.pdf-table tr.highlight td:first-child { position: relative; }
+.pdf-table tr.highlight td:first-child::before {
+  content: "▸"; position: absolute; left: -12px; color: var(--blue); font-family: sans-serif; font-weight: 600;
+}
+
+.region-box {
+  position: relative; margin-top: 22px; padding: 20px 14px 12px;
+  border: 1.5px dashed var(--blue); background: var(--blue-dim); border-radius: 3px;
+}
+.region-box .rlbl { position: absolute; top: -10px; left: 10px; background: var(--background); padding: 0 6px; font-family: var(--font-mono); font-size: 10px; color: var(--blue); letter-spacing: 0.06em; text-transform: uppercase; }
+.region-box .val { font-family: var(--font-mono); font-size: 11px; color: var(--text-primary); }
+.region-box .hint { font-size: 11px; color: var(--text-tertiary); margin-top: 4px; line-height: 1.45; }
+
+/* Fix-all modal */
+.modal-backdrop {
+  position: fixed; inset: 0; background: rgba(10, 12, 18, 0.55); backdrop-filter: blur(4px);
+  display: flex; align-items: center; justify-content: center; z-index: 80;
+  opacity: 0; pointer-events: none; transition: opacity 0.2s;
+}
+.modal-backdrop.open { opacity: 1; pointer-events: auto; }
+.modal {
+  width: min(560px, 92vw); background: var(--surface); border-radius: 10px;
+  border: 1px solid var(--border); box-shadow: 0 16px 48px rgba(0,0,0,0.24);
+  overflow: hidden; transform: translateY(8px); transition: transform 0.2s;
+  position: relative;
+}
+.modal::before, .modal::after {
+  content: ''; position: absolute; width: 14px; height: 14px; pointer-events: none; opacity: 0.35;
+}
+.modal::before { top: -1px; left: -1px; border-top: 2px solid var(--blue); border-left: 2px solid var(--blue); border-radius: 3px 0 0 0; }
+.modal::after { bottom: -1px; right: -1px; border-bottom: 2px solid var(--blue); border-right: 2px solid var(--blue); border-radius: 0 0 3px 0; }
+.modal-backdrop.open .modal { transform: translateY(0); }
+.modal-head { padding: 18px 22px 6px; }
+.modal-head .eyebrow { font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.2em; text-transform: uppercase; color: var(--blue); margin-bottom: 6px; }
+.modal-head h3 { font-size: 17px; color: var(--text-primary); letter-spacing: 0.01em; }
+.modal-head p { font-size: 13px; color: var(--text-secondary); margin-top: 6px; line-height: 1.55; }
+.modal-body { padding: 12px 22px 8px; }
+.field-group { margin-bottom: 14px; }
+.field-group label { display: block; font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-tertiary); margin-bottom: 6px; }
+.field-group input, .field-group select {
+  width: 100%; padding: 9px 12px; background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); color: var(--text-primary); font-size: 14px; font-family: inherit;
+}
+.field-group input:focus, .field-group select:focus {
+  outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px var(--blue-dim);
+}
+
+.affected {
+  background: var(--surface-raised); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  padding: 10px 12px; max-height: 160px; overflow-y: auto;
+}
+.affected .row { display: flex; align-items: center; gap: 10px; padding: 5px 0; font-size: 13px; }
+.affected .row input[type=checkbox] { accent-color: var(--blue); }
+.affected .row .d { font-family: var(--font-mono); font-weight: 600; color: var(--text-primary); min-width: 48px; }
+.affected .row .h { color: var(--text-secondary); }
+.affected .row .l { color: var(--text-tertiary); margin-left: auto; font-size: 12px; }
+
+.save-rule {
+  margin-top: 12px; padding: 12px 14px; background: var(--blue-dim);
+  border: 1px dashed color-mix(in srgb, var(--blue) 30%, transparent); border-radius: var(--radius-sm);
+}
+.save-rule .t { font-size: 13px; color: var(--text-primary); font-weight: 500; display: flex; align-items: center; gap: 8px; }
+.save-rule .t .pin { color: var(--blue); }
+.save-rule .d { font-size: 12px; color: var(--text-secondary); margin-top: 4px; line-height: 1.5; }
+.save-rule .d code { font-family: var(--font-mono); background: var(--surface); padding: 1px 5px; border-radius: 3px; border: 1px solid var(--border-dim); font-size: 11px; }
+.save-rule .scope { display: flex; gap: 6px; margin-top: 10px; }
+.save-rule .scope button {
+  font-size: 12px; padding: 6px 10px; border-radius: var(--radius-sm);
+  background: var(--surface); border: 1px solid var(--border); color: var(--text-secondary);
+}
+.save-rule .scope button.active { background: var(--blue); color: white; border-color: var(--blue); }
+
+.modal-foot { padding: 14px 22px 18px; display: flex; align-items: center; justify-content: flex-end; gap: 8px; background: var(--surface-raised); border-top: 1px solid var(--border-dim); }
+
+/* Tweaks panel */
+.tweaks-panel {
+  position: fixed; bottom: 20px; right: 20px; z-index: 90;
+  width: 300px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.16);
+  display: none; overflow: hidden;
+}
+.tweaks-panel.open { display: block; }
+.tweaks-head { padding: 12px 16px; border-bottom: 1px solid var(--border); background: var(--surface-raised); }
+.tweaks-head .t { font-family: var(--font-display); font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-primary); }
+.tweaks-head .d { font-size: 11px; color: var(--text-tertiary); margin-top: 2px; }
+.tweaks-body { padding: 14px 16px; display: flex; flex-direction: column; gap: 16px; }
+.tweak-row label { display: block; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-tertiary); margin-bottom: 6px; }
+.tweak-row .seg { display: inline-flex; background: var(--tint); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 2px; }
+.tweak-row .seg button {
+  border: 0; background: transparent; padding: 5px 10px; font-size: 12px;
+  color: var(--text-secondary); border-radius: 3px;
+}
+.tweak-row .seg button.active { background: var(--surface); color: var(--text-primary); box-shadow: 0 1px 2px rgba(0,0,0,0.08); }
+.tweak-row .toggle { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--text-primary); }
+.tweak-row .toggle input { width: 16px; height: 16px; accent-color: var(--blue); }
+
+/* Floating help text on hover */
+.tooltip {
+  position: fixed; z-index: 100;
+  background: var(--text-primary); color: var(--surface); padding: 6px 9px; border-radius: 4px;
+  font-size: 11px; line-height: 1.35; font-family: var(--font-mono); letter-spacing: 0.02em;
+  opacity: 0; transition: opacity 0.15s; pointer-events: none; max-width: 220px;
+}
+.tooltip.open { opacity: 1; }
+
+.chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  padding: 2px 6px; border-radius: var(--radius-pill); border: 1px solid;
+}
+.chip.rule { color: var(--blue); background: var(--blue-dim); border-color: color-mix(in srgb, var(--blue) 25%, transparent); }
+
+@media (max-width: 1200px) {
+  .page { grid-template-columns: 1fr 420px; }
+}
+@media (max-width: 980px) {
+  .page { grid-template-columns: 1fr; }
+  .rail { display: none; }
+}
+
+/* Rail modes (Tweaks) */
+body[data-rail="expand"] .page { grid-template-columns: 1fr; }
+body[data-rail="expand"] .rail { display: none; }
+body[data-rail="expand"] .inline-pdf { display: block; }
+.inline-pdf { display: none; margin: 12px 0 4px; padding: 14px 18px; background: var(--surface-raised); border: 1px solid var(--border); border-radius: var(--radius); }
+.inline-pdf .ih { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+.inline-pdf .ih .title { font-family: var(--font-display); font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--text-secondary); }
+.inline-pdf .ih .page-pill { font-family: var(--font-mono); font-size: 11px; color: var(--blue); padding: 3px 8px; background: var(--blue-dim); border-radius: var(--radius-pill); border: 1px solid color-mix(in srgb, var(--blue) 20%, transparent); }
+
+/* Density: compact */
+body[data-density="compact"] { font-size: 13px; }
+body[data-density="compact"] .main { padding-top: 16px; }
+body[data-density="compact"] .page-head { margin-bottom: 12px; }
+body[data-density="compact"] .page-head h1 { font-size: 18px; }
+body[data-density="compact"] .progress-panel { padding: 12px 14px; margin-bottom: 14px; }
+body[data-density="compact"] .groups { gap: 8px; }
+body[data-density="compact"] .group-head { padding: 9px 14px; gap: 10px; }
+body[data-density="compact"] .group-head .title { font-size: 13px; gap: 8px; }
+body[data-density="compact"] .group-head .darrin { font-size: 11.5px; margin-top: 2px; }
+body[data-density="compact"] .door-row { grid-template-columns: 44px 60px 1fr auto auto; gap: 10px; padding: 6px 14px; }
+body[data-density="compact"] .door-row .dno { font-size: 12px; }
+body[data-density="compact"] .door-row .info { font-size: 12px; }
+body[data-density="compact"] .door-row .conf .seg { width: 8px; height: 5px; }
+body[data-density="compact"] .btn { padding: 5px 9px; font-size: 12px; }
+body[data-density="compact"] .group-foot { padding: 6px 14px; font-size: 11px; }
+body[data-density="compact"] .disclosure { padding: 10px 14px; }
+</style>
+</head>
+<body>
+
+<!-- Navbar -->
+<nav class="navbar">
+  <div class="brand">
+    <div class="logo">RABBIT<span class="dot">·</span>HOLE</div>
+    <div class="sub">Door Hardware Systems</div>
+  </div>
+  <div class="crumbs">
+    <a href="#">Projects</a>
+    <span class="sep">/</span>
+    <a href="#">Radius DC · Project Smash</a>
+    <span class="sep">/</span>
+    <span class="cur">Import submittal · Review</span>
+  </div>
+  <div class="spacer"></div>
+  <div class="save-status">
+    <span class="pulse"></span>
+    <span id="saveStatus">Saved just now</span>
+  </div>
+  <button class="theme-btn" id="themeToggle">☾ Dark</button>
+</nav>
+
+<!-- Step rail -->
+<div class="steps">
+  <div class="step done"><span class="num">✓</span><span class="label">Upload</span></div>
+  <div class="step-sep"></div>
+  <div class="step done"><span class="num">✓</span><span class="label">Scan</span></div>
+  <div class="step-sep"></div>
+  <div class="step done"><span class="num">✓</span><span class="label">Map columns</span></div>
+  <div class="step-sep"></div>
+  <div class="step done"><span class="num">✓</span><span class="label">Questions</span></div>
+  <div class="step-sep"></div>
+  <div class="step cur"><span class="num">5</span><span class="label">Review</span></div>
+  <div class="step-sep"></div>
+  <div class="step"><span class="num">6</span><span class="label">Confirm</span></div>
+</div>
+
+<div class="page">
+  <!-- Main column -->
+  <main class="main">
+    <div class="page-head">
+      <div class="eyebrow">Submittal 4 · Job #306169 · MJW / DPR · March 20, 2026</div>
+      <h1>Clear attention, then confirm</h1>
+      <div class="meta">
+        <span><span class="k">102</span> openings</span>
+        <span><span class="k">30</span> hardware sets</span>
+        <span><span class="k">44 pages</span> scanned</span>
+        <span>2902 Brick Church Pike · Nashville, TN</span>
+        <span><span class="k">Darrin v3.4</span></span>
+      </div>
+    </div>
+
+    <!-- Toggles row -->
+    <div class="toggles-row">
+      <div class="seg-toggle" role="tablist" id="viewToggle">
+        <button class="active" data-view="door">Door view</button>
+        <button data-view="set">Set view</button>
+      </div>
+      <div style="flex:1"></div>
+      <div class="seg-toggle sm" id="densityToggle">
+        <button class="active" data-density="comfortable">Comfortable</button>
+        <button data-density="compact">Compact</button>
+      </div>
+    </div>
+
+    <!-- Progress panel -->
+    <div class="progress-panel">
+      <span class="corner-tl"></span><span class="corner-br"></span>
+      <div class="progress-head">
+        <div class="title">Attention needed</div>
+        <div class="count"><span id="clearedCount">0</span> <span class="of">of 8 items cleared</span></div>
+      </div>
+      <div class="bar"><div class="fill" id="progressFill" style="width: 0%"></div></div>
+      <div class="progress-foot">
+        <span id="progressHint">8 attention groups — 79 openings auto-approved</span>
+        <span id="projectedTime">~12 min to finish</span>
+      </div>
+    </div>
+
+    <!-- Attention groups -->
+    <div class="groups" id="groups">
+      <!-- Groups rendered by JS -->
+    </div>
+
+    <!-- Inline PDF (shown only when rail = expand-in-place) -->
+    <div class="inline-pdf" id="inlinePdf">
+      <div class="ih">
+        <div class="title">Source · Submittal PDF (inline)</div>
+        <div class="page-pill" id="inlinePdfPagePill">Page 14 of 47</div>
+      </div>
+      <div class="pdf-page" id="inlinePdfPage">
+        <div class="hdr">RADIUS DC · PROJECT SMASH — OPENING LIST</div>
+        <div class="sub">Job #306169 · Bulletin 4 plans · 2026-01-13 · Submittal 4 · 2026-03-20</div>
+        <table class="pdf-table"><thead><tr><th>Opening</th><th>Hdw Set</th><th>Heading</th><th>Label</th><th>Type</th><th>Frame</th></tr></thead><tbody id="inlinePdfRows"></tbody></table>
+      </div>
+    </div>
+
+    <!-- Auto-approved disclosure -->
+    <div class="disclosure" id="disclosure">
+      <div class="icon">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>
+      </div>
+      <div class="lbl">
+        <div class="t">Show 75 auto-approved doors</div>
+        <div class="d">All confidence ≥ high · no missing required fields · no structural warnings</div>
+      </div>
+      <svg class="chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+    </div>
+    <div class="disclosure-body" id="disclosureBody">
+      <div style="padding: 12px 18px; font-size: 12.5px; color: var(--text-secondary); line-height: 1.55;">
+        <div style="font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.08em; color: var(--text-tertiary); margin-bottom: 8px;">79 OPENINGS · AUTO-APPROVED</div>
+        Sample: <span style="font-family: var(--font-mono); color: var(--text-primary)">110-01A · DH1-10 · Corridor 1203 from Data Hall 110</span>,
+        <span style="font-family: var(--font-mono); color: var(--text-primary)">1310 · DH5 · Sprinkler Valve Room</span>,
+        <span style="font-family: var(--font-mono); color: var(--text-primary)">2201 · AD5-8-IS · Janitor</span>,
+        and 76 more. All required fields filled, confidence ≥ high, no structural flags.
+      </div>
+    </div>
+
+    <!-- Wizard nav -->
+    <div class="wizard-nav">
+      <div class="left">
+        <button class="btn btn-ghost">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+          Back
+        </button>
+      </div>
+      <div class="right" id="navRight">
+        <span class="soft-warn" id="softWarn" style="display: none;">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          Resolve attention items before continuing
+        </span>
+        <button class="btn btn-primary" id="continueBtn" disabled style="opacity:0.5">
+          Continue to Confirm
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+        </button>
+      </div>
+    </div>
+  </main>
+
+  <!-- Drag grip -->
+  <div class="rail-grip" id="railGrip" title="Drag to resize"></div>
+
+  <!-- Rail: PDF preview -->
+  <aside class="rail">
+    <div class="rail-head">
+      <div class="title">Source · Submittal PDF</div>
+      <div class="page-pill" id="pdfPagePill">Page 14 of 47</div>
+    </div>
+    <div class="rail-body" id="railBody">
+      <!-- Draw-region overlay -->
+      <div id="drawBanner" style="display:none; padding: 10px 14px; margin-bottom: 14px; background: var(--blue-dim); border: 1px dashed color-mix(in srgb, var(--blue) 40%, transparent); border-radius: var(--radius-sm); font-size: 12.5px; color: var(--text-primary); line-height: 1.5;">
+        <div style="font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--blue); margin-bottom: 4px;">DRAW-REGION MODE · <span id="drawStepLbl">Step 1 of 1</span></div>
+        <div>Click and drag on the sheet below to capture the <strong id="drawFieldName">value</strong> for <strong id="drawDoorLbl">D042</strong>. Press <kbd style="font-family:var(--font-mono);font-size:10px;padding:1px 5px;background:var(--surface);border:1px solid var(--border);border-radius:3px;">Esc</kbd> to cancel.</div>
+      </div>
+      <div class="pdf-page" id="pdfPage" style="position: relative;">
+        <div id="drawCanvas" style="display:none; position:absolute; inset:0; cursor: crosshair; z-index: 3;"></div>
+        <div id="drawRect" style="display:none; position:absolute; border:2px solid var(--blue); background: color-mix(in srgb, var(--blue) 20%, transparent); z-index: 4; pointer-events:none;"></div>
+        <div class="hdr">RADIUS DC · PROJECT SMASH — OPENING LIST</div>
+        <div class="sub">Job #306169 · Bulletin 4 plans · 2026-01-13 · Submittal 4 · 2026-03-20</div>
+        <table class="pdf-table" id="pdfTable">
+          <thead>
+            <tr>
+              <th>Opening</th><th>Hdw Set</th><th>Heading</th><th>Label</th><th>Type</th><th>Frame</th>
+            </tr>
+          </thead>
+          <tbody id="pdfRows"></tbody>
+        </table>
+        <div class="region-box" id="regionBox" style="display:none;">
+          <span class="rlbl">Detected region</span>
+          <div class="val" id="regionVal">DELHR</div>
+          <div class="hint" id="regionHint">
+            Darrin pulled this from column 7 rows 42–45. Draw a new region if the value is wrong.
+          </div>
+        </div>
+      </div>
+    </div>
+  </aside>
+</div>
+
+<!-- Fix-all modal -->
+<div class="modal-backdrop" id="modalBackdrop">
+  <div class="modal" role="dialog" aria-modal="true">
+    <div class="modal-head">
+      <div class="eyebrow" id="modalEyebrow">Fix for all 3 doors</div>
+      <h3 id="modalTitle">Set door type for 3 doors</h3>
+      <p id="modalDesc">Darrin couldn't read a door type from the schedule rows for these openings. Draw a region on the PDF, or type a value directly.</p>
+    </div>
+    <div class="modal-body">
+      <div class="field-group">
+        <label id="fieldLabel">Value (door type)</label>
+        <input id="modalInput" type="text" placeholder="e.g. HM-80, Solid Core Wood" autocomplete="off" />
+      </div>
+      <div class="field-group">
+        <label>Apply to</label>
+        <div class="affected" id="affectedList"></div>
+      </div>
+      <div class="save-rule">
+        <div class="t"><span class="pin">✦</span> Save as a rule for future imports?</div>
+        <div class="d" id="ruleDesc">When <code>hw_set</code> starts with <code>HW-1</code>, set <code>door_type</code> to the value above.</div>
+        <div class="scope">
+          <button data-scope="none" class="active">Don't save</button>
+          <button data-scope="project">This project only</button>
+          <button data-scope="company">All future projects</button>
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-ghost" id="modalCancel">Cancel</button>
+      <button class="btn btn-ghost" id="modalNA" style="margin-right:auto;">Mark N/A</button>
+      <button class="btn btn-ghost" id="modalSkip" style="display:none;">Skip for now</button>
+      <button class="btn btn-ghost" id="modalDraw">Draw on PDF</button>
+      <button class="btn btn-primary" id="modalApply">Apply</button>
+    </div>
+  </div>
+</div>
+
+<!-- Tweaks panel -->
+<div class="tweaks-panel" id="tweaks">
+  <div class="tweaks-head">
+    <div class="t">Tweaks</div>
+    <div class="d">Compare variations of this redesign</div>
+  </div>
+  <div class="tweaks-body">
+    <div class="tweak-row">
+      <label>Primary action weighting</label>
+      <div class="seg" data-tweak="primary">
+        <button data-val="group" class="active">Fix all N primary</button>
+        <button data-val="equal">Equal weight</button>
+      </div>
+    </div>
+    <div class="tweak-row">
+      <label>Soft-flag group</label>
+      <div class="toggle">
+        <input type="checkbox" id="softFlagToggle" checked />
+        <span>Show "Review if time allows" group</span>
+      </div>
+    </div>
+    <div class="tweak-row">
+      <label>PDF rail</label>
+      <div class="seg" data-tweak="rail">
+        <button data-val="sticky" class="active">Sticky side rail</button>
+        <button data-val="expand">Expand-in-place</button>
+      </div>
+    </div>
+    <div class="tweak-row">
+      <label>Density</label>
+      <div class="seg" data-tweak="density">
+        <button data-val="comfortable" class="active">Comfortable</button>
+        <button data-val="compact">Compact</button>
+      </div>
+    </div>
+    <div class="tweak-row">
+      <label>Theme</label>
+      <div class="seg" data-tweak="theme">
+        <button data-val="light" class="active">Light</button>
+        <button data-val="dark">Dark</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="tooltip" id="tooltip"></div>
+
+<script>
+// ─────────────────────────────────────────
+// Data — modeled on DoorEntry + getDoorIssues
+// ─────────────────────────────────────────
+// ─────────────────────────────────────────
+// Real seed data — Radius DC Project Smash (Job #306169, submittal 4)
+// Each opening keeps the real "Opening / Hdw Set / Heading / Label / Type / Frame"
+// plus inferred location, hand, and the bits of scheduled hardware the rail shows.
+// ─────────────────────────────────────────
+const DOORS = {
+  // RFI #1 — Finish conflict (626 vs 630) — interior locks/panics get 626, exterior stay 630
+  "1308":    { on:"1308",    hw_set:"DH1-10",     heading:"DH1.01", label:"45Min", door_type:"A", frame_type:"F2", hand:"RHRA", location:"Corridor 1202 from POE 1308", page:19,
+               confidence:{ on:.99, hw_set:.98, door_type:.95, frame_type:.95, hand:.9, fire_rating:.95, finish:.42 } },
+  "1307":    { on:"1307",    hw_set:"DH1-9",      heading:"DH1.0",  label:"45Min", door_type:"B", frame_type:"F2", hand:"RHRA", location:"Corridor 1206 from Electric Room 1307", page:18,
+               confidence:{ on:.99, hw_set:.62, door_type:.95, frame_type:.95, hand:.9, fire_rating:.95, finish:.42 } },
+  "1316":    { on:"1316",    hw_set:"AD4",        heading:"AD4.0",  label:"45Min", door_type:"B", frame_type:"F2", hand:"RHRA", location:"Corridor 1202 from IDF Room 1316", page:31,
+               confidence:{ on:.99, hw_set:.9, door_type:.95, frame_type:.95, hand:.88, fire_rating:.95, rod_len:.38 } },
+
+  // RFI #2 — Electrified hardware mismatch between security col & HW set
+  "1214":    { on:"1214",    hw_set:"DH2",        heading:"DH2.0",  label:"45Min", door_type:"A", frame_type:"F1", hand:"RHR",  location:"Penthouse 1213 from Elec Closet 1214", page:21,
+               confidence:{ on:.99, hw_set:.96, door_type:.95, frame_type:.95, hand:.9, electrified:.48 } },
+  "1901":    { on:"1901",    hw_set:"AD3",        heading:"AD3.0",  label:"45Min", door_type:"B", frame_type:"F1", hand:"RHR",  location:"Corridor 1204 from Electric Room 1901", page:29,
+               confidence:{ on:.99, hw_set:.94, door_type:.95, frame_type:.95, hand:.9, electrified:.48 } },
+  "1903":    { on:"1903",    hw_set:"AD7",        heading:"AD7.0",  label:"90Min", door_type:"B", frame_type:"F2", hand:"RHRA", location:"Loading Dock Area 1800 from Fire Control Room 1903", page:34,
+               confidence:{ on:.99, hw_set:.94, door_type:.95, frame_type:.95, hand:.88, electrified:.45 } },
+
+  // RFI #3 — ACSI "LC" nomenclature → QC3 quick-connect (CON-6P at hinge frame side)
+  "EX3.0_STC": { on:"ST-1C", hw_set:"EX3-R",     heading:"EX3.0",  label:"45Min", door_type:"A", frame_type:"F1", hand:"RHR",  location:"Roof Stair ST-1 from Penthouse 1213", page:11,
+               confidence:{ on:.99, hw_set:.93, door_type:.95, frame_type:.95, hand:.9, lc_nomen:.35 } },
+  "1201A":   { on:"1201A",   hw_set:"EX3-NR",     heading:"EX3.1",  label:"",      door_type:"A", frame_type:"F1", hand:"RHR",  location:"Exterior Equipment Yard from Corridor 1201", page:12,
+               confidence:{ on:.99, hw_set:.93, door_type:.95, frame_type:.95, hand:.9, lc_nomen:.35, fire_rating:.55 } },
+
+  // RFI #4 — 9'0"/10'0" rated pairs — constant-latch flushbolt rod-length violation on DH1, DH4A, DH9, AD7, AD21
+  "110-01A": { on:"110-01A", hw_set:"DH1-10",     heading:"DH1.01", label:"45Min", door_type:"A", frame_type:"F2", hand:"RHRA", location:"Corridor 1203 from Data Hall 110 · 110-01", page:19,
+               confidence:{ on:.99, hw_set:.98, door_type:.95, frame_type:.95, hand:.9, fire_rating:.95, rod_len:.38 } },
+  "110-01B": { on:"110-01B", hw_set:"DH1-10",     heading:"DH1.01", label:"45Min", door_type:"A", frame_type:"F2", hand:"RHRA", location:"Corridor 1203 from Data Hall 110 · 110-01", page:19,
+               confidence:{ on:.99, hw_set:.98, door_type:.95, frame_type:.95, hand:.9, fire_rating:.95, rod_len:.38 } },
+  "110-01C": { on:"110-01C", hw_set:"DH1-10",     heading:"DH1.01", label:"45Min", door_type:"A", frame_type:"F2", hand:"RHRA", location:"Corridor 1205 from Data Hall 110 · 110-01", page:19,
+               confidence:{ on:.99, hw_set:.98, door_type:.95, frame_type:.95, hand:.9, fire_rating:.95, rod_len:.38 } },
+  "110-01D": { on:"110-01D", hw_set:"DH1-10",     heading:"DH1.01", label:"45Min", door_type:"A", frame_type:"F2", hand:"RHRA", location:"Corridor 1205 from Data Hall 110 · 110-01", page:19,
+               confidence:{ on:.99, hw_set:.98, door_type:.95, frame_type:.95, hand:.9, fire_rating:.95, rod_len:.38 } },
+  "1301":    { on:"1301",    hw_set:"DH1-10",     heading:"DH1.01", label:"45Min", door_type:"A", frame_type:"F2", hand:"RHRA", location:"Corridor 1202 from POE 1301", page:19,
+               confidence:{ on:.99, hw_set:.98, door_type:.95, frame_type:.95, hand:.9, fire_rating:.95, rod_len:.38 } },
+  "1302":    { on:"1302",    hw_set:"DH1-9",      heading:"DH1.0",  label:"45Min", door_type:"B", frame_type:"F2", hand:"RHRA", location:"Corridor 1210 from Electric Room 1302", page:18,
+               confidence:{ on:.99, hw_set:.98, door_type:.95, frame_type:.95, hand:.9, fire_rating:.95, rod_len:.42 } },
+  "1314":    { on:"1314",    hw_set:"DH9",        heading:"DH9.0",  label:"45Min", door_type:"B", frame_type:"F2", hand:"RHRA", location:"Corridor 1201 from Storage Closet 1314", page:27,
+               confidence:{ on:.99, hw_set:.95, door_type:.95, frame_type:.95, hand:.9, fire_rating:.95, rod_len:.4 } },
+  "1315":    { on:"1315",    hw_set:"DH9",        heading:"DH9.1",  label:"45Min", door_type:"B", frame_type:"F2", hand:"RHRA", location:"Corridor 1206 from Storage 1315", page:28,
+               confidence:{ on:.99, hw_set:.95, door_type:.95, frame_type:.95, hand:.9, fire_rating:.95, rod_len:.4 } },
+  "110-08A": { on:"110-08A", hw_set:"DH4A",       heading:"DH4A.0", label:"90Min", door_type:"A", frame_type:"F2", hand:"RHRA", location:"Corridor 1202 from DH1 UPS-D 110-08", page:24,
+               confidence:{ on:.99, hw_set:.97, door_type:.95, frame_type:.95, hand:.9, fire_rating:.95, rod_len:.38 } },
+  "110A-04A":{ on:"110A-04A",hw_set:"DH4A",       heading:"DH4A.0", label:"90Min", door_type:"A", frame_type:"F2", hand:"LHRA", location:"Corridor 1202 from DH1 UPS-A 110-04", page:24,
+               confidence:{ on:.99, hw_set:.97, door_type:.95, frame_type:.95, hand:.9, fire_rating:.95, rod_len:.38 } },
+  "110A-05A":{ on:"110A-05A",hw_set:"DH4A",       heading:"DH4A.0", label:"90Min", door_type:"A", frame_type:"F2", hand:"RHRA", location:"Corridor 1202 from DH1 UPS-B 110-05", page:24,
+               confidence:{ on:.99, hw_set:.97, door_type:.95, frame_type:.95, hand:.9, fire_rating:.95, rod_len:.38 } },
+  "110A-06A":{ on:"110A-06A",hw_set:"DH4A",       heading:"DH4A.0", label:"90Min", door_type:"A", frame_type:"F2", hand:"RHRA", location:"Corridor 1202 from DH1 UPS-R 110-06", page:24,
+               confidence:{ on:.99, hw_set:.97, door_type:.95, frame_type:.95, hand:.9, fire_rating:.95, rod_len:.38 } },
+  "110B-07A":{ on:"110B-07A",hw_set:"DH4A",       heading:"DH4A.0", label:"90Min", door_type:"A", frame_type:"F2", hand:"RHRA", location:"Corridor 1202 from DH1 UPS-C 110-07", page:24,
+               confidence:{ on:.99, hw_set:.97, door_type:.95, frame_type:.95, hand:.9, fire_rating:.95, rod_len:.38 } },
+  "120-05A": { on:"120-05A", hw_set:"DH4A",       heading:"DH4A.0", label:"90Min", door_type:"A", frame_type:"F2", hand:"RHRA", location:"Corridor 1202 from DH2-Future-UPS Room 120-05", page:24,
+               confidence:{ on:.99, hw_set:.97, door_type:.95, frame_type:.95, hand:.9, fire_rating:.95, rod_len:.38 } },
+
+  // RFI #5/6 — 110A-04B, 05B, 06B: HW set DH-4 for single doors, but they're double-egress pairs. MJW notes B3 omits these — re-evaluate.
+  "110A-04B":{ on:"110A-04B",hw_set:"DH4-R-NOCR", heading:"DH4.1",  label:"90Min", door_type:"A", frame_type:"F2", hand:"DELHR",location:"DH1 UPS-A 110-04 ⇄ DH1 UPS-B 110-05 · double egress", page:23,
+               confidence:{ on:.99, hw_set:.5,  door_type:.95, frame_type:.95, hand:.9, fire_rating:.95, double_egress:.48 } },
+  "110A-05B":{ on:"110A-05B",hw_set:"DH4-R-NOCR", heading:"DH4.1",  label:"90Min", door_type:"A", frame_type:"F2", hand:"DELHR",location:"DH1 UPS-B 110-05 ⇄ DH1 UPS-R 110-06 · double egress", page:23,
+               confidence:{ on:.99, hw_set:.5,  door_type:.95, frame_type:.95, hand:.9, fire_rating:.95, double_egress:.48 } },
+  "110A-06B":{ on:"110A-06B",hw_set:"DH4-R-NOCR", heading:"DH4.1",  label:"90Min", door_type:"A", frame_type:"F2", hand:"DELHR",location:"DH1 UPS-R 110-06 ⇄ DH1 UPS-C 110-07 · double egress", page:23,
+               confidence:{ on:.99, hw_set:.5,  door_type:.95, frame_type:.95, hand:.9, fire_rating:.95, double_egress:.48 } },
+  "110-07B": { on:"110-07B", hw_set:"DH4-R-NOCR", heading:"DH4.1",  label:"90Min", door_type:"A", frame_type:"F2", hand:"DELHR",location:"DH1 UPS-C 110-07 ⇄ DH1 UPS-D 110-08 · double egress", page:23,
+               confidence:{ on:.99, hw_set:.5,  door_type:.95, frame_type:.95, hand:.9, fire_rating:.95, double_egress:.48 } },
+
+  // RFI #9 — Privacy vs Passage for common restrooms 2100 / 2104
+  "2100":    { on:"2100",    hw_set:"AD10-PASS",  heading:"AD10.2", label:"",      door_type:"A", frame_type:"F1", hand:"LH",   location:"Admin East Corridor 1209 to Men's Restroom 2100", page:37,
+               confidence:{ on:.99, hw_set:.5,  door_type:.95, frame_type:.95, hand:.9, function_type:.45 } },
+  "2104":    { on:"2104",    hw_set:"AD10-PASS",  heading:"AD10.2", label:"",      door_type:"A", frame_type:"F1", hand:"RH",   location:"Admin East Corridor 1209 to Women's Restroom 2104", page:37,
+               confidence:{ on:.99, hw_set:.5,  door_type:.95, frame_type:.95, hand:.9, function_type:.45 } },
+
+  // 7 blank openings — listed as "N/A" hardware set with blank Type/Frame/Label
+  "120-04B": { on:"120-04B", hw_set:"N/A",        heading:"NA.0",   label:"",      door_type:"",  frame_type:"",   hand:"",     location:"Future Flex Space 120-04 (inactive leaf)", page:6,
+               confidence:{ on:.99, hw_set:.0, door_type:.0, frame_type:.0, hand:.0, fire_rating:.0 } },
+  "1201B":   { on:"1201B",   hw_set:"N/A",        heading:"NA.0",   label:"",      door_type:"",  frame_type:"",   hand:"",     location:"Exterior Equipment Yard (inactive leaf)", page:6,
+               confidence:{ on:.99, hw_set:.0, door_type:.0, frame_type:.0, hand:.0, fire_rating:.0 } },
+  "1313B":   { on:"1313B",   hw_set:"N/A",        heading:"NA.0",   label:"",      door_type:"",  frame_type:"",   hand:"",     location:"Flex Space 1313 (inactive leaf)", page:7,
+               confidence:{ on:.99, hw_set:.0, door_type:.0, frame_type:.0, hand:.0, fire_rating:.0 } },
+  "1800C":   { on:"1800C",   hw_set:"N/A",        heading:"NA.0",   label:"",      door_type:"",  frame_type:"",   hand:"",     location:"Loading Dock Area 1800 (overhead/leaf)", page:7,
+               confidence:{ on:.99, hw_set:.0, door_type:.0, frame_type:.0, hand:.0, fire_rating:.0 } },
+  "1800D":   { on:"1800D",   hw_set:"N/A",        heading:"NA.0",   label:"",      door_type:"",  frame_type:"",   hand:"",     location:"Loading Dock Area 1800 (overhead/leaf)", page:7,
+               confidence:{ on:.99, hw_set:.0, door_type:.0, frame_type:.0, hand:.0, fire_rating:.0 } },
+  "1800F":   { on:"1800F",   hw_set:"N/A",        heading:"NA.0",   label:"",      door_type:"",  frame_type:"",   hand:"",     location:"Loading Dock Area 1800 (overhead/leaf)", page:7,
+               confidence:{ on:.99, hw_set:.0, door_type:.0, frame_type:.0, hand:.0, fire_rating:.0 } },
+  "1400-BL": { on:"1400-BL", hw_set:"4/A700",     heading:"",       label:"",      door_type:"",  frame_type:"",   hand:"",     location:"Bulletin reference · 4/A700 callout", page:7,
+               confidence:{ on:.85, hw_set:.35, door_type:.0, frame_type:.0, hand:.0 } },
+
+  // Soft-flag: 1600/1700 AL/storefront openings missing fire rating + sometimes door/frame type
+  "1600A":   { on:"1600A",   hw_set:"AD13-AL",    heading:"AD13.2", label:"",      door_type:"",  frame_type:"",   hand:"",     location:"Lobby 1600 (aluminum storefront)", page:6,
+               confidence:{ on:.99, hw_set:.85, door_type:.35, frame_type:.35, hand:.4, fire_rating:.3 } },
+  "1600B":   { on:"1600B",   hw_set:"AD2",        heading:"AD2.0",  label:"",      door_type:"",  frame_type:"",   hand:"",     location:"Lobby 1600 from Secure Vestibule 1701 (AL door)", page:28,
+               confidence:{ on:.99, hw_set:.82, door_type:.35, frame_type:.35, hand:.4, fire_rating:.3 } },
+  "1601A":   { on:"1601A",   hw_set:"EX1",        heading:"EX1.0",  label:"",      door_type:"",  frame_type:"",   hand:"RHRA", location:"Vestibule 1601 from Lobby 1600 (AL pair)", page:11,
+               confidence:{ on:.99, hw_set:.85, door_type:.35, frame_type:.35, hand:.9, fire_rating:.3 } },
+  "1601B":   { on:"1601B",   hw_set:"EX1",        heading:"EX1.0",  label:"",      door_type:"",  frame_type:"",   hand:"RHRA", location:"Exterior from Vestibule 1601 (AL pair)", page:11,
+               confidence:{ on:.99, hw_set:.85, door_type:.35, frame_type:.35, hand:.9, fire_rating:.3 } },
+};
+
+// Attention groups — each corresponds to a real Request-for-Information item from the submittal pages 4–5,
+// or a structural data issue (missing hardware set, missing door/frame type).
+const GROUPS_SPEC = [
+  {
+    id: "g_finish",
+    label: "Finish conflict — 626 interior / 630 exterior",
+    severity: "high",
+    field: "finish",
+    darrin: "RFI #1. Sets list mixed 630/32D and 626/26D on locks and panics. DPR replied: 626 at interior doors, stainless (630) at exterior. Confirm the finish on each of these interior openings.",
+    doors: ["1308","1307","1316"],
+    suggestedRule: { when: "frame_type = F1/F2 AND opening not exterior", then: "lock/panic finish = 626" },
+    pdfHighlightPage: 4,
+  },
+  {
+    id: "g_electrified",
+    label: "Electrified hardware — security column mismatch",
+    severity: "high",
+    field: "electrified",
+    darrin: "RFI #2. Door-schedule security column and floor-plan card-reader notes don't match the HW-set electrified items. I deferred to the HW sets; DPR replied 'Coordination Needed'. Please confirm electrification per opening.",
+    doors: ["1214","1901","1903"],
+    suggestedRule: null,
+    pdfHighlightPage: 4,
+  },
+  {
+    id: "g_lc_nomen",
+    label: "ACSI \"LC\" → quick-connect (QC3 / CON-6P)",
+    severity: "high",
+    field: "lc_nomen",
+    darrin: "RFI #3. \"LC\" is not ACSI nomenclature. Scheduled as QC3 with CON-6P at the hinge frame side. DPR confirmed. One click confirms across the EX3 family.",
+    doors: ["EX3.0_STC","1201A"],
+    suggestedRule: { when: "hw_set starts with EX3", then: "add CON-6P at hinge-side frame" },
+    pdfHighlightPage: 4,
+  },
+  {
+    id: "g_rod_len",
+    label: "Constant-latch flushbolt rod length — rated 9'/10' pairs",
+    severity: "high",
+    field: "rod_len",
+    darrin: "RFI #4. 36\"/48\" rods aren't approved on rated pairs. 12\" rod puts the release at 8'–9' AFF. Recommended Ives FB31P auto-flushbolts. DPR replied \"Auto flushbolts\" — apply to these openings?",
+    doors: ["110-01A","110-01B","110-01C","110-01D","1301","1302","1314","1315","110-08A","110A-04A","110A-05A","110A-06A","110B-07A","120-05A","1316"],
+    suggestedRule: { when: "rated pair AND door_height ≥ 9'0\"", then: "flushbolt = Ives FB31P auto" },
+    pdfHighlightPage: 4,
+  },
+  {
+    id: "g_double_egress",
+    label: "Tags 110A-04B/05B/06B — DH-4 on double-egress pairs",
+    severity: "high",
+    field: "double_egress",
+    darrin: "RFI #5/6. These openings are double-egress pairs but specified with DH-4 (standard swing). MJW: \"Bulletin 3 omits these openings; Item #05 no longer requires resolution.\" Confirm drop or provide new hardware set.",
+    doors: ["110A-04B","110A-05B","110A-06B","110-07B"],
+    suggestedRule: null,
+    pdfHighlightPage: 5,
+  },
+  {
+    id: "g_priv_pass",
+    label: "Privacy vs Passage — common-use restrooms 2100 / 2104",
+    severity: "med",
+    field: "function_type",
+    darrin: "RFI #9. AD-10 lists privacy sets; these are entry doors into common-use restrooms. I scheduled passage sets. DPR: \"Agree.\" Ready to confirm.",
+    doors: ["2100","2104"],
+    suggestedRule: { when: "location matches Men's/Women's Restroom", then: "function = passage (L9010)" },
+    pdfHighlightPage: 5,
+  },
+  {
+    id: "g_no_hwset",
+    label: "Openings listed with no hardware set",
+    severity: "high",
+    field: "hw_set",
+    darrin: "7 openings import with hw_set = N/A or a bulletin callout. These are inactive leaves, overhead coils, or a sheet reference — confirm each is intentionally unhardwared, or assign a set.",
+    doors: ["120-04B","1201B","1313B","1800C","1800D","1800F","1400-BL"],
+    suggestedRule: { when: "location contains 'inactive leaf'", then: "hw_set = N/A (no hardware)" },
+    pdfHighlightPage: 6,
+  },
+  {
+    id: "g_soft",
+    label: "Storefront/AL openings — missing fire rating & type",
+    severity: "soft",
+    field: "fire_rating",
+    darrin: "The four lobby/vestibule AL openings import without fire rating and without door/frame type. Per Clarification #3, aluminum-door hardware is excluded (cylinders only). Not blocking — confirm when you have a minute.",
+    doors: ["1600A","1600B","1601A","1601B"],
+    suggestedRule: null,
+    pdfHighlightPage: 9,
+  },
+];
+
+// State
+const state = {
+  groups: JSON.parse(JSON.stringify(GROUPS_SPEC)),
+  openGroup: "g_finish",
+  activeDoor: "110-01A",
+  cleared: new Set(),           // door IDs that have been resolved
+  naFields: {},                 // {doorId: Set(field)} — fields marked N/A
+  modal: null,                  // { groupId, singleDoor, steps:[{did,field}], stepIdx }
+  ruleScope: "none",
+  showSoftFlag: true,
+  primaryMode: "group",
+  density: "comfortable",
+  railMode: "sticky",
+  view: "door",                 // 'door' | 'set'
+  drawMode: false,
+};
+
+// Restore persisted rail width + density
+try {
+  const w = parseInt(localStorage.getItem('rh_rail_w') || '520', 10);
+  if (w >= 340 && w <= 760) document.documentElement.style.setProperty('--rail-w', w + 'px');
+  const d = localStorage.getItem('rh_density') || 'comfortable';
+  state.density = d; document.body.setAttribute('data-density', d);
+} catch (e) {}
+
+// ─────────────────────────────────────────
+// Rendering
+// ─────────────────────────────────────────
+function severityLabel(s) {
+  if (s === "high") return "High priority";
+  if (s === "med") return "Medium";
+  if (s === "soft") return "Soft flag";
+  return "";
+}
+function groupDoorCount(g) { return g.doors.length; }
+function groupClearedCount(g) { return g.doors.filter(d => state.cleared.has(d)).length; }
+function groupFullyCleared(g) { return groupClearedCount(g) === g.doors.length; }
+
+function renderConfidence(door) {
+  const all = Object.keys(door.confidence || {});
+  const fields = all.length ? all : ['on','hw_set','door_type','frame_type','hand'];
+  return `<span class="conf" data-tip="Per-field confidence: ${fields.map(f => f + '=' + Math.round((door.confidence[f]||0)*100) + '%').join(', ')}">` +
+    fields.map(f => {
+      const s = door.confidence[f] || 0;
+      const cls = s >= 0.75 ? 'h' : s >= 0.6 ? 'm' : 'l';
+      return `<span class="seg ${cls}" title="${f}: ${Math.round(s*100)}%"></span>`;
+    }).join('') + `</span>`;
+}
+
+function renderGroup(g) {
+  const visible = g.severity !== "soft" || state.showSoftFlag;
+  if (!visible) return "";
+  const cleared = groupFullyCleared(g);
+  const cn = groupClearedCount(g);
+  const total = groupDoorCount(g);
+  const sevClass = cleared ? "resolved" : `sev-${g.severity}`;
+  const open = state.openGroup === g.id;
+  const primaryLabel = g.severity === "soft" ? `Review ${total}` : `Fix all ${total}`;
+  const primaryIsEqual = state.primaryMode === "equal";
+  const titleSev = severityLabel(g.severity);
+
+  return `
+    <section class="group ${sevClass} ${open ? 'open' : ''}" data-group="${g.id}">
+      <header class="group-head" data-toggle="${g.id}">
+        <span class="sev-dot"></span>
+        <div class="title-wrap">
+          <div class="title">
+            <span>${g.label}</span>
+            <span class="count-pill">${cn}/${total} cleared</span>
+            ${cleared ? '<span class="chip rule" style="color:var(--green);background:var(--green-dim);border-color:color-mix(in srgb, var(--green) 25%, transparent);">✓ Resolved</span>' : ''}
+            ${g.severity === 'soft' ? '<span class="chip" style="color:var(--yellow);background:var(--yellow-dim);border-color:color-mix(in srgb, var(--yellow) 25%, transparent);">non-blocking</span>' : ''}
+          </div>
+          <div class="darrin">
+            <span class="avatar">D</span>${g.darrin}
+          </div>
+        </div>
+        <div class="actions" onclick="event.stopPropagation();">
+          ${!cleared ? `
+            <button class="btn ${primaryIsEqual ? 'btn-ghost' : 'btn-primary'}" data-fixall="${g.id}">
+              ${primaryLabel}
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+            </button>
+          ` : `
+            <span class="chip" style="color:var(--green);background:var(--green-dim);border-color:color-mix(in srgb, var(--green) 25%, transparent);">All cleared</span>
+          `}
+          <svg class="chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+        </div>
+      </header>
+      <div class="group-body">
+        ${g.doors.map(did => {
+          const d = DOORS[did];
+          const clearedRow = state.cleared.has(did);
+          return `
+            <div class="door-row ${clearedRow ? 'cleared' : ''}" data-door="${did}" data-group="${g.id}">
+              <div class="cb"><input type="checkbox" ${clearedRow ? 'checked' : ''} data-check="${did}" data-gid="${g.id}"/></div>
+              <div class="dno">${d.on}</div>
+              <div class="info">
+                <span class="hw">${d.hw_set}</span>
+                <span class="loc">${d.location || '—'}</span>
+              </div>
+              ${renderConfidence(d)}
+              ${clearedRow
+                ? '<span class="cleared-badge">✓ Resolved</span>'
+                : '<button class="fix-one" data-fixone="' + did + '" data-gid="' + g.id + '">Fix this one</button>'}
+            </div>
+          `;
+        }).join('')}
+        <div class="group-foot">
+          <span>Tip: click a row to preview its page in the PDF rail.</span>
+          ${g.suggestedRule && !cleared
+            ? `<span style="display:inline-flex;align-items:center;gap:6px;">
+                 <span class="chip rule">✦ Rule suggestion</span>
+                 <span style="color:var(--text-secondary);">
+                   ${g.suggestedRule.when} → <span style="color:var(--text-primary);font-family:var(--font-mono);">${g.suggestedRule.then}</span>
+                 </span>
+               </span>`
+            : ''}
+        </div>
+      </div>
+    </section>
+  `;
+}
+
+function renderSetView() {
+  // Group attention rows by hw_set
+  const container = document.getElementById('groups');
+  const visibleGroups = state.groups.filter(g => g.severity !== 'soft' || state.showSoftFlag);
+  const bySet = {};
+  visibleGroups.forEach(g => {
+    g.doors.forEach(did => {
+      const d = DOORS[did];
+      const key = d.hw_set;
+      bySet[key] = bySet[key] || { set: key, doors: new Set(), issues: [] };
+      bySet[key].doors.add(did);
+      bySet[key].issues.push({ gid: g.id, field: g.field, did, severity: g.severity });
+    });
+  });
+  const html = Object.values(bySet).map(s => {
+    const doorsArr = Array.from(s.doors);
+    const total = doorsArr.length;
+    const cleared = doorsArr.filter(d => state.cleared.has(d)).length;
+    const open = state.openGroup === ('set_' + s.set);
+    const fields = Array.from(new Set(s.issues.map(i => i.field)));
+    const fieldLbl = fields.map(f => ({door_type:'door type',hand:'hand',fire_rating:'fire rating'}[f] || f)).join(' · ');
+    return `
+      <div class="set-card ${open ? 'open' : ''}" data-set="${s.set}">
+        <div class="set-head" data-settoggle="${s.set}">
+          <div style="flex:1">
+            <div class="set-name">${s.set}</div>
+            <div class="set-stats">
+              ${total} door${total===1?'':'s'} · ${cleared===total ? `<span class="ok">all cleared</span>` : `<span class="bad">${total-cleared} need${total-cleared===1?'s':''} attention</span>`} · predominant: ${fieldLbl}
+            </div>
+          </div>
+          <svg class="chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="${open?'transform:rotate(90deg)':''}"><polyline points="9 18 15 12 9 6"></polyline></svg>
+        </div>
+        <div class="set-body">
+          ${doorsArr.map(did => {
+            const d = DOORS[did];
+            const clearedRow = state.cleared.has(did);
+            const issue = s.issues.find(i => i.did === did);
+            const gid = issue ? issue.gid : '';
+            return `
+              <div class="door-row ${clearedRow ? 'cleared' : ''}" data-door="${did}" data-group="${gid}">
+                <div class="cb"><input type="checkbox" ${clearedRow?'checked':''} data-check="${did}" data-gid="${gid}"/></div>
+                <div class="dno">${d.on}</div>
+                <div class="info"><span class="hw">${d.hw_set}</span><span class="loc">${d.location || '—'}</span></div>
+                ${renderConfidence(d)}
+                ${clearedRow
+                  ? '<span class="cleared-badge">✓ Resolved</span>'
+                  : '<button class="fix-one" data-fixone="'+did+'" data-gid="'+gid+'">Fix this one</button>'}
+              </div>`;
+          }).join('')}
+        </div>
+      </div>`;
+  }).join('');
+  container.innerHTML = html || '<div style="padding:40px;text-align:center;color:var(--text-tertiary);">No sets with attention items.</div>';
+  // Wire
+  document.querySelectorAll('[data-settoggle]').forEach(el => {
+    el.addEventListener('click', () => {
+      const s = el.getAttribute('data-settoggle');
+      state.openGroup = state.openGroup === ('set_' + s) ? null : ('set_' + s);
+      renderGroups();
+    });
+  });
+  document.querySelectorAll('[data-fixone]').forEach(el => {
+    el.addEventListener('click', (e) => { e.stopPropagation(); openModal(el.getAttribute('data-gid'), el.getAttribute('data-fixone')); });
+  });
+  document.querySelectorAll('.door-row').forEach(row => {
+    row.addEventListener('click', (e) => {
+      if (e.target.closest('button') || e.target.closest('input')) return;
+      state.activeDoor = row.getAttribute('data-door');
+      updatePdfRail();
+    });
+  });
+  updateProgressAndGate(visibleGroups);
+  updatePdfRail();
+}
+
+function updateProgressAndGate(visibleGroups) {
+  const totalVisible = visibleGroups.filter(g => g.severity !== 'soft').length;
+  const clearedCount = visibleGroups.filter(g => g.severity !== 'soft' && groupFullyCleared(g)).length;
+  const allCleared = totalVisible > 0 && clearedCount === totalVisible;
+  document.getElementById('clearedCount').textContent = clearedCount;
+  document.querySelector('.progress-head .of').textContent = `of ${totalVisible} items cleared`;
+  const pct = totalVisible ? Math.round(clearedCount / totalVisible * 100) : 100;
+  const fill = document.getElementById('progressFill');
+  fill.style.width = pct + '%';
+  fill.classList.toggle('done', allCleared);
+  const hint = document.getElementById('progressHint');
+  if (allCleared) {
+    hint.innerHTML = '<span style="color:var(--green);font-weight:500;">✓ All attention items resolved — ready to confirm</span>';
+    document.getElementById('projectedTime').textContent = '79 openings auto-approved';
+  } else {
+    const remaining = totalVisible - clearedCount;
+    hint.textContent = `${remaining} attention group${remaining === 1 ? '' : 's'} remaining — 79 openings auto-approved`;
+    document.getElementById('projectedTime').textContent = `~${Math.max(1, remaining * 2)} min to finish`;
+  }
+  const cont = document.getElementById('continueBtn');
+  const softWarn = document.getElementById('softWarn');
+  if (allCleared) { cont.disabled = false; cont.style.opacity = '1'; softWarn.style.display = 'none'; }
+  else { cont.disabled = true; cont.style.opacity = '0.5'; softWarn.style.display = 'inline-flex'; }
+}
+
+function renderGroups() {
+  if (state.view === 'set') return renderSetView();
+  const container = document.getElementById('groups');
+  const visibleGroups = state.groups.filter(g => g.severity !== 'soft' || state.showSoftFlag);
+  container.innerHTML = visibleGroups.map(renderGroup).join('');
+
+  updateProgressAndGate(visibleGroups);
+  wireGroupEvents();
+  updatePdfRail();
+}
+
+function wireGroupEvents() {
+  document.querySelectorAll('[data-toggle]').forEach(el => {
+    el.addEventListener('click', (e) => {
+      const gid = el.getAttribute('data-toggle');
+      state.openGroup = state.openGroup === gid ? null : gid;
+      const g = state.groups.find(x => x.id === gid);
+      if (g && state.openGroup) {
+        state.activeDoor = g.doors[0];
+      }
+      renderGroups();
+    });
+  });
+  document.querySelectorAll('[data-fixall]').forEach(el => {
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openModal(el.getAttribute('data-fixall'));
+    });
+  });
+  document.querySelectorAll('[data-fixone]').forEach(el => {
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      openModal(el.getAttribute('data-gid'), el.getAttribute('data-fixone'));
+    });
+  });
+  document.querySelectorAll('.door-row').forEach(row => {
+    row.addEventListener('click', (e) => {
+      if (e.target.closest('button') || e.target.closest('input')) return;
+      state.activeDoor = row.getAttribute('data-door');
+      document.querySelectorAll('.door-row').forEach(r => r.style.outline = 'none');
+      row.style.outline = '2px solid var(--blue-dim)';
+      updatePdfRail();
+    });
+  });
+  document.querySelectorAll('[data-check]').forEach(cb => {
+    cb.addEventListener('change', (e) => {
+      const did = cb.getAttribute('data-check');
+      if (cb.checked) state.cleared.add(did); else state.cleared.delete(did);
+      flashSaved();
+      renderGroups();
+    });
+  });
+  // Tooltip on confidence bar
+  document.querySelectorAll('[data-tip]').forEach(el => {
+    el.addEventListener('mouseenter', (e) => showTip(el, el.getAttribute('data-tip')));
+    el.addEventListener('mouseleave', hideTip);
+  });
+}
+
+// ─────────────────────────────────────────
+// PDF rail
+// ─────────────────────────────────────────
+function renderPdfRows(activeDoor, highlightGroup) {
+  const all = Object.entries(DOORS);
+  const activeIdx = all.findIndex(([k]) => k === activeDoor);
+  const start = Math.max(0, activeIdx - 2);
+  const slice = all.slice(start, start + 6);
+  const rowsHtml = slice.map(([k, d]) => {
+    const hl = k === activeDoor;
+    return `<tr class="${hl ? 'highlight' : ''}">
+      <td>${d.on}</td>
+      <td>${d.hw_set || '<span style="color:#c9542d;font-weight:600">N/A</span>'}</td>
+      <td>${d.heading || '—'}</td>
+      <td>${d.label || '—'}</td>
+      <td>${d.door_type || '<span style="color:#c9542d;font-weight:600">—</span>'}</td>
+      <td>${d.frame_type || '<span style="color:#c9542d;font-weight:600">—</span>'}</td>
+    </tr>`;
+  }).join('');
+  document.getElementById('pdfRows').innerHTML = rowsHtml;
+}
+
+function updatePdfRail() {
+  const d = DOORS[state.activeDoor];
+  if (!d) return;
+  document.getElementById('pdfPagePill').textContent = `Page ${d.page} of 44`;
+  document.getElementById('inlinePdfPagePill').textContent = `Page ${d.page} of 44`;
+  renderPdfRows(state.activeDoor);
+  // Mirror rows into inline PDF too
+  const inlineRows = document.getElementById('inlinePdfRows');
+  if (inlineRows) inlineRows.innerHTML = document.getElementById('pdfRows').innerHTML;
+
+  // Region box: show when active group has a field that's missing for this door
+  const g = state.groups.find(x => x.id === state.openGroup);
+  const box = document.getElementById('regionBox');
+  if (g && g.doors.includes(state.activeDoor) && !state.cleared.has(state.activeDoor)) {
+    box.style.display = 'block';
+    const labelMap = { door_type: 'Door Type (detected)', hand: 'Hand (detected)', fire_rating: 'Fire Rating (detected)' };
+    document.querySelector('#regionBox .rlbl').textContent = labelMap[g.field] || g.field;
+    const guess = {
+      door_type: '— no text detected —',
+      hand: 'RHR · 62% confidence',
+      fire_rating: '— no text detected —',
+    };
+    document.getElementById('regionVal').textContent = guess[g.field] || '';
+    const hintMap = {
+      door_type: "Darrin couldn't parse a value from the door-type column. Draw the region if it's elsewhere on the sheet.",
+      hand: "Hand abbreviation is ambiguous (could be LH or LHR). Please confirm.",
+      fire_rating: "Column 5 is blank for this row. Check the plan for a rating callout nearby.",
+    };
+    document.getElementById('regionHint').textContent = hintMap[g.field] || '';
+  } else {
+    box.style.display = 'none';
+  }
+}
+
+// ─────────────────────────────────────────
+// Modal — stepper (one field at a time when fixing a single door with many missing fields)
+// ─────────────────────────────────────────
+function missingFieldsFor(did) {
+  // A field is "missing" if there's an open group that includes this door for that field
+  const fields = [];
+  state.groups.forEach(g => {
+    if (g.severity === 'soft') return;
+    if (!g.doors.includes(did)) return;
+    if (!(state.naFields[did] && state.naFields[did].has(g.field))) {
+      fields.push({ gid: g.id, field: g.field });
+    }
+  });
+  return fields;
+}
+
+function openModal(groupId, singleDoor) {
+  const g = state.groups.find(x => x.id === groupId);
+  if (!g) return;
+  let steps, stepIdx = 0;
+  if (singleDoor) {
+    // Stepper: one step per missing field on this door
+    const missing = missingFieldsFor(singleDoor);
+    if (missing.length === 0) steps = [{ gid: groupId, field: g.field, did: singleDoor }];
+    else steps = missing.map(m => ({ gid: m.gid, field: m.field, did: singleDoor }));
+    // Start on the field that matched the clicked group
+    const idx = steps.findIndex(s => s.field === g.field);
+    if (idx >= 0) stepIdx = idx;
+    // Point the active door + set for the PDF rail
+    state.activeDoor = singleDoor;
+  } else {
+    // Fix-all: one step, bulk
+    steps = [{ gid: groupId, field: g.field, bulk: true }];
+  }
+  state.modal = { groupId, singleDoor, steps, stepIdx };
+  state.ruleScope = 'none';
+  renderModal();
+  document.getElementById('modalBackdrop').classList.add('open');
+  setTimeout(() => { const i = document.getElementById('modalInput'); if (i) i.focus(); }, 100);
+  updatePdfRail();
+}
+
+function currentStep() { return state.modal && state.modal.steps[state.modal.stepIdx]; }
+
+function renderModal() {
+  const m = state.modal; if (!m) return;
+  const step = currentStep();
+  const g = state.groups.find(x => x.id === step.gid);
+  const fieldLabels = { finish: 'finish', electrified: 'electrified hardware', lc_nomen: 'LC modification', rod_len: 'flushbolt type/rod', double_egress: 'double-egress resolution', function_type: 'lock function', hw_set: 'hardware set', fire_rating: 'fire rating', door_type: 'door type', frame_type: 'frame type', hand: 'hand' };
+  const fieldName = fieldLabels[step.field] || step.field;
+  const isBulk = !!step.bulk;
+  const multiStep = m.steps.length > 1;
+
+  if (isBulk) {
+    const doors = g.doors.filter(d => !state.cleared.has(d));
+    document.getElementById('modalEyebrow').textContent = `Fix for all ${doors.length} opening${doors.length===1?'':'s'}`;
+    document.getElementById('modalTitle').textContent = `Set ${fieldName} for ${doors.length} opening${doors.length===1?'':'s'}`;
+    document.getElementById('modalDesc').textContent = g.darrin;
+    document.getElementById('affectedList').innerHTML = doors.map(did => {
+      const d = DOORS[did];
+      return `<label class="row"><input type="checkbox" checked data-affected="${did}"/><span class="d">${d.on}</span><span class="h">${d.hw_set}</span><span class="l">${d.location||'—'}</span></label>`;
+    }).join('');
+    const prefixes = Array.from(new Set(doors.map(d => DOORS[d].hw_set)));
+    document.getElementById('ruleDesc').innerHTML = prefixes.length === 1
+      ? `When <code>hw_set = ${prefixes[0]}</code>, set <code>${step.field}</code> to the value above.`
+      : `When <code>hw_set</code> matches any of <code>${prefixes.join(', ')}</code>, set <code>${step.field}</code> to the value above.`;
+    document.querySelector('.save-rule').style.display = '';
+  } else {
+    const d = DOORS[step.did];
+    document.getElementById('modalEyebrow').textContent = multiStep
+      ? `Step ${m.stepIdx + 1} of ${m.steps.length} · ${d.on}`
+      : `Fix one · ${d.on}`;
+    document.getElementById('modalTitle').textContent = `Set ${fieldName} for ${d.on}`;
+    document.getElementById('modalDesc').textContent = (g && g.darrin) || '';
+    document.getElementById('affectedList').innerHTML =
+      `<label class="row"><input type="checkbox" checked data-affected="${step.did}" disabled/><span class="d">${d.on}</span><span class="h">${d.hw_set}</span><span class="l">${d.location||'—'}</span></label>`;
+    document.querySelector('.save-rule').style.display = multiStep ? 'none' : '';
+  }
+
+  document.getElementById('fieldLabel').textContent = `Value (${fieldName})`;
+  const input = document.getElementById('modalInput');
+  input.value = '';
+  input.style.borderColor = '';
+  const placeholder = { door_type: 'e.g. A, B, HM-80', hand: 'LH · LHR · RH · RHR · RHRA · DELHR', fire_rating: 'e.g. 45Min, 90Min, N/A', finish: '626 · 630 · US26D · US32D', hw_set: 'e.g. DH1-10, AD4, N/A', rod_len: 'FB31P (auto) or FB32 (constant)', function_type: 'passage · privacy · classroom · storeroom', electrified: 'QC3 · none · advise', lc_nomen: 'QC3 + CON-6P', double_egress: 'CVR panic, no CR', frame_type: 'HM · AL · WD' }[step.field];
+  input.placeholder = placeholder || '';
+
+  document.getElementById('modalSkip').style.display = multiStep ? 'inline-flex' : 'none';
+  document.getElementById('modalApply').textContent = multiStep
+    ? (m.stepIdx === m.steps.length - 1 ? 'Apply · Finish' : 'Apply · Next')
+    : (isBulk ? 'Apply to selected' : 'Apply');
+
+  document.querySelectorAll('.save-rule .scope button').forEach(b => {
+    b.classList.toggle('active', b.getAttribute('data-scope') === 'none');
+  });
+  state.ruleScope = 'none';
+}
+function closeModal() {
+  state.modal = null;
+  document.getElementById('modalBackdrop').classList.remove('open');
+}
+
+document.getElementById('modalCancel').addEventListener('click', closeModal);
+document.getElementById('modalBackdrop').addEventListener('click', (e) => {
+  if (e.target.id === 'modalBackdrop') closeModal();
+});
+document.querySelectorAll('.save-rule .scope button').forEach(b => {
+  b.addEventListener('click', () => {
+    document.querySelectorAll('.save-rule .scope button').forEach(x => x.classList.remove('active'));
+    b.classList.add('active');
+    state.ruleScope = b.getAttribute('data-scope');
+  });
+});
+function applyStep(naValue) {
+  const m = state.modal; if (!m) return;
+  const step = currentStep();
+  const val = naValue || document.getElementById('modalInput').value.trim();
+  if (!val) {
+    const inp = document.getElementById('modalInput');
+    inp.style.borderColor = 'var(--red)'; inp.focus(); return;
+  }
+  const g = state.groups.find(x => x.id === step.gid);
+  const targets = step.bulk
+    ? Array.from(document.querySelectorAll('[data-affected]:checked')).map(x => x.getAttribute('data-affected'))
+    : [step.did];
+  targets.forEach(did => {
+    DOORS[did][step.field] = (val === '__NA__') ? 'N/A' : val;
+    DOORS[did].confidence[step.field] = 1.0;
+    if (val === '__NA__') {
+      state.naFields[did] = state.naFields[did] || new Set();
+      state.naFields[did].add(step.field);
+    }
+    // Only mark door cleared when it has no remaining open fields for non-soft groups
+    const remaining = missingFieldsFor(did).filter(m2 => m2.field !== step.field);
+    if (step.bulk || remaining.length === 0) state.cleared.add(did);
+  });
+  flashSaved();
+  if (state.ruleScope !== 'none' && step.bulk) {
+    const note = `Rule saved (${state.ruleScope === 'project' ? 'this project' : 'all future projects'})`;
+    document.getElementById('saveStatus').textContent = note;
+    setTimeout(() => { document.getElementById('saveStatus').textContent = 'Saved just now'; }, 2400);
+  }
+  // Advance stepper
+  if (m.steps.length > 1 && m.stepIdx < m.steps.length - 1) {
+    m.stepIdx += 1; renderModal(); renderGroups();
+  } else {
+    closeModal(); renderGroups();
+  }
+}
+
+document.getElementById('modalApply').addEventListener('click', () => applyStep());
+document.getElementById('modalNA').addEventListener('click', () => {
+  // Set input to N/A then apply
+  document.getElementById('modalInput').value = 'N/A';
+  applyStep('__NA__');
+});
+document.getElementById('modalSkip').addEventListener('click', () => {
+  const m = state.modal; if (!m) return;
+  if (m.stepIdx < m.steps.length - 1) { m.stepIdx += 1; renderModal(); }
+  else closeModal();
+});
+document.getElementById('modalDraw').addEventListener('click', () => {
+  enterDrawMode();
+});
+
+// ─────────────────────────────────────────
+// Draw-region mode
+// ─────────────────────────────────────────
+function enterDrawMode() {
+  const step = currentStep(); if (!step || step.bulk) return;
+  state.drawMode = true;
+  document.getElementById('modalBackdrop').classList.remove('open');
+  const banner = document.getElementById('drawBanner');
+  banner.style.display = 'block';
+  document.getElementById('drawStepLbl').textContent = state.modal.steps.length > 1
+    ? `Step ${state.modal.stepIdx + 1} of ${state.modal.steps.length}` : 'Step 1 of 1';
+  const fieldName = { finish: 'finish', electrified: 'electrified hardware', lc_nomen: 'LC modification', rod_len: 'flushbolt type', double_egress: 'double-egress resolution', function_type: 'lock function', hw_set: 'hardware set', door_type: 'door type', hand: 'hand', fire_rating: 'fire rating', frame_type: 'frame type' }[step.field] || step.field;
+  document.getElementById('drawFieldName').textContent = fieldName;
+  document.getElementById('drawDoorLbl').textContent = DOORS[step.did].on;
+
+  const canvas = document.getElementById('drawCanvas');
+  canvas.style.display = 'block';
+  const rect = document.getElementById('drawRect');
+  rect.style.display = 'none';
+
+  let dragging = false, sx = 0, sy = 0;
+  const onDown = (e) => {
+    const r = canvas.getBoundingClientRect();
+    sx = e.clientX - r.left; sy = e.clientY - r.top;
+    dragging = true;
+    rect.style.left = sx + 'px'; rect.style.top = sy + 'px';
+    rect.style.width = '0'; rect.style.height = '0'; rect.style.display = 'block';
+  };
+  const onMove = (e) => {
+    if (!dragging) return;
+    const r = canvas.getBoundingClientRect();
+    const x = e.clientX - r.left; const y = e.clientY - r.top;
+    rect.style.left = Math.min(sx, x) + 'px';
+    rect.style.top = Math.min(sy, y) + 'px';
+    rect.style.width = Math.abs(x - sx) + 'px';
+    rect.style.height = Math.abs(y - sy) + 'px';
+  };
+  const onUp = () => {
+    if (!dragging) return;
+    dragging = false;
+    // Simulate OCR: pick a plausible value for the field
+    const capture = {
+      door_type: 'A',
+      hand: 'RHRA',
+      fire_rating: '90Min',
+      finish: '626',
+      hw_set: 'N/A',
+      rod_len: 'FB31P (auto)',
+      function_type: 'passage (L9010)',
+      electrified: 'QC3',
+      lc_nomen: 'QC3 + CON-6P',
+      double_egress: 'CVR panic, no CR',
+      frame_type: 'HM',
+    }[step.field] || 'captured';
+    exitDrawMode();
+    // Re-open modal with captured value prefilled
+    document.getElementById('modalBackdrop').classList.add('open');
+    const inp = document.getElementById('modalInput');
+    inp.value = capture;
+    inp.style.borderColor = 'var(--green)';
+    const note = document.createElement('div');
+    flashCaptureHint(capture);
+  };
+  canvas.onmousedown = onDown;
+  canvas.onmousemove = onMove;
+  canvas.onmouseup = onUp;
+  canvas.onmouseleave = onUp;
+
+  window.addEventListener('keydown', escExit);
+  function escExit(e) {
+    if (e.key === 'Escape') { exitDrawMode(); document.getElementById('modalBackdrop').classList.add('open'); window.removeEventListener('keydown', escExit); }
+  }
+}
+function exitDrawMode() {
+  state.drawMode = false;
+  document.getElementById('drawBanner').style.display = 'none';
+  document.getElementById('drawCanvas').style.display = 'none';
+  const rect = document.getElementById('drawRect');
+  setTimeout(() => { rect.style.display = 'none'; }, 800);
+}
+function flashCaptureHint(val) {
+  const el = document.getElementById('saveStatus');
+  el.textContent = `Captured "${val}" from PDF`;
+  setTimeout(() => { el.textContent = 'Saved just now'; }, 2200);
+}
+
+// ─────────────────────────────────────────
+// Disclosure (auto-approved)
+// ─────────────────────────────────────────
+document.getElementById('disclosure').addEventListener('click', () => {
+  const d = document.getElementById('disclosure');
+  const b = document.getElementById('disclosureBody');
+  d.classList.toggle('open');
+  b.classList.toggle('open');
+});
+
+// ─────────────────────────────────────────
+// Save status
+// ─────────────────────────────────────────
+function flashSaved() {
+  const el = document.getElementById('saveStatus');
+  el.textContent = 'Saving…';
+  setTimeout(() => { el.textContent = 'Saved just now'; }, 700);
+}
+
+// ─────────────────────────────────────────
+// Theme toggle
+// ─────────────────────────────────────────
+document.getElementById('themeToggle').addEventListener('click', () => {
+  const cur = document.documentElement.getAttribute('data-theme');
+  const next = cur === 'light' ? 'dark' : 'light';
+  document.documentElement.setAttribute('data-theme', next);
+  document.getElementById('themeToggle').textContent = next === 'light' ? '☾ Dark' : '☀ Light';
+  // Sync tweak toggle
+  const tgGroup = document.querySelector('[data-tweak="theme"]');
+  if (tgGroup) {
+    tgGroup.querySelectorAll('button').forEach(b => b.classList.toggle('active', b.getAttribute('data-val') === next));
+  }
+});
+
+// ─────────────────────────────────────────
+// Tooltip
+// ─────────────────────────────────────────
+const tip = document.getElementById('tooltip');
+function showTip(el, text) {
+  tip.textContent = text;
+  const r = el.getBoundingClientRect();
+  tip.style.left = (r.left + r.width / 2 - 110) + 'px';
+  tip.style.top = (r.top - 42) + 'px';
+  tip.classList.add('open');
+}
+function hideTip() { tip.classList.remove('open'); }
+
+// ─────────────────────────────────────────
+// Tweaks (Edit Mode contract)
+// ─────────────────────────────────────────
+window.addEventListener('message', (e) => {
+  if (!e.data) return;
+  if (e.data.type === '__activate_edit_mode') document.getElementById('tweaks').classList.add('open');
+  if (e.data.type === '__deactivate_edit_mode') document.getElementById('tweaks').classList.remove('open');
+});
+try { window.parent.postMessage({ type: '__edit_mode_available' }, '*'); } catch (e) {}
+
+// Also allow local toggle via shortcut
+window.addEventListener('keydown', (e) => {
+  if (e.key === 't' && (e.metaKey || e.ctrlKey)) {
+    e.preventDefault();
+    document.getElementById('tweaks').classList.toggle('open');
+  }
+});
+
+// Tweak segmented controls
+document.querySelectorAll('.tweak-row .seg').forEach(seg => {
+  const tweak = seg.getAttribute('data-tweak');
+  seg.querySelectorAll('button').forEach(b => {
+    b.addEventListener('click', () => {
+      seg.querySelectorAll('button').forEach(x => x.classList.remove('active'));
+      b.classList.add('active');
+      const val = b.getAttribute('data-val');
+      if (tweak === 'primary') state.primaryMode = val;
+      if (tweak === 'rail') {
+        state.railMode = val;
+        document.body.setAttribute('data-rail', val);
+      }
+      if (tweak === 'density') {
+        state.density = val;
+        document.body.setAttribute('data-density', val);
+      }
+      if (tweak === 'theme') {
+        document.documentElement.setAttribute('data-theme', val);
+        document.getElementById('themeToggle').textContent = val === 'light' ? '☾ Dark' : '☀ Light';
+      }
+      renderGroups();
+    });
+  });
+});
+document.getElementById('softFlagToggle').addEventListener('change', (e) => {
+  state.showSoftFlag = e.target.checked;
+  renderGroups();
+});
+
+// View toggle (door / set)
+document.querySelectorAll('#viewToggle button').forEach(b => {
+  b.addEventListener('click', () => {
+    document.querySelectorAll('#viewToggle button').forEach(x => x.classList.remove('active'));
+    b.classList.add('active');
+    state.view = b.getAttribute('data-view');
+    state.openGroup = null;
+    renderGroups();
+  });
+});
+// Density toggle (surfaced)
+document.querySelectorAll('#densityToggle button').forEach(b => {
+  if (b.getAttribute('data-density') === state.density) {
+    document.querySelectorAll('#densityToggle button').forEach(x => x.classList.remove('active'));
+    b.classList.add('active');
+  }
+  b.addEventListener('click', () => {
+    document.querySelectorAll('#densityToggle button').forEach(x => x.classList.remove('active'));
+    b.classList.add('active');
+    state.density = b.getAttribute('data-density');
+    document.body.setAttribute('data-density', state.density);
+    try { localStorage.setItem('rh_density', state.density); } catch (e) {}
+    // Sync the Tweaks panel
+    const seg = document.querySelector('[data-tweak="density"]');
+    if (seg) seg.querySelectorAll('button').forEach(x => x.classList.toggle('active', x.getAttribute('data-val') === state.density));
+  });
+});
+
+// Rail grip drag
+(function initRailGrip() {
+  const grip = document.getElementById('railGrip');
+  if (!grip) return;
+  let dragging = false;
+  grip.addEventListener('mousedown', (e) => {
+    dragging = true; grip.classList.add('dragging');
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    e.preventDefault();
+  });
+  window.addEventListener('mousemove', (e) => {
+    if (!dragging) return;
+    const w = Math.min(760, Math.max(340, window.innerWidth - e.clientX));
+    document.documentElement.style.setProperty('--rail-w', w + 'px');
+  });
+  window.addEventListener('mouseup', () => {
+    if (!dragging) return;
+    dragging = false; grip.classList.remove('dragging');
+    document.body.style.cursor = ''; document.body.style.userSelect = '';
+    const w = getComputedStyle(document.documentElement).getPropertyValue('--rail-w');
+    try { localStorage.setItem('rh_rail_w', parseInt(w, 10)); } catch (e) {}
+  });
+})();
+
+// Initial render
+renderGroups();
+</script>
+
+</body>
+</html>
