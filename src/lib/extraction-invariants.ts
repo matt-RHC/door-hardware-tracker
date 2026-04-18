@@ -38,6 +38,7 @@ export type InvariantRule =
   | 'location_matches_fire_rating'
   | 'heading_door_set_mismatch'
   | 'per_leaf_qty_sum_mismatch'
+  | 'leaf_count_consistency'
 
 export type InvariantSeverity = 'blocker' | 'warning'
 
@@ -389,6 +390,26 @@ export function runInvariants(
           })
         }
       }
+    }
+  }
+
+  // (i) leaf_count_consistency — if any hardware_item has leaf_side='inactive',
+  // the opening must have leaf_count >= 2. leaf_side='inactive' is exclusively
+  // set on pair-specific rows (Door (Inactive Leaf) and hinge-split inactive);
+  // it is never set on single-leaf openings. A violation means the staging loop
+  // wrote leaf_count=1 while buildPerOpeningItems detected a pair — the UI
+  // would hide the Shared/Leaf 1/Leaf 2 tab bar for a pair door.
+  for (const opening of openings) {
+    const ois = itemsByOpening.get(opening.id) ?? []
+    const hasInactiveLeafItems = ois.some(i => i.leaf_side === 'inactive')
+    if (hasInactiveLeafItems && opening.leaf_count < 2) {
+      violations.push({
+        rule: 'leaf_count_consistency',
+        opening_id: opening.id,
+        door_number: opening.door_number,
+        details: `leaf_count=${opening.leaf_count} but hardware_items contain leaf_side='inactive' rows — pair detection disagreed between staging loop and item builder.`,
+        severity: 'blocker',
+      })
     }
   }
 
