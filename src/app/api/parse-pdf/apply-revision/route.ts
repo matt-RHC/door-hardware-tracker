@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import type { DoorEntry, HardwareSet } from '@/lib/types'
-import { buildPerOpeningItems, buildDoorToSetMap, normalizeQuantities } from '@/lib/parse-pdf-helpers'
+import {
+  buildPerOpeningItems,
+  buildDoorToSetMap,
+  normalizeQuantities,
+  detectIsPair,
+  normalizeDoorNumber,
+} from '@/lib/parse-pdf-helpers'
 import { logActivity } from '@/lib/activity-log'
 
 // User decisions from the wizard
@@ -133,6 +139,20 @@ export async function POST(request: NextRequest) {
 
       const hwSet = setMap.get(parsedDoor.hw_set)
 
+      // Pair detection for leaf_count: mirror save/route.ts so apply-revision
+      // writes the SAME value a fresh extraction would. doorToSetMap is keyed
+      // by normalized door number; fall back to the legacy setMap by hw_set.
+      // DoorEntry.leaf_count is authoritative when present (the wizard already
+      // computed it from pair detection); otherwise recompute via detectIsPair.
+      const doorKey = normalizeDoorNumber(parsedDoor.door_number)
+      const resolvedSet = doorToSetMap.get(doorKey) ?? setMap.get(parsedDoor.hw_set ?? '')
+      const doorInfo = {
+        door_type: parsedDoor.door_type || '',
+        frame_type: parsedDoor.frame_type || '',
+      }
+      const resolvedLeafCount =
+        parsedDoor.leaf_count ?? (detectIsPair(resolvedSet, doorInfo) ? 2 : 1)
+
       // Update the opening fields
       const { error: updateError } = await (supabase as any)
         .from('openings')
@@ -145,6 +165,11 @@ export async function POST(request: NextRequest) {
           fire_rating: parsedDoor.fire_rating || null,
           hand: parsedDoor.hand || null,
           pdf_page: hwSet?.pdf_page ?? null,
+          // Phase 2 (PR-B): persist pair detection on revision path. Omitting
+          // this made every updated opening revert to leaf_count=1 (DB default),
+          // breaking the per-leaf UI tabs for users who re-extracted onto a
+          // pair-laden project. Save/route.ts writes the same field.
+          leaf_count: resolvedLeafCount,
         })
         .eq('id', decision.existing_id)
 
@@ -237,18 +262,32 @@ export async function POST(request: NextRequest) {
     const newDoors = (new_door_numbers ?? []).map(dn => doorMap.get(dn)).filter(Boolean) as DoorEntry[]
 
     if (newDoors.length > 0) {
-      const openingRows = newDoors.map(door => ({
-        project_id: projectId,
-        door_number: door.door_number,
-        hw_set: door.hw_set || null,
-        hw_heading: setMap.get(door.hw_set)?.heading || null,
-        location: door.location || null,
-        door_type: door.door_type || null,
-        frame_type: door.frame_type || null,
-        fire_rating: door.fire_rating || null,
-        hand: door.hand || null,
-        pdf_page: setMap.get(door.hw_set)?.pdf_page ?? null,
-      }))
+      const openingRows = newDoors.map(door => {
+        // Pair detection mirrors save/route.ts:170-191 so apply-revision writes
+        // the SAME leaf_count a fresh extraction would. See PR-B note above.
+        const doorKey = normalizeDoorNumber(door.door_number)
+        const resolvedSet = doorToSetMap.get(doorKey) ?? setMap.get(door.hw_set ?? '')
+        const doorInfo = {
+          door_type: door.door_type || '',
+          frame_type: door.frame_type || '',
+        }
+        const resolvedLeafCount =
+          door.leaf_count ?? (detectIsPair(resolvedSet, doorInfo) ? 2 : 1)
+        return {
+          project_id: projectId,
+          door_number: door.door_number,
+          hw_set: door.hw_set || null,
+          hw_heading: setMap.get(door.hw_set)?.heading || null,
+          location: door.location || null,
+          door_type: door.door_type || null,
+          frame_type: door.frame_type || null,
+          fire_rating: door.fire_rating || null,
+          hand: door.hand || null,
+          pdf_page: setMap.get(door.hw_set)?.pdf_page ?? null,
+          // Phase 2 (PR-B): persist pair detection on new-door insert path.
+          leaf_count: resolvedLeafCount,
+        }
+      })
 
       const insertedOpenings: Array<{ id: string; door_number: string; hw_set: string }> = []
 
