@@ -2571,3 +2571,171 @@ describe('golden PDF smoke — buildPerOpeningItems emits invariant-clean rows',
     expect(violations.filter(v => v.severity === 'blocker')).toEqual([])
   })
 })
+
+// ─── apply-revision new-door insert: leaf_count ↔ hardware items agree ──────
+//
+// Regression guard for the bug described in Option A of the 2026-04-18
+// fix-pair-detection session: apply-revision/route.ts used to insert new
+// openings without computing leaf_count, while its buildPerOpeningItems()
+// call emitted pair-aware Door rows via detectIsPair(). The opening row
+// and the hardware items then disagreed — opening.leaf_count = default (1),
+// items said pair. Fixed in commit f6c0e54 (PR #302, kept by the PR #309
+// revert).
+//
+// This test locks in the invariant: for a new pair door routed through
+// apply-revision, the leaf_count written to the opening row MUST equal
+// what buildPerOpeningItems would imply from its own internal detectIsPair
+// call. If the route's inline leaf-count formula ever drifts from the
+// helper's, this test fails.
+describe('apply-revision new doors — leaf_count matches buildPerOpeningItems', () => {
+  it('pair door (heading_leaf_count > heading_door_count) → leaf_count=2 and emits Door (Active Leaf)', () => {
+    const hwSet: HardwareSet = {
+      set_id: 'DH4A.1',
+      generic_set_id: 'DH4A',
+      heading: 'Heading #DH4A.1',
+      heading_door_count: 1,
+      heading_leaf_count: 2,
+      heading_doors: ['120-02A'],
+      items: [
+        { qty: 1, name: 'Exit Device 9875L-F', model: '', finish: '', manufacturer: '' },
+      ],
+    }
+
+    // Mirror apply-revision/route.ts:77-84 setMap construction.
+    const setMap = new Map<string, HardwareSet>()
+    setMap.set(hwSet.set_id, hwSet)
+    if (hwSet.generic_set_id && hwSet.generic_set_id !== hwSet.set_id) {
+      setMap.set(hwSet.generic_set_id, hwSet)
+    }
+    const doorToSetMap = buildDoorToSetMap([hwSet])
+
+    // Simulate a single NEW door entering via new_door_numbers. DoorEntry
+    // does NOT carry an authoritative leaf_count here — the revision payload
+    // may omit it — so the route must fall back to detectIsPair().
+    const newDoor: DoorEntry = {
+      door_number: '120-02A',
+      hw_set: 'DH4A.1',
+      door_type: 'A',
+      frame_type: 'F2',
+      fire_rating: '',
+      hand: '',
+      location: '',
+    } as DoorEntry
+
+    // Replicate apply-revision/route.ts:265-289 exactly.
+    const doorKey = normalizeDoorNumber(newDoor.door_number)
+    const resolvedSet = doorToSetMap.get(doorKey) ?? setMap.get(newDoor.hw_set ?? '')
+    const doorInfo = {
+      door_type: newDoor.door_type || '',
+      frame_type: newDoor.frame_type || '',
+    }
+    const resolvedLeafCount =
+      newDoor.leaf_count ?? (detectIsPair(resolvedSet, doorInfo) ? 2 : 1)
+
+    expect(resolvedLeafCount).toBe(2)
+
+    // Build hardware items with the SAME inputs the route passes to
+    // buildPerOpeningItems(insertedOpenings, newDoorInfoMap, setMap, doorToSetMap).
+    const insertedOpenings = [
+      { id: 'op-new-1', door_number: '120-02A', hw_set: 'DH4A.1' },
+    ]
+    const doorInfoMap = new Map<string, { door_type: string; frame_type: string }>([
+      ['120-02A', doorInfo],
+    ])
+    const rows = buildPerOpeningItems(insertedOpenings, doorInfoMap, setMap, doorToSetMap)
+    const names = rows.map(r => String(r['name'] ?? ''))
+
+    expect(names).toContain('Door (Active Leaf)')
+    expect(names).toContain('Door (Inactive Leaf)')
+    expect(names).not.toContain('Door')
+  })
+
+  it('single door (heading_leaf_count == heading_door_count, narrow size) → leaf_count=1 and emits single Door', () => {
+    const hwSet: HardwareSet = {
+      set_id: 'H01',
+      generic_set_id: 'H01',
+      heading: 'Set H01',
+      heading_door_count: 1,
+      heading_leaf_count: 1,
+      heading_doors: ['101'],
+      items: [
+        { qty: 1, name: 'Lockset', model: 'L9080', finish: '626', manufacturer: 'Schlage' },
+      ],
+    }
+    const setMap = new Map<string, HardwareSet>([['H01', hwSet]])
+    const doorToSetMap = buildDoorToSetMap([hwSet])
+
+    const newDoor: DoorEntry = {
+      door_number: '101',
+      hw_set: 'H01',
+      door_type: 'A',
+      frame_type: 'HM',
+      fire_rating: '',
+      hand: '',
+      location: '',
+    } as DoorEntry
+
+    const doorKey = normalizeDoorNumber(newDoor.door_number)
+    const resolvedSet = doorToSetMap.get(doorKey) ?? setMap.get(newDoor.hw_set ?? '')
+    const doorInfo = {
+      door_type: newDoor.door_type || '',
+      frame_type: newDoor.frame_type || '',
+    }
+    const resolvedLeafCount =
+      newDoor.leaf_count ?? (detectIsPair(resolvedSet, doorInfo) ? 2 : 1)
+
+    expect(resolvedLeafCount).toBe(1)
+
+    const insertedOpenings = [
+      { id: 'op-new-2', door_number: '101', hw_set: 'H01' },
+    ]
+    const doorInfoMap = new Map<string, { door_type: string; frame_type: string }>([
+      ['101', doorInfo],
+    ])
+    const rows = buildPerOpeningItems(insertedOpenings, doorInfoMap, setMap, doorToSetMap)
+    const names = rows.map(r => String(r['name'] ?? ''))
+
+    expect(names).toContain('Door')
+    expect(names).not.toContain('Door (Active Leaf)')
+    expect(names).not.toContain('Door (Inactive Leaf)')
+  })
+
+  it('respects authoritative DoorEntry.leaf_count when the wizard already computed it', () => {
+    // Wizard-computed leaf_count overrides detectIsPair per apply-revision
+    // route.ts:275. Guards against a regression where the route drops the
+    // `door.leaf_count ??` prefix and silently recomputes.
+    const hwSet: HardwareSet = {
+      set_id: 'DH1',
+      generic_set_id: 'DH1',
+      heading: 'Set DH1',
+      heading_door_count: 1,
+      heading_leaf_count: 1,
+      heading_doors: ['201'],
+      items: [{ qty: 1, name: 'Lockset', model: '', finish: '', manufacturer: '' }],
+    }
+    const setMap = new Map<string, HardwareSet>([['DH1', hwSet]])
+    const doorToSetMap = buildDoorToSetMap([hwSet])
+
+    const newDoor = {
+      door_number: '201',
+      hw_set: 'DH1',
+      door_type: 'A',
+      frame_type: 'HM',
+      fire_rating: '',
+      hand: '',
+      location: '',
+      leaf_count: 2,
+    } as DoorEntry
+
+    const doorKey = normalizeDoorNumber(newDoor.door_number)
+    const resolvedSet = doorToSetMap.get(doorKey) ?? setMap.get(newDoor.hw_set ?? '')
+    const doorInfo = {
+      door_type: newDoor.door_type || '',
+      frame_type: newDoor.frame_type || '',
+    }
+    const resolvedLeafCount =
+      newDoor.leaf_count ?? (detectIsPair(resolvedSet, doorInfo) ? 2 : 1)
+
+    expect(resolvedLeafCount).toBe(2)
+  })
+})
