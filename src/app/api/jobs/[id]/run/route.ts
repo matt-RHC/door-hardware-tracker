@@ -1223,11 +1223,14 @@ export async function POST(
       )
     }
 
-    const doorInfoMap = new Map<string, { door_type: string; frame_type: string }>()
+    // location included so detectIsPair's secondary size signal can fire
+    // when heading_leaf_count is absent on per-door sub-sets.
+    const doorInfoMap = new Map<string, { door_type: string; frame_type: string; location: string }>()
     for (const d of filteredDoors) {
       doorInfoMap.set(d.door_number, {
         door_type: d.door_type || '',
         frame_type: d.frame_type || '',
+        location: d.location || '',
       })
     }
 

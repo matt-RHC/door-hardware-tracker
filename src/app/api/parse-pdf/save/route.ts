@@ -150,12 +150,15 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Build doorInfoMap (needed by both staging and production paths)
-    const doorInfoMap = new Map<string, { door_type: string; frame_type: string }>()
+    // Build doorInfoMap (needed by both staging and production paths).
+    // location is included so detectIsPair's secondary size signal can fire
+    // for PDFs where heading_leaf_count is absent on sub-sets.
+    const doorInfoMap = new Map<string, { door_type: string; frame_type: string; location: string }>()
     for (const door of activeDoors) {
       doorInfoMap.set(door.door_number, {
         door_type: door.door_type || '',
         frame_type: door.frame_type || '',
+        location: door.location || '',
       })
     }
 

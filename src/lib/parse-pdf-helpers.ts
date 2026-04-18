@@ -2703,7 +2703,7 @@ export function wouldProduceZeroItems(
  */
 export function buildPerOpeningItems(
   openings: Array<{ id: string; door_number: string; hw_set: string | null }>,
-  doorInfoMap: Map<string, { door_type: string; frame_type: string }>,
+  doorInfoMap: Map<string, { door_type: string; frame_type: string; location?: string }>,
   setMap: Map<string, HardwareSet>,
   doorToSetMap: Map<string, HardwareSet>,
   fkColumn: 'opening_id' | 'staging_opening_id' = 'opening_id',
