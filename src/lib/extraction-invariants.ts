@@ -25,6 +25,7 @@ import type { Database } from '@/lib/types/database'
 import type { HardwareSet } from '@/lib/types'
 import { classifyItemScope, normalizeDoorNumber } from '@/lib/parse-pdf-helpers'
 import { inferHandingDirection } from '@/lib/hardware-handing-filter'
+import { classifyItem } from '@/lib/hardware-taxonomy'
 
 // ── Rule identifiers ────────────────────────────────────────────────────────
 //
@@ -41,6 +42,7 @@ export type InvariantRule =
   | 'per_leaf_qty_sum_mismatch'
   | 'leaf_count_consistency'
   | 'handing_consistency'
+  | 'pair_leaf_hinge_duplication'
 
 export type InvariantSeverity = 'blocker' | 'warning'
 
@@ -414,6 +416,38 @@ export function runInvariants(
             })
           }
         }
+      }
+    }
+
+    // (k) pair_leaf_hinge_duplication — on pair openings, each (name,
+    //     model) standard-hinge tuple must have at most one row per
+    //     leaf_side. Fires when consolidatePairLeafHingeRows could not
+    //     safely resolve a per-leaf duplicate (e.g. three+ rows, mismatched
+    //     electric-hinge delta, or no electric hinge present) and the
+    //     hinge-split branch emitted duplicates onto the same leaf.
+    //     Warning severity per Matthew's 2026-04-18 decision "B":
+    //     observability first, data-mutation second — the user sees the
+    //     flag at save/promote time and can correct it upstream.
+    if (opening.leaf_count === LEAF_COUNT_PAIR) {
+      const hingeCounts = new Map<string, number>()
+      for (const item of ois) {
+        const itemName = item.name ?? ''
+        if (!itemName || DOOR_NAME_ANY.test(itemName) || FRAME_NAME.test(itemName)) continue
+        if (classifyItem(itemName, undefined, item.model ?? undefined) !== 'hinges') continue
+        const side = item.leaf_side ?? 'unknown'
+        const key = `${itemName.trim().toLowerCase()}::${(item.model ?? '').trim().toLowerCase()}::${side}`
+        hingeCounts.set(key, (hingeCounts.get(key) ?? 0) + 1)
+      }
+      for (const [key, count] of hingeCounts.entries()) {
+        if (count <= 1) continue
+        const [name, model, side] = key.split('::')
+        violations.push({
+          rule: 'pair_leaf_hinge_duplication',
+          opening_id: opening.id,
+          door_number: opening.door_number,
+          details: `Pair opening has ${count} standard-hinge rows on leaf_side="${side}" with the same (name="${name}", model="${model}"). Consolidation heuristic did not resolve — review upstream schedule.`,
+          severity: 'warning',
+        })
       }
     }
   }

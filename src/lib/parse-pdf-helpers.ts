@@ -48,7 +48,7 @@ import type {
   ExtractionConfidence,
 } from '@/lib/types/confidence'
 import { extractJSON } from '@/lib/extractJSON'
-import { TAXONOMY_REGEX_CACHE, classifyItem, scanElectricHinges, isAsymmetricHingeSplit, getPairLeafPlacement, PAIR_LEAF_PLACEMENT, type InstallScope } from '@/lib/hardware-taxonomy'
+import { TAXONOMY_REGEX_CACHE, classifyItem, scanElectricHinges, isAsymmetricHingeSplit, consolidatePairLeafHingeRows, getPairLeafPlacement, PAIR_LEAF_PLACEMENT, type InstallScope } from '@/lib/hardware-taxonomy'
 import { createAdminSupabaseClient } from '@/lib/supabase/admin'
 
 /**
@@ -3013,8 +3013,27 @@ export function buildPerOpeningItems(
     if ((hwSet?.items?.length ?? 0) > 0) {
       // Pre-scan for electric hinges on pair doors so we can adjust
       // standard hinge quantities per-leaf.
-      const setItems = hwSet?.items ?? []
-      const { totalElectricQty: totalElectricHingeQty } = scanElectricHinges(setItems, isPair)
+      const rawSetItems = hwSet?.items ?? []
+      const { totalElectricQty: totalElectricHingeQty } = scanElectricHinges(rawSetItems, isPair)
+
+      // ── Per-leaf hinge duplicate consolidation (110-01B DH1 fix) ──
+      // Python's extractor emits per-leaf standard-hinge counts as
+      // separate rows on electrified pair schedules — e.g. qty=3 for
+      // the reduced active-leaf count and qty=4 for the inactive-leaf
+      // count. The hinge-split branch below expects a single standard-
+      // hinge entry per set; two entries cause it to emit 4 rows
+      // instead of 2. consolidatePairLeafHingeRows conservatively
+      // collapses (qty, raw-qty) pairs whose delta matches the
+      // electric-hinge total, leaving all other shapes untouched for
+      // the `pair_leaf_hinge_duplication` invariant to surface.
+      const { items: setItems, consolidated: consolidatedHingeRows } =
+        consolidatePairLeafHingeRows(rawSetItems, isPair, totalElectricHingeQty)
+      if (consolidatedHingeRows > 0) {
+        console.debug(
+          `[build] ${hwSet?.set_id ?? 'unknown'} opening=${opening.door_number}: ` +
+          `consolidated ${consolidatedHingeRows} per-leaf hinge duplicate(s) (electric=${totalElectricHingeQty})`
+        )
+      }
 
       for (const item of setItems) {
         // ── Phantom structural-row dedupe ──
