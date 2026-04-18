@@ -13,9 +13,11 @@ import { scoreExtraction } from '@/lib/confidence-scoring'
 import { findPageForSet } from '@/lib/punch-cards'
 import {
   createExtractionRun,
+  updateExtractionRun,
   writeStagingData,
   type StagingOpening,
 } from '@/lib/extraction-staging'
+import { toDarrinConfidence, type DarrinConfidence } from '@/lib/types'
 import {
   callPdfplumber,
   callDarrinColumnReview,
@@ -509,6 +511,11 @@ export async function POST(
   const projectId = claimed.project_id
   const pdfStoragePath = claimed.pdf_storage_path
 
+  // Hoisted so the catch block can mark this run failed if the row was
+  // created (created at start of Phase 4). Stays undefined if the error
+  // fires before Phase 4 — markRunFailed bails on undefined.
+  let runId: string | undefined
+
   try {
     // ══════════════════════════════════════════════════════════════
     // Phase 1: Fetch PDF from storage
@@ -679,9 +686,9 @@ export async function POST(
 
     // Create the extraction_runs row up front so its id is available to
     // Darrin call sites in processChunk. Status starts as 'extracting' and
-    // is updated to its terminal value during Phase 6. Linking the run to
+    // is updated to its terminal value during Phase 7. Linking the run to
     // the job here too — same single round-trip we used to make later.
-    const runId = await createExtractionRun(adminSupabase, {
+    runId = await createExtractionRun(adminSupabase, {
       projectId,
       userId: claimed.created_by,
       pdfStoragePath,
@@ -701,6 +708,9 @@ export async function POST(
     let extractedDoors: DoorEntry[]
     let extractedSets: HardwareSet[]
     let extractedReferenceCodes: Array<{ code_type: string; code: string; full_name: string }> = []
+    // Worst Darrin CP2 self-reported confidence across chunks. null when no
+    // chunk supplied the field (call failed on every chunk, or model omitted).
+    let darrinWorstConfidence: DarrinConfidence | null = null
     const allQtyFlags: NonNullable<DarrinQuantityCheck['flags']> = []
     const allQtyComplianceIssues: NonNullable<DarrinQuantityCheck['compliance_issues']> = []
     let failedChunks: Array<{ index: number; error: string }> = []
@@ -761,6 +771,10 @@ export async function POST(
           allDoors.push(...chunkResult.doors)
           allSets.push(...chunkResult.hardwareSets)
           allReferenceCodes.push(...chunkResult.referenceCodes)
+          darrinWorstConfidence = pickWorseDarrinConfidence(
+            darrinWorstConfidence,
+            chunkResult.darrinPostExtractionConfidence,
+          )
 
           if (chunkResult.darrinQuantityCheck) {
             allQtyFlags.push(...(chunkResult.darrinQuantityCheck.flags ?? []))
@@ -799,6 +813,7 @@ export async function POST(
       extractedSets = singleResult.hardwareSets
       extractedReferenceCodes = singleResult.referenceCodes
       extractionConfidence = singleResult.confidence
+      darrinWorstConfidence = singleResult.darrinPostExtractionConfidence
 
       if (singleResult.darrinQuantityCheck) {
         allQtyFlags.push(...(singleResult.darrinQuantityCheck.flags ?? []))
@@ -1462,6 +1477,34 @@ export async function POST(
       duration_ms: durationMs,
     })
 
+    // Finalize the extraction_runs row. The row was created at the start of
+    // Phase 4 with status='extracting' and only the PDF metadata; until this
+    // call lands it stays stuck in 'extracting' forever. Confidence prefers
+    // Darrin's self-reported value when present, falling back to our local
+    // computed score (extractionConfidence). Failures are warned, not
+    // thrown — a finalize error must not stop a successful job from
+    // returning success to the caller.
+    const finalConfidence: 'high' | 'medium' | 'low' | undefined =
+      darrinWorstConfidence
+        ?? toDarrinConfidence(extractionConfidence?.overall, 'medium')
+    try {
+      await updateExtractionRun(adminSupabase, runId, {
+        status: extractionIsPartial ? 'completed_with_issues' : 'reviewing',
+        confidence: finalConfidence,
+        confidenceScore: extractionConfidence?.score,
+        doorsExtracted: openingsCount,
+        hwSetsExtracted: extractedSets.length,
+        referenceCodesExtracted: extractedReferenceCodes.length,
+        completedAt: new Date().toISOString(),
+        durationMs,
+      })
+    } catch (finalizeErr) {
+      console.warn(
+        `[job-orchestrator] Job ${jobId}: extraction_runs finalize failed:`,
+        finalizeErr instanceof Error ? finalizeErr.message : String(finalizeErr),
+      )
+    }
+
     console.log(`[job-orchestrator] Job ${jobId}: completed in ${durationMs}ms — ${openingsCount} openings, ${itemsCount} items`)
 
     return NextResponse.json({
@@ -1480,6 +1523,27 @@ export async function POST(
   } catch (error) {
     const durationMs = Date.now() - startTime
 
+    // Mark the extraction_runs row failed if it was created. The row is
+    // created at the start of Phase 4, so any error before that leaves
+    // runId undefined — bail in that case. Wrapped so a finalize error
+    // can't mask the original error returned to the caller.
+    const markRunFailed = async (msg: string) => {
+      if (!runId) return
+      try {
+        await updateExtractionRun(adminSupabase, runId, {
+          status: 'failed',
+          completedAt: new Date().toISOString(),
+          durationMs,
+          errorMessage: msg,
+        })
+      } catch (finalizeErr) {
+        console.warn(
+          `[job-orchestrator] Job ${jobId}: extraction_runs failure-finalize failed:`,
+          finalizeErr instanceof Error ? finalizeErr.message : String(finalizeErr),
+        )
+      }
+    }
+
     // Specific handling for deadline exceeded — not an unexpected crash
     if (error instanceof PipelineDeadlineError) {
       console.error(`[job-orchestrator] Job ${jobId}: ${error.message}`)
@@ -1490,6 +1554,7 @@ export async function POST(
         completed_at: new Date().toISOString(),
         duration_ms: durationMs,
       })
+      await markRunFailed(error.message)
       return NextResponse.json({ error: error.message }, { status: 504 })
     }
 
@@ -1506,6 +1571,7 @@ export async function POST(
       completed_at: new Date().toISOString(),
       duration_ms: durationMs,
     })
+    await markRunFailed(message)
 
     return NextResponse.json({ error: message, phase }, { status: 500 })
   }
@@ -1514,6 +1580,21 @@ export async function POST(
 // ── Chunk Processor ───────────────────────────────────────────────
 // Replicates the logic from /api/parse-pdf/chunk/route.ts, calling
 // helper functions directly instead of fetching the API route.
+
+/**
+ * Pick the worse of two DarrinConfidence values, treating null as "no signal."
+ * Order: low > medium > high (low is worst). Used to aggregate per-chunk
+ * Darrin confidence into a single value for the run.
+ */
+function pickWorseDarrinConfidence(
+  current: DarrinConfidence | null,
+  next: DarrinConfidence | null,
+): DarrinConfidence | null {
+  if (next === null) return current
+  if (current === null) return next
+  const rank: Record<DarrinConfidence, number> = { low: 0, medium: 1, high: 2 }
+  return rank[next] < rank[current] ? next : current
+}
 
 async function processChunk(
   client: Anthropic,
@@ -1531,6 +1612,9 @@ async function processChunk(
   darrinQuantityCheck: DarrinQuantityCheck | null
   confidence: ExtractionConfidence
   referenceCodes: Array<{ code_type: string; code: string; full_name: string }>
+  /** Darrin's self-reported confidence on this chunk's CP2 review.
+   *  null when Darrin omitted the field (older responses) or the call failed. */
+  darrinPostExtractionConfidence: DarrinConfidence | null
 }> {
   // Step 1: Pdfplumber extraction
   let pdfplumberResult: PdfplumberResult | null = null
@@ -1623,5 +1707,22 @@ async function processChunk(
       && (rc.code_type === 'manufacturer' || rc.code_type === 'finish' || rc.code_type === 'option')
   )
 
-  return { doors, hardwareSets, darrinQuantityCheck: quantityCheck, confidence, referenceCodes }
+  // Darrin's self-reported overall_confidence from CP2. The schema permits
+  // omission (older Darrin responses), so this returns null in that case so
+  // the orchestrator can distinguish "no signal" from "low".
+  const darrinPostExtractionConfidence: DarrinConfidence | null =
+    corrections.overall_confidence === 'high'
+      || corrections.overall_confidence === 'medium'
+      || corrections.overall_confidence === 'low'
+      ? corrections.overall_confidence
+      : null
+
+  return {
+    doors,
+    hardwareSets,
+    darrinQuantityCheck: quantityCheck,
+    confidence,
+    referenceCodes,
+    darrinPostExtractionConfidence,
+  }
 }
