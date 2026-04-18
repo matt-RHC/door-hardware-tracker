@@ -2088,20 +2088,36 @@ def parse_hw_set_id_from_text(text: str) -> tuple[str, str, str]:
 
 # Pattern to count doors listed in heading block.
 # Matches: "1 Pair Doors #...", "For 2 Single Doors", "Qty: 3 Pair Door Openings",
-#           "1 - Pair Doors #..."
+#           "1 - Pair Doors #...", "1 Double Egress Door #..."
+# "Double Egress" is a pair (two active leaves) — count it like Pair downstream.
+# Bug discovered 2026-04-18 on Radius DC DH4-R-NOCR set: the four
+# `1 Double Egress Door #...` lines on PDF p.22 were silently dropped because
+# the type group only matched Pair|Single. heading_doors stayed empty for that
+# set, so 3 of 4 openings never reached staging.
+_DOOR_TYPE_GROUP = r"(Pair|Single|Double\s+Egress)"
 HEADING_DOOR_LINE = re.compile(
-    r"(?:For\s+|Qty[:\s]+)?(\d+)\s*[-–]?\s*(Pair|Single)\s+Doors?\s*"
+    r"(?:For\s+|Qty[:\s]+)?(\d+)\s*[-–]?\s*" + _DOOR_TYPE_GROUP + r"\s+Doors?\s*"
     r"(?:Opening)?s?\s*(?:#|$)",
     re.IGNORECASE,
 )
 
 # BUG-25: Pattern to extract door numbers from heading block lines.
-# Captures: qty, type (Pair/Single), and the door number after #.
+# Captures: qty, type (Pair/Single/Double Egress), and the door number after #.
 HEADING_DOOR_WITH_NUMBER = re.compile(
-    r"(?:For\s+|Qty[:\s]+)?(\d+)\s*[-–]?\s*(Pair|Single)\s+Doors?\s*"
+    r"(?:For\s+|Qty[:\s]+)?(\d+)\s*[-–]?\s*" + _DOOR_TYPE_GROUP + r"\s+Doors?\s*"
     r"(?:Opening)?s?\s*#\s*(\S+)",
     re.IGNORECASE,
 )
+
+
+def _heading_door_type_is_pair(type_token: str) -> bool:
+    """Return True when the matched type group represents a pair opening
+    (two leaves per opening). 'Pair' and 'Double Egress' both qualify;
+    'Single' does not. The token is whatever group(2) of HEADING_DOOR_LINE /
+    HEADING_DOOR_WITH_NUMBER captured — case-insensitive, with internal
+    whitespace collapsed so 'Double  Egress' matches."""
+    normalized = re.sub(r"\s+", " ", (type_token or "").strip().lower())
+    return normalized in ("pair", "double egress")
 
 
 def count_heading_doors(page_text: str) -> tuple[int, int]:
@@ -2109,16 +2125,19 @@ def count_heading_doors(page_text: str) -> tuple[int, int]:
     Count doors listed in a hardware set heading block.
     Returns (opening_count, leaf_count).
 
-    "1 Pair Doors #1.01.B.03A" → 1 opening, 2 leaves
-    "1 Single Door #2.01.E.08" → 1 opening, 1 leaf
+    "1 Pair Doors #1.01.B.03A"        → 1 opening, 2 leaves
+    "1 Single Door #2.01.E.08"        → 1 opening, 1 leaf
+    "1 Double Egress Door #110-07B"   → 1 opening, 2 leaves
 
     Leaf count accounts for pair doors having 2 leaves each.
+    Double-egress openings are pairs (two active leaves) and counted
+    the same as Pair for leaf-math purposes.
     """
     opening_count = 0
     leaf_count = 0
     for m in HEADING_DOOR_LINE.finditer(page_text):
         qty = int(m.group(1))
-        is_pair = m.group(2).lower() == "pair"
+        is_pair = _heading_door_type_is_pair(m.group(2))
         opening_count += qty
         leaf_count += qty * (2 if is_pair else 1)
     return (opening_count, leaf_count)
@@ -2597,10 +2616,15 @@ _DOOR_TOKEN_RE = re.compile(
     re.IGNORECASE,
 )
 
-# Pattern for doors listed after Pair/Single on heading lines:
+# Pattern for doors listed after Pair/Single/Double Egress on heading lines:
 # "1 Pair Doors #101, #102" / "2 Single Doors #103A, #104B, #105C"
+# / "1 Double Egress Door #110-07B"
+# Type group is shared with HEADING_DOOR_LINE / HEADING_DOOR_WITH_NUMBER above
+# so the three regexes stay in lockstep on which type tokens count as pairs.
 _HEADING_DOOR_NUMBERS_RE = re.compile(
-    r"(?:For\s+|Qty[:\s]+)?(\d+)\s*[-–]?\s*(Pair|Single)\s+Doors?\s*"
+    r"(?:For\s+|Qty[:\s]+)?(\d+)\s*[-–]?\s*"
+    r"(Pair|Single|Double\s+Egress)"
+    r"\s+Doors?\s*"
     r"(?:Opening)?s?\s*#?\s*(.+)",
     re.IGNORECASE,
 )
@@ -2655,9 +2679,9 @@ def extract_inline_door_assignments(
                 d.hand = match["hand"]
         return doors
 
-    # Strategy 2: "N Pair/Single Doors #101, #102, #103" pattern
+    # Strategy 2: "N Pair/Single/Double Egress Doors #101, #102, #103" pattern
     for m in _HEADING_DOOR_NUMBERS_RE.finditer(page_text):
-        door_type = "PR" if m.group(2).lower() == "pair" else ""
+        door_type = "PR" if _heading_door_type_is_pair(m.group(2)) else ""
         door_list_text = m.group(3)
         for token in _DOOR_TOKEN_RE.finditer(door_list_text):
             _add_door(token.group(1), door_type=door_type)

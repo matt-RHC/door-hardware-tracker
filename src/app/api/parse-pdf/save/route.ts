@@ -11,7 +11,9 @@ import {
   detectIsPairWithTrace,
   normalizeDoorNumber,
   wouldProduceZeroItems,
+  type PairSignalResult,
 } from '@/lib/parse-pdf-helpers'
+import { buildOpeningAudit } from '@/lib/extraction-opening-audit'
 import { validateExtractionRun, summarizeReport } from '@/lib/extraction-invariants'
 import type { InvariantViolation } from '@/lib/extraction-invariants'
 import {
@@ -195,17 +197,22 @@ export async function POST(request: NextRequest) {
     // call disagreed on sub-headings that round-tripped through the DB.
     // The leaf_count_consistency invariant (runInvariants rule "i") catches
     // any remaining disagreement post-promote and blocks the save.
+    // Migration 048: collect per-opening pair-signal evidence in parallel
+    // with the staging payload so we can write the audit JSONB to
+    // extraction_runs.opening_audit AFTER writeStagingData succeeds.
+    const pairSignalsByDoor = new Map<string, PairSignalResult>()
     const stagingOpenings: StagingOpening[] = activeDoors.map(d => {
       // Resolve the hardware set for this door (same lookup chain as buildPerOpeningItems)
       const doorKey = normalizeDoorNumber(d.door_number)
       const hwSet = doorToSetMap.get(doorKey) ?? setMap.get(d.hw_set ?? '')
       const doorInfo = doorInfoMap.get(d.door_number)
-      const isPair = detectIsPairWithTrace(hwSet, doorInfo, {
+      const pairSignal = detectIsPairWithTrace(hwSet, doorInfo, {
         runId,
         set_id: hwSet?.set_id ?? d.hw_set ?? null,
         door_number: d.door_number,
         source: 'save',
       })
+      pairSignalsByDoor.set(d.door_number, pairSignal)
       return {
         door_number: d.door_number,
         hw_set: d.hw_set || undefined,
@@ -218,13 +225,36 @@ export async function POST(request: NextRequest) {
         // so it lands on openings.pdf_page after promote_extraction().
         pdf_page: setMap.get(d.hw_set ?? '')?.pdf_page ?? null,
         // Phase 2: persist pair detection so the UI can render per-leaf sections
-        leaf_count: isPair ? 2 : 1,
+        leaf_count: pairSignal.isPair ? 2 : 1,
         field_confidence: d.field_confidence || undefined,
       }
     })
 
     // 3. Write staging openings (empty hardwareSets — items handled separately)
     const stagingResult = await writeStagingData(supabase, runId, projectId, stagingOpenings, [])
+
+    // 3b. Migration 048: persist the per-set + per-opening audit alongside
+    // the run. This is the post-hoc signal that would have screamed on the
+    // 2026-04-18 Radius DC bug — header_door_count=4 vs emitted_opening_count=1
+    // on DH4-R-NOCR, plus pair_signal_tier='none' on the surviving opening.
+    // Best-effort: an audit-write failure must not break the save itself.
+    try {
+      const audit = buildOpeningAudit({
+        hardwareSets,
+        stagingOpenings: stagingOpenings.map(o => ({
+          door_number: o.door_number,
+          hw_set: o.hw_set ?? null,
+          leaf_count: o.leaf_count ?? 1,
+        })),
+        pairSignalsByDoor,
+      })
+      await updateExtractionRun(supabase, runId, { openingAudit: audit })
+    } catch (auditErr) {
+      Sentry.captureMessage('extraction.opening_audit.write_failed', {
+        level: 'warning',
+        extra: { runId, error: (auditErr as Error)?.message },
+      })
+    }
 
     // 4. Query back staging openings to get their IDs for item insertion
     const { data: stagingOpeningRows, error: fetchError } = await (supabase as any)

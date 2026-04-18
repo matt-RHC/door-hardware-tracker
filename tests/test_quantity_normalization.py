@@ -396,6 +396,89 @@ class TestExpandedHeadingRegex:
         assert count == 2
         assert leaves == 2
 
+    def test_double_egress_single(self, extract_tables):
+        """'1 Double Egress Door #110-07B' → 1 opening, 2 leaves.
+
+        Regression for Radius DC DH4-R-NOCR (2026-04-18). Before this fix
+        the type group only matched (Pair|Single), so Double Egress lines
+        contributed 0 to both counts and the SECONDARY pair-detection
+        signal could not fire."""
+        count, leaves = extract_tables.count_heading_doors(
+            "1 Double Egress Door #110-07B"
+        )
+        assert count == 1
+        assert leaves == 2
+
+    def test_double_egress_block(self, extract_tables):
+        """Four sequential Double Egress lines (the actual DH4-R-NOCR shape).
+
+        opening_count must reach 4 and leaf_count must reach 8 so that the
+        TS SECONDARY signal (`heading_leaf_count > heading_door_count`)
+        flips pair detection to true on every opening in the set."""
+        text = (
+            "1 Double Egress Door #110-07B   DH1 UPS-C 110-07 to/from DH1 UPS-D 110-08   DELHR\n"
+            "1 Double Egress Door #110A-04B  DH1 UPS-A 110-04 to/from DH1 UPS-B 110-05  DELHR\n"
+            "1 Double Egress Door #110A-05B  DH1 UPS-B 110-05 to/from DH1 UPS-R 110-06  DELHR\n"
+            "1 Double Egress Door #110A-06B  DH1 UPS-R 110-06 to/from DH1 UPS-C 110-07  DELHR\n"
+        )
+        count, leaves = extract_tables.count_heading_doors(text)
+        assert count == 4
+        assert leaves == 8
+
+    def test_double_egress_extracts_door_numbers(self, extract_tables):
+        """extract_heading_door_numbers must return all four door numbers
+        from the DH4-R-NOCR block — they populate HardwareSetDef.heading_doors
+        which buildDoorToSetMap consumes on the TS side."""
+        text = (
+            "1 Double Egress Door #110-07B   DH1 UPS-C 110-07 to/from DH1 UPS-D 110-08\n"
+            "1 Double Egress Door #110A-04B  DH1 UPS-A 110-04 to/from DH1 UPS-B 110-05\n"
+            "1 Double Egress Door #110A-05B  DH1 UPS-B 110-05 to/from DH1 UPS-R 110-06\n"
+            "1 Double Egress Door #110A-06B  DH1 UPS-R 110-06 to/from DH1 UPS-C 110-07\n"
+        )
+        doors = extract_tables.extract_heading_door_numbers(text)
+        assert doors == ["110-07B", "110A-04B", "110A-05B", "110A-06B"]
+
+    def test_double_egress_plural(self, extract_tables):
+        """'2 Double Egress Doors #...' → 2 openings, 4 leaves. Plural form
+        is supported by the existing `Doors?` quantifier."""
+        count, leaves = extract_tables.count_heading_doors(
+            "2 Double Egress Doors #110-07B"
+        )
+        assert count == 2
+        assert leaves == 4
+
+    def test_double_egress_line_creates_door_entries(self, extract_tables):
+        """build_heading_page_map must produce a DoorEntry per Double Egress
+        line so the join with the Opening List can fill in missing openings.
+
+        This is the direct fix for the silent-data-loss part of the bug:
+        before, _extract_heading_doors_on_page used HEADING_DOOR_WITH_NUMBER
+        which did not match Double Egress, so heading_map stayed empty and
+        join_opening_list_with_heading_pages had nothing to append for the
+        three openings that were absent from the Opening List table."""
+        from unittest.mock import Mock
+
+        page_text = (
+            "Heading #DH4.1 (Set #DH4-R-NOCR)\n"
+            "1 Double Egress Door #110-07B  DH1 UPS-C 110-07 to/from DH1 UPS-D 110-08  DELHR\n"
+            "1 Double Egress Door #110A-04B DH1 UPS-A 110-04 to/from DH1 UPS-B 110-05  DELHR\n"
+            "1 Double Egress Door #110A-05B DH1 UPS-B 110-05 to/from DH1 UPS-R 110-06  DELHR\n"
+            "1 Double Egress Door #110A-06B DH1 UPS-R 110-06 to/from DH1 UPS-C 110-07  DELHR\n"
+        )
+        page = Mock()
+        page.extract_text = Mock(return_value=page_text)
+        heading_map: dict[str, object] = {}
+        extract_tables._extract_heading_doors_on_page(page, heading_map)
+        assert sorted(heading_map.keys()) == ["110-07B", "110A-04B", "110A-05B", "110A-06B"]
+        # All entries must carry the same non-empty hw_set so downstream
+        # buildDoorToSetMap routes them all to the same HardwareSet.
+        # The exact value is whichever id _HEADING_LINE_PATTERN captures
+        # (sub-heading like "DH4.1" or generic set id like "DH4-R-NOCR");
+        # the downstream join keys off whichever the heading parser yields.
+        hw_sets = {entry.hw_set for entry in heading_map.values()}
+        assert len(hw_sets) == 1, f"expected one shared hw_set, got {hw_sets}"
+        assert next(iter(hw_sets)), "hw_set must be non-empty"
+
 
 # ── Unit tests: normalize with opening list fallback ──
 

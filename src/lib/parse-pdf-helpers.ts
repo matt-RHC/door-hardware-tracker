@@ -2828,7 +2828,11 @@ export function detectIsPairWithTrace(
   hwSet: HardwareSet | undefined,
   doorInfo: { door_type?: string | null; location?: string | null } | undefined,
   context: { runId?: string; set_id?: string | null; door_number?: string | null; source: 'save' | 'jobs_run' },
-): boolean {
+): PairSignalResult {
+  // Returns the full PairSignalResult so the caller can persist the
+  // winning tier alongside leaf_count (migration 048 added the
+  // staging_openings.leaf_count_signal_tier column for that purpose).
+  // Existing call sites that only need the boolean read `.isPair`.
   const result = detectPairSignal(hwSet, doorInfo)
   console.log(
     JSON.stringify({
@@ -2842,7 +2846,7 @@ export function detectIsPairWithTrace(
       evidence: result.evidence,
     }),
   )
-  return result.isPair
+  return result
 }
 
 /**
