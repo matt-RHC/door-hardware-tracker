@@ -183,20 +183,19 @@ export async function POST(request: NextRequest) {
 
     // 2. Transform doors → StagingOpening[]
     //
-    // Compute isPair ONCE per door and reuse it for both staging.leaf_count
-    // and the per-opening item rows below. A separate detectIsPair call in
-    // buildPerOpeningItems would be susceptible to DB round-trip differences
-    // in door_number/hw_set keys (2026-04-18 Radius DC regression: 25 openings
-    // got Door-leaf rows with leaf_count=1). Single source of truth eliminates
-    // that class of bug.
-    const isPairByDoor = new Map<string, boolean>()
+    // Pair detection runs twice intentionally: once here for staging.leaf_count
+    // and once inside buildPerOpeningItems for the per-opening item rows. A
+    // threaded isPairByDoor map was tried in PR #306 but caused a fresh
+    // Radius DC regression where the map and the extractor's detectIsPair
+    // call disagreed on sub-headings that round-tripped through the DB.
+    // The leaf_count_consistency invariant (runInvariants rule "i") catches
+    // any remaining disagreement post-promote and blocks the save.
     const stagingOpenings: StagingOpening[] = activeDoors.map(d => {
       // Resolve the hardware set for this door (same lookup chain as buildPerOpeningItems)
       const doorKey = normalizeDoorNumber(d.door_number)
       const hwSet = doorToSetMap.get(doorKey) ?? setMap.get(d.hw_set ?? '')
       const doorInfo = doorInfoMap.get(d.door_number)
       const isPair = detectIsPair(hwSet, doorInfo)
-      isPairByDoor.set(d.door_number, isPair)
       return {
         door_number: d.door_number,
         hw_set: d.hw_set || undefined,
@@ -227,28 +226,10 @@ export async function POST(request: NextRequest) {
       throw new Error(`Failed to fetch staging openings: ${fetchError.message}`)
     }
 
-    // Consistency gate: every fetched staging opening must have a precomputed
-    // isPair decision. A miss means doorInfoMap/isPairByDoor were keyed by a
-    // door_number that the DB round-tripped differently (trim, case, collation).
-    // Failing loud here is better than silently diverging between leaf_count
-    // and buildPerOpeningItems' emitted rows.
-    const missingPairDecision = (stagingOpeningRows ?? []).filter(
-      (o: { door_number: string }) => !isPairByDoor.has(o.door_number),
-    )
-    if (missingPairDecision.length > 0) {
-      console.error(
-        `[save] BUG: ${missingPairDecision.length} staging opening(s) fetched from DB have door_numbers not present in isPairByDoor:`,
-        missingPairDecision.map((o: { door_number: string }) => o.door_number),
-      )
-      return NextResponse.json({
-        success: false,
-        error: `Internal error: door numbers ${missingPairDecision.map((o: { door_number: string }) => o.door_number).join(', ')} were transformed during DB write. Please contact support.`,
-      }, { status: 500 })
-    }
-
     // 5. Build all items (Door/Frame + set items) via shared helper.
-    // Pass isPairByDoor so the helper uses the same pair decision that was
-    // written to staging_openings.leaf_count.
+    // buildPerOpeningItems calls detectIsPair internally with the same
+    // (hwSet, doorInfo) pair used above for leaf_count, so the two stay
+    // consistent without an externally-threaded map.
     const allItems = buildPerOpeningItems(
       stagingOpeningRows ?? [],
       doorInfoMap,
@@ -256,7 +237,6 @@ export async function POST(request: NextRequest) {
       doorToSetMap,
       'staging_opening_id',
       { extraction_run_id: runId },
-      isPairByDoor,
     )
 
     // Breadcrumbs (not errors) — give us context in Sentry for any later
