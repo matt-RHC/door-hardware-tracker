@@ -93,7 +93,7 @@ export default function PropagationSuggestionModal({
 
   return (
     <div className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
-      <div className="bg-surface border border-th-border rounded-md p-5 w-full max-w-lg max-h-[90vh] overflow-y-auto shadow-2xl space-y-4">
+      <div className="bg-surface border border-th-border panel--modal p-5 w-full max-w-lg max-h-[90vh] overflow-y-auto space-y-4">
         <DarrinMessage
           avatar={applying ? "success" : "concerned"}
           message={applying ? successBlurb : openingBlurb}

@@ -39,8 +39,8 @@ export default function WizardNav({
       : "bg-accent hover:bg-accent/80 text-white";
 
   return (
-    <div className="sticky bottom-0 z-10 mt-auto -mx-6 px-6 pt-6 pb-2 bg-gradient-to-t from-background via-background/95 to-transparent pointer-events-none">
-      <div className="flex items-center justify-between pointer-events-auto">
+    <div className="sticky bottom-0 z-10 mt-auto -mx-6 px-6 wizard-bottom-nav">
+      <div className="flex items-center justify-between">
         {/* Left side: Back + optional secondary */}
         <div className="flex items-center gap-3">
           {onBack ? (

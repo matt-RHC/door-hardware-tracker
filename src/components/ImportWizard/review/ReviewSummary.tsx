@@ -57,8 +57,39 @@ export default function ReviewSummary({
 }: ReviewSummaryProps) {
   const showToggle = viewMode !== undefined && onViewModeChange !== undefined;
 
+  const attentionCount = medCount + lowCount;
+  const issueTypeCount = Array.from(issueGroups.entries())
+    .filter(([key]) => !key.startsWith('missing_door_number') && !key.startsWith('missing_hw_set'))
+    .length;
+  const ready = attentionCount === 0 && totalDoors > 0;
+
   return (
     <>
+      {/* ── Page head (attention-first look/feel) ── */}
+      {totalDoors > 0 && (
+        <div className="mb-4">
+          <div className="eyebrow mb-2">
+            {totalDoors} openings imported · {issueTypeCount} issue{issueTypeCount === 1 ? '' : 's'} flagged
+          </div>
+          <h1 className="page-h1 mb-2">
+            Review what needs your attention.
+          </h1>
+          <p className="lede max-w-3xl">
+            {attentionCount > 0 ? (
+              <>
+                Rabbit Hole imported <strong>{totalDoors}</strong> openings.{' '}
+                <strong>{attentionCount}</strong> opening{attentionCount === 1 ? '' : 's'} across{' '}
+                <strong>{issueTypeCount || 1}</strong> issue{issueTypeCount === 1 ? '' : 's'} still need a call before we can export.
+              </>
+            ) : (
+              <>
+                Rabbit Hole imported <strong>{totalDoors}</strong> openings. Everything looks clean — you&rsquo;re ready to export.
+              </>
+            )}
+          </p>
+        </div>
+      )}
+
       {/* ── Auto-removed orphan notice ── */}
       {orphanDoors.length > 0 && !orphanNoticeDismissed && (
         <div className="mb-3 p-3 bg-tint border border-border-dim rounded-md flex items-start gap-2">
@@ -69,7 +100,7 @@ export default function ReviewSummary({
               ({orphanDoors.slice(0, 8).map(d => d.door_number).join(', ')}{orphanDoors.length > 8 ? `, +${orphanDoors.length - 8} more` : ''})
             </span>
             <span className="text-tertiary ml-1">
-              — no hardware set or items found
+              &mdash; no hardware set or items found
             </span>
           </div>
           <button
@@ -92,83 +123,59 @@ export default function ReviewSummary({
         </div>
       )}
 
-      {/* ── Summary Stats Bar ── */}
-      <div className="mb-4 p-3 bg-tint border border-border-dim rounded-md">
-        <div className="flex items-center justify-between mb-2 gap-2 flex-wrap">
-          <span className="text-sm text-primary font-medium tabular-nums">
-            {totalDoors} doors extracted
-          </span>
-          <div className="flex items-center gap-2">
-            {hasExistingData && (
-              <span className="text-xs bg-warning-dim text-warning px-2 py-0.5 rounded-full">
-                Revision
-              </span>
-            )}
-            {showToggle && (
-              <div
-                className="inline-flex items-center rounded-md border border-border-dim-strong p-0.5 bg-tint"
-                role="group"
-                aria-label="View mode"
-              >
-                <button
-                  type="button"
-                  onClick={() => onViewModeChange!('door')}
-                  className={`text-[11px] px-2.5 py-1 rounded min-h-9 transition-colors ${
-                    viewMode === 'door'
-                      ? 'bg-accent text-white'
-                      : 'text-secondary hover:text-primary'
-                  }`}
-                  aria-pressed={viewMode === 'door'}
-                >
-                  Door view
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onViewModeChange!('set')}
-                  className={`text-[11px] px-2.5 py-1 rounded min-h-9 transition-colors ${
-                    viewMode === 'set'
-                      ? 'bg-accent text-white'
-                      : 'text-secondary hover:text-primary'
-                  }`}
-                  aria-pressed={viewMode === 'set'}
-                >
-                  Set view
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Confidence bar */}
-        <div className="confidence-bar mb-2">
-          {highCount > 0 && (
+      {/* ── Progress + gate row ── */}
+      {totalDoors > 0 && (
+        <div className="mb-4">
+          <div className="progress-meter mb-2">
             <div
-              className="confidence-bar__segment confidence-bar__segment--high"
+              className="progress-meter__fill"
               style={{ width: `${(highCount / totalDoors) * 100}%` }}
             />
-          )}
-          {medCount > 0 && (
-            <div
-              className="confidence-bar__segment confidence-bar__segment--med"
-              style={{ width: `${(medCount / totalDoors) * 100}%` }}
-            />
-          )}
-          {lowCount > 0 && (
-            <div
-              className="confidence-bar__segment confidence-bar__segment--low"
-              style={{ width: `${(lowCount / totalDoors) * 100}%` }}
-            />
-          )}
+          </div>
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <span className="text-xs text-secondary tabular-nums">
+              {highCount} of {totalDoors} ready
+              {medCount > 0 ? ` · ${medCount} need${medCount === 1 ? 's' : ''} attention` : ''}
+              {lowCount > 0 ? ` · ${lowCount} missing data` : ''}
+            </span>
+            <div className="flex items-center gap-2">
+              {hasExistingData && (
+                <span className="text-[11px] bg-warning-dim text-warning px-2 py-0.5 rounded-full font-medium tracking-wide uppercase">
+                  Revision
+                </span>
+              )}
+              <span className={`gate-pill ${ready ? 'gate-pill--ready' : 'gate-pill--blocked'}`}>
+                {ready
+                  ? 'Ready to export'
+                  : `Export blocked · ${attentionCount} opening${attentionCount === 1 ? '' : 's'}`}
+              </span>
+              {showToggle && (
+                <div className="segmented" role="group" aria-label="View mode">
+                  <button
+                    type="button"
+                    onClick={() => onViewModeChange!('door')}
+                    className={`segmented__btn ${viewMode === 'door' ? 'segmented__btn--active' : ''}`}
+                    aria-pressed={viewMode === 'door'}
+                  >
+                    Door view
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onViewModeChange!('set')}
+                    className={`segmented__btn ${viewMode === 'set' ? 'segmented__btn--active' : ''}`}
+                    aria-pressed={viewMode === 'set'}
+                  >
+                    Set view
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
+      )}
 
-        {/* Human labels */}
-        <div className="flex items-center gap-4 text-xs mb-3 tabular-nums">
-          <span className="text-success">{highCount} ready</span>
-          <span className="text-warning">{medCount} need{medCount === 1 ? 's' : ''} attention</span>
-          <span className="text-danger">{lowCount} missing data</span>
-        </div>
-
-        {/* Issue-type summary (only when there are attention/missing items) */}
+      {/* ── Issue-type summary + filters ── */}
+      <div className="mb-4 p-3 bg-tint border border-border-dim rounded-md">
         {(medCount > 0 || lowCount > 0) && (
           <div className="flex flex-wrap gap-2 mb-3">
             {Array.from(issueGroups.entries())
@@ -176,8 +183,8 @@ export default function ReviewSummary({
               .sort((a, b) => b[1].length - a[1].length)
               .slice(0, 5)
               .map(([issueKey, doorNumbers]) => (
-                <span key={issueKey} className="text-[11px] px-2 py-0.5 rounded bg-warning-dim text-warning border border-warning/20">
-                  {doorNumbers.length} door{doorNumbers.length !== 1 ? 's' : ''}: {ISSUE_LABELS[issueKey] ?? issueKey.replace(/_/g, ' ')}
+                <span key={issueKey} className="text-[11px] px-2 py-0.5 rounded bg-warning-dim text-warning border border-warning/20 font-mono">
+                  {doorNumbers.length} opening{doorNumbers.length !== 1 ? 's' : ''}: {ISSUE_LABELS[issueKey] ?? issueKey.replace(/_/g, ' ')}
                 </span>
               ))}
           </div>
