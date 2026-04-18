@@ -36,7 +36,9 @@ import {
   normalizeDoorNumber,
   type PdfplumberResult,
   type VisionExtractionResult,
+  type PairSignalResult,
 } from '@/lib/parse-pdf-helpers'
+import { buildOpeningAudit } from '@/lib/extraction-opening-audit'
 import type { ExtractionConfidence } from '@/lib/types/confidence'
 import { shouldAutoTriggerDeepExtraction } from '@/lib/types/confidence'
 import { reconcileExtractions } from '@/lib/reconciliation'
@@ -1318,16 +1320,21 @@ export async function POST(
     // Radius DC regression where the map and the extractor's detectIsPair
     // call disagreed on sub-headings that round-tripped through the DB.
     // The leaf_count_consistency invariant catches any remaining disagreement.
+    // Migration 048: collect per-opening pair-signal evidence in parallel
+    // with the staging payload so we can write the audit JSONB to
+    // extraction_runs.opening_audit AFTER writeStagingData succeeds.
+    const pairSignalsByDoor = new Map<string, PairSignalResult>()
     const stagingOpenings: StagingOpening[] = filteredDoors.map(d => {
       const doorKey = normalizeDoorNumber(d.door_number)
       const hwSet = doorToSetMap.get(doorKey) ?? setMap.get(d.hw_set ?? '')
       const doorInfo = doorInfoMap.get(d.door_number)
-      const isPair = detectIsPairWithTrace(hwSet, doorInfo, {
+      const pairSignal = detectIsPairWithTrace(hwSet, doorInfo, {
         runId,
         set_id: hwSet?.set_id ?? d.hw_set ?? null,
         door_number: d.door_number,
         source: 'jobs_run',
       })
+      pairSignalsByDoor.set(d.door_number, pairSignal)
       return {
         door_number: d.door_number,
         hw_set: d.hw_set || undefined,
@@ -1338,7 +1345,7 @@ export async function POST(
         fire_rating: d.fire_rating || undefined,
         hand: d.hand || undefined,
         pdf_page: setMap.get(d.hw_set ?? '')?.pdf_page ?? null,
-        leaf_count: isPair ? 2 : 1,
+        leaf_count: pairSignal.isPair ? 2 : 1,
         field_confidence: d.field_confidence,
       }
     })
@@ -1351,6 +1358,28 @@ export async function POST(
       stagingOpenings,
       [],  // empty sets — items inserted separately below
     )
+
+    // 6a-bis. Migration 048: persist the per-set + per-opening audit. See
+    // src/lib/extraction-opening-audit.ts for the schema and the SQL queries
+    // it enables (silent opening loss + weak pair-signal detection). Best-
+    // effort: an audit-write failure must not break the run.
+    try {
+      const audit = buildOpeningAudit({
+        hardwareSets: extractedSets,
+        stagingOpenings: stagingOpenings.map(o => ({
+          door_number: o.door_number,
+          hw_set: o.hw_set ?? null,
+          leaf_count: o.leaf_count ?? 1,
+        })),
+        pairSignalsByDoor,
+      })
+      await updateExtractionRun(adminSupabase, runId, { openingAudit: audit })
+    } catch (auditErr) {
+      Sentry.captureMessage('extraction.opening_audit.write_failed', {
+        level: 'warning',
+        extra: { runId, error: (auditErr as Error)?.message },
+      })
+    }
 
     // 6b. Query back staging openings to get their DB-assigned IDs
     const { data: stagingOpeningRows, error: fetchError } = await adminSupabase

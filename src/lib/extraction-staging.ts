@@ -118,6 +118,10 @@ export async function updateExtractionRun(
     durationMs?: number
     errorMessage?: string
     extractionNotes?: string[]
+    /** Migration 048: per-set + per-opening audit captured at staging-write
+     *  time. Used to detect silent opening loss and weak pair-signal tiers
+     *  without re-running the extractor. Built by buildOpeningAudit(). */
+    openingAudit?: unknown
   }
 ): Promise<void> {
   const row: Record<string, unknown> = {}
@@ -132,6 +136,7 @@ export async function updateExtractionRun(
   if (updates.durationMs !== undefined) row.duration_ms = updates.durationMs
   if (updates.errorMessage !== undefined) row.error_message = updates.errorMessage
   if (updates.extractionNotes !== undefined) row.extraction_notes = updates.extractionNotes
+  if (updates.openingAudit !== undefined) row.opening_audit = updates.openingAudit
 
   const { error } = await supabase
     .from('extraction_runs')
