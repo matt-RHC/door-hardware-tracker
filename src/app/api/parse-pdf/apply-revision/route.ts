@@ -5,9 +5,9 @@ import {
   buildPerOpeningItems,
   buildDoorToSetMap,
   normalizeQuantities,
-  detectIsPair,
   normalizeDoorNumber,
 } from '@/lib/parse-pdf-helpers'
+import { resolveLeafCount } from '@/lib/resolve-leaf-count'
 import { logActivity } from '@/lib/activity-log'
 
 // User decisions from the wizard
@@ -139,19 +139,9 @@ export async function POST(request: NextRequest) {
 
       const hwSet = setMap.get(parsedDoor.hw_set)
 
-      // Pair detection for leaf_count: mirror save/route.ts so apply-revision
-      // writes the SAME value a fresh extraction would. doorToSetMap is keyed
-      // by normalized door number; fall back to the legacy setMap by hw_set.
-      // DoorEntry.leaf_count is authoritative when present (the wizard already
-      // computed it from pair detection); otherwise recompute via detectIsPair.
       const doorKey = normalizeDoorNumber(parsedDoor.door_number)
       const resolvedSet = doorToSetMap.get(doorKey) ?? setMap.get(parsedDoor.hw_set ?? '')
-      const doorInfo = {
-        door_type: parsedDoor.door_type || '',
-        frame_type: parsedDoor.frame_type || '',
-      }
-      const resolvedLeafCount =
-        parsedDoor.leaf_count ?? (detectIsPair(resolvedSet, doorInfo) ? 2 : 1)
+      const resolvedLeafCount = resolveLeafCount(parsedDoor, resolvedSet)
 
       // Update the opening fields
       const { error: updateError } = await (supabase as any)
@@ -263,16 +253,9 @@ export async function POST(request: NextRequest) {
 
     if (newDoors.length > 0) {
       const openingRows = newDoors.map(door => {
-        // Pair detection mirrors save/route.ts:170-191 so apply-revision writes
-        // the SAME leaf_count a fresh extraction would. See PR-B note above.
         const doorKey = normalizeDoorNumber(door.door_number)
         const resolvedSet = doorToSetMap.get(doorKey) ?? setMap.get(door.hw_set ?? '')
-        const doorInfo = {
-          door_type: door.door_type || '',
-          frame_type: door.frame_type || '',
-        }
-        const resolvedLeafCount =
-          door.leaf_count ?? (detectIsPair(resolvedSet, doorInfo) ? 2 : 1)
+        const resolvedLeafCount = resolveLeafCount(door, resolvedSet)
         return {
           project_id: projectId,
           door_number: door.door_number,
