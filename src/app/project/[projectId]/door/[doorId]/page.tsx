@@ -189,6 +189,32 @@ export default function DoorDetailPage() {
       });
   }, [doorId, fetchOpeningData]);
 
+  // Backend/UI leaf-count disagreement telemetry. Fires once per fetch of new
+  // opening data (not per re-render), so an item-editing session on a
+  // disagreement-flagged door produces a single breadcrumb rather than
+  // flooding Sentry's 100-event buffer. See 2026-04-18 Radius DC regression.
+  useEffect(() => {
+    if (!opening) return;
+    const backendLeafCount = (opening as any).leaf_count ?? 1;
+    const itemsSuggestPair = itemsIndicatePair(opening.hardware_items ?? []);
+    if (backendLeafCount === 1 && itemsSuggestPair) {
+      console.warn(
+        `[door-detail] leaf_count/hardware_items disagreement for ${opening.door_number}: backend=${backendLeafCount}, inferred=2`,
+      );
+      Sentry.addBreadcrumb({
+        category: "door.leaf_count.mismatch",
+        level: "warning",
+        message:
+          "Door detail inferred pair from hardware_items leaf_side despite leaf_count=1",
+        data: {
+          door_number: opening.door_number,
+          backend_leaf_count: backendLeafCount,
+          inferred_leaf_count: 2,
+        },
+      });
+    }
+  }, [opening?.door_number, (opening as any)?.leaf_count, opening?.hardware_items?.length]);
+
   // Fetch recent activity for this opening
   useEffect(() => {
     if (!opening) return;
@@ -757,30 +783,16 @@ export default function DoorDetailPage() {
 
   // --- Per-leaf grouping ---
   // Fail-safe: if backend says leaf_count=1 but items already carry
-  // leaf_side='active'|'inactive', trust the items and render the pair UI.
-  // A single backend miscompute (2026-04-18 Radius DC regression) must never
-  // hide all per-leaf views. Disagreement is surfaced via console + Sentry
-  // so backend bugs get flagged.
+  // leaf_side='inactive' (the unambiguous pair signal — see
+  // itemsIndicatePair), trust the items and render the pair UI. A single
+  // backend miscompute (2026-04-18 Radius DC regression) must never hide
+  // all per-leaf views. The disagreement warn + Sentry breadcrumb lives in
+  // a useEffect above so it fires once per fetched opening, not per render.
   const backendLeafCount = (opening as any).leaf_count ?? 1;
   const itemsSuggestPair = itemsIndicatePair(opening.hardware_items);
   const leafCountDisagreement = backendLeafCount === 1 && itemsSuggestPair;
   const leafCount = Math.max(backendLeafCount, itemsSuggestPair ? 2 : 1);
   const isPair = leafCount >= 2;
-  if (leafCountDisagreement) {
-    console.warn(
-      `[door-detail] leaf_count/hardware_items disagreement for ${opening.door_number}: backend=${backendLeafCount}, inferred=2`,
-    );
-    Sentry.addBreadcrumb({
-      category: "door.leaf_count.mismatch",
-      level: "warning",
-      message: "Door detail inferred pair from hardware_items leaf_side despite leaf_count=1",
-      data: {
-        door_number: opening.door_number,
-        backend_leaf_count: backendLeafCount,
-        inferred_leaf_count: 2,
-      },
-    });
-  }
   const { shared, leaf1, leaf2 } = groupItemsByLeaf(opening.hardware_items, leafCount);
 
   // Progress: count each leaf section's items independently

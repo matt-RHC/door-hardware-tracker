@@ -460,16 +460,25 @@ export async function POST(request: NextRequest) {
         // the save even when the general invariantGateEnabled() flag is off.
         // The LEAF_COUNT_CONSISTENCY_ENFORCE env var is an emergency kill
         // switch that disables this specific rule without a code revert.
-        const enforceAlwaysViolated = invariantBlockers.some(
-          v => (ENFORCE_ALWAYS_RULES as ReadonlyArray<string>).includes(v.rule) && leafCountConsistencyEnforced(),
+        const killSwitchOn = leafCountConsistencyEnforced()
+        const enforceAlwaysViolated = killSwitchOn && invariantBlockers.some(
+          v => (ENFORCE_ALWAYS_RULES as ReadonlyArray<string>).includes(v.rule),
         )
 
         if (invariantGateEnabled() || enforceAlwaysViolated) {
+          // User-facing message stays generic; the env-var override detail
+          // is logged server-side so support can find it in the Sentry
+          // event (already captured above at line ~444).
+          if (enforceAlwaysViolated) {
+            console.warn(
+              '[save] enforce-always invariant violated. Override with LEAF_COUNT_CONSISTENCY_ENFORCE=false in Vercel env if this is a false positive.',
+            )
+          }
           return NextResponse.json({
             success: false,
             partial: isPartialSave,
             error: enforceAlwaysViolated
-              ? 'Extraction blocked: leaf_count/leaf_side consistency violation. Contact support or set LEAF_COUNT_CONSISTENCY_ENFORCE=false in Vercel to override.'
+              ? 'Extraction blocked: pair detection is inconsistent with per-leaf hardware items. Please contact support.'
               : 'Extraction completed with invariant violations.',
             stagingSuccess: true,
             openingsCount: promoteResult.openingsPromoted ?? stagingResult.openingsCount,
