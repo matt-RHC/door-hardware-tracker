@@ -98,7 +98,7 @@ export default function PromoteConfirmModal({
           this new modal doesn't introduce a parallel visual vocabulary.
           `animate-fade-in-up` is already disabled under prefers-reduced-
           motion and low/mid perf tiers (globals.css:653). */}
-      <div className="panel animate-fade-in-up p-5 w-full max-w-md shadow-2xl space-y-4">
+      <div className="panel panel--modal animate-fade-in-up p-5 w-full max-w-md space-y-4">
         <div>
           <h3
             id="promote-confirm-title"
