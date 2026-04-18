@@ -1506,7 +1506,20 @@ export function applyCorrections(
         // editable — the guard is specifically about preserving the name.
         if (corr.items_to_fix) {
           const skippedFixes: Array<{ name: string; field: string }> = []
+          const noopFixes: Array<{ name: string; field: string; value: string }> = []
           corr.items_to_fix = corr.items_to_fix.filter(fix => {
+            // Drop no-op fixes where Darrin returned new_value === old_value.
+            // ~30% of real fixes hit this; applying them wastes work and
+            // pollutes audit trails. Token spend is the upstream waste; this
+            // catches it on the apply side.
+            if (
+              fix.old_value !== undefined
+              && fix.new_value !== undefined
+              && String(fix.old_value) === String(fix.new_value)
+            ) {
+              noopFixes.push({ name: fix.name, field: fix.field, value: String(fix.new_value) })
+              return false
+            }
             if (
               fix.field === 'name'
               && _PAIR_LEAF_NAMED_DOOR_RE.test((fix.name ?? '').trim())
@@ -1522,6 +1535,14 @@ export function applyCorrections(
               level: 'warning',
               message: 'Refused to apply items_to_fix.name rewrite on leaf-named Door row',
               data: { set_id: set.set_id, skipped: skippedFixes },
+            })
+          }
+          if (noopFixes.length > 0) {
+            Sentry.addBreadcrumb({
+              category: 'extraction.corrections.skip_noop_fix',
+              level: 'info',
+              message: 'Dropped no-op items_to_fix entries (old_value === new_value)',
+              data: { set_id: set.set_id, count: noopFixes.length, sample: noopFixes.slice(0, 5) },
             })
           }
           for (const fix of corr.items_to_fix) {

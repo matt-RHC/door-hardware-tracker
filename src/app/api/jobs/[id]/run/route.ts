@@ -677,12 +677,30 @@ export async function POST(
     // ══════════════════════════════════════════════════════════════
     console.log(`[job-orchestrator] Job ${jobId}: starting extraction (${pdfByteLength} bytes)`)
 
+    // Create the extraction_runs row up front so its id is available to
+    // Darrin call sites in processChunk. Status starts as 'extracting' and
+    // is updated to its terminal value during Phase 6. Linking the run to
+    // the job here too — same single round-trip we used to make later.
+    const runId = await createExtractionRun(adminSupabase, {
+      projectId,
+      userId: claimed.created_by,
+      pdfStoragePath,
+      pdfHash: claimed.pdf_hash ?? undefined,
+      pdfPageCount: claimed.pdf_page_count ?? undefined,
+      extractionMethod: 'background_job',
+    })
+    await adminSupabase
+      .from('extraction_runs')
+      .update({ job_id: jobId })
+      .eq('id', runId)
+
     const anthropicClient = createAnthropicClient()
     // Derive the requestOrigin for callPdfplumber. In server-side context
     // we don't have a request.url pointing to the app, so use env vars.
     const requestOrigin = getPythonApiBaseUrl()
     let extractedDoors: DoorEntry[]
     let extractedSets: HardwareSet[]
+    let extractedReferenceCodes: Array<{ code_type: string; code: string; full_name: string }> = []
     const allQtyFlags: NonNullable<DarrinQuantityCheck['flags']> = []
     const allQtyComplianceIssues: NonNullable<DarrinQuantityCheck['compliance_issues']> = []
     let failedChunks: Array<{ index: number; error: string }> = []
@@ -716,6 +734,7 @@ export async function POST(
 
       const allDoors: DoorEntry[] = []
       const allSets: HardwareSet[] = []
+      const allReferenceCodes: Array<{ code_type: string; code: string; full_name: string }> = []
       failedChunks = []
 
       for (let i = 0; i < chunks.length; i++) {
@@ -736,10 +755,12 @@ export async function POST(
             mappingPayload,
             projectId,
             requestOrigin,
+            runId,
           )
 
           allDoors.push(...chunkResult.doors)
           allSets.push(...chunkResult.hardwareSets)
+          allReferenceCodes.push(...chunkResult.referenceCodes)
 
           if (chunkResult.darrinQuantityCheck) {
             allQtyFlags.push(...(chunkResult.darrinQuantityCheck.flags ?? []))
@@ -759,6 +780,7 @@ export async function POST(
 
       extractedDoors = mergeDoors(allDoors)
       extractedSets = mergeHardwareSets(allSets)
+      extractedReferenceCodes = allReferenceCodes
     } else {
       // ── Single-shot extraction ──
       const singleResult = await processChunk(
@@ -770,10 +792,12 @@ export async function POST(
         mappingPayload,
         projectId,
         requestOrigin,
+        runId,
       )
 
       extractedDoors = singleResult.doors
       extractedSets = singleResult.hardwareSets
+      extractedReferenceCodes = singleResult.referenceCodes
       extractionConfidence = singleResult.confidence
 
       if (singleResult.darrinQuantityCheck) {
@@ -817,6 +841,51 @@ export async function POST(
           ? findPageForSet(set.set_id, classifyPages)
           : null)
       set.pdf_page = page
+    }
+
+    // ── Persist reference_codes (manufacturer/finish/option lookups) ──
+    // Python extracts these per-chunk; we dedupe across chunks and upsert
+    // by (project_id, code_type, code) so re-uploads don't error on the
+    // unique constraint. Existing rows are left as-is to preserve any
+    // user_corrected source. Fire-and-forget; failures are logged but
+    // don't block extraction.
+    if (extractedReferenceCodes.length > 0) {
+      const seen = new Set<string>()
+      const dedupedRows: Array<{
+        project_id: string
+        code_type: string
+        code: string
+        full_name: string
+        source: string
+      }> = []
+      for (const rc of extractedReferenceCodes) {
+        const key = `${rc.code_type}|${rc.code}`
+        if (seen.has(key)) continue
+        seen.add(key)
+        dedupedRows.push({
+          project_id: projectId,
+          code_type: rc.code_type,
+          code: rc.code,
+          full_name: rc.full_name,
+          source: 'pdf_extracted',
+        })
+      }
+      const { error: refCodesErr } = await adminSupabase
+        .from('reference_codes')
+        .upsert(dedupedRows, {
+          onConflict: 'project_id,code_type,code',
+          ignoreDuplicates: true,
+        })
+      if (refCodesErr) {
+        console.warn(
+          `[job-orchestrator] Job ${jobId}: reference_codes upsert failed:`,
+          refCodesErr.message,
+        )
+      } else {
+        console.debug(
+          `[job-orchestrator] Job ${jobId}: upserted ${dedupedRows.length} reference codes`,
+        )
+      }
     }
 
     const extractionIsPartial = failedChunks.length > 0
@@ -1182,25 +1251,12 @@ export async function POST(
     })
 
     // ══════════════════════════════════════════════════════════════
-    // Phase 6: Create extraction run + write staging data
+    // Phase 6: Write staging data
+    // (extraction_runs row was created at the start of Phase 4 so that
+    // Darrin call sites in processChunk could log against runId)
     // ══════════════════════════════════════════════════════════════
     checkDeadline('writing_staging')
     console.log(`[job-orchestrator] Job ${jobId}: writing staging data`)
-
-    const runId = await createExtractionRun(adminSupabase, {
-      projectId,
-      userId: claimed.created_by,
-      pdfStoragePath,
-      pdfHash: claimed.pdf_hash ?? undefined,
-      pdfPageCount: claimed.pdf_page_count ?? undefined,
-      extractionMethod: 'background_job',
-    })
-
-    // Link extraction run to job
-    await adminSupabase
-      .from('extraction_runs')
-      .update({ job_id: jobId })
-      .eq('id', runId)
 
     // Build lookup maps for buildPerOpeningItems (same pattern as save/route.ts)
     const setMap = new Map<string, HardwareSet>()
@@ -1468,11 +1524,13 @@ async function processChunk(
   userColumnMapping: Record<string, number> | null,
   projectId: string,
   requestOrigin: string,
+  extractionRunId: string,
 ): Promise<{
   doors: DoorEntry[]
   hardwareSets: HardwareSet[]
   darrinQuantityCheck: DarrinQuantityCheck | null
   confidence: ExtractionConfidence
+  referenceCodes: Array<{ code_type: string; code: string; full_name: string }>
 }> {
   // Step 1: Pdfplumber extraction
   let pdfplumberResult: PdfplumberResult | null = null
@@ -1515,7 +1573,7 @@ async function processChunk(
   // Step 2: Darrin CP1 — Column Mapping Review (first chunk only)
   if (chunkIndex === 0 && userColumnMapping) {
     try {
-      await callDarrinColumnReview(client, chunkBase64, userColumnMapping, { projectId })
+      await callDarrinColumnReview(client, chunkBase64, userColumnMapping, { projectId, extractionRunId })
     } catch (err) {
       console.error('[job] Darrin column review error:', err instanceof Error ? err.message : String(err))
     }
@@ -1533,7 +1591,7 @@ async function processChunk(
     hw_sets_found: 0,
     method: 'none',
     error: 'pdfplumber failed',
-  }, knownSetIds, { projectId })
+  }, knownSetIds, { projectId, extractionRunId })
 
   // Apply corrections
   const corrected = applyCorrections(hardwareSets, doors, corrections)
@@ -1549,7 +1607,7 @@ async function processChunk(
   // Step 4: Darrin CP3 — Quantity Sanity Check
   let quantityCheck: DarrinQuantityCheck | null = null
   try {
-    quantityCheck = await callDarrinQuantityCheck(client, chunkBase64, hardwareSets, doors, null, { projectId })
+    quantityCheck = await callDarrinQuantityCheck(client, chunkBase64, hardwareSets, doors, null, { projectId, extractionRunId })
   } catch (err) {
     console.error('[job] Darrin quantity check error:', err instanceof Error ? err.message : String(err))
   }
@@ -1557,5 +1615,13 @@ async function processChunk(
   // Step 5: Confidence Scoring
   const confidence = calculateExtractionConfidence(hardwareSets, doors, corrections)
 
-  return { doors, hardwareSets, darrinQuantityCheck: quantityCheck, confidence }
+  // Reference codes — pass through from pdfplumber so the orchestrator can
+  // upsert them into public.reference_codes after extraction completes.
+  // Filtered to the schema's allowed code_type values.
+  const referenceCodes = (pdfplumberResult?.reference_codes ?? []).filter(
+    rc => rc && rc.code_type && rc.code && rc.full_name
+      && (rc.code_type === 'manufacturer' || rc.code_type === 'finish' || rc.code_type === 'option')
+  )
+
+  return { doors, hardwareSets, darrinQuantityCheck: quantityCheck, confidence, referenceCodes }
 }
