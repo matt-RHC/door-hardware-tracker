@@ -209,12 +209,22 @@ export async function POST(request: NextRequest) {
 
         type ExistingRow = { id: string; name: string | null; install_type: string | null }
         const rows: ExistingRow[] = (existingItems ?? []) as ExistingRow[]
-        const preserved = rows.filter(r => r.install_type !== null)
+
+        // Structural rows (Door*, Frame) are always deleted and re-inserted
+        // from the fresh PDF so a single→pair (or pair→single) reclassification
+        // replaces the old row with the correctly-named variant.  If we kept a
+        // preserved "Door" row and then inserted "Door (Active Leaf)", both
+        // would end up in the DB — the conflicting_door_variants bug seen on
+        // opening 110-01B.  Only hardware-set items with a user-set install_type
+        // are preserved so bench/field classifications survive the revision.
+        const isStructuralRow = (name: string | null) =>
+          /^(Door(\s|$|\()|Frame$)/.test(name ?? '')
+        const preserved = rows.filter(r => r.install_type !== null && !isStructuralRow(r.name))
         const preservedNames = new Set(
           preserved.map(r => (r.name ?? '').toLowerCase()),
         )
         const toDeleteIds = rows
-          .filter(r => r.install_type === null)
+          .filter(r => r.install_type === null || isStructuralRow(r.name))
           .map(r => r.id)
 
         // 3. Delete only untouched (un-classified) existing items.

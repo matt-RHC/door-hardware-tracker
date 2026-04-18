@@ -105,6 +105,41 @@ describe('invariant (b) conflicting_door_variants', () => {
   })
 })
 
+// ── Regression: apply-revision single→pair reclassification (110-01B) ────────
+//
+// When apply-revision reset a changed door and pair detection changed from
+// single to pair, the old "Door" row survived in `preserved` (install_type was
+// set) while the new "Door (Active Leaf)" row was inserted without colliding.
+// Both ended up in the DB, triggering conflicting_door_variants.
+//
+// Fix: isStructuralRow() forces Door*/Frame rows into toDeleteIds regardless
+// of install_type, so they are always regenerated from the fresh PDF.
+// This test asserts the invariant catches the resulting corrupt DB state and
+// that a correctly-regenerated pair opening passes.
+
+describe('regression: apply-revision single→pair reclassification', () => {
+  it('detects conflict when stale "Door" survives alongside "Door (Active Leaf)"', () => {
+    const opening = makeOpening({ leaf_count: 2 })
+    const items: ItemFixture[] = [
+      makeItem({ id: 'i1', name: 'Door', leaf_side: 'active' }),           // stale single row
+      makeItem({ id: 'i2', name: 'Door (Active Leaf)', leaf_side: 'active' }), // new pair row
+    ]
+    const v = runInvariants([opening], items, [])
+    expect(v.find(x => x.rule === 'conflicting_door_variants')).toBeDefined()
+  })
+
+  it('passes after correction: pair opening with Active + Inactive Leaf only', () => {
+    const opening = makeOpening({ leaf_count: 2 })
+    const items: ItemFixture[] = [
+      makeItem({ id: 'i1', name: 'Door (Active Leaf)', leaf_side: 'active' }),
+      makeItem({ id: 'i2', name: 'Door (Inactive Leaf)', leaf_side: 'inactive' }),
+    ]
+    const v = runInvariants([opening], items, [])
+    expect(v.filter(x => x.rule === 'conflicting_door_variants')).toHaveLength(0)
+    expect(v.filter(x => x.rule === 'pair_leaf_door_count_mismatch')).toHaveLength(0)
+  })
+})
+
 // ── Rule (c): too_many_frames ───────────────────────────────────────────────
 
 describe('invariant (c) too_many_frames', () => {
