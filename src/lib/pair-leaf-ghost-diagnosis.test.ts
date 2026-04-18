@@ -1,47 +1,43 @@
 /**
- * DIAGNOSIS — reproduce the 110-01B / DH1 pair-leaf ghost bug in isolation.
+ * Regression test — 110-01B / DH1 pair-leaf hinge ghost.
  *
- * This test is a throwaway instrument to confirm the hypothesis that
- * `buildPerOpeningItems` double-emits hinge rows onto both leaves of a pair
- * opening when `hwSet.items` carries TWO standard-hinge entries (one
- * representing Leaf 1's count, one representing Leaf 2's). It should be
- * removed or replaced with a proper regression test once the fix ships.
+ * Originally written as a diagnosis reproducer; flipped to lock in the
+ * consolidatePairLeafHingeRows fix (hardware-taxonomy.ts).
  *
- * Observed (Matthew, 2026-04-18): On 110-01B / DH1, Leaf 2 (inactive)
- * showed BOTH a qty=3 row and a qty=4 row of identical model
- * `5BB1 HW 4 1/2 × 4 1/2 NRP`. Ground truth: Leaf 2 should have a single
- * qty=4 row; the qty=3 is Leaf 1's count leaking across.
+ * Ground truth (Matthew, 2026-04-18): on 110-01B / DH1 the active leaf
+ * carries 3 standard + 1 electric hinge = 4 total positions, the inactive
+ * leaf carries 4 standard hinges. Opening total = 8 hinge positions.
  */
 
 import { describe, it, expect } from 'vitest'
 import { buildPerOpeningItems } from './parse-pdf-helpers'
+import { consolidatePairLeafHingeRows } from './hardware-taxonomy'
 import type { HardwareSet } from '@/lib/types'
 
-describe('DIAGNOSIS: pair-leaf hinge ghost on 110-01B DH1', () => {
-  it('reproduces the qty-3 + qty-4 duplicate rows on inactive leaf', () => {
-    // Approximates DH1's extracted shape. Matthew's ground truth:
-    //   Leaf 1 (active):   3 std hinges + 1 electric hinge = 4 total
-    //   Leaf 2 (inactive): 4 std hinges
-    //
-    // Hypothesis: Python emits two standard-hinge entries in hwSet.items —
-    // one with qty=3 (representing Leaf 1's reduced count) and one with
-    // qty=4 (representing Leaf 2's). buildPerOpeningItems then runs its
-    // hinge-split branch on BOTH entries, emitting active+inactive rows for
-    // each, which yields 2+2=4 hinge rows on the opening instead of 2.
-    const hwSet: HardwareSet = {
-      set_id: 'DH1',
-      generic_set_id: 'DH1',
-      heading: 'Set DH1',
-      heading_door_count: 1,
-      heading_leaf_count: 2,
-      heading_doors: ['110-01B'],
-      items: [
-        { qty: 3, name: 'Hinges', model: '5BB1 HW 4 1/2 × 4 1/2 NRP', finish: '626', manufacturer: 'Ives' },
-        { qty: 4, name: 'Hinges', model: '5BB1 HW 4 1/2 × 4 1/2 NRP', finish: '626', manufacturer: 'Ives' },
-        { qty: 1, name: 'Hinges', model: '5BB1 HW 4 1/2 × 4 1/2 CON TW8', finish: '626', manufacturer: 'Ives' },
-      ],
-    }
+const DH1_HINGE_MODEL = '5BB1 HW 4 1/2 × 4 1/2 NRP'
+const ELEC_HINGE_MODEL = '5BB1 HW 4 1/2 × 4 1/2 CON TW8'
 
+function makeDh1LikeSet(): HardwareSet {
+  return {
+    set_id: 'DH1',
+    generic_set_id: 'DH1',
+    heading: 'Set DH1',
+    heading_door_count: 1,
+    heading_leaf_count: 2,
+    heading_doors: ['110-01B'],
+    items: [
+      { qty: 3, name: 'Hinges', model: DH1_HINGE_MODEL, finish: '626', manufacturer: 'Ives' },
+      { qty: 4, name: 'Hinges', model: DH1_HINGE_MODEL, finish: '626', manufacturer: 'Ives' },
+      { qty: 1, name: 'Hinges', model: ELEC_HINGE_MODEL, finish: '626', manufacturer: 'Ives' },
+    ],
+  }
+}
+
+// ── Integration: full buildPerOpeningItems output after the fix ─────────────
+
+describe('regression: 110-01B / DH1 pair-leaf hinge ghost', () => {
+  it('emits exactly one std-hinge row per leaf on a pair with electrified asymmetric hinge schedule', () => {
+    const hwSet = makeDh1LikeSet()
     const opening = { id: 'op-110-01B', door_number: '110-01B', hw_set: 'DH1' }
     const doorInfoMap = new Map([['110-01B', { door_type: 'A', frame_type: 'HM' }]])
     const setMap = new Map([['DH1', hwSet]])
@@ -49,27 +45,102 @@ describe('DIAGNOSIS: pair-leaf hinge ghost on 110-01B DH1', () => {
 
     const rows = buildPerOpeningItems([opening], doorInfoMap, setMap, doorToSetMap)
 
-    // Summarize for diagnosis.
-    const hingeRows = rows.filter(r => String(r['name'] ?? '').toLowerCase().includes('hinge'))
-    const byLeaf: Record<string, Array<{ qty: unknown; model: unknown }>> = {}
-    for (const r of hingeRows) {
+    const stdHinges = rows.filter(r => String(r['model'] ?? '') === DH1_HINGE_MODEL)
+    const stdByLeaf: Record<string, Array<{ qty: unknown }>> = {}
+    for (const r of stdHinges) {
       const side = String(r['leaf_side'] ?? 'unknown')
-      byLeaf[side] = byLeaf[side] ?? []
-      byLeaf[side].push({ qty: r['qty'], model: r['model'] })
+      stdByLeaf[side] = stdByLeaf[side] ?? []
+      stdByLeaf[side].push({ qty: r['qty'] })
     }
-    // eslint-disable-next-line no-console
-    console.log('DIAGNOSIS: hinge rows by leaf_side =', JSON.stringify(byLeaf, null, 2))
-    // eslint-disable-next-line no-console
-    console.log('DIAGNOSIS: total hinge rows =', hingeRows.length)
 
-    // Leaf 2 (inactive): ground truth expects ONE row at qty=4.
-    const inactiveStdHingeRows = (byLeaf['inactive'] ?? []).filter(
-      r => String(r.model ?? '').includes('NRP'),
-    )
-    // EXPECTED if the bug is present: two rows, qty 3 and qty 4.
-    // If this expectation holds, hypothesis confirmed.
-    expect(inactiveStdHingeRows).toHaveLength(2)
-    const inactiveQtys = inactiveStdHingeRows.map(r => r.qty).sort()
-    expect(inactiveQtys).toEqual([3, 4])
+    // Ground truth: 1 active std row (qty=3 = raw 4 − electric 1),
+    // 1 inactive std row (qty=4 raw). No duplicates on either leaf.
+    expect(stdByLeaf['active']).toHaveLength(1)
+    expect(stdByLeaf['inactive']).toHaveLength(1)
+    expect(stdByLeaf['active']?.[0].qty).toBe(3)
+    expect(stdByLeaf['inactive']?.[0].qty).toBe(4)
+
+    // Electric hinge stays single-row on the active leaf.
+    const electricRows = rows.filter(r => String(r['model'] ?? '') === ELEC_HINGE_MODEL)
+    expect(electricRows).toHaveLength(1)
+    expect(electricRows[0]['leaf_side']).toBe('active')
+    expect(electricRows[0]['qty']).toBe(1)
+
+    // Opening total = 8 hinge positions (3+1 active, 4 inactive).
+    const allHinges = rows.filter(r => String(r['name'] ?? '').toLowerCase().includes('hinge'))
+    const totalPositions = allHinges.reduce((s, r) => s + (typeof r['qty'] === 'number' ? (r['qty'] as number) : 0), 0)
+    expect(totalPositions).toBe(8)
+  })
+})
+
+// ── Helper unit tests ───────────────────────────────────────────────────────
+
+describe('consolidatePairLeafHingeRows', () => {
+  const mkHinge = (qty: number, model = DH1_HINGE_MODEL) => ({
+    name: 'Hinges' as const,
+    model,
+    qty,
+    finish: null,
+    manufacturer: null,
+  })
+
+  it('does nothing on single-leaf openings', () => {
+    const items = [mkHinge(3), mkHinge(4)]
+    const result = consolidatePairLeafHingeRows(items, false, 1)
+    expect(result.items).toHaveLength(2)
+    expect(result.consolidated).toBe(0)
+  })
+
+  it('does nothing when electric-hinge qty is zero', () => {
+    const items = [mkHinge(3), mkHinge(4)]
+    const result = consolidatePairLeafHingeRows(items, true, 0)
+    expect(result.items).toHaveLength(2)
+    expect(result.consolidated).toBe(0)
+  })
+
+  it('consolidates the canonical DH1 shape: drops the lower-qty row', () => {
+    const items = [mkHinge(3), mkHinge(4), { name: 'Hinges', model: ELEC_HINGE_MODEL, qty: 1, finish: null, manufacturer: null }]
+    const result = consolidatePairLeafHingeRows(items, true, 1)
+    expect(result.consolidated).toBe(1)
+    expect(result.items).toHaveLength(2)
+    const stdRow = result.items.find(i => i.model === DH1_HINGE_MODEL)
+    expect(stdRow?.qty).toBe(4)   // higher-qty kept
+  })
+
+  it('does not consolidate when delta does not match electric qty (ambiguous)', () => {
+    // electric=1, but qtys differ by 2 — not a per-leaf split shape.
+    const items = [mkHinge(2), mkHinge(4)]
+    const result = consolidatePairLeafHingeRows(items, true, 1)
+    expect(result.consolidated).toBe(0)
+    expect(result.items).toHaveLength(2)
+  })
+
+  it('does not consolidate three+ rows of the same name+model', () => {
+    // Ambiguous — cannot confidently identify which two belong to the split.
+    const items = [mkHinge(3), mkHinge(4), mkHinge(4)]
+    const result = consolidatePairLeafHingeRows(items, true, 1)
+    expect(result.consolidated).toBe(0)
+    expect(result.items).toHaveLength(3)
+  })
+
+  it('does not cross-consolidate different (name, model) groups', () => {
+    // Two separate hinge products, each with a single row — no consolidation.
+    const items = [
+      mkHinge(4, 'Model-A NRP'),
+      mkHinge(3, 'Model-B NRP'),
+    ]
+    const result = consolidatePairLeafHingeRows(items, true, 1)
+    expect(result.consolidated).toBe(0)
+    expect(result.items).toHaveLength(2)
+  })
+
+  it('leaves non-hinge items alone even when their qtys would match the heuristic', () => {
+    const items = [
+      { name: 'Closer', model: 'LCN 4040XP', qty: 3, finish: null, manufacturer: null },
+      { name: 'Closer', model: 'LCN 4040XP', qty: 4, finish: null, manufacturer: null },
+    ]
+    const result = consolidatePairLeafHingeRows(items, true, 1)
+    expect(result.consolidated).toBe(0)
+    expect(result.items).toHaveLength(2)
   })
 })

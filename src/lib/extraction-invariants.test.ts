@@ -517,3 +517,60 @@ describe('invariant (j) handing_consistency', () => {
     expect(v.filter(x => x.rule === 'handing_consistency')).toHaveLength(0)
   })
 })
+
+// ── Rule (k): pair_leaf_hinge_duplication ───────────────────────────────────
+
+describe('invariant (k) pair_leaf_hinge_duplication', () => {
+  it('passes when pair has exactly one std hinge row per leaf_side', () => {
+    const opening = makeOpening({ leaf_count: 2 })
+    const items: ItemFixture[] = [
+      makeItem({ id: 'h1', name: 'Hinges', model: '5BB1 NRP', qty: 3, leaf_side: 'active' }),
+      makeItem({ id: 'h2', name: 'Hinges', model: '5BB1 NRP', qty: 4, leaf_side: 'inactive' }),
+    ]
+    const v = runInvariants([opening], items, [])
+    expect(v.filter(x => x.rule === 'pair_leaf_hinge_duplication')).toHaveLength(0)
+  })
+
+  it('fires as warning when pair has two std hinge rows on the same leaf_side', () => {
+    const opening = makeOpening({ leaf_count: 2 })
+    const items: ItemFixture[] = [
+      makeItem({ id: 'h1', name: 'Hinges', model: '5BB1 NRP', qty: 3, leaf_side: 'inactive' }),
+      makeItem({ id: 'h2', name: 'Hinges', model: '5BB1 NRP', qty: 4, leaf_side: 'inactive' }),
+    ]
+    const v = runInvariants([opening], items, [])
+    const hit = v.find(x => x.rule === 'pair_leaf_hinge_duplication')
+    expect(hit).toBeDefined()
+    expect(hit?.severity).toBe('warning')
+    expect(hit?.details).toContain('inactive')
+  })
+
+  it('does not fire on single-leaf openings', () => {
+    const opening = makeOpening({ leaf_count: 1 })
+    const items: ItemFixture[] = [
+      makeItem({ id: 'h1', name: 'Hinges', model: '5BB1 NRP', qty: 3, leaf_side: 'active' }),
+      makeItem({ id: 'h2', name: 'Hinges', model: '5BB1 NRP', qty: 4, leaf_side: 'active' }),
+    ]
+    const v = runInvariants([opening], items, [])
+    expect(v.filter(x => x.rule === 'pair_leaf_hinge_duplication')).toHaveLength(0)
+  })
+
+  it('does not fire across different (name, model) on the same leaf', () => {
+    const opening = makeOpening({ leaf_count: 2 })
+    const items: ItemFixture[] = [
+      makeItem({ id: 'h1', name: 'Hinges', model: 'Model-A', qty: 3, leaf_side: 'active' }),
+      makeItem({ id: 'h2', name: 'Hinges', model: 'Model-B', qty: 4, leaf_side: 'active' }),
+    ]
+    const v = runInvariants([opening], items, [])
+    expect(v.filter(x => x.rule === 'pair_leaf_hinge_duplication')).toHaveLength(0)
+  })
+
+  it('ignores non-hinge items even when duplicated on the same leaf', () => {
+    const opening = makeOpening({ leaf_count: 2 })
+    const items: ItemFixture[] = [
+      makeItem({ id: 'c1', name: 'Closer', model: 'LCN 4040XP', qty: 1, leaf_side: 'active' }),
+      makeItem({ id: 'c2', name: 'Closer', model: 'LCN 4040XP', qty: 1, leaf_side: 'active' }),
+    ]
+    const v = runInvariants([opening], items, [])
+    expect(v.filter(x => x.rule === 'pair_leaf_hinge_duplication')).toHaveLength(0)
+  })
+})

@@ -769,6 +769,81 @@ export function isAsymmetricHingeSplit(
 }
 
 /**
+ * For pair openings, consolidate per-leaf standard-hinge duplicates that
+ * Python's extractor emits as separate rows on electrified pair doors.
+ *
+ * Context (110-01B / DH1 reproducer): the schedule PDF lists per-leaf
+ * hinge counts separately — 3 standard on Leaf 1 (reduced because the
+ * active leaf carries one electric hinge replacing a standard position)
+ * and 4 standard on Leaf 2. Python emits BOTH counts as distinct rows
+ * in `hwSet.items` with identical name + model but different qty. The
+ * downstream hinge-split branch in `buildPerOpeningItems` expects a
+ * single standard-hinge entry per set; two entries cause it to emit 4
+ * rows on the opening instead of 2 — producing the qty-3 / qty-4 ghost
+ * on both leaves that Matthew observed on 110-01B.
+ *
+ * Heuristic (conservative — per Matthew's 2026-04-18 decision "B":
+ * observability first, data-mutation second):
+ *
+ *   - Fires ONLY on pair sets with a known electric-hinge qty > 0.
+ *   - Groups standard-hinge items (category 'hinges') by name + model.
+ *   - Consolidates only groups with EXACTLY two rows where
+ *     `|qtyA − qtyB| === electricHingeQty`. Keeps the higher-qty row
+ *     (the inactive leaf's full count); the hinge-split branch then
+ *     computes `active = raw − electric` correctly.
+ *   - Any other duplicate shape (three or more rows, mismatched delta,
+ *     or no electric present) is left untouched. The
+ *     `pair_leaf_hinge_duplication` invariant surfaces these for human
+ *     review rather than mutating the data silently.
+ *
+ * Returns the possibly-shorter items array plus the drop count so the
+ * caller can breadcrumb.
+ */
+export function consolidatePairLeafHingeRows<
+  T extends { name: string; model?: string | null; qty?: number | null },
+>(
+  items: ReadonlyArray<T>,
+  isPair: boolean,
+  totalElectricHingeQty: number,
+): { items: T[]; consolidated: number } {
+  if (!isPair || totalElectricHingeQty <= 0 || items.length < 2) {
+    return { items: [...items], consolidated: 0 }
+  }
+
+  type Group = { indices: number[]; qtys: number[] }
+  const groups = new Map<string, Group>()
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i]
+    if (classifyItem(item.name, undefined, item.model ?? undefined) !== 'hinges') continue
+    const key = `${(item.name ?? '').trim().toLowerCase()}::${(item.model ?? '').trim().toLowerCase()}`
+    const bucket = groups.get(key) ?? { indices: [], qtys: [] }
+    bucket.indices.push(i)
+    bucket.qtys.push(item.qty ?? 0)
+    groups.set(key, bucket)
+  }
+
+  const dropIndices = new Set<number>()
+  for (const group of groups.values()) {
+    if (group.indices.length !== 2) continue
+    const [qA, qB] = group.qtys
+    if (Math.abs(qA - qB) !== totalElectricHingeQty) continue
+    // Keep the higher-qty row (inactive-leaf count); drop the lower. The
+    // hinge-split branch will compute `active = raw − electric` from the
+    // kept row, yielding exactly one active + one inactive row.
+    const dropIdx = qA < qB ? group.indices[0] : group.indices[1]
+    dropIndices.add(dropIdx)
+  }
+
+  if (dropIndices.size === 0) return { items: [...items], consolidated: 0 }
+
+  const kept: T[] = []
+  for (let i = 0; i < items.length; i++) {
+    if (!dropIndices.has(i)) kept.push(items[i])
+  }
+  return { items: kept, consolidated: dropIndices.size }
+}
+
+/**
  * Classify an item name into a category. Returns the category ID or 'unknown'.
  * Optionally accepts a manufacturer for fallback classification when the
  * item name is a model number only (e.g., "Von Duprin 99").
