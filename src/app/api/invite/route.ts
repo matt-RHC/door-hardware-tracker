@@ -49,25 +49,36 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Look up invitee by email using the admin client (auth.admin.listUsers
-    // is not available on the client SDK, so we query profiles or use the
-    // admin API). Use the admin client to find the user by email.
     const adminSupabase = createAdminSupabaseClient()
-    const { data: { users }, error: lookupError } = await adminSupabase.auth.admin.listUsers({
-      perPage: 1,
-      page: 1,
-    })
 
-    // Filter by email since listUsers doesn't support email filter directly
-    // Use getUserByEmail via the admin API
     let inviteeId: string | null = null
-    // Prefer the direct lookup method
-    const matchedUsers = (users ?? []).filter(u => u.email === email.toLowerCase())
-    if (matchedUsers.length > 0) {
-      inviteeId = matchedUsers[0].id
+    const PAGE_SIZE = 500
+    const MAX_PAGES = 20
+
+    for (let page = 1; page <= MAX_PAGES; page++) {
+      const { data: { users }, error: lookupError } = await adminSupabase.auth.admin.listUsers({
+        perPage: PAGE_SIZE,
+        page,
+      })
+
+      if (lookupError) {
+        console.error('Error looking up user by email:', lookupError)
+        return NextResponse.json(
+          { error: 'Failed to look up user' },
+          { status: 500 }
+        )
+      }
+
+      const match = (users ?? []).find(u => u.email?.toLowerCase() === email.toLowerCase())
+      if (match) {
+        inviteeId = match.id
+        break
+      }
+
+      if (!users || users.length < PAGE_SIZE) break
     }
 
-    if (lookupError || !inviteeId) {
+    if (!inviteeId) {
       return NextResponse.json(
         { error: 'No user found with that email. They must sign up first.' },
         { status: 404 }
