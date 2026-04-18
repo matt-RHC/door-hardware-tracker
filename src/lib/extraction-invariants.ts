@@ -24,6 +24,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/types/database'
 import type { HardwareSet } from '@/lib/types'
 import { classifyItemScope, normalizeDoorNumber } from '@/lib/parse-pdf-helpers'
+import { inferHandingDirection } from '@/lib/hardware-handing-filter'
 
 // ── Rule identifiers ────────────────────────────────────────────────────────
 //
@@ -39,6 +40,7 @@ export type InvariantRule =
   | 'heading_door_set_mismatch'
   | 'per_leaf_qty_sum_mismatch'
   | 'leaf_count_consistency'
+  | 'handing_consistency'
 
 export type InvariantSeverity = 'blocker' | 'warning'
 
@@ -92,6 +94,7 @@ type OpeningRow = {
   hw_set: string | null
   leaf_count: number
   location: string | null
+  hand: string | null
 }
 
 type HardwareItemRow = {
@@ -168,7 +171,7 @@ export async function validateExtractionRun(
   // 3) Promoted openings for this run's doors
   const { data: openingRows, error: openingsErr } = await supabase
     .from('openings')
-    .select('id, door_number, hw_set, leaf_count, location')
+    .select('id, door_number, hw_set, leaf_count, location, hand')
     .eq('project_id', projectId)
     .in('door_number', doorNumbers)
 
@@ -385,6 +388,32 @@ export function runInvariants(
           details: `opening.leaf_count=${opening.leaf_count} but item "${inactiveLeafItem.name}" has leaf_side="inactive" (indicates pair). Backend pair detection is inconsistent.`,
           severity: 'blocker',
         })
+      }
+    }
+
+    // (j) handing_consistency — on single-leaf openings, no item may carry
+    //     a handing token (RHR/LHR/RHRA/LHRA/RH/LH) that contradicts
+    //     opening.hand. The hardware-handing-filter runs pre-save to drop
+    //     mismatches; this invariant backstops any that slip past (pair
+    //     openings are skipped — pair-leaf handing is a separate axis,
+    //     handled in the pair-leaf attribution workstream).
+    if (opening.leaf_count === LEAF_COUNT_SINGLE) {
+      const openingDir = inferHandingDirection(opening.hand)
+      if (openingDir !== null) {
+        for (const item of ois) {
+          const itemName = item.name ?? ''
+          const haystack = item.model ? `${itemName} ${item.model}` : itemName
+          const itemDir = inferHandingDirection(haystack)
+          if (itemDir !== null && itemDir !== openingDir) {
+            violations.push({
+              rule: 'handing_consistency',
+              opening_id: opening.id,
+              door_number: opening.door_number,
+              details: `Item "${itemName}"${item.model ? ` (${item.model})` : ''} has handing ${itemDir} but opening.hand="${opening.hand}" (${openingDir}) on a single-leaf opening.`,
+              severity: 'blocker',
+            })
+          }
+        }
       }
     }
   }

@@ -1,5 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
+import * as Sentry from '@sentry/nextjs'
 import { createAdminSupabaseClient } from '@/lib/supabase/admin'
+import {
+  filterAllItemsByOpeningHand,
+  type OpeningHandRecord,
+} from '@/lib/hardware-handing-filter'
+import { logActivity } from '@/lib/activity-log'
+import { ACTIVITY_ACTIONS } from '@/lib/constants/activity-actions'
 import { fetchProjectPdf } from '@/lib/pdf-storage'
 import { extractFireRatings } from '@/lib/fire-rating'
 import { scoreExtraction } from '@/lib/confidence-scoring'
@@ -1286,7 +1293,7 @@ export async function POST(
     // 6c. Build per-opening items (structural rows + leaf_side + hinge split).
     // buildPerOpeningItems calls detectIsPair internally with the same
     // (hwSet, doorInfo) pair used above for leaf_count.
-    const allItems = buildPerOpeningItems(
+    const builtItems = buildPerOpeningItems(
       stagingOpeningRows ?? [],
       doorInfoMap,
       setMap,
@@ -1294,6 +1301,79 @@ export async function POST(
       'staging_opening_id',
       { extraction_run_id: runId },
     )
+
+    // 6c-bis. Handing filter — drop items whose inferred handing token
+    // contradicts opening.hand on single-leaf openings. Pair openings are
+    // skipped (pair-handing is a separate workstream). Parity with
+    // src/app/api/parse-pdf/save/route.ts — see that file and
+    // src/lib/hardware-handing-filter.ts for full rule detail.
+    const handByDoorNumber = new Map<string, { hand: string | null; leafCount: number }>()
+    for (const so of stagingOpenings) {
+      handByDoorNumber.set(so.door_number, {
+        hand: so.hand ?? null,
+        leafCount: so.leaf_count ?? 1,
+      })
+    }
+    const openingHandMap: OpeningHandRecord[] = (stagingOpeningRows ?? []).map(
+      (row: { id: string; door_number: string }) => {
+        const meta = handByDoorNumber.get(row.door_number)
+        return {
+          id: row.id,
+          doorNumber: row.door_number,
+          hand: meta?.hand ?? null,
+          leafCount: meta?.leafCount ?? 1,
+        }
+      },
+    )
+    const handingFilter = filterAllItemsByOpeningHand(
+      builtItems,
+      openingHandMap,
+      'staging_opening_id',
+    )
+    const allItems = handingFilter.kept
+
+    if (handingFilter.dropped.length > 0) {
+      Sentry.addBreadcrumb({
+        category: 'extraction.jobs_run.handing_filter',
+        level: 'info',
+        message: 'handing filter drops',
+        data: {
+          runId,
+          jobId,
+          droppedCount: handingFilter.dropped.length,
+          openingsWithUnknownHand: handingFilter.openingsWithUnknownHand,
+          pairOpeningsSkipped: handingFilter.pairOpeningsSkipped,
+          sample: handingFilter.dropped.slice(0, 10).map(d => ({
+            door: d.doorNumber,
+            name: d.itemName,
+            model: d.itemModel,
+            itemHanding: d.itemHanding,
+            openingHand: d.openingHand,
+          })),
+        },
+      })
+      void logActivity({
+        projectId,
+        userId: claimed.created_by,
+        action: ACTIVITY_ACTIONS.EXTRACTION_HANDING_FILTER_APPLIED,
+        entityType: 'extraction_job',
+        entityId: runId,
+        details: {
+          runId,
+          jobId,
+          droppedCount: handingFilter.dropped.length,
+          openingsWithUnknownHand: handingFilter.openingsWithUnknownHand,
+          pairOpeningsSkipped: handingFilter.pairOpeningsSkipped,
+          drops: handingFilter.dropped.map(d => ({
+            door_number: d.doorNumber,
+            item_name: d.itemName,
+            item_model: d.itemModel,
+            item_handing: d.itemHanding,
+            opening_hand: d.openingHand,
+          })),
+        },
+      })
+    }
 
     // 6d. Chunk-insert staging hardware items (same pattern as save/route.ts)
     const ITEM_CHUNK_SIZE = 50

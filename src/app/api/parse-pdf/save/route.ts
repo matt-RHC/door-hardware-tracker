@@ -14,7 +14,12 @@ import {
 } from '@/lib/parse-pdf-helpers'
 import { validateExtractionRun, summarizeReport } from '@/lib/extraction-invariants'
 import type { InvariantViolation } from '@/lib/extraction-invariants'
+import {
+  filterAllItemsByOpeningHand,
+  type OpeningHandRecord,
+} from '@/lib/hardware-handing-filter'
 import { logActivity } from '@/lib/activity-log'
+import { ACTIVITY_ACTIONS } from '@/lib/constants/activity-actions'
 import { validateJson, errorResponse } from '@/lib/api-helpers/validate'
 import { ParsePdfSaveRequestSchema } from '@/lib/schemas/parse-pdf'
 
@@ -235,7 +240,7 @@ export async function POST(request: NextRequest) {
     // buildPerOpeningItems calls detectIsPair internally with the same
     // (hwSet, doorInfo) pair used above for leaf_count, so the two stay
     // consistent without an externally-threaded map.
-    const allItems = buildPerOpeningItems(
+    const builtItems = buildPerOpeningItems(
       stagingOpeningRows ?? [],
       doorInfoMap,
       setMap,
@@ -243,6 +248,79 @@ export async function POST(request: NextRequest) {
       'staging_opening_id',
       { extraction_run_id: runId },
     )
+
+    // 5b. Handing filter — drop items whose inferred handing token
+    // contradicts opening.hand on single-leaf openings (e.g. an LHR Exit
+    // Device row on an RHR opening). Pair openings are skipped; pair-
+    // handing nuance belongs to the pair-leaf attribution workstream.
+    // See src/lib/hardware-handing-filter.ts for scope + rule detail, and
+    // extraction-invariants.ts rule (j) for the backstop invariant.
+    const handByDoorNumber = new Map<string, { hand: string | null; leafCount: number }>()
+    for (const so of stagingOpenings) {
+      handByDoorNumber.set(so.door_number, {
+        hand: so.hand ?? null,
+        leafCount: so.leaf_count ?? 1,
+      })
+    }
+    const openingHandMap: OpeningHandRecord[] = (stagingOpeningRows ?? []).map(
+      (row: { id: string; door_number: string }) => {
+        const meta = handByDoorNumber.get(row.door_number)
+        return {
+          id: row.id,
+          doorNumber: row.door_number,
+          hand: meta?.hand ?? null,
+          leafCount: meta?.leafCount ?? 1,
+        }
+      },
+    )
+    const handingFilter = filterAllItemsByOpeningHand(
+      builtItems,
+      openingHandMap,
+      'staging_opening_id',
+    )
+    const allItems = handingFilter.kept
+
+    if (handingFilter.dropped.length > 0) {
+      Sentry.addBreadcrumb({
+        category: 'extraction.save.handing_filter',
+        level: 'info',
+        message: 'handing filter drops',
+        data: {
+          runId,
+          droppedCount: handingFilter.dropped.length,
+          openingsWithUnknownHand: handingFilter.openingsWithUnknownHand,
+          pairOpeningsSkipped: handingFilter.pairOpeningsSkipped,
+          // Bounded sample — full list lives in activity_log.
+          sample: handingFilter.dropped.slice(0, 10).map(d => ({
+            door: d.doorNumber,
+            name: d.itemName,
+            model: d.itemModel,
+            itemHanding: d.itemHanding,
+            openingHand: d.openingHand,
+          })),
+        },
+      })
+      void logActivity({
+        projectId,
+        userId: user.id,
+        action: ACTIVITY_ACTIONS.EXTRACTION_HANDING_FILTER_APPLIED,
+        entityType: 'extraction_job',
+        entityId: runId,
+        details: {
+          runId,
+          droppedCount: handingFilter.dropped.length,
+          openingsWithUnknownHand: handingFilter.openingsWithUnknownHand,
+          pairOpeningsSkipped: handingFilter.pairOpeningsSkipped,
+          drops: handingFilter.dropped.map(d => ({
+            door_number: d.doorNumber,
+            item_name: d.itemName,
+            item_model: d.itemModel,
+            item_handing: d.itemHanding,
+            opening_hand: d.openingHand,
+          })),
+        },
+      })
+    }
 
     // Breadcrumbs (not errors) — give us context in Sentry for any later
     // alert that fires on this run, without adding noise by themselves.

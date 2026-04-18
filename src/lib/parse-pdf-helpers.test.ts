@@ -2609,7 +2609,7 @@ describe('golden PDF smoke — buildPerOpeningItems emits invariant-clean rows',
     hw_set: string | null,
     leaf_count: number,
   ) {
-    return { id, door_number, hw_set, leaf_count, location: 'Corridor' }
+    return { id, door_number, hw_set, leaf_count, location: 'Corridor', hand: null }
   }
 
   it('Radius DC DH4A.1 pair opening passes all invariants after build', () => {
