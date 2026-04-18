@@ -8,6 +8,10 @@
     {
       "path": "/api/cron/process-jobs",
       "schedule": "*/2 * * * *"
+    },
+    {
+      "path": "/api/cron/reap-stuck-runs",
+      "schedule": "*/30 * * * *"
     }
   ],
   "functions": {
@@ -60,6 +64,9 @@
       "maxDuration": 10
     },
     "src/app/api/cron/process-jobs/route.ts": {
+      "maxDuration": 30
+    },
+    "src/app/api/cron/reap-stuck-runs/route.ts": {
       "maxDuration": 30
     },
     "api/extract-tables.py": {
