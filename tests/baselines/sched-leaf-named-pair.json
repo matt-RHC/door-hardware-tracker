@@ -1,0 +1,104 @@
+{
+  "pdf_name": "sched-leaf-named-pair.synthetic.pdf",
+  "door_count": 2,
+  "confirmed_count": 2,
+  "flagged_count": 0,
+  "hw_set_count": 1,
+  "tables_found": 1,
+  "reference_code_count": 0,
+  "_synthetic": true,
+  "_notes": "Synthetic fixture seating PR #312's PRIMARY pair-detection signal (detectIsPair reads the leaf-named Door rows from hwSet.items and decides leaf_count=2 before heading_leaf_count/size/keyword fallbacks run). The two 'Door (Active Leaf)' / 'Door (Inactive Leaf)' rows are the ground-truth signal — if a future Darrin correction ever strips or renames them, the applyCorrections guard in parse-pdf-helpers.ts:~1467 refuses the mutation. Exercised by src/lib/__tests__/detectIsPair.primary-signal.test.ts.",
+  "hardware_sets": [
+    {
+      "set_id": "DH-PAIR-TEST",
+      "heading": "Main Entry — Pair",
+      "heading_door_count": 2,
+      "heading_leaf_count": 4,
+      "heading_doors": ["100-01A", "100-02A"],
+      "pdf_page": 1,
+      "item_count": 6,
+      "items": [
+        {
+          "name": "Door (Active Leaf)",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": 1,
+          "qty_door_count": 1,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Door (Inactive Leaf)",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": 1,
+          "qty_door_count": 1,
+          "manufacturer": "",
+          "model": "",
+          "finish": ""
+        },
+        {
+          "name": "Hinges",
+          "qty": 3,
+          "qty_source": "parsed",
+          "qty_total": 3,
+          "qty_door_count": 1,
+          "manufacturer": "Ives",
+          "model": "5BB1",
+          "finish": "626"
+        },
+        {
+          "name": "Exit Device",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": 1,
+          "qty_door_count": 1,
+          "manufacturer": "Von Duprin",
+          "model": "99L",
+          "finish": "626"
+        },
+        {
+          "name": "Closer",
+          "qty": 1,
+          "qty_source": "parsed",
+          "qty_total": 1,
+          "qty_door_count": 1,
+          "manufacturer": "LCN",
+          "model": "4040XP",
+          "finish": "689"
+        },
+        {
+          "name": "Silencer",
+          "qty": 3,
+          "qty_source": "parsed",
+          "qty_total": 3,
+          "qty_door_count": 1,
+          "manufacturer": "Ives",
+          "model": "SR64",
+          "finish": ""
+        }
+      ]
+    }
+  ],
+  "doors": [
+    {
+      "door_number": "100-01A",
+      "hw_set": "DH-PAIR-TEST",
+      "location": "Main Entry",
+      "door_type": "6'0\" x 7'0\" HM",
+      "frame_type": "HM",
+      "fire_rating": "",
+      "hand": "LHR"
+    },
+    {
+      "door_number": "100-02A",
+      "hw_set": "DH-PAIR-TEST",
+      "location": "Main Entry",
+      "door_type": "6'0\" x 7'0\" HM",
+      "frame_type": "HM",
+      "fire_rating": "",
+      "hand": "RHR"
+    }
+  ]
+}

@@ -239,6 +239,7 @@ CRITICAL RULES:
 - FIELD SPLITTING: The name field should contain ONLY the hardware category name (e.g., "Closer", "Hinges", "Exit Device"). If an item's name contains model numbers, finish codes, or manufacturer abbreviations, report it as items_to_fix.
 - If pdfplumber found VERY FEW doors but the PDF clearly has more, extract the missing doors from the PDF. This is common with schedule-format PDFs where doors are listed inline in heading blocks rather than in a separate table.
 - Cross-reference: fire-rated doors must have fire-rated hardware. Flag any fire-rated opening missing a closer or positive latching.
+- NEVER put rows named "Door (Active Leaf)" or "Door (Inactive Leaf)" in items_to_remove, AND never use items_to_fix with field='name' to rename them. These are structural markers Python uses to detect pair doors — removing or renaming them breaks leaf detection downstream.
 
 If the extraction is accurate and complete, return: {"overall_confidence": "high", "notes": "Extraction looks solid."}`
 }

@@ -8,7 +8,7 @@ import {
   buildPerOpeningItems,
   buildDoorToSetMap,
   buildSetLookupMap,
-  detectIsPair,
+  detectIsPairWithTrace,
   normalizeDoorNumber,
   wouldProduceZeroItems,
 } from '@/lib/parse-pdf-helpers'
@@ -195,7 +195,12 @@ export async function POST(request: NextRequest) {
       const doorKey = normalizeDoorNumber(d.door_number)
       const hwSet = doorToSetMap.get(doorKey) ?? setMap.get(d.hw_set ?? '')
       const doorInfo = doorInfoMap.get(d.door_number)
-      const isPair = detectIsPair(hwSet, doorInfo)
+      const isPair = detectIsPairWithTrace(hwSet, doorInfo, {
+        runId,
+        set_id: hwSet?.set_id ?? d.hw_set ?? null,
+        door_number: d.door_number,
+        source: 'save',
+      })
       return {
         door_number: d.door_number,
         hw_set: d.hw_set || undefined,

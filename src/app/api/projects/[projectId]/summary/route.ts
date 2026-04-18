@@ -100,6 +100,13 @@ export async function GET(
     let openingsWithDoorDrawing = 0
     let openingsWithFrameDrawing = 0
 
+    // Item counts below are per-leaf on pair doors: buildPerOpeningItems
+    // emits one row per leaf for split-placement categories (closer, hinges,
+    // kick plate, etc. — see PAIR_LEAF_PLACEMENT in hardware-taxonomy.ts),
+    // which reflects the physical installed count. A pair door with "1
+    // closer" in its hardware set genuinely has 2 installed closers, one
+    // per leaf. Shared items (strike, coordinator, threshold) stay as one
+    // row with null leaf_side.
     for (const opening of openings) {
       const items = opening.hardware_items || []
       const checklists = opening.checklist_progress || []

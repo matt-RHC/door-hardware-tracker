@@ -166,6 +166,10 @@ export async function GET(
     }
 
     // --- Totals ---
+    // Note: progressRows / stageRows / totalItems count per-leaf rows on
+    // pair doors (split-placement items emit one row per leaf — see
+    // PAIR_LEAF_PLACEMENT in hardware-taxonomy.ts and the
+    // projects/[id]/summary route for the full rationale).
     const totalItems = progressRows.length
     const completedItems = progressRows.filter(
       (r: { qa_qc: boolean; installed: boolean }) => r.qa_qc || r.installed

@@ -76,7 +76,11 @@ export async function GET(
       )
     }
 
-    // Transform data to include counts + per-stage breakdown
+    // Transform data to include counts + per-stage breakdown.
+    //
+    // total_items counts per-leaf rows on pair doors (split-placement items
+    // emit one row per leaf — see PAIR_LEAF_PLACEMENT in hardware-taxonomy.ts
+    // and the projects/[id]/summary route for the full rationale).
     const transformedOpenings = (openings as OpeningWithCounts[]).map((opening) => {
       const cp = opening.checklist_progress || []
       return {

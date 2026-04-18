@@ -114,7 +114,13 @@ export async function GET(
       )
     }
 
-    // Build CSV: one row per hardware item, grouped by door
+    // Build CSV: one row per hardware item, grouped by door.
+    //
+    // Pair-door note: split-placement items (closer, kick plate, hinges,
+    // etc.) appear as two CSV rows — one per leaf — with leaf_side set to
+    // 'active'/'inactive'. This mirrors the per-leaf row emission from
+    // buildPerOpeningItems and reflects real installed counts. See
+    // PAIR_LEAF_PLACEMENT in hardware-taxonomy.ts.
     const headers = [
       'Door Number',
       'HW Set',
