@@ -484,6 +484,12 @@ describe('END-TO-END: pair door hinge distribution (THE critical regression test
 
 describe('groupItemsByLeaf — electric hinge does not affect non-hinge items', () => {
   it('closer and lockset route normally alongside electric hinge', () => {
+    // 2026-04-18: Updated for PAIR_LEAF_PLACEMENT routing.
+    // Under the new placement map: Lockset is 'active' (active leaf only),
+    // Closer is 'split' (both leaves), Coordinator is 'shared'. This asserts
+    // the electric-hinge qty adjustment still layers cleanly on top of the
+    // placement map — it only subtracts from the standard hinge row on the
+    // active leaf and doesn't leak into other hardware's routing.
     const items: LeafGroupableItem[] = [
       makeItem('Hinges', { qty: 4, model: '5BB1 HW NRP' }),
       makeItem('Hinges', { qty: 1, model: '5BB1 HW CON TW8' }),
@@ -497,19 +503,25 @@ describe('groupItemsByLeaf — electric hinge does not affect non-hinge items', 
     // Shared: Coordinator + Frame
     expect(shared.map(i => i.name)).toEqual(['Coordinator', 'Frame'])
 
-    // Active leaf: 3 standard hinges + 1 electric + closer + lockset
+    // Active leaf: 3 standard hinges (4-1) + 1 electric + closer + lockset
     expect(leaf1).toHaveLength(4)
     expect(leaf1[0].qty).toBe(3) // standard hinge: 4-1
     expect(leaf1[1].qty).toBe(1) // electric hinge
-    // Closer and Lockset unchanged
     const closerOnActive = leaf1.find(i => i.name === 'Closer')
     expect(closerOnActive).toBeDefined()
     expect(closerOnActive!.qty).toBe(1)
+    const locksetOnActive = leaf1.find(i => i.name === 'Lockset')
+    expect(locksetOnActive).toBeDefined()
+    expect(locksetOnActive!.qty).toBe(1)
 
-    // Inactive leaf: 4 standard hinges + closer + lockset (no electric)
-    expect(leaf2).toHaveLength(3)
-    expect(leaf2[0].qty).toBe(4) // standard hinge: full qty
+    // Inactive leaf: 4 standard hinges (full qty, no electric adjust) + closer
+    // Lockset is placement='active' → must NOT appear on leaf2 under the
+    // duplication fix; prior behavior mirrored it and inflated the count.
+    expect(leaf2).toHaveLength(2)
+    expect(leaf2.some(i => i.name === 'Hinges' && i.qty === 4)).toBe(true)
     expect(leaf2.some(i => i.model?.includes('CON TW'))).toBe(false)
+    expect(leaf2.some(i => i.name === 'Closer')).toBe(true)
+    expect(leaf2.some(i => i.name === 'Lockset')).toBe(false)
   })
 })
 

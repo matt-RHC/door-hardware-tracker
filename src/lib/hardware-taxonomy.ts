@@ -864,6 +864,114 @@ export function validateQty(
 }
 
 /**
+ * Pair-door leaf placement by category.
+ *
+ * Encodes where each hardware category physically installs on a pair door —
+ * independent of the taxonomy's `install_scope` (which answers "how does the
+ * qty scale?"). Install scope tells us how to divide; this map tells us where
+ * the thing ENDS UP.
+ *
+ * Why this exists (2026-04-18): Radius DC grid-RR Door 110-01B rendered
+ * qty=1 items (Cylinder Housing, Temp IC Core, Permanent Core, Wire Harness)
+ * on BOTH leaves of a pair. Those items are per_leaf / per_opening by scope,
+ * so computeLeafSide() deferred (returned null) and the render fallback
+ * routed them to both leaves — visually duplicating the qty.
+ *
+ * The fix: once we know the category, we also know where it installs. A
+ * single cylinder housing for a lockset belongs on the active leaf (where
+ * the lockset is). A flush bolt belongs on the inactive leaf. We stop
+ * treating "scope" as the answer to a different question.
+ *
+ * Values:
+ *   - 'active'   → installs on the active leaf only (lockset/exit-device
+ *                  sided items, wiring that enters through the active leaf,
+ *                  auto-operator mounted above the active leaf)
+ *   - 'inactive' → installs on the inactive leaf only (flush bolts,
+ *                  dust-proof strikes recessed into the inactive leaf)
+ *   - 'shared'   → one unit spans the whole opening (thresholds, astragals,
+ *                  coordinators, gaskets)
+ *   - 'split'    → genuinely per-leaf; emit one row per leaf so each can
+ *                  be tracked / completed independently (hinges, closers,
+ *                  kick plates)
+ *
+ * Unknown categories fall back in getPairLeafPlacement() below.
+ */
+export const PAIR_LEAF_PLACEMENT: Record<string, 'active' | 'inactive' | 'shared' | 'split'> = {
+  // --- Active leaf only ---
+  // The active leaf carries the operating hardware on a pair door.
+  lockset: 'active',
+  exit_device: 'active',
+  cylinder_housing: 'active',
+  core: 'active',
+  elec_modification: 'active',
+  wire_harness: 'active',
+  electric_hinge: 'active',   // DHI standard; also special-cased at save time
+  auto_operator: 'active',
+
+  // --- Inactive leaf only ---
+  // Bolts and their catches live on the inactive leaf.
+  flush_bolt: 'inactive',
+  dust_proof_strike: 'inactive',
+
+  // --- Shared (one per opening / frame) ---
+  strike: 'shared',
+  coordinator: 'shared',
+  astragal: 'shared',
+  mullion: 'shared',
+  threshold: 'shared',
+  gasket: 'shared',
+  smoke_seal: 'shared',
+  gasketing: 'shared',
+  acoustic_seal: 'shared',
+  weatherstrip: 'shared',
+  rain_drip: 'shared',
+  silencer: 'shared',
+  by_others: 'shared',
+
+  // --- Split across both leaves ---
+  // Genuinely per-leaf items; save path emits one row per leaf.
+  hinges: 'split',
+  continuous_hinge: 'split',
+  pivot_hinge: 'split',
+  spring_hinge: 'split',
+  closer: 'split',
+  kick_plate: 'split',
+  stop: 'split',
+  door_sweep: 'split',
+  viewer: 'split',
+  signage: 'split',
+  // Note: `silencer` is frame-mounted hardware (per_frame scope) and lives
+  // in the shared block above — not here — so a typical 3-per-opening
+  // silencer qty isn't duplicated to 6 on pair doors.
+}
+
+/**
+ * Resolve where a hardware category installs on a pair door, with a
+ * conservative fallback for unknown categories.
+ *
+ * Fallback rules (when `category` is 'unknown' or not in the map):
+ *   - qty <= 1 → 'shared'  (treat a single item as opening-level; prevents
+ *                the pre-fix duplication where qty=1 items rendered on both
+ *                leaves, visually doubling the count)
+ *   - qty >  1 → 'split'   (preserve prior behavior — likely per-leaf item)
+ *
+ * Single-door callers should not need this — a single door has no pair
+ * placement decision to make. Guarded by callers via `isPair` checks.
+ */
+export function getPairLeafPlacement(
+  category: string | null | undefined,
+  qty: number | null | undefined,
+): 'active' | 'inactive' | 'shared' | 'split' {
+  const mapped = category ? PAIR_LEAF_PLACEMENT[category] : undefined
+  if (mapped) return mapped
+  // Fallback: qty=1 → shared, qty>1 → split.
+  // The qty=1 → shared rule is the 2026-04-18 duplication fix: an unknown
+  // single-qty item on a pair door is treated as opening-level rather than
+  // mirrored onto both leaves.
+  return (qty ?? 0) > 1 ? 'split' : 'shared'
+}
+
+/**
  * Export taxonomy as a compact string for use in LLM prompts.
  * Keeps it concise to minimize token usage.
  */

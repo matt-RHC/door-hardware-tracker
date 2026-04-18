@@ -1426,18 +1426,24 @@ describe('buildPerOpeningItems — pair detection', () => {
     const nrpInactive = nrpRows.find(r => r.leaf_side === 'inactive')
     expect(nrpInactive?.qty).toBe(4) // raw per-leaf (no subtraction on inactive)
 
-    // Non-hinge items: unchanged behavior
+    // 2026-04-18: placement map routes pair-door hardware by physical
+    // install location rather than by scope. Exit device → active leaf;
+    // flush bolt → inactive leaf; coordinator → shared.
     const exitDevice = rows.find(r => (r.name as string).includes('Exit Device'))
-    expect(exitDevice?.leaf_side).toBeNull() // per_opening, ambiguous
+    expect(exitDevice?.leaf_side).toBe('active')
 
     const flushBolt = rows.find(r => (r.name as string).includes('Flush Bolt'))
-    expect(flushBolt?.leaf_side).toBe('shared') // per_pair → shared
+    expect(flushBolt?.leaf_side).toBe('inactive')
 
     const coordinator = rows.find(r => (r.name as string).includes('Coordinator'))
-    expect(coordinator?.leaf_side).toBe('shared') // per_pair → shared
+    expect(coordinator?.leaf_side).toBe('shared')
   })
 
-  it('does NOT split standard hinges when no electric hinge is present on pair doors', () => {
+  it('splits standard hinges per-leaf on pair doors even without electric hinges', () => {
+    // 2026-04-18: hinges are always split on pair doors (PAIR_LEAF_PLACEMENT
+    // = 'split') so each leaf's hinges can be tracked independently in the
+    // checklist. Previously the save path only split when electric hinges
+    // were present; now split is the default for all split-category items.
     const hwSet: HardwareSet = {
       set_id: 'DH2.0',
       heading: 'PAIR DOORS - DH2',
@@ -1455,11 +1461,20 @@ describe('buildPerOpeningItems — pair detection', () => {
 
     const rows = buildPerOpeningItems(openings, doorInfoMap, setMap, doorToSetMap)
 
-    // Standard hinges: single row (no split), leaf_side=null (ambiguous per_leaf)
+    // Standard hinges: split into active + inactive rows at same qty
+    // (no electric hinge present, so active qty is NOT reduced).
     const hingeRows = rows.filter(r => (r.name as string).includes('Hinges'))
-    expect(hingeRows).toHaveLength(1)
-    expect(hingeRows[0].qty).toBe(4)
-    expect(hingeRows[0].leaf_side).toBeNull() // no electric → no special treatment
+    expect(hingeRows).toHaveLength(2)
+    const activeHinge = hingeRows.find(r => r.leaf_side === 'active')
+    const inactiveHinge = hingeRows.find(r => r.leaf_side === 'inactive')
+    expect(activeHinge?.qty).toBe(4)
+    expect(inactiveHinge?.qty).toBe(4)
+
+    // Closer is also split-category on pairs.
+    const closerRows = rows.filter(r => (r.name as string).includes('Closer'))
+    expect(closerRows).toHaveLength(2)
+    expect(closerRows.find(r => r.leaf_side === 'active')?.qty).toBe(1)
+    expect(closerRows.find(r => r.leaf_side === 'inactive')?.qty).toBe(1)
   })
 
   it('keeps electric hinge as-is on single doors (no pair leaf splitting)', () => {
@@ -1518,51 +1533,73 @@ describe('computeLeafSide — per-item leaf attribution', () => {
     expect(computeLeafSide('Door', 2)).toBeNull()
   })
 
-  it('returns shared for per_pair items (coordinator, flush bolt, astragal)', () => {
-    expect(computeLeafSide('Coordinator', 2)).toBe('shared')
-    expect(computeLeafSide('Flush Bolt Kit FB32', 2)).toBe('shared')
-    expect(computeLeafSide('Astragal', 2)).toBe('shared')
-  })
+  // 2026-04-18: computeLeafSide now consults PAIR_LEAF_PLACEMENT for pair
+  // doors, so it returns a definite leaf_side for items whose physical
+  // install location is known. The previous contract (return null for any
+  // per_leaf / per_opening / unknown item on a pair) was the root cause of
+  // the Radius DC grid-RR duplication — qty=1 items with null leaf_side
+  // rendered on both leaves. Tests below lock the new contract.
 
-  it('returns shared for per_frame items (threshold, seals, silencer)', () => {
+  it('returns shared for items that physically install once per opening', () => {
+    expect(computeLeafSide('Coordinator', 2)).toBe('shared')
+    expect(computeLeafSide('Astragal', 2)).toBe('shared')
     expect(computeLeafSide('Threshold 655BK', 2)).toBe('shared')
     expect(computeLeafSide('Gasketing', 2)).toBe('shared')
     expect(computeLeafSide('Silencer', 2)).toBe('shared')
     expect(computeLeafSide('Weatherstrip', 2)).toBe('shared')
   })
 
-  it('returns null for per_leaf items on pairs (ambiguous — render-time decides)', () => {
-    // Hinges, exit devices, kick plates: could go on active, inactive,
-    // or both leaves depending on spec. Keep NULL so the UI keeps the
-    // existing behavior until the triage UI lets users set it explicitly.
+  it('returns inactive for flush bolts and dust proof strikes', () => {
+    // Flush bolts live on the inactive leaf, not shared — this is the
+    // change from the prior scope-based routing.
+    expect(computeLeafSide('Flush Bolt Kit FB32', 2)).toBe('inactive')
+    expect(computeLeafSide('Dust Proof Strike DP2', 2)).toBe('inactive')
+  })
+
+  it('returns active for lockset-sided hardware on pair doors', () => {
+    // The placement map sends these to the active leaf (Radius DC fix).
+    expect(computeLeafSide('Mortise Lockset L9080', 2)).toBe('active')
+    expect(computeLeafSide('Exit Device 9875', 2)).toBe('active')
+    expect(computeLeafSide('Cylinder Housing 20-057', 2, undefined, 1)).toBe('active')
+    expect(computeLeafSide('Permanent Core 23-030', 2, undefined, 1)).toBe('active')
+    expect(computeLeafSide('Wire Harness CON-6W', 2, undefined, 1)).toBe('active')
+  })
+
+  it('returns active for electric / conductor hinges on pair doors', () => {
+    // Electric hinges carry wiring between frame and active leaf; they are
+    // never installed on the inactive leaf (DHI standard practice). The
+    // placement map encodes this so the save path stamps leaf_side=active
+    // even without special-casing in buildPerOpeningItems.
+    expect(computeLeafSide('Hinges 5BB1 4.5x4.5 CON TW8', 2)).toBe('active')
+    expect(computeLeafSide('Electric Hinge ETH', 2)).toBe('active')
+    expect(computeLeafSide('Conductor Hinge', 2)).toBe('active')
+    expect(computeLeafSide('Power Transfer Hinge', 2)).toBe('active')
+  })
+
+  it('returns null for split-category items (caller emits two rows)', () => {
+    // Hinges, closers, kick plates install on BOTH leaves. computeLeafSide
+    // returns null so the save path (buildPerOpeningItems) knows to emit
+    // separate active + inactive rows rather than a single ambiguous row.
     expect(computeLeafSide('Hinges 5BB1 4.5x4.5 NRP', 2)).toBeNull()
-    expect(computeLeafSide('Exit Device 9875', 2)).toBeNull()
+    expect(computeLeafSide('Closer 4040XP', 2)).toBeNull()
     expect(computeLeafSide('Kick Plate', 2)).toBeNull()
   })
 
-  it('returns null for per_opening items on pairs (ambiguous)', () => {
-    expect(computeLeafSide('Closer 4040XP', 2)).toBeNull()
-    expect(computeLeafSide('Mortise Lockset L9080', 2)).toBeNull()
-  })
-
-  it('returns null for electric/conductor hinges on pair doors (deferred to buildPerOpeningItems)', () => {
-    // computeLeafSide no longer handles electric hinges directly.
-    // buildPerOpeningItems() is the authoritative source for electric hinge
-    // leaf routing — it creates separate active/inactive rows with adjusted
-    // quantities. Returning null here means "defer to caller context."
-    expect(computeLeafSide('Hinges 5BB1 4.5x4.5 CON TW8', 2)).toBeNull()
-    expect(computeLeafSide('Electric Hinge ETH', 2)).toBeNull()
-    expect(computeLeafSide('Conductor Hinge', 2)).toBeNull()
-    expect(computeLeafSide('Power Transfer Hinge', 2)).toBeNull()
-  })
-
-  it('returns null for electric hinges on single doors (no leaf split needed)', () => {
-    // On single doors there's only one leaf, so no active/inactive distinction
+  it('returns null for split-category items on single doors (caller decides)', () => {
+    // On single doors there's only one leaf — single-door pair placement
+    // doesn't apply and computeLeafSide defers so the caller uses its
+    // default per-leaf emission.
     expect(computeLeafSide('Hinges 5BB1 4.5x4.5 CON TW8', 1)).toBeNull()
+    expect(computeLeafSide('Closer 4040XP', 1)).toBeNull()
   })
 
-  it('returns null for unknown / unclassified items', () => {
-    expect(computeLeafSide('Widget XYZ-123', 2)).toBeNull()
+  it('unknown items: qty=1 routes to shared, qty>1 defers to caller (split)', () => {
+    // Qty=1 unknown items get the shared-placement safety net (prevents the
+    // pre-fix duplication where the render fallback mirrored them onto both
+    // leaves). Qty>1 returns null so the save path treats it like a per-
+    // leaf item and emits two rows.
+    expect(computeLeafSide('Widget XYZ-123', 2, undefined, 1)).toBe('shared')
+    expect(computeLeafSide('Widget XYZ-123', 2, undefined, 4)).toBeNull()
   })
 })
 
