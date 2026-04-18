@@ -58,20 +58,24 @@ describe('groupItemsByLeaf — DB leaf_side preference (Phase 3)', () => {
     expect(leaf2).toHaveLength(1)
   })
 
-  it('falls back to taxonomy regex when leaf_side is null/undefined', () => {
-    // Coordinator is per_pair → shared. Flush Bolt is per_pair → shared.
-    // Both have leaf_side=undefined in this test, so legacy classification
-    // applies.
+  it('falls back to PAIR_LEAF_PLACEMENT when leaf_side is null/undefined', () => {
+    // 2026-04-18: the fallback path now uses PAIR_LEAF_PLACEMENT rather than
+    // install_scope. Concrete mappings exercised here:
+    //   - Coordinator → 'shared' (unchanged)
+    //   - Flush Bolt  → 'inactive' (CHANGED: was 'shared' under scope rules)
+    //   - Hinge       → 'split' (unchanged — appears on both leaves)
+    // Flush bolts physically install on the inactive leaf; routing them to
+    // shared hid that fact from the review UI.
     const items = [
       makeItem('Coordinator'),
       makeItem('Flush Bolt FB32'),
       makeItem('Hinge'),
     ]
     const { shared, leaf1, leaf2 } = groupItemsByLeaf(items, 2)
-    expect(shared.map(i => i.name)).toEqual(['Coordinator', 'Flush Bolt FB32'])
-    // Hinge (per_leaf, leaf_side unset) → both leaves via legacy logic
+    expect(shared.map(i => i.name)).toEqual(['Coordinator'])
+    // Hinge (split) → both leaves; Flush Bolt (inactive) → leaf2 only
     expect(leaf1.map(i => i.name)).toEqual(['Hinge'])
-    expect(leaf2.map(i => i.name)).toEqual(['Hinge'])
+    expect(leaf2.map(i => i.name)).toEqual(['Flush Bolt FB32', 'Hinge'])
   })
 
   it('explicit leaf_side overrides taxonomy even when taxonomy disagrees', () => {
@@ -362,5 +366,185 @@ describe('door detail page: leafCount derivation locks out Radius DC regression'
   it('backend says 2 AND no leaf_side items → UI still trusts backend pair signal', () => {
     const items = [makeItem('Hinge', { leaf_side: undefined })]
     expect(deriveLeafCount(2, items)).toBe(2)
+  })
+})
+
+// ── PAIR_LEAF_PLACEMENT routing (Radius DC grid-RR duplication fix) ─────────
+//
+// 2026-04-18: Matthew reported qty=1 items (Cylinder Housing, Temp IC Core,
+// Permanent Core, Wire Harness) rendering on BOTH leaves of Door 110-01B.
+// The pre-fix render fallback classified by install_scope — per_leaf /
+// per_opening items with null leaf_side were mirrored onto both leaves.
+//
+// These tests lock the new routing (via PAIR_LEAF_PLACEMENT) so the
+// regression can't come back silently.
+
+describe('groupItemsByLeaf — pair placement by physical install location', () => {
+  it('qty=1 cylinder housing routes to active leaf only (not duplicated)', () => {
+    // Radius DC grid-RR repro: before the fix, this qty=1 item appeared on
+    // both leaves, making the opening look like it needed 2 cylinder housings.
+    const items = [makeItem('Cylinder Housing 20-057', { qty: 1 })]
+    const { shared, leaf1, leaf2 } = groupItemsByLeaf(items, 2)
+    expect(shared).toHaveLength(0)
+    expect(leaf1).toHaveLength(1)
+    expect(leaf2).toHaveLength(0)
+  })
+
+  it('qty=1 permanent core routes to active leaf only (not duplicated)', () => {
+    const items = [makeItem('Permanent Core 23-030', { qty: 1 })]
+    const { shared, leaf1, leaf2 } = groupItemsByLeaf(items, 2)
+    expect(shared).toHaveLength(0)
+    expect(leaf1).toHaveLength(1)
+    expect(leaf2).toHaveLength(0)
+  })
+
+  it('qty=1 temporary IC core routes to active leaf only (not duplicated)', () => {
+    const items = [makeItem('Temporary IC Core 09-000', { qty: 1 })]
+    const { shared, leaf1, leaf2 } = groupItemsByLeaf(items, 2)
+    expect(leaf1).toHaveLength(1)
+    expect(leaf2).toHaveLength(0)
+  })
+
+  it('qty=1 wire harness routes to active leaf only (not duplicated)', () => {
+    const items = [makeItem('Wire Harness CON-6W', { qty: 1 })]
+    const { leaf1, leaf2 } = groupItemsByLeaf(items, 2)
+    expect(leaf1).toHaveLength(1)
+    expect(leaf2).toHaveLength(0)
+  })
+
+  it('lockset routes to active leaf only on pairs', () => {
+    const items = [makeItem('Lockset L9080', { qty: 1 })]
+    const { leaf1, leaf2 } = groupItemsByLeaf(items, 2)
+    expect(leaf1).toHaveLength(1)
+    expect(leaf2).toHaveLength(0)
+  })
+
+  it('exit device routes to active leaf only on pairs', () => {
+    const items = [makeItem('Exit Device 99', { qty: 1 })]
+    const { leaf1, leaf2 } = groupItemsByLeaf(items, 2)
+    expect(leaf1).toHaveLength(1)
+    expect(leaf2).toHaveLength(0)
+  })
+
+  it('auto operator routes to active leaf only on pairs', () => {
+    const items = [makeItem('Automatic Operator 8310-856T', { qty: 1 })]
+    const { leaf1, leaf2 } = groupItemsByLeaf(items, 2)
+    expect(leaf1).toHaveLength(1)
+    expect(leaf2).toHaveLength(0)
+  })
+
+  it('flush bolt routes to inactive leaf only on pairs', () => {
+    const items = [makeItem('Flush Bolt FB458', { qty: 2 })]
+    const { shared, leaf1, leaf2 } = groupItemsByLeaf(items, 2)
+    expect(shared).toHaveLength(0)
+    expect(leaf1).toHaveLength(0)
+    expect(leaf2).toHaveLength(1)
+  })
+
+  it('dust proof strike routes to inactive leaf only on pairs', () => {
+    const items = [makeItem('Dust Proof Strike DP2', { qty: 1 })]
+    const { shared, leaf1, leaf2 } = groupItemsByLeaf(items, 2)
+    expect(leaf1).toHaveLength(0)
+    expect(leaf2).toHaveLength(1)
+    expect(shared).toHaveLength(0)
+  })
+
+  it('coordinator routes to shared on pairs', () => {
+    const items = [makeItem('Coordinator COR52', { qty: 1 })]
+    const { shared, leaf1, leaf2 } = groupItemsByLeaf(items, 2)
+    expect(shared).toHaveLength(1)
+    expect(leaf1).toHaveLength(0)
+    expect(leaf2).toHaveLength(0)
+  })
+
+  it('threshold routes to shared on pairs', () => {
+    const items = [makeItem('Threshold 896S', { qty: 1 })]
+    const { shared, leaf1, leaf2 } = groupItemsByLeaf(items, 2)
+    expect(shared).toHaveLength(1)
+    expect(leaf1).toHaveLength(0)
+    expect(leaf2).toHaveLength(0)
+  })
+
+  it('astragal routes to shared on pairs', () => {
+    const items = [makeItem('Astragal 357SP', { qty: 1 })]
+    const { shared, leaf1, leaf2 } = groupItemsByLeaf(items, 2)
+    expect(shared).toHaveLength(1)
+    expect(leaf1).toHaveLength(0)
+    expect(leaf2).toHaveLength(0)
+  })
+
+  it('closer is split — appears on both leaves', () => {
+    const items = [makeItem('Closer 4040XP', { qty: 1 })]
+    const { shared, leaf1, leaf2 } = groupItemsByLeaf(items, 2)
+    expect(shared).toHaveLength(0)
+    expect(leaf1).toHaveLength(1)
+    expect(leaf2).toHaveLength(1)
+  })
+
+  it('kick plate is split — appears on both leaves', () => {
+    const items = [makeItem('Kick Plate K1050', { qty: 1 })]
+    const { leaf1, leaf2 } = groupItemsByLeaf(items, 2)
+    expect(leaf1).toHaveLength(1)
+    expect(leaf2).toHaveLength(1)
+  })
+
+  it('unknown category with qty=1 routes to shared (duplication safety net)', () => {
+    // An un-taxonomied item with qty=1 should not be duplicated across leaves.
+    // The fallback treats it as opening-level.
+    const items = [makeItem('Mystery Hardware XYZ', { qty: 1 })]
+    const { shared, leaf1, leaf2 } = groupItemsByLeaf(items, 2)
+    expect(shared).toHaveLength(1)
+    expect(leaf1).toHaveLength(0)
+    expect(leaf2).toHaveLength(0)
+  })
+
+  it('unknown category with qty>1 splits across both leaves (preserved behavior)', () => {
+    // qty>1 preserves the prior "both leaves" behavior — when multiple units
+    // exist, treating them as per-leaf is the safer default.
+    const items = [makeItem('Mystery Hardware XYZ', { qty: 4 })]
+    const { shared, leaf1, leaf2 } = groupItemsByLeaf(items, 2)
+    expect(shared).toHaveLength(0)
+    expect(leaf1).toHaveLength(1)
+    expect(leaf2).toHaveLength(1)
+  })
+
+  it('single door: pair placement does not apply (everything to leaf1)', () => {
+    const items = [
+      makeItem('Lockset L9080', { qty: 1 }),
+      makeItem('Flush Bolt FB458', { qty: 2 }),     // would be inactive on pair
+      makeItem('Coordinator COR52', { qty: 1 }),    // would be shared on pair
+      makeItem('Closer 4040XP', { qty: 1 }),        // would be split on pair
+    ]
+    const { shared, leaf1, leaf2 } = groupItemsByLeaf(items, 1)
+    expect(shared).toHaveLength(0)
+    expect(leaf1).toHaveLength(4)
+    expect(leaf2).toHaveLength(0)
+  })
+
+  it('Radius DC grid-RR shape — full opening, no qty duplication', () => {
+    // The canonical regression: Door 110-01B carried these items, all at
+    // qty=1 pair-context, rendering on both leaves. After the fix, each
+    // qty=1 item lands on exactly one section.
+    const items = [
+      makeItem('Cylinder Housing 20-057', { qty: 1 }),
+      makeItem('Permanent Core 23-030', { qty: 1 }),
+      makeItem('Temporary IC Core 09-000', { qty: 1 }),
+      makeItem('Wire Harness CON-6W', { qty: 1 }),
+      makeItem('Coordinator COR52', { qty: 1 }),
+      makeItem('Flush Bolt FB458', { qty: 2 }),
+    ]
+    const { shared, leaf1, leaf2 } = groupItemsByLeaf(items, 2)
+    // No item appears twice across sections — total rows across all sections
+    // equals input rows.
+    expect(shared.length + leaf1.length + leaf2.length).toBe(items.length)
+    // Concrete placements:
+    expect(shared.map(i => i.name)).toEqual(['Coordinator COR52'])
+    expect(leaf1.map(i => i.name)).toEqual([
+      'Cylinder Housing 20-057',
+      'Permanent Core 23-030',
+      'Temporary IC Core 09-000',
+      'Wire Harness CON-6W',
+    ])
+    expect(leaf2.map(i => i.name)).toEqual(['Flush Bolt FB458'])
   })
 })

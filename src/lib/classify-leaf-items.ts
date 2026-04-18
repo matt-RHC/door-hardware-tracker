@@ -1,24 +1,30 @@
 /**
  * Groups hardware items into Shared / Leaf 1 / Leaf 2 sections for pair doors.
  *
- * Phase 3 of groovy-tumbling-backus: prefer the persisted
- * `hardware_items.leaf_side` value (migration 013) when it is set, falling
- * back to the taxonomy-regex logic below when it is NULL. That fallback
- * stays in place for two reasons:
+ * Prefer the persisted `hardware_items.leaf_side` value (migration 013) when
+ * it is set; fall back to category-driven placement below when it is NULL.
+ * Fallback still runs in two cases:
  *
- *   1. Existing rows backfilled only at the unambiguous cases (structural
- *      Door/Frame rows plus `per_pair` / `per_frame` items). per_leaf and
- *      per_opening items on pair doors still carry NULL and are classified
- *      at render time like before.
+ *   1. Existing rows backfilled only at the unambiguous cases. Some legacy
+ *      rows still carry NULL leaf_side and are classified at render time.
  *   2. The wizard preview operates on items that haven't been saved yet and
  *      therefore have no leaf_side — it relies on the render-time path.
  *
- * Taxonomy scope → default leaf routing (when leaf_side is NULL):
- *   - per_leaf    → appears on both Leaf 1 and Leaf 2 (stored qty is per-leaf)
- *   - per_opening → appears on both leaves (UI shows qty / leafCount per leaf)
- *   - per_pair    → Shared section (coordinator, flush bolt, astragal)
- *   - per_frame   → Shared section (threshold, seals, etc.)
- *   - unknown     → defaults to per-leaf behavior (appears on both leaves)
+ * Fallback routing (2026-04-18): uses PAIR_LEAF_PLACEMENT (hardware-taxonomy.ts)
+ * which answers "where does this hardware physically install on a pair door?"
+ * rather than "how does the qty scale?" This prevents the qty=1 duplication
+ * where items like cylinder housings and cores showed on both leaves.
+ *
+ * Placement map → leaf routing:
+ *   - 'active'   → leaf1 only   (lockset, exit_device, cylinder_housing,
+ *                                core, wire_harness, etc.)
+ *   - 'inactive' → leaf2 only   (flush_bolt, dust_proof_strike)
+ *   - 'shared'   → shared       (coordinator, threshold, astragal, seals)
+ *   - 'split'    → both leaves  (hinges, closers, kick plates)
+ *
+ * Unknown categories fall back via getPairLeafPlacement:
+ *   - qty<=1 → 'shared' (single item, treat as opening-level)
+ *   - qty>1  → 'split'  (preserve prior per-leaf behavior)
  *
  * Structural items are classified by name:
  *   - "Door (Active Leaf)"   → leaf1
@@ -28,7 +34,7 @@
  */
 
 import { classifyItemScope } from '@/lib/parse-pdf-helpers'
-import { classifyItem, scanElectricHinges } from '@/lib/hardware-taxonomy'
+import { classifyItem, scanElectricHinges, getPairLeafPlacement } from '@/lib/hardware-taxonomy'
 import type { InstallScope } from '@/lib/hardware-taxonomy'
 
 /** Minimal item shape — works with both API response items and wizard preview items. */
@@ -196,13 +202,13 @@ export function groupItemsByLeaf<T extends LeafGroupableItem>(
       continue
     }
 
-    // Hardware items: classified by taxonomy scope
-    const scope = classifyItemScope(item.name, item.model ?? undefined)
+    // Hardware items: classified by category → placement map.
+    const category = classifyItem(item.name, undefined, item.model ?? undefined)
 
     // Electric hinges: always active leaf only on pairs (even without persisted leaf_side).
     // During wizard preview, items haven't been saved so leaf_side is null. Without this
     // guard, electric hinges fall through to the per_opening branch and appear on BOTH leaves.
-    if (isPair && !item.leaf_side && classifyItem(item.name, undefined, item.model ?? undefined) === 'electric_hinge') {
+    if (isPair && !item.leaf_side && category === 'electric_hinge') {
       leaf1.push(item)
       continue
     }
@@ -212,20 +218,44 @@ export function groupItemsByLeaf<T extends LeafGroupableItem>(
     // so active leaf standard qty = total standard qty - electric hinge qty.
     // Only applies during wizard preview (leaf_side is null); after save, the
     // qty is already correct from buildPerOpeningItems.
-    if (isPair && electricHingeQty > 0 && !item.leaf_side && classifyItem(item.name, undefined, item.model ?? undefined) === 'hinges') {
+    if (isPair && electricHingeQty > 0 && !item.leaf_side && category === 'hinges') {
       leaf1.push({ ...item, qty: Math.max(0, (item.qty || 0) - electricHingeQty) } as T)
       leaf2.push({ ...item } as T)
       continue
     }
 
-    if (scope === 'per_pair' || scope === 'per_frame') {
-      shared.push(item)
-    } else if (scope === 'per_leaf' || scope === 'per_opening' || scope === null) {
-      // per_leaf: item appears on each leaf with its stored qty
-      // per_opening: item appears on each leaf with qty / leafCount
-      // null (unknown): conservative — treat like per_leaf
+    // Single doors: nothing to decide — everything goes to leaf1.
+    // Previously the taxonomy-scope branch below was also reaching this case
+    // and correctly routing to leaf1, but being explicit avoids stepping
+    // through the pair placement logic when leafCount=1.
+    if (!isPair) {
       leaf1.push(item)
-      if (isPair) leaf2.push(item)
+      continue
+    }
+
+    // Pair doors: consult PAIR_LEAF_PLACEMENT with qty fallback.
+    //
+    // 2026-04-18: Replaced the scope-only fallback (per_pair/per_frame →
+    // shared, everything else → both leaves) because it duplicated qty=1
+    // items like cylinder housings, cores, and wire harnesses. The new
+    // path routes by PHYSICAL INSTALLATION LOCATION (via PAIR_LEAF_PLACEMENT)
+    // rather than by how qty scales. Matches the save-path logic in
+    // buildPerOpeningItems() so wizard preview and saved state agree.
+    //
+    // Unknown-category fallback (getPairLeafPlacement):
+    //   qty<=1 → shared (prevents qty=1 duplication)
+    //   qty>1  → split  (preserves prior behavior for genuine per-leaf items)
+    const placement = getPairLeafPlacement(category, item.qty)
+    if (placement === 'active') {
+      leaf1.push(item)
+    } else if (placement === 'inactive') {
+      leaf2.push(item)
+    } else if (placement === 'shared') {
+      shared.push(item)
+    } else {
+      // 'split' → appears on each leaf with its stored per-leaf qty.
+      leaf1.push(item)
+      leaf2.push(item)
     }
   }
 

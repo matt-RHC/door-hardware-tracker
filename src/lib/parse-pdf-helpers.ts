@@ -48,7 +48,7 @@ import type {
   ExtractionConfidence,
 } from '@/lib/types/confidence'
 import { extractJSON } from '@/lib/extractJSON'
-import { TAXONOMY_REGEX_CACHE, classifyItem, scanElectricHinges, isAsymmetricHingeSplit, type InstallScope } from '@/lib/hardware-taxonomy'
+import { TAXONOMY_REGEX_CACHE, classifyItem, scanElectricHinges, isAsymmetricHingeSplit, getPairLeafPlacement, PAIR_LEAF_PLACEMENT, type InstallScope } from '@/lib/hardware-taxonomy'
 import { createAdminSupabaseClient } from '@/lib/supabase/admin'
 
 // --- Darrin observation logging (fire-and-forget) ---
@@ -175,26 +175,36 @@ export type LeafSide = 'active' | 'inactive' | 'shared' | 'both'
 /**
  * Compute the unambiguous `leaf_side` for a hardware item at save time.
  *
- * Returns a definite value for structural rows (Door / Frame) and for
- * items whose taxonomy scope is per_pair or per_frame (those items only
- * ever exist once per opening regardless of leaf count). For per_leaf
- * and per_opening items on pair doors, the choice between 'active',
- * 'inactive', and 'both' depends on installation details we can't infer
- * from the name alone, so we return `null` and let render-time logic
- * handle it — users will eventually override via the triage UI.
+ * Returns a definite value for structural rows (Door / Frame) and, on pair
+ * doors, consults the PAIR_LEAF_PLACEMENT map (hardware-taxonomy.ts) so
+ * items like locksets, flush bolts, cylinder housings, and cores land on
+ * the leaf where they physically install.
  *
- * Exception: electric / conductor hinges on pair doors are always assigned
- * to the active leaf. They carry wiring between the frame and active leaf
- * and are never installed on the inactive leaf (DHI standard practice).
+ * Return contract:
+ *   - 'active'   → active leaf only
+ *   - 'inactive' → inactive leaf only
+ *   - 'shared'   → single opening-level row (no per-leaf duplication)
+ *   - null       → defer to caller:
+ *                  · on pair doors with placement='split', the caller
+ *                    (buildPerOpeningItems) emits two rows — one per leaf —
+ *                    so independent per-leaf checklist tracking is possible
+ *                  · on single doors for ambiguous items, the render path
+ *                    routes them to the lone leaf anyway
  *
- * Note: caller should pass `leafCount` from the opening row so we can
- * correctly handle single-leaf openings (where there's no inactive leaf
- * and a bare "Door" is implicitly active).
+ * Why the return-null-on-'split' contract (2026-04-18): emitting two rows
+ * is a shape decision that save-path callers already make for standard
+ * hinges when electric hinges are present. Pushing that responsibility up
+ * to the caller keeps computeLeafSide a pure classifier and lets
+ * buildPerOpeningItems reuse its existing split-row emission pattern.
+ *
+ * Note: caller should pass `leafCount` so we can correctly handle single-
+ * leaf openings (no inactive leaf, bare "Door" is implicitly active).
  */
 export function computeLeafSide(
   itemName: string,
   leafCount: number,
   model?: string,
+  qty?: number | null,
 ): LeafSide | null {
   // Structural items — fixed by name.
   if (itemName === 'Door (Active Leaf)') return 'active'
@@ -204,16 +214,28 @@ export function computeLeafSide(
   // code routes it to leaf 1 which is the implicit active leaf.
   if (itemName === 'Door') return leafCount <= 1 ? 'active' : null
 
-  // Hardware items — scope drives unambiguous attribution.
-  const scope = classifyItemScope(itemName, model)
-  if (scope === 'per_pair' || scope === 'per_frame') return 'shared'
+  // Single-leaf openings: no pair placement decision needed. The render
+  // path routes the single leaf to leaf1, and there is no inactive leaf
+  // to collide with. Defer (null) so the caller treats it as "no hint."
+  if (leafCount <= 1) return null
 
-  // per_leaf / per_opening / unknown on pair doors: ambiguous, defer.
-  // NOTE: Electric hinges on pair doors are handled by buildPerOpeningItems()
-  // (save path, stamps leaf_side='active') and groupItemsByLeaf() (preview
-  // path, routes to active leaf). This function returns null to let those
-  // callers decide — the electric hinge check that was here was dead code
-  // because buildPerOpeningItems() always overwrites the result immediately.
+  // Pair doors — consult placement map. 2026-04-18: replaced the prior
+  // scope-based heuristic (per_pair/per_frame → shared, everything else
+  // → null) because it over-deferred per_leaf/per_opening items to the
+  // render path, where they rendered on BOTH leaves. That visually
+  // doubled qty=1 items like cylinder housings, cores, and wire harnesses
+  // on Radius DC grid-RR Door 110-01B.
+  //
+  // The placement map answers the install question directly:
+  //   "on a pair door, where does this physically live?"
+  const category = classifyItem(itemName, undefined, model)
+  const placement = getPairLeafPlacement(category, qty ?? null)
+  if (placement === 'active') return 'active'
+  if (placement === 'inactive') return 'inactive'
+  if (placement === 'shared') return 'shared'
+  // placement === 'split' → caller emits two rows. Return null so the
+  // single-row emission path skips setting leaf_side (the caller handles
+  // it explicitly when it emits the active/inactive pair).
   return null
 }
 
@@ -2899,7 +2921,15 @@ export function buildPerOpeningItems(
         }
 
         const category = isPair ? classifyItem(item.name, undefined, item.model) : null
-        let leafSide = computeLeafSide(item.name, leafCount, item.model)
+        // 2026-04-18: computeLeafSide now consults PAIR_LEAF_PLACEMENT so
+        // items like locksets / cylinder housings / cores / wire harnesses
+        // get a definite leaf_side at save time instead of deferring to the
+        // render path (which mirrored them onto both leaves = visual qty
+        // duplication on Radius DC grid-RR Door 110-01B).
+        let leafSide = computeLeafSide(item.name, leafCount, item.model, item.qty)
+        const placement = isPair && category
+          ? PAIR_LEAF_PLACEMENT[category] ?? getPairLeafPlacement(category, item.qty)
+          : null
 
         // Quantity audit columns — carry through from extraction
         const qtyAudit = {
@@ -2930,6 +2960,13 @@ export function buildPerOpeningItems(
         // replaces one standard hinge position on the active leaf only.
         //   Active leaf:   raw − electric (e.g. 4 − 1 = 3)
         //   Inactive leaf: raw (e.g. 4)
+        //
+        // This remains a hinge-specific branch (rather than folding into the
+        // generic 'split' branch below) because hinges are the only split
+        // category whose per-leaf qtys DIFFER — the electric hinge occupies
+        // one hinge position on the active leaf and nothing on the inactive
+        // leaf. Generic split items (closers, kick plates, door sweeps) have
+        // identical per-leaf qtys.
         if (isPair && category === 'hinges' && totalElectricHingeQty > 0) {
           const inactiveQty = item.qty || 1
           const activeQty = inactiveQty - totalElectricHingeQty
@@ -2960,7 +2997,50 @@ export function buildPerOpeningItems(
           continue
         }
 
+        // ── Generic split: emit one row per leaf ──
+        // 2026-04-18: extends the hinge-split pattern to every split-eligible
+        // category (closer, kick_plate, door_sweep, stop, silencer, signage,
+        // viewer, continuous/pivot/spring hinges). Each leaf gets its own row
+        // at the same per-leaf qty so the checklist UI can track Leaf 1 and
+        // Leaf 2 completion independently.
+        //
+        // Why qty is NOT divided here: the stored qty is already per-leaf
+        // after normalizeQuantities() divided per_leaf by leafCount and per_
+        // opening by doorCount (see normalizeQuantities comment block in this
+        // file). Emitting two rows each at the per-leaf qty represents the
+        // real installed hardware — e.g. a pair with 4 hinges/leaf has 2
+        // rows (qty=4 each), totaling 8 hinge positions across the opening.
+        if (isPair && placement === 'split') {
+          rows.push({
+            ...base,
+            name: item.name,
+            qty: item.qty || 1,
+            ...qtyAudit,
+            manufacturer: item.manufacturer || null,
+            model: item.model || null,
+            finish: item.finish || null,
+            sort_order: sortOrder++,
+            leaf_side: 'active',
+          })
+          rows.push({
+            ...base,
+            name: item.name,
+            qty: item.qty || 1,
+            ...qtyAudit,
+            manufacturer: item.manufacturer || null,
+            model: item.model || null,
+            finish: item.finish || null,
+            sort_order: sortOrder++,
+            leaf_side: 'inactive',
+          })
+          continue
+        }
+
         // ── All other items: default behavior ──
+        // leafSide is 'active' / 'inactive' / 'shared' (from placement map)
+        // or null (single doors, or pair items whose placement was resolved
+        // inline above). computeLeafSide returns null for 'split' so the
+        // two-row emission above has already handled those.
         rows.push({
           ...base,
           name: item.name,
