@@ -2791,6 +2791,13 @@ export function buildPerOpeningItems(
       const { totalElectricQty: totalElectricHingeQty } = scanElectricHinges(setItems, isPair)
 
       for (const item of setItems) {
+        // Skip items whose name matches a structural row that buildPerOpeningItems
+        // already emits above (Door, Door (Active Leaf), Door (Inactive Leaf), Frame).
+        // Vision extraction and reconciliation can produce these as set items —
+        // emitting them a second time creates the conflicting_door_variants state
+        // seen on opening 110-01B on a fresh first upload.
+        if (/^(Door(\s|$|\()|Frame$)/i.test(item.name ?? '')) continue
+
         const category = isPair ? classifyItem(item.name, undefined, item.model) : null
         let leafSide = computeLeafSide(item.name, leafCount, item.model)
 
