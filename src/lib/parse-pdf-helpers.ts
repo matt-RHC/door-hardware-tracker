@@ -2701,6 +2701,29 @@ export function wouldProduceZeroItems(
  *  1. doorToSetMap lookup by specific door_number (handles multi-heading)
  *  2. Legacy setMap lookup by opening.hw_set (handles single-heading + fallback)
  */
+// Phantom structural-row names we refuse to copy from hwSet.items into the
+// per-opening rows. These are produced upstream (Python extractor) as stray
+// bare "Door" / "Frame" tokens or as leaf-shaped "Door (Active Leaf)" /
+// "Door (Inactive Leaf)" / "Frame (...)" entries that slip past
+// NON_HARDWARE_PATTERN in api/extract-tables.py (the `$`-anchored form
+// matches bare tokens but not the parenthesized variants).
+//
+// Why this regex lives here, not only in Python: this helper is the single
+// place every extraction path converges on before writing to
+// hardware_items / staging_hardware_items (see
+// docs/architecture/extraction-pipeline.md). The structural rows (Door /
+// Door (Active Leaf) / Door (Inactive Leaf) / Frame) are emitted *above*
+// this loop by the isPair branch — any matching entry coming through
+// hwSet.items is a duplicate by construction, so dropping it here is
+// defense-in-depth and keeps the leaf_count / too_many_doors /
+// too_many_frames / conflicting_door_variants invariants green even if
+// the Python filter regresses.
+//
+// Incident context: Radius DC grid-RR, extraction run 2cb82554
+// (2026-04-18), 202 blockers across 5 invariant classes all traced back
+// to leaf-named phantoms reaching this loop.
+const STRUCTURAL_ROW_NAME_RE = /^(Door|Frame)(\s*\([^)]*\))?\s*$/i
+
 export function buildPerOpeningItems(
   openings: Array<{ id: string; door_number: string; hw_set: string | null }>,
   doorInfoMap: Map<string, { door_type: string; frame_type: string }>,
@@ -2710,6 +2733,10 @@ export function buildPerOpeningItems(
   extraFields?: Record<string, unknown>,
 ): Array<Record<string, unknown>> {
   const rows: Array<Record<string, unknown>> = []
+  // Observability: count dropped phantoms across the whole call so a single
+  // breadcrumb captures the aggregate instead of N individual ones.
+  let droppedPhantomCount = 0
+  const droppedPhantomSamples: string[] = []
 
   for (const opening of openings) {
     let sortOrder = 0
@@ -2785,6 +2812,25 @@ export function buildPerOpeningItems(
       const { totalElectricQty: totalElectricHingeQty } = scanElectricHinges(setItems, isPair)
 
       for (const item of setItems) {
+        // ── Phantom structural-row dedupe ──
+        // The structural rows (Door / Door (Active|Inactive Leaf) / Frame)
+        // were already emitted above by the isPair branch. Any hwSet.items
+        // entry whose name matches STRUCTURAL_ROW_NAME_RE is a duplicate
+        // produced upstream (see regex comment above). Skipping them is
+        // what prevents the extraction invariants
+        // (leaf_count_consistency, too_many_doors, too_many_frames,
+        // conflicting_door_variants, single_leaf_door_count_mismatch)
+        // from firing on Radius-DC-class PDFs.
+        const rawName = String(item.name ?? '').trim()
+        if (STRUCTURAL_ROW_NAME_RE.test(rawName)) {
+          droppedPhantomCount++
+          // Keep sample list bounded so the breadcrumb payload stays small.
+          if (droppedPhantomSamples.length < 8) {
+            droppedPhantomSamples.push(rawName)
+          }
+          continue
+        }
+
         const category = isPair ? classifyItem(item.name, undefined, item.model) : null
         let leafSide = computeLeafSide(item.name, leafCount, item.model)
 
@@ -2863,6 +2909,53 @@ export function buildPerOpeningItems(
     }
   }
 
+  // ── Structural invariant check (Matthew, 2026-04-17) ──
+  // An opening has at most 2 Door* rows (single=1, pair=2, double-egress=2)
+  // and at most 1 Frame row (pair shares one doubled frame). Any opening
+  // exceeding this is a bug — either a phantom shape the dedupe regex
+  // didn't catch, or a logic error in the structural-row emission block.
+  //
+  // This is a SOFT assertion: we log to Sentry at error level and continue
+  // so the pipeline degrades gracefully. The extraction invariants
+  // (runInvariants) will still catch the resulting data on the staging
+  // side and block promotion, but we want a proactive signal in Sentry
+  // the moment the helper produces the bad shape so we can diagnose
+  // before the user hits the review page.
+  try {
+    const overCapOpenings: Array<{ id: string; door: number; frame: number }> = []
+    const perOpening = new Map<string, { door: number; frame: number }>()
+    for (const row of rows) {
+      const k = String(row[fkColumn])
+      const counts = perOpening.get(k) ?? { door: 0, frame: 0 }
+      const nm = String(row['name'] ?? '')
+      if (/^Door(\s|$|\()/i.test(nm)) counts.door++
+      else if (nm === 'Frame') counts.frame++
+      perOpening.set(k, counts)
+    }
+    // Per-opening caps: ≤2 Door* and ≤1 Frame.
+    const MAX_DOORS_PER_OPENING = 2
+    const MAX_FRAMES_PER_OPENING = 1
+    for (const [id, c] of perOpening.entries()) {
+      if (c.door > MAX_DOORS_PER_OPENING || c.frame > MAX_FRAMES_PER_OPENING) {
+        overCapOpenings.push({ id, door: c.door, frame: c.frame })
+      }
+    }
+    if (overCapOpenings.length > 0) {
+      Sentry.captureMessage('buildPerOpeningItems produced over-cap structural rows', {
+        level: 'error',
+        extra: {
+          overCapSample: overCapOpenings.slice(0, 8),
+          totalOverCap: overCapOpenings.length,
+          totalOpenings: openings.length,
+          droppedPhantomCount,
+          droppedPhantomSamples,
+        },
+      })
+    }
+  } catch {
+    // Never let the invariant check break the pipeline.
+  }
+
   // Diagnostic breadcrumb — shape of the per-opening output. Not an error,
   // so Sentry will only surface it as context when a later event fires on
   // this request. Capped per-opening counts to stay under breadcrumb size.
@@ -2878,7 +2971,7 @@ export function buildPerOpeningItems(
     const inactiveLeafRowCount = rows.filter(r => String(r['name'] ?? '') === 'Door (Inactive Leaf)').length
     Sentry.addBreadcrumb({
       category: 'extraction.helpers.buildPerOpeningItems',
-      level: 'info',
+      level: droppedPhantomCount > 0 ? 'warning' : 'info',
       message: 'buildPerOpeningItems completed',
       data: {
         openings: openings.length,
@@ -2887,6 +2980,8 @@ export function buildPerOpeningItems(
         frameRows: frameRowCount,
         activeLeafRows: activeLeafRowCount,
         inactiveLeafRows: inactiveLeafRowCount,
+        droppedPhantomCount,
+        droppedPhantomSamples,
         perOpeningHistogramSample: JSON.stringify(histogram).slice(0, 4000),
       },
     })
