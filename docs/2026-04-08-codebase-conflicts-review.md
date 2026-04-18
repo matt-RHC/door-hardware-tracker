@@ -141,4 +141,4 @@ This is a report only — no code changes in this session. Per CLAUDE.md Rule 2,
 5. **PR 5 (P1):** Add `error_occurred` to quantity check — fixes 1D
 6. **Subsequent PRs:** P2/P3 items as capacity allows
 
-Each PR should be tested against the 3 golden PDFs (small/medium/large) before merge.
+Each PR should be tested against the golden suite via `scripts/run-golden-suite.mjs` before merge (catalog of ~18 training PDFs with per-PDF `BASELINES`). The "small/medium/large" shorthand used above is legacy and does not map to current filenames — use the `PDF_CATALOG` `shortName` values (`grid-RR`, `grid-MCA`, `grid-CAA`, etc.). Exact PDF counts drift as new fixtures are added; the health check is that the suite runs green and per-PDF door/set counts stay within a reasonable delta of `BASELINES`.
