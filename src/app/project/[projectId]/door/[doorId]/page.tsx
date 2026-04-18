@@ -23,6 +23,7 @@ import { classifyItemScope } from "@/lib/parse-pdf-helpers";
 import PDFRegionSelector from "@/components/ImportWizard/PDFRegionSelector";
 import SyncStatusDot from "@/components/SyncStatusDot";
 import QAFindingsChips from "@/components/QAFindingsChips";
+import * as Sentry from "@sentry/nextjs";
 import { ACTION_LABELS } from "@/lib/constants/activity-actions";
 
 interface RescanFieldDiff {
@@ -755,8 +756,27 @@ export default function DoorDetailPage() {
   if (!opening) return null;
 
   // --- Per-leaf grouping ---
-  const leafCount = (opening as any).leaf_count ?? 1;
+  // Treat opening.leaf_count as advisory: if any hardware_item carries an
+  // active/inactive leaf_side, the opening IS a pair regardless of what
+  // leaf_count says. A wrong leaf_count (=1 on a pair) is a backend bug —
+  // we render the correct tabs and log so the discrepancy gets noticed.
+  const storedLeafCount = (opening as any).leaf_count ?? 1;
+  const hasLeafSideItems = opening.hardware_items.some(
+    (item: any) => item.leaf_side === 'active' || item.leaf_side === 'inactive',
+  );
+  const leafCount = hasLeafSideItems ? Math.max(storedLeafCount, 2) : storedLeafCount;
   const isPair = leafCount >= 2;
+  if (hasLeafSideItems && storedLeafCount < 2) {
+    console.warn(
+      `[door ${doorId}] leaf_count=${storedLeafCount} disagrees with hardware_items having leaf-side rows — rendering as pair. Backend extraction bug.`,
+    );
+    Sentry.addBreadcrumb({
+      category: 'door.leaf_count_mismatch',
+      level: 'warning',
+      message: 'leaf_count disagrees with hardware_items leaf_side — UI overrode to pair',
+      data: { doorId, storedLeafCount, hasLeafSideItems },
+    });
+  }
   const { shared, leaf1, leaf2 } = groupItemsByLeaf(opening.hardware_items, leafCount);
 
   // Progress: count each leaf section's items independently
