@@ -277,15 +277,24 @@ describe('Radius DC: buildPerOpeningItems must not emit duplicate structural row
     }
   })
 
-  // Documents that buildPerOpeningItems is the AMPLIFIER — given a
-  // Radius-DC-shaped payload where Python already emitted phantom bare
-  // "Door"/"Frame" rows in hwSet.items (the pre-fix state), the helper
-  // faithfully appends them on top of its own structural rows, yielding
-  // the exact 2× Door / 2× Frame fingerprint observed in production.
-  // This test stays GREEN to pin that behavior; the Python fix
-  // (NON_HARDWARE_PATTERN) prevents the phantom inputs upstream, so this
-  // amplification path is not reachable in prod.
-  it('AMPLIFICATION WITNESS: phantom Python Door/Frame items produce >1 bare Door per opening', () => {
+  // Regression gate for PR #310 (Fix A: phantom structural-row dedupe in
+  // buildPerOpeningItems). Given a Radius-DC-shaped payload where Python
+  // has already emitted phantom bare "Door" / "Frame" rows in hwSet.items
+  // — the exact production fingerprint we observed in extraction run
+  // 2cb82554 — the helper must now DROP them rather than faithfully copy
+  // them through.
+  //
+  // Before PR #310 this test asserted `.toBeGreaterThan(1)` to prove the
+  // bug existed (the "amplification witness"). After PR #310 the
+  // dedupe in buildPerOpeningItems (STRUCTURAL_ROW_NAME_RE) catches the
+  // phantoms before they land in the output rows, so the test now
+  // asserts the suppressed shape: at most 1× bare Door and at most 1×
+  // Frame per opening regardless of how many phantoms Python seeded.
+  //
+  // If this test flips back to >1, the TS-side dedupe has been
+  // regressed. Do NOT "fix" it by reverting the assertion — that would
+  // reopen the Radius DC 202-blocker incident.
+  it('REGRESSION GATE: TS dedupe suppresses phantom Door/Frame amplification', () => {
     const PHANTOM_PAYLOAD = {
       ...SYNTHETIC_PAYLOAD,
       hardwareSets: SYNTHETIC_PAYLOAD.hardwareSets.map(s => ({
@@ -324,12 +333,25 @@ describe('Radius DC: buildPerOpeningItems must not emit duplicate structural row
       maxFrames = Math.max(maxFrames, r.filter(x => x.name === 'Frame').length)
     }
 
-    // The exact Radius DC production fingerprint: 2× Door + 2× Frame
-    // per opening. If this drops to 1×, either the TS helper started
-    // filtering phantom rows (which is NOT what we want — that would
-    // mask future Python regressions) or the fixture stopped seeding
-    // phantoms.
-    expect(maxBareDoors, 'phantom Python items should amplify into >1 bare Door rows').toBeGreaterThan(1)
-    expect(maxFrames, 'phantom Python items should amplify into >1 Frame rows').toBeGreaterThan(1)
+    // Structural invariant (Matthew, 2026-04-17): an opening has at most
+    // TWO Door* rows ever — one leaf for a single, two leaves for a pair
+    // (both may be 'active' on a double-egress opening, but the COUNT is
+    // still 2). Three or more is always a bug.
+    //
+    // Frames follow the same logic — a pair shares one doubled frame, so
+    // exactly 1 Frame row regardless of leaf count.
+    //
+    // Before PR #310 this block asserted `>1` bare Door rows to prove the
+    // bug existed. After PR #310 the TS dedupe catches phantoms, so we
+    // flip to asserting the suppressed shape.
+    let maxTotalDoorRows = 0
+    for (const o of openings) {
+      const r = rows.filter(x => x.staging_opening_id === o.id)
+      const totalDoorRows = r.filter(x => typeof x.name === 'string' && /^Door(\s|$|\()/i.test(x.name)).length
+      maxTotalDoorRows = Math.max(maxTotalDoorRows, totalDoorRows)
+    }
+    expect(maxBareDoors, 'after dedupe, no opening should carry more than 1 bare Door row').toBeLessThanOrEqual(1)
+    expect(maxFrames, 'after dedupe, no opening should carry more than 1 Frame row').toBeLessThanOrEqual(1)
+    expect(maxTotalDoorRows, 'no opening may have more than 2 Door* rows (single=1, pair=2, double-egress=2)').toBeLessThanOrEqual(2)
   })
 })

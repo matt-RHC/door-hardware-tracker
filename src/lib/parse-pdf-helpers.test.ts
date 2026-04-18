@@ -2571,3 +2571,203 @@ describe('golden PDF smoke — buildPerOpeningItems emits invariant-clean rows',
     expect(violations.filter(v => v.severity === 'blocker')).toEqual([])
   })
 })
+
+// ─── buildPerOpeningItems — phantom structural-row dedupe (PR #310) ───
+//
+// Regression: Radius DC grid-RR extraction run 2cb82554 produced 202
+// blockers across 5 invariants (leaf_count_consistency, too_many_doors,
+// too_many_frames, conflicting_door_variants,
+// single_leaf_door_count_mismatch). Root cause: hwSet.items carried
+// leaf-shaped phantom entries ("Door (Active Leaf)", "Door (Inactive
+// Leaf)", bare "Door" / "Frame") because NON_HARDWARE_PATTERN in
+// api/extract-tables.py uses a `$`-anchored regex that only matches bare
+// tokens. The helper emitted the structural rows from the isPair branch
+// AND faithfully copied the phantoms from hwSet.items, doubling them.
+//
+// Fix: drop hwSet.items entries whose name matches
+//   /^(Door|Frame)(\s*\([^)]*\))?\s*$/i
+// as the first step of the set-items loop. The structural rows above
+// remain the sole source of truth for Door / Frame names.
+//
+// These tests pin the dedupe behavior on both pair and single-leaf
+// openings, and confirm that legitimate items (Door Closer, Door Stop,
+// Door Sweep) are NOT dropped by the regex.
+describe('buildPerOpeningItems — phantom structural-row dedupe', () => {
+  it('drops leaf-shaped phantoms on pair openings but keeps the structural rows', () => {
+    // A pair opening whose hwSet.items contains BOTH the leaf-named
+    // phantoms (emitted upstream) and legitimate hardware.
+    const hwSet: HardwareSet = {
+      set_id: 'DH4A.1',
+      generic_set_id: 'DH4A',
+      heading: 'Pair Opening',
+      heading_door_count: 1,
+      heading_leaf_count: 2,
+      heading_doors: ['120-02A'],
+      items: [
+        // Phantoms that should be dropped
+        { qty: 1, name: 'Door (Active Leaf)',   model: '', finish: '', manufacturer: '' },
+        { qty: 1, name: 'Door (Inactive Leaf)', model: '', finish: '', manufacturer: '' },
+        { qty: 1, name: 'Frame',                 model: '', finish: '', manufacturer: '' },
+        // Legitimate hardware that must survive
+        { qty: 4, name: 'Hinges 5BB1 4.5x4.5 NRP', model: '', finish: '', manufacturer: '' },
+        { qty: 1, name: 'Exit Device 9875L-F',     model: '', finish: '', manufacturer: '' },
+      ],
+    }
+    const openings = [
+      { id: 'op-pair-1', door_number: '120-02A', hw_set: 'DH4A.1' },
+    ]
+    const doorInfoMap = new Map<string, { door_type: string; frame_type: string }>([
+      ['120-02A', { door_type: 'A', frame_type: 'F2' }],
+    ])
+    const setMap = new Map<string, HardwareSet>([['DH4A.1', hwSet]])
+    const doorToSetMap = new Map<string, HardwareSet>([['120-02A', hwSet]])
+
+    const rows = buildPerOpeningItems(openings, doorInfoMap, setMap, doorToSetMap)
+
+    // Structural rows: exactly 1 Active, 1 Inactive, 1 Frame — no duplicates.
+    expect(rows.filter(r => r.name === 'Door (Active Leaf)')).toHaveLength(1)
+    expect(rows.filter(r => r.name === 'Door (Inactive Leaf)')).toHaveLength(1)
+    expect(rows.filter(r => r.name === 'Frame')).toHaveLength(1)
+
+    // Bare "Door" phantom should be nonexistent (was never emitted here,
+    // and the pair branch emits leaf-named rows).
+    expect(rows.filter(r => r.name === 'Door')).toHaveLength(0)
+
+    // Legitimate hardware survives.
+    expect(rows.some(r => String(r.name).includes('Exit Device'))).toBe(true)
+    expect(rows.some(r => String(r.name).includes('Hinges'))).toBe(true)
+
+    // Structural invariant (Matthew, 2026-04-17): an opening has at most
+    // two Door* rows ever — single=1, pair=2, double-egress=2. Three or
+    // more is always a bug.
+    const doorStarRows = rows.filter(r => /^Door(\s|$|\()/i.test(String(r.name)))
+    expect(doorStarRows.length, 'pair opening: at most 2 Door* rows').toBeLessThanOrEqual(2)
+  })
+
+  it('drops bare Door and Frame phantoms on single-leaf openings', () => {
+    // A single-leaf opening (no pair signals) whose hwSet.items carries
+    // bare "Door" and "Frame" phantoms and a legitimate closer.
+    const hwSet: HardwareSet = {
+      set_id: 'DH1',
+      heading: 'Single Door Opening',
+      heading_door_count: 1,
+      heading_leaf_count: 1,
+      heading_doors: ['101'],
+      items: [
+        // Phantoms to drop
+        { qty: 1, name: 'Door',  model: '', finish: '', manufacturer: '' },
+        { qty: 1, name: 'Frame', model: '', finish: '', manufacturer: '' },
+        // Also a leaf-shaped phantom that shouldn't exist on a single-leaf
+        // opening but has been observed in the wild — must still be dropped.
+        { qty: 1, name: 'Door (Active Leaf)', model: '', finish: '', manufacturer: '' },
+        // Legitimate hardware
+        { qty: 1, name: 'Closer 4040XP', model: '', finish: '', manufacturer: '' },
+      ],
+    }
+    const openings = [
+      { id: 'op-single-1', door_number: '101', hw_set: 'DH1' },
+    ]
+    const doorInfoMap = new Map<string, { door_type: string; frame_type: string }>([
+      ['101', { door_type: 'A', frame_type: 'F1' }],
+    ])
+    const setMap = new Map<string, HardwareSet>([['DH1', hwSet]])
+    const doorToSetMap = new Map<string, HardwareSet>([['101', hwSet]])
+
+    const rows = buildPerOpeningItems(openings, doorInfoMap, setMap, doorToSetMap)
+
+    // Exactly one Door, one Frame, no leaf-named rows.
+    expect(rows.filter(r => r.name === 'Door')).toHaveLength(1)
+    expect(rows.filter(r => r.name === 'Frame')).toHaveLength(1)
+    expect(rows.filter(r => r.name === 'Door (Active Leaf)')).toHaveLength(0)
+    expect(rows.filter(r => r.name === 'Door (Inactive Leaf)')).toHaveLength(0)
+
+    // Closer preserved.
+    const closer = rows.find(r => String(r.name).includes('Closer'))
+    expect(closer).toBeDefined()
+    expect(closer?.qty).toBe(1)
+
+    // Structural invariant: single-leaf opening has exactly 1 Door* row.
+    const doorStarRows = rows.filter(r => /^Door(\s|$|\()/i.test(String(r.name)))
+    expect(doorStarRows.length, 'single opening: exactly 1 Door* row').toBe(1)
+  })
+
+  it('preserves legitimate items that contain "Door" or "Frame" as substrings', () => {
+    // False-positive defense: "Door Closer", "Door Stop", "Door Sweep",
+    // "Door Silencer", "Frame Silencer", "Frame Seal" must NOT be dropped.
+    const hwSet: HardwareSet = {
+      set_id: 'DH2',
+      heading: 'Single Door with named hardware',
+      heading_door_count: 1,
+      heading_leaf_count: 1,
+      heading_doors: ['102'],
+      items: [
+        { qty: 1, name: 'Door Closer',         model: '', finish: '', manufacturer: '' },
+        { qty: 1, name: 'Door Stop',           model: '', finish: '', manufacturer: '' },
+        { qty: 1, name: 'Door Sweep',          model: '', finish: '', manufacturer: '' },
+        { qty: 1, name: 'Door Silencer',       model: '', finish: '', manufacturer: '' },
+        { qty: 1, name: 'Frame Silencer',      model: '', finish: '', manufacturer: '' },
+        { qty: 1, name: 'Frame Seal',          model: '', finish: '', manufacturer: '' },
+        { qty: 1, name: 'Door Position Switch',model: '', finish: '', manufacturer: '' },
+      ],
+    }
+    const openings = [
+      { id: 'op-named-1', door_number: '102', hw_set: 'DH2' },
+    ]
+    const doorInfoMap = new Map<string, { door_type: string; frame_type: string }>([
+      ['102', { door_type: 'A', frame_type: 'F1' }],
+    ])
+    const setMap = new Map<string, HardwareSet>([['DH2', hwSet]])
+    const doorToSetMap = new Map<string, HardwareSet>([['102', hwSet]])
+
+    const rows = buildPerOpeningItems(openings, doorInfoMap, setMap, doorToSetMap)
+
+    // All 7 named items survive.
+    const namedItemNames = [
+      'Door Closer', 'Door Stop', 'Door Sweep', 'Door Silencer',
+      'Frame Silencer', 'Frame Seal', 'Door Position Switch',
+    ]
+    for (const n of namedItemNames) {
+      expect(rows.some(r => r.name === n)).toBe(true)
+    }
+
+    // Structural rows still emitted exactly once each.
+    expect(rows.filter(r => r.name === 'Door')).toHaveLength(1)
+    expect(rows.filter(r => r.name === 'Frame')).toHaveLength(1)
+  })
+
+  it('handles whitespace and case variants of phantom names', () => {
+    const hwSet: HardwareSet = {
+      set_id: 'DH3',
+      heading: 'Whitespace / case phantoms',
+      heading_door_count: 1,
+      heading_leaf_count: 1,
+      heading_doors: ['103'],
+      items: [
+        // Case / whitespace variants — all must be dropped.
+        { qty: 1, name: '  Door  ',              model: '', finish: '', manufacturer: '' },
+        { qty: 1, name: 'DOOR',                   model: '', finish: '', manufacturer: '' },
+        { qty: 1, name: 'door (active leaf)',     model: '', finish: '', manufacturer: '' },
+        { qty: 1, name: 'FRAME',                  model: '', finish: '', manufacturer: '' },
+        // Legitimate
+        { qty: 1, name: 'Threshold',              model: '', finish: '', manufacturer: '' },
+      ],
+    }
+    const openings = [
+      { id: 'op-ws-1', door_number: '103', hw_set: 'DH3' },
+    ]
+    const doorInfoMap = new Map<string, { door_type: string; frame_type: string }>([
+      ['103', { door_type: 'A', frame_type: 'F1' }],
+    ])
+    const setMap = new Map<string, HardwareSet>([['DH3', hwSet]])
+    const doorToSetMap = new Map<string, HardwareSet>([['103', hwSet]])
+
+    const rows = buildPerOpeningItems(openings, doorInfoMap, setMap, doorToSetMap)
+
+    // Only the structural Door (emitted above) + structural Frame + Threshold.
+    const names = rows.map(r => String(r.name))
+    expect(names.filter(n => /^\s*door\s*$/i.test(n))).toHaveLength(1)
+    expect(names.filter(n => /^\s*frame\s*$/i.test(n))).toHaveLength(1)
+    expect(names.filter(n => /^door\s*\(active leaf\)$/i.test(n))).toHaveLength(0)
+    expect(names).toContain('Threshold')
+  })
+})
