@@ -83,7 +83,7 @@ export default function FieldAssignmentPanel({
   // region-extract text. Per-field because the same raw text ("R)\nROOM
   // 101") strips differently under "location" vs. "hand". When the user
   // retargets the field chip, this memo re-runs and the input reflects
-  // the new sanitization — unless the user has hand-edited the input.
+  // the new sanitization for that field.
   const sanitizedFromRaw = useMemo(
     () => sanitizeFieldValue(field, detectedValue || rawText),
     [field, detectedValue, rawText],
@@ -91,10 +91,15 @@ export default function FieldAssignmentPanel({
 
   // `userValue` is null until the user hand-edits the input; once they do,
   // their value takes precedence over the sanitized-from-raw derivation.
-  // This avoids the common "useEffect + setState" anti-pattern that
-  // react-hooks/set-state-in-effect flags.
+  // Switching fields resets userValue to null so the input always shows the
+  // sanitized default for the newly selected field.
   const [userValue, setUserValue] = useState<string | null>(null);
   const value = userValue ?? sanitizedFromRaw;
+
+  const handleFieldChange = (newField: RegionExtractField) => {
+    setField(newField);
+    setUserValue(null);
+  };
 
   // Always include the trigger door, and pre-check any other door that's
   // missing this field. User can toggle freely.
@@ -174,7 +179,7 @@ export default function FieldAssignmentPanel({
             {FIELD_OPTIONS.map((f) => (
               <DarrinAction
                 key={f}
-                onClick={() => setField(f)}
+                onClick={() => handleFieldChange(f)}
                 selected={field === f}
               >
                 {FIELD_LABELS[f]}
