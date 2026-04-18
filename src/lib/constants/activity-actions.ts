@@ -72,4 +72,5 @@ export const ACTION_LABELS: Record<string, string> = {
   extraction_job_failed: 'Extraction Failed',
   item_edited: 'Item Edited',
   item_deleted: 'Item Deleted',
+  extraction_handing_filter_applied: 'Handing Filter Applied',
 }
