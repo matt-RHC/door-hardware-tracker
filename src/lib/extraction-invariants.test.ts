@@ -19,6 +19,7 @@ type OpeningFixture = {
   hw_set: string | null
   leaf_count: number
   location: string | null
+  hand: string | null
 }
 
 type ItemFixture = {
@@ -37,6 +38,7 @@ function makeOpening(overrides: Partial<OpeningFixture> = {}): OpeningFixture {
     hw_set: overrides.hw_set ?? 'H01',
     leaf_count: overrides.leaf_count ?? 1,
     location: overrides.location ?? 'Corridor',
+    hand: overrides.hand ?? null,
   }
 }
 
@@ -458,5 +460,60 @@ describe('invariant (i) leaf_count_consistency', () => {
     ]
     const v = runInvariants([opening], items, [])
     expect(v.filter(x => x.rule === 'leaf_count_consistency')).toHaveLength(0)
+  })
+})
+
+// ── Rule (j): handing_consistency ───────────────────────────────────────────
+
+describe('invariant (j) handing_consistency', () => {
+  it('fails when a LHR item reaches an RHR single-leaf opening', () => {
+    const opening = makeOpening({ leaf_count: 1, hand: 'RHR' })
+    const items: ItemFixture[] = [
+      makeItem({ id: 'i1', name: 'Exit Device', model: '98L-NL-F × 996L-NL-R&V 06 LHR' }),
+    ]
+    const v = runInvariants([opening], items, [])
+    const hit = v.find(x => x.rule === 'handing_consistency')
+    expect(hit).toBeDefined()
+    expect(hit?.severity).toBe('blocker')
+    expect(hit?.opening_id).toBe('op-1')
+    expect(hit?.details).toContain('LH')
+    expect(hit?.details).toContain('RHR')
+  })
+
+  it('passes when item handing matches opening hand', () => {
+    const opening = makeOpening({ leaf_count: 1, hand: 'RHR' })
+    const items: ItemFixture[] = [
+      makeItem({ id: 'i1', name: 'Exit Device', model: '98L-NL-F × 996L-NL-R&V 06 RHR' }),
+    ]
+    const v = runInvariants([opening], items, [])
+    expect(v.filter(x => x.rule === 'handing_consistency')).toHaveLength(0)
+  })
+
+  it('passes when item has no handing token (unhanded hardware)', () => {
+    const opening = makeOpening({ leaf_count: 1, hand: 'RHR' })
+    const items: ItemFixture[] = [
+      makeItem({ id: 'i1', name: 'Hinges', model: '5BB1 HW 4 1/2 × 4 1/2 NRP' }),
+      makeItem({ id: 'i2', name: 'Closer', model: 'LCN 4040XP' }),
+    ]
+    const v = runInvariants([opening], items, [])
+    expect(v.filter(x => x.rule === 'handing_consistency')).toHaveLength(0)
+  })
+
+  it('passes when opening.hand is null (unknown — cannot assert mismatch)', () => {
+    const opening = makeOpening({ leaf_count: 1, hand: null })
+    const items: ItemFixture[] = [
+      makeItem({ id: 'i1', name: 'Exit Device', model: 'ED-LHR' }),
+    ]
+    const v = runInvariants([opening], items, [])
+    expect(v.filter(x => x.rule === 'handing_consistency')).toHaveLength(0)
+  })
+
+  it('skips pair openings — pair handing is a separate axis', () => {
+    const opening = makeOpening({ leaf_count: 2, hand: 'RHR' })
+    const items: ItemFixture[] = [
+      makeItem({ id: 'i1', name: 'Exit Device', model: 'ED-LHR' }),
+    ]
+    const v = runInvariants([opening], items, [])
+    expect(v.filter(x => x.rule === 'handing_consistency')).toHaveLength(0)
   })
 })

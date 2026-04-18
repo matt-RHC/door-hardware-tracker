@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import * as Sentry from '@sentry/nextjs'
 import { createServerSupabaseClient } from '@/lib/supabase/server'
 import type { DoorEntry, HardwareSet } from '@/lib/types'
 import {
@@ -8,7 +9,13 @@ import {
   detectIsPair,
   normalizeDoorNumber,
 } from '@/lib/parse-pdf-helpers'
+import {
+  filterAllItemsByOpeningHand,
+  type HandingFilterDrop,
+  type OpeningHandRecord,
+} from '@/lib/hardware-handing-filter'
 import { logActivity } from '@/lib/activity-log'
+import { ACTIVITY_ACTIONS } from '@/lib/constants/activity-actions'
 
 // User decisions from the wizard
 interface RemovedDecision {
@@ -109,6 +116,15 @@ export async function POST(request: NextRequest) {
     let doorsAdded = 0
     let progressTransferred = 0
     let progressReset = 0
+
+    // Handing filter drops aggregated across both buildPerOpeningItems call
+    // sites in this handler (CHANGED doors below and NEW doors further down).
+    // Parity with save/route.ts and jobs/[id]/run/route.ts — apply-revision
+    // writes directly to production, so invariant (j) cannot backstop. See
+    // src/lib/hardware-handing-filter.ts.
+    const handingDrops: HandingFilterDrop[] = []
+    let handingOpeningsWithUnknownHand = 0
+    let handingPairOpeningsSkipped = 0
 
     // ==========================================
     // 1. Handle REMOVED doors
@@ -232,13 +248,33 @@ export async function POST(request: NextRequest) {
           door_type: parsedDoor.door_type || '',
           frame_type: parsedDoor.frame_type || '',
         }]])
-        const newItems = buildPerOpeningItems(
+        const builtItems = buildPerOpeningItems(
           [{ id: decision.existing_id, door_number: parsedDoor.door_number, hw_set: parsedDoor.hw_set ?? null }],
           doorInfoMap,
           setMap,
           doorToSetMap,
         )
-        const itemsToInsert = newItems.filter(item => {
+
+        // Handing filter — drop items whose inferred handing contradicts
+        // opening.hand on single-leaf openings. Same logic as save/route.ts
+        // and jobs/[id]/run/route.ts. fkColumn is 'opening_id' here because
+        // apply-revision writes directly to production hardware_items.
+        const changedOpeningHandMap: OpeningHandRecord[] = [{
+          id: decision.existing_id,
+          doorNumber: parsedDoor.door_number,
+          hand: parsedDoor.hand ?? null,
+          leafCount: resolvedLeafCount,
+        }]
+        const changedHandingFilter = filterAllItemsByOpeningHand(
+          builtItems,
+          changedOpeningHandMap,
+          'opening_id',
+        )
+        handingDrops.push(...changedHandingFilter.dropped)
+        handingOpeningsWithUnknownHand += changedHandingFilter.openingsWithUnknownHand
+        handingPairOpeningsSkipped += changedHandingFilter.pairOpeningsSkipped
+
+        const itemsToInsert = changedHandingFilter.kept.filter(item => {
           const itemName = typeof item.name === 'string' ? item.name : ''
           return !preservedNames.has(itemName.toLowerCase())
         })
@@ -313,7 +349,36 @@ export async function POST(request: NextRequest) {
           frame_type: door.frame_type || '',
         })
       }
-      const allHardwareRows = buildPerOpeningItems(insertedOpenings, newDoorInfoMap, setMap, doorToSetMap)
+      const builtHardwareRows = buildPerOpeningItems(insertedOpenings, newDoorInfoMap, setMap, doorToSetMap)
+
+      // Handing filter for new-door inserts. Build the opening→hand map by
+      // joining insertedOpenings (DB rows with id) to newDoors (payload with
+      // hand + leaf_count).
+      const newDoorsByNumber = new Map<string, DoorEntry>()
+      for (const door of newDoors) newDoorsByNumber.set(door.door_number, door)
+      const newOpeningHandMap: OpeningHandRecord[] = insertedOpenings.map(row => {
+        const d = newDoorsByNumber.get(row.door_number)
+        const resolvedSet = d
+          ? (doorToSetMap.get(normalizeDoorNumber(d.door_number)) ?? setMap.get(d.hw_set ?? ''))
+          : undefined
+        const doorInfo = d ? { door_type: d.door_type || '', frame_type: d.frame_type || '' } : undefined
+        const leafCount = d?.leaf_count ?? (d ? (detectIsPair(resolvedSet, doorInfo) ? 2 : 1) : 1)
+        return {
+          id: row.id,
+          doorNumber: row.door_number,
+          hand: d?.hand ?? null,
+          leafCount,
+        }
+      })
+      const newHandingFilter = filterAllItemsByOpeningHand(
+        builtHardwareRows,
+        newOpeningHandMap,
+        'opening_id',
+      )
+      handingDrops.push(...newHandingFilter.dropped)
+      handingOpeningsWithUnknownHand += newHandingFilter.openingsWithUnknownHand
+      handingPairOpeningsSkipped += newHandingFilter.pairOpeningsSkipped
+      const allHardwareRows = newHandingFilter.kept
 
       for (let i = 0; i < allHardwareRows.length; i += CHUNK_SIZE) {
         const chunk = allHardwareRows.slice(i, i + CHUNK_SIZE)
@@ -343,6 +408,49 @@ export async function POST(request: NextRequest) {
       entityId: projectId,
       details: { revision: true, ...summary },
     })
+
+    // Handing filter audit — fires only when at least one row was dropped
+    // across the two buildPerOpeningItems call sites above.
+    if (handingDrops.length > 0) {
+      Sentry.addBreadcrumb({
+        category: 'extraction.apply_revision.handing_filter',
+        level: 'info',
+        message: 'handing filter drops',
+        data: {
+          projectId,
+          droppedCount: handingDrops.length,
+          openingsWithUnknownHand: handingOpeningsWithUnknownHand,
+          pairOpeningsSkipped: handingPairOpeningsSkipped,
+          sample: handingDrops.slice(0, 10).map(d => ({
+            door: d.doorNumber,
+            name: d.itemName,
+            model: d.itemModel,
+            itemHanding: d.itemHanding,
+            openingHand: d.openingHand,
+          })),
+        },
+      })
+      void logActivity({
+        projectId,
+        userId: user.id,
+        action: ACTIVITY_ACTIONS.EXTRACTION_HANDING_FILTER_APPLIED,
+        entityType: 'project',
+        entityId: projectId,
+        details: {
+          source: 'apply_revision',
+          droppedCount: handingDrops.length,
+          openingsWithUnknownHand: handingOpeningsWithUnknownHand,
+          pairOpeningsSkipped: handingPairOpeningsSkipped,
+          drops: handingDrops.map(d => ({
+            door_number: d.doorNumber,
+            item_name: d.itemName,
+            item_model: d.itemModel,
+            item_handing: d.itemHanding,
+            opening_hand: d.openingHand,
+          })),
+        },
+      })
+    }
 
     return NextResponse.json({ success: true, summary })
   } catch (error) {
