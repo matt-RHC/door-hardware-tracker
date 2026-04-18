@@ -38,6 +38,7 @@ export type InvariantRule =
   | 'location_matches_fire_rating'
   | 'heading_door_set_mismatch'
   | 'per_leaf_qty_sum_mismatch'
+  | 'leaf_count_consistency'
 
 export type InvariantSeverity = 'blocker' | 'warning'
 
@@ -359,6 +360,31 @@ export function runInvariants(
             severity: 'warning',
           })
         }
+      }
+    }
+
+    // (i) leaf_count ↔ item leaf_side consistency (2026-04-18 Radius DC fix).
+    //
+    // If any hardware_item carries leaf_side='inactive', the opening is
+    // unambiguously a pair and leaf_count must be >= 2. Only 'inactive' is
+    // the trigger: buildPerOpeningItems stamps single-door bare "Door"
+    // rows with leaf_side='active' (see parse-pdf-helpers.ts:2746), so
+    // 'active' is not an unambiguous pair signal. An 'inactive' row is
+    // only emitted from the pair branch, making it the correct canary.
+    //
+    // Enforced as a BLOCKER regardless of the general invariantGateEnabled()
+    // flag; see save/route.ts for the enforce-always wiring with a
+    // LEAF_COUNT_CONSISTENCY_ENFORCE=false kill switch.
+    if (opening.leaf_count < LEAF_COUNT_PAIR) {
+      const inactiveLeafItem = ois.find(i => i.leaf_side === 'inactive')
+      if (inactiveLeafItem) {
+        violations.push({
+          rule: 'leaf_count_consistency',
+          opening_id: opening.id,
+          door_number: opening.door_number,
+          details: `opening.leaf_count=${opening.leaf_count} but item "${inactiveLeafItem.name}" has leaf_side="inactive" (indicates pair). Backend pair detection is inconsistent.`,
+          severity: 'blocker',
+        })
       }
     }
   }

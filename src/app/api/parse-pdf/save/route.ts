@@ -29,6 +29,21 @@ function invariantGateEnabled(): boolean {
   return v === '1' || v === 'true'
 }
 
+// Specific kill switch for the leaf_count_consistency rule. This rule is
+// enforce-always by default (2026-04-18 Radius DC regression demanded an
+// unconditional gate on the leaf_count/leaf_side contradiction). Set
+// LEAF_COUNT_CONSISTENCY_ENFORCE=false in Vercel to disable if a false
+// positive ever blocks a save; default is enforcement on.
+function leafCountConsistencyEnforced(): boolean {
+  const v = (process.env.LEAF_COUNT_CONSISTENCY_ENFORCE ?? '').toLowerCase()
+  return v !== 'false' && v !== '0'
+}
+
+// Rules that bypass the general invariantGateEnabled() env flag and always
+// block the save when violated. Add members sparingly; each one makes a
+// save potentially fail where it previously succeeded.
+const ENFORCE_ALWAYS_RULES: ReadonlyArray<InvariantViolation['rule']> = ['leaf_count_consistency']
+
 // --- Shared: check for unmatched sets ---
 //
 // Doors with `by_others === true` are intentionally unassigned (hardware
@@ -167,12 +182,21 @@ export async function POST(request: NextRequest) {
     })
 
     // 2. Transform doors → StagingOpening[]
+    //
+    // Compute isPair ONCE per door and reuse it for both staging.leaf_count
+    // and the per-opening item rows below. A separate detectIsPair call in
+    // buildPerOpeningItems would be susceptible to DB round-trip differences
+    // in door_number/hw_set keys (2026-04-18 Radius DC regression: 25 openings
+    // got Door-leaf rows with leaf_count=1). Single source of truth eliminates
+    // that class of bug.
+    const isPairByDoor = new Map<string, boolean>()
     const stagingOpenings: StagingOpening[] = activeDoors.map(d => {
       // Resolve the hardware set for this door (same lookup chain as buildPerOpeningItems)
       const doorKey = normalizeDoorNumber(d.door_number)
       const hwSet = doorToSetMap.get(doorKey) ?? setMap.get(d.hw_set ?? '')
       const doorInfo = doorInfoMap.get(d.door_number)
       const isPair = detectIsPair(hwSet, doorInfo)
+      isPairByDoor.set(d.door_number, isPair)
       return {
         door_number: d.door_number,
         hw_set: d.hw_set || undefined,
@@ -203,7 +227,28 @@ export async function POST(request: NextRequest) {
       throw new Error(`Failed to fetch staging openings: ${fetchError.message}`)
     }
 
-    // 5. Build all items (Door/Frame + set items) via shared helper
+    // Consistency gate: every fetched staging opening must have a precomputed
+    // isPair decision. A miss means doorInfoMap/isPairByDoor were keyed by a
+    // door_number that the DB round-tripped differently (trim, case, collation).
+    // Failing loud here is better than silently diverging between leaf_count
+    // and buildPerOpeningItems' emitted rows.
+    const missingPairDecision = (stagingOpeningRows ?? []).filter(
+      (o: { door_number: string }) => !isPairByDoor.has(o.door_number),
+    )
+    if (missingPairDecision.length > 0) {
+      console.error(
+        `[save] BUG: ${missingPairDecision.length} staging opening(s) fetched from DB have door_numbers not present in isPairByDoor:`,
+        missingPairDecision.map((o: { door_number: string }) => o.door_number),
+      )
+      return NextResponse.json({
+        success: false,
+        error: `Internal error: door numbers ${missingPairDecision.map((o: { door_number: string }) => o.door_number).join(', ')} were transformed during DB write. Please contact support.`,
+      }, { status: 500 })
+    }
+
+    // 5. Build all items (Door/Frame + set items) via shared helper.
+    // Pass isPairByDoor so the helper uses the same pair decision that was
+    // written to staging_openings.leaf_count.
     const allItems = buildPerOpeningItems(
       stagingOpeningRows ?? [],
       doorInfoMap,
@@ -211,6 +256,7 @@ export async function POST(request: NextRequest) {
       doorToSetMap,
       'staging_opening_id',
       { extraction_run_id: runId },
+      isPairByDoor,
     )
 
     // Breadcrumbs (not errors) — give us context in Sentry for any later
@@ -410,11 +456,21 @@ export async function POST(request: NextRequest) {
           },
         })
 
-        if (invariantGateEnabled()) {
+        // Enforce-always rules (currently just leaf_count_consistency) block
+        // the save even when the general invariantGateEnabled() flag is off.
+        // The LEAF_COUNT_CONSISTENCY_ENFORCE env var is an emergency kill
+        // switch that disables this specific rule without a code revert.
+        const enforceAlwaysViolated = invariantBlockers.some(
+          v => (ENFORCE_ALWAYS_RULES as ReadonlyArray<string>).includes(v.rule) && leafCountConsistencyEnforced(),
+        )
+
+        if (invariantGateEnabled() || enforceAlwaysViolated) {
           return NextResponse.json({
             success: false,
             partial: isPartialSave,
-            error: 'Extraction completed with invariant violations.',
+            error: enforceAlwaysViolated
+              ? 'Extraction blocked: leaf_count/leaf_side consistency violation. Contact support or set LEAF_COUNT_CONSISTENCY_ENFORCE=false in Vercel to override.'
+              : 'Extraction completed with invariant violations.',
             stagingSuccess: true,
             openingsCount: promoteResult.openingsPromoted ?? stagingResult.openingsCount,
             itemsCount: promoteResult.itemsPromoted ?? itemsInserted,
