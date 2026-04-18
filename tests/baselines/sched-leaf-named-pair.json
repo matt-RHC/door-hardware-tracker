@@ -7,7 +7,7 @@
   "tables_found": 1,
   "reference_code_count": 0,
   "_synthetic": true,
-  "_notes": "Synthetic fixture seating PR #312's PRIMARY pair-detection signal (detectIsPair reads the leaf-named Door rows from hwSet.items and decides leaf_count=2 before heading_leaf_count/size/keyword fallbacks run). The two 'Door (Active Leaf)' / 'Door (Inactive Leaf)' rows are the ground-truth signal — if a future Darrin correction ever strips or renames them, the applyCorrections guard in parse-pdf-helpers.ts:~1467 refuses the mutation. Exercised by src/lib/__tests__/detectIsPair.primary-signal.test.ts.",
+  "_notes": "Synthetic fixture seating PR #312's PRIMARY pair-detection signal (detectIsPair reads the leaf-named Door rows from hwSet.items and decides leaf_count=2 before heading_leaf_count/size/keyword fallbacks run). The two 'Door (Active Leaf)' / 'Door (Inactive Leaf)' rows are the ground-truth signal — if a future Darrin correction ever strips or renames them, the applyCorrections guard in parse-pdf-helpers.ts:~1467 refuses the mutation. Exercised by src/lib/detectIsPair.primary-signal.test.ts.",
   "hardware_sets": [
     {
       "set_id": "DH-PAIR-TEST",
