@@ -2561,37 +2561,104 @@ export function parseOpeningSize(
 }
 
 /**
+ * Matches a leaf-named structural Door row emitted by the Python extractor
+ * for pair openings — e.g. "Door (Active Leaf)", "Door (Inactive Leaf)",
+ * "Door (active leaf — swing)". Used by detectIsPair's primary signal.
+ *
+ * Shape: bare "Door " then a parenthetical that contains the word
+ * "active" or "inactive" adjacent to "leaf" (whitespace-insensitive). The
+ * `$` anchor ensures we don't match item rows that happen to start with
+ * "Door ( … leaf …)" followed by trailing model/finish text.
+ *
+ * Why ≥ 2 occurrences are required at the call site: a single "Door
+ * (Active Leaf)" row with no counterpart is suspicious (Python mis-emit)
+ * and shouldn't by itself flip an opening to pair. A true pair opening
+ * produces both Active AND Inactive leaf rows.
+ */
+const _PAIR_LEAF_NAMED_DOOR_RE =
+  /^Door\s*\([^)]*(active|inactive)\s+leaf[^)]*\)\s*$/i
+
+/**
  * Detect whether an opening is a pair door based on the hardware set and
  * door info. Uses a layered signal strategy so the detection is robust
  * across different PDF formats:
  *
- *   1. PRIMARY — `heading_leaf_count > heading_door_count`. If Python's
+ *   1. PRIMARY — `hwSet.items` contains ≥ 2 leaf-named Door rows matching
+ *      _PAIR_LEAF_NAMED_DOOR_RE. This is the strongest signal: Python's
+ *      extractor already emitted "Door (Active Leaf)" + "Door (Inactive
+ *      Leaf)" rows, which means the upstream pair decision is settled.
+ *      Trust it.
+ *   2. SECONDARY — `heading_leaf_count > heading_door_count`. If the
  *      extractor captured the "N Pair Doors" lines correctly, the leaf
- *      count exceeds the opening count and we have a definitive answer.
- *   2. SECONDARY — Parse the opening size from door_type or the heading
- *      text. If width ≥ 48" (4'0"), treat as pair. This catches PDFs
- *      where the heading parser missed the leaf count but the size is
- *      available in the door schedule.
- *   3. TERTIARY — Keyword scan of heading/door_type for "pair", "double",
- *      "pr" (the legacy behavior). This is the weakest signal but catches
- *      edge cases where neither structured signal is present.
+ *      count exceeds the opening count and we have a definitive answer
+ *      from heading parsing.
+ *   3. TERTIARY — Parse the opening size from door_type or the heading
+ *      text. If width ≥ 48" (4'0"), treat as pair. Catches PDFs where
+ *      the heading parser missed the leaf count but the size is in the
+ *      door schedule.
+ *   4. QUATERNARY — Keyword scan of heading/door_type for "pair",
+ *      "double", "pr" (the legacy behavior). Weakest signal; catches
+ *      edge cases where no structured signal is present.
  *
- * Previously only the tertiary signal was used, which failed silently for
- * the Radius DC PDF format (heading text "Heading #DH4A.1", door_type "A")
- * and left pair doors with the wrong per-leaf → per-opening math.
+ * Why PRIMARY was added (2026-04-18): the Radius DC grid-RR regression.
+ *
+ * Incident chain:
+ *   - PR #306 threaded an `isPairByDoor` map from save-time into
+ *     buildPerOpeningItems so the two callers couldn't disagree. Reverted
+ *     after the map and `detectIsPair` diverged on DB-round-tripped
+ *     sub-headings (DH4A.0 vs DH4A.1). The leaf_count_consistency
+ *     invariant was added as a post-hoc guardrail.
+ *   - PR #311 added a phantom-dedupe regex inside buildPerOpeningItems to
+ *     drop duplicate Door/Frame rows emitted when both TS and Python
+ *     produced structural rows. Dedupe was correct given `isPair=true`;
+ *     but on 25 Radius DC pair openings the heading carried
+ *     `heading_leaf_count=1` so `detectIsPair` returned false, the dedupe
+ *     ran in single-leaf mode, and it stripped the leaf-named rows that
+ *     were the pair opening's only remaining identity. 25 openings
+ *     silently collapsed to single-leaf rendering.
+ *
+ * Fix (this PR): trust Python's item-level evidence. If ≥2 leaf-named
+ * Door rows are in `hwSet.items`, the extractor already decided it's a
+ * pair; `detectIsPair` returns true; `staging_openings.leaf_count` gets
+ * stamped to 2 at save/jobs-run time; the downstream dedupe regex correctly
+ * drops the duplicated rows because TS's pair branch emits its own
+ * Active/Inactive copies upstream.
+ *
+ * Determinism note: this function is called at TWO sites per opening
+ * (staging write-time in save/route.ts:198 + jobs/run:1245, AND inside
+ * buildPerOpeningItems:2768). The load-bearing comment at those call
+ * sites says both invocations must agree or the leaf_count_consistency
+ * invariant blocks the save. Signal #1 reads `hwSet.items` which is
+ * identical across both call sites for the same `hwSet`, so determinism
+ * is preserved.
  */
 export function detectIsPair(
   hwSet: HardwareSet | undefined,
   doorInfo: { door_type?: string | null; location?: string | null } | undefined,
 ): boolean {
-  // --- Primary: leaf count exceeds door count in the extracted set ---
+  // --- Primary: Python already emitted leaf-named Door rows ---
+  // Ground truth from the extractor. If Active+Inactive Leaf rows are
+  // present, the upstream pair decision is settled. Added 2026-04-18 to
+  // close the PR #311 Radius DC regression — see JSDoc above for the
+  // full incident chain and why this signal ranks above heading parsing.
+  const items = hwSet?.items ?? []
+  let leafNamedCount = 0
+  for (const item of items) {
+    const name = (item.name ?? '').trim()
+    if (_PAIR_LEAF_NAMED_DOOR_RE.test(name)) {
+      leafNamedCount++
+      if (leafNamedCount >= 2) return true
+    }
+  }
+
+  // --- Secondary: leaf count exceeds door count in the extracted set ---
   const leafCount = hwSet?.heading_leaf_count ?? 0
   const doorCount = hwSet?.heading_door_count ?? 0
   if (doorCount >= 1 && leafCount > doorCount) {
     return true
   }
 
-  // --- Secondary: parse opening size from door_type or heading text ---
+  // --- Tertiary: parse opening size from door_type or heading text ---
   const sizeSources: Array<string | null | undefined> = [
     doorInfo?.door_type,
     doorInfo?.location,
@@ -2604,7 +2671,7 @@ export function detectIsPair(
     }
   }
 
-  // --- Tertiary: keyword scan (legacy fallback) ---
+  // --- Quaternary: keyword scan (legacy fallback) ---
   const heading = (hwSet?.heading ?? '').toLowerCase()
   const doorType = (doorInfo?.door_type ?? '').toLowerCase()
   if (
