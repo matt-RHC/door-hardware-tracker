@@ -1232,13 +1232,18 @@ export async function POST(
     }
 
     // Convert accepted doors to StagingOpening format.
-    // Compute leaf_count via detectIsPair (matching save/route.ts) so pair
-    // detection uses heading_leaf_count, opening size, and keyword signals.
+    // Compute isPair ONCE per door and reuse it for staging.leaf_count
+    // and the per-opening item rows emitted by buildPerOpeningItems below.
+    // A second detectIsPair call inside buildPerOpeningItems would be
+    // susceptible to DB round-trip differences in door_number/hw_set keys;
+    // threading the decision through the map eliminates that class of bug.
+    const isPairByDoor = new Map<string, boolean>()
     const stagingOpenings: StagingOpening[] = filteredDoors.map(d => {
       const doorKey = normalizeDoorNumber(d.door_number)
       const hwSet = doorToSetMap.get(doorKey) ?? setMap.get(d.hw_set ?? '')
       const doorInfo = doorInfoMap.get(d.door_number)
       const isPair = detectIsPair(hwSet, doorInfo)
+      isPairByDoor.set(d.door_number, isPair)
       return {
         door_number: d.door_number,
         hw_set: d.hw_set || undefined,
@@ -1273,7 +1278,25 @@ export async function POST(
       throw new Error(`Failed to fetch staging openings: ${fetchError.message}`)
     }
 
-    // 6c. Build per-opening items (structural rows + leaf_side + hinge split)
+    // Consistency gate (matches save/route.ts): every fetched staging opening
+    // must have a precomputed isPair decision. A miss means the DB round-trip
+    // changed door_number in a way that breaks keying. Fail loud.
+    const missingPairDecision = (stagingOpeningRows ?? []).filter(
+      (o: { door_number: string }) => !isPairByDoor.has(o.door_number),
+    )
+    if (missingPairDecision.length > 0) {
+      const missingNumbers = missingPairDecision.map((o: { door_number: string }) => o.door_number).join(', ')
+      console.error(
+        `[job-orchestrator] BUG: ${missingPairDecision.length} staging opening(s) fetched from DB have door_numbers not present in isPairByDoor: ${missingNumbers}`,
+      )
+      throw new Error(
+        `isPairByDoor missing decisions for door_numbers: ${missingNumbers}. Staging door_numbers were transformed by the DB.`,
+      )
+    }
+
+    // 6c. Build per-opening items (structural rows + leaf_side + hinge split).
+    // Pass isPairByDoor so the helper uses the same pair decision that was
+    // written to staging_openings.leaf_count.
     const allItems = buildPerOpeningItems(
       stagingOpeningRows ?? [],
       doorInfoMap,
@@ -1281,6 +1304,7 @@ export async function POST(
       doorToSetMap,
       'staging_opening_id',
       { extraction_run_id: runId },
+      isPairByDoor,
     )
 
     // 6d. Chunk-insert staging hardware items (same pattern as save/route.ts)

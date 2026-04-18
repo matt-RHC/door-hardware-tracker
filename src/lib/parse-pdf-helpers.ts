@@ -2708,6 +2708,7 @@ export function buildPerOpeningItems(
   doorToSetMap: Map<string, HardwareSet>,
   fkColumn: 'opening_id' | 'staging_opening_id' = 'opening_id',
   extraFields?: Record<string, unknown>,
+  isPairByDoor?: Map<string, boolean>,
 ): Array<Record<string, unknown>> {
   const rows: Array<Record<string, unknown>> = []
 
@@ -2722,17 +2723,28 @@ export function buildPerOpeningItems(
     const doorKey = normalizeDoorNumber(opening.door_number)
     const hwSet = doorToSetMap.get(doorKey) ?? setMap.get(opening.hw_set ?? '')
 
-    // Pair detection uses detectIsPair which layers three signals:
+    // Pair detection. If the caller passed isPairByDoor, that decision is
+    // authoritative and a missing entry is a program bug (save/jobs paths
+    // build it up-front for every door — see 2026-04-18 Radius DC
+    // regression where staging leaf_count and item leaf_side disagreed).
+    // Legacy callers (apply-revision) that don't pass the map fall back to
+    // an in-function detectIsPair call, which layers three signals:
     //   1. hwSet.heading_leaf_count > heading_door_count (primary)
     //   2. parseOpeningSize → width >= 48" (secondary)
     //   3. keyword scan of heading / door_type (tertiary)
-    //
-    // This replaces an earlier inline keyword-only check that silently
-    // returned false for Radius DC format (heading "Heading #DH4A.1",
-    // door_type "A" — no "pair" keyword in either). The result was that
-    // pair openings got only 1 Door row and per-leaf item quantities
-    // were stored without being doubled.
-    const isPair = detectIsPair(hwSet, doorInfo)
+    let isPair: boolean
+    if (isPairByDoor) {
+      const precomputed = isPairByDoor.get(opening.door_number)
+      if (precomputed === undefined) {
+        throw new Error(
+          `buildPerOpeningItems: isPairByDoor provided but missing decision for door_number=${opening.door_number}. ` +
+          `Caller must populate the map for every opening passed in.`,
+        )
+      }
+      isPair = precomputed
+    } else {
+      isPair = detectIsPair(hwSet, doorInfo)
+    }
     const leafCount = isPair ? 2 : 1
 
     // Add door(s) only when door_type is known. Stamp leaf_side on each
