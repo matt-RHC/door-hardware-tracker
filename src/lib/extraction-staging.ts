@@ -14,7 +14,7 @@ import { SupabaseClient } from '@supabase/supabase-js'
 
 /**
  * Run lifecycle states for `extraction_runs.status`. The DB CHECK
- * constraint (migration 050) enforces the same set — keep these
+ * constraint (migration 050 + 056) enforces the same set — keep these
  * aligned or writes will start failing.
  *
  * Transition diagram:
@@ -23,24 +23,32 @@ import { SupabaseClient } from '@supabase/supabase-js'
  *     ↓
  *   extracting ──────────────────────────────────── failed
  *     ↓                                                ↑
- *     ├─────────→ reviewing                            │ (catch handler
+ *     ├─────────→ reviewing ─────────→ promoted        │ (catch handler
  *     │           (success, awaiting user promote)     │  or stuck-run
- *     │                                                │  reaper)
+ *     │                ↑                               │  reaper)
+ *     │                │ merge_extraction success      │
  *     └─────────→ completed_with_issues ───────────────┘
  *                 (partial chunks or orphan doors —
  *                  user can still promote after review)
  *
- * Prior to migration 050, the enum also included `'pending' | 'promoted'
- * | 'rejected'` (the original CHECK + `DEFAULT 'pending'` came from
- * migration 007). None of the dropped values were ever written in 6+
- * months of production. Re-add them with a new migration if the
- * lifecycle grows.
+ * History
+ *   - Migration 007 introduced the original CHECK + `DEFAULT 'pending'`
+ *     with values {pending, extracting, reviewing, completed_with_issues,
+ *     failed, promoted, rejected}.
+ *   - Migration 050 narrowed to the 4-value set above and dropped
+ *     'pending' / 'promoted' / 'rejected'. The commit message claimed
+ *     merge_extraction never wrote 'promoted' — but it has done so since
+ *     migration 037, masked first by the notes-column drift fixed in
+ *     migration 055 and then by the constraint violation. See migration
+ *     056 for the post-mortem and re-widen.
+ *   - 'pending' and 'rejected' really ARE unused — left out of 056.
  */
 export type ExtractionStatus =
   | 'extracting'
   | 'reviewing'
   | 'completed_with_issues'
   | 'failed'
+  | 'promoted'
 
 export type PdfSourceType =
   | 'comsense'
