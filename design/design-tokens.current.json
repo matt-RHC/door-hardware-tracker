@@ -1,0 +1,84 @@
+{
+  "$schema-note": "Reference only. Brand is being fully reset. Use this to mirror the structure in the new tokens JSON — same key names, new values. Source: src/app/globals.css lines 7-208.",
+  "color": {
+    "light": {
+      "background": "#F7F8FA",
+      "foreground": "#1A1D23",
+      "surface": "#FFFFFF",
+      "surface-hover": "#F0F2F5",
+      "surface-raised": "#F5F6F8",
+      "border": "#D8DCE2",
+      "border-hover": "#B8BEC8",
+      "text-primary": "#1A1D23",
+      "text-secondary": "#5C6370",
+      "text-tertiary": "#8B919E",
+      "accent": "#1B6EB5",
+      "success": "#1A8754",
+      "warning": "#AD5B00",
+      "caution": "#926C00",
+      "danger": "#CC2D37",
+      "purple": "#7C4DBC",
+      "field": "#AD5B00",
+      "bench": "#7C4DBC",
+      "tint": "rgba(0,0,0,0.03)",
+      "tint-strong": "rgba(0,0,0,0.06)",
+      "border-dim": "rgba(0,0,0,0.06)",
+      "border-dim-strong": "rgba(0,0,0,0.10)"
+    },
+    "dark": {
+      "background": "#0F1117",
+      "foreground": "#E4E6EB",
+      "surface": "#1A1D25",
+      "surface-hover": "#252830",
+      "surface-raised": "#1F222B",
+      "border": "#2E323C",
+      "border-hover": "#3E434F",
+      "text-primary": "#F2F4F8",
+      "text-secondary": "#B5BBC6",
+      "text-tertiary": "#8A93A3",
+      "accent": "#4BA3E3",
+      "success": "#2ECC71",
+      "warning": "#E8811A",
+      "caution": "#E8A817",
+      "danger": "#E04850",
+      "purple": "#9B6DD7",
+      "field": "#D97706",
+      "bench": "#7C4DBC",
+      "tint": "rgba(255,255,255,0.04)",
+      "tint-strong": "rgba(255,255,255,0.08)",
+      "border-dim": "rgba(255,255,255,0.06)",
+      "border-dim-strong": "rgba(255,255,255,0.08)"
+    },
+    "semantic-meaning": {
+      "accent": "Primary brand / info — currently steel blue",
+      "success": "OSHA safe / go / complete / received / passed",
+      "warning": "OSHA warning / approaching deadline / delay",
+      "caution": "OSHA caution / advisory / routine reminder",
+      "danger": "OSHA danger / stop / critical blocking issue",
+      "purple": "Non-semantic accent for routing/categorization (never an OSHA alarm)",
+      "field": "Install-type indicator — field install, kept distinct from OSHA warning (bug-fix: see globals.css:76-82)",
+      "bench": "Install-type indicator — bench install, kept distinct from OSHA routing purple"
+    }
+  },
+  "radius": {
+    "sm": "4px",
+    "md": "6px",
+    "pill": "20px"
+  },
+  "font": {
+    "sans": "Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif",
+    "display": "Orbitron, Inter, monospace",
+    "mono": "'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace"
+  },
+  "elevation": {
+    "glow-sm": "0 0 4px <glow-color>",
+    "glow-md": "0 0 8px <glow-color>",
+    "glow-lg": "0 0 14px <glow-color>",
+    "note": "Glows are the current signature elevation language. Light mode suppresses them (see globals.css:398-421). A new elevation system is expected."
+  },
+  "performance-tiers": {
+    "note": "Accessibility-adjacent feature that must survive. data-perf='low' disables glows + animations; data-perf='mid' keeps static decorations but disables animations; prefers-reduced-motion overrides everything."
+  },
+  "base-font-size": "14px",
+  "base-line-height": 1.5
+}

@@ -1,0 +1,55 @@
+{
+  "_note": "DERIVED from real McCarthy Jones & Woodard submittal PDF (grid-RR.pdf). Third-party entity names redacted. All technical content preserved.",
+  "id": "00000000-0000-0000-0000-000000000100",
+  "name": "Radius DC — Nashville Hardware Package",
+  "project_code": "Project Smash",
+  "job_number": "306169",
+  "general_contractor": "Keystone Construction Group",
+  "architect": "Highridge Architects",
+  "hardware_supplier": "Meridian Hardware Supply",
+  "salesperson": "user1@example.com",
+  "project_manager": "user1@example.com",
+  "address": "2902 Brick Church Pike, Nashville, TN 37207",
+  "submittal_date": "2026-03-20",
+  "submittal_history": [
+    { "revision": "1st", "submitted": "2025-10-01", "returned": null },
+    { "revision": "2nd", "submitted": "2025-10-27", "returned": null },
+    { "revision": "3rd", "submitted": "2026-01-28", "returned": null },
+    { "revision": "4th", "submitted": "2026-03-20", "returned": null }
+  ],
+  "based_on_plans": "Bulletin 4, dated 2026-01-13",
+  "created_at": "2025-10-01T14:22:15.412+00:00",
+  "created_by": "00000000-0000-0000-0000-000000000010",
+  "company_id": "00000000-0000-0000-0000-000000000001",
+  "last_pdf_hash": "<redacted-hash>",
+  "last_pdf_uploaded_at": "2026-03-20T14:30:00.000+00:00",
+  "pdf_storage_path": "<redacted-storage-path>",
+  "pdf_page_count": 44,
+  "key_system": {
+    "lock_manufacturer": "Schlage",
+    "core_manufacturer": "Best",
+    "core_type": "small format interchangeable (SFIC)",
+    "temporary_cores_during_construction": true,
+    "marking": "Visual Key Control number, Do Not Duplicate",
+    "status": "pending keying meeting"
+  },
+  "lead_times": {
+    "mechanical_hardware_weeks": [8, 10],
+    "electrified_hardware_weeks": [14, 16],
+    "trigger": "after approval of schedules and keying"
+  },
+  "project_holds": {
+    "on_hold": true,
+    "reason": "Awaiting keying instructions and required delivery dates.",
+    "since": "2026-03-20"
+  },
+  "counts": {
+    "openings": 82,
+    "hardware_items": 1470,
+    "hardware_sets": 34,
+    "issues_open": 3,
+    "issues_resolved": 6,
+    "extraction_jobs": 4,
+    "rfis_total": 10
+  }
+}

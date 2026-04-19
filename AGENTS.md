@@ -86,7 +86,7 @@ Git operations run directly in the working directory. See CLAUDE.md for git iden
 
 - Each session should produce either (a) merged code with a test, or (b) a single focused prompt that will produce merged code.
 - If a session only produced documents and no code, flag that as a problem in the audit log.
-- Clean up at end of session: archive stale files, remove loose artifacts from repo root.
+- Clean up at end of session: archive stale files **you created** that are no longer needed, and remove loose artifacts **you created** at the repo root. **Do not touch files outside your task's scope**, even if they look unfinished or document-only — other sessions or the user may be actively working on them. The `design/` folder in particular is a shared workspace for UI/UX redesign assets and must not be modified or cleaned by unrelated sessions.
 
 ## Tracking Items (cross-session state)
 
