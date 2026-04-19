@@ -31,9 +31,10 @@ import { SupabaseClient } from '@supabase/supabase-js'
  *                  user can still promote after review)
  *
  * Prior to migration 050, the enum also included `'pending' | 'promoted'
- * | 'rejected'`. None were ever written in 6+ months of production and
- * were removed to prevent drift. Re-add them with a new migration if
- * the lifecycle grows.
+ * | 'rejected'` (the original CHECK + `DEFAULT 'pending'` came from
+ * migration 007). None of the dropped values were ever written in 6+
+ * months of production. Re-add them with a new migration if the
+ * lifecycle grows.
  */
 export type ExtractionStatus =
   | 'extracting'
