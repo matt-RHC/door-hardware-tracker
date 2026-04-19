@@ -1,0 +1,93 @@
+{
+  "id": "00000000-0000-0000-0000-000000000400",
+  "project_id": "00000000-0000-0000-0000-000000000100",
+  "created_by": "00000000-0000-0000-0000-000000000010",
+  "status": "completed",
+  "progress": 100,
+  "status_message": "Done: 76 openings, 1470 items staged.",
+  "pdf_storage_path": "<redacted-storage-path>",
+  "pdf_hash": "<redacted-hash>",
+  "pdf_page_count": 44,
+  "extraction_run_id": "00000000-0000-0000-0000-000000000401",
+  "started_at": "2026-04-02T15:20:16.344+00:00",
+  "completed_at": "2026-04-02T15:22:25.708+00:00",
+  "duration_ms": 129365,
+  "created_at": "2026-04-02T15:19:18.557324+00:00",
+  "updated_at": "2026-04-02T15:22:25.709+00:00",
+  "deep_extraction": false,
+  "auto_triggered": false,
+  "classify_result": {
+    "profile": { "source": "word_excel", "hw_set_count": 34, "heading_format": "himmel", "table_strategy": "lines", "hw_set_count_raw": 46, "door_number_format": "mixed", "door_schedule_pages": 6, "has_reference_tables": true },
+    "summary": { "cover_pages": [2], "total_pages": 44, "scanned_pages": 0, "submittal_pages": [3, 8, 9], "hardware_set_pages": [1, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27], "door_schedule_pages": [0, 4, 5, 6, 7, 43] },
+    "extraction_strategy": "pdfplumber"
+  },
+  "detect_result": {
+    "headers": ["Opening", "Hdw Set", "Hdw Heading", "Opening Label", "Door Type", "Frame Type"],
+    "success": true,
+    "page_index": 5,
+    "sample_rows": [ ["110-01A", "DH1-10", "DH1.01", "45Min", "A", "F2"], ["110-02A", "DH4A", "DH4A.1", "45Min", "A", "F2"] ],
+    "total_pages": 44,
+    "avg_confidence": 1,
+    "low_confidence": false,
+    "detection_method": "text_line",
+    "auto_mapping": { "hw_set": 1, "door_type": 4, "frame_type": 5, "hw_heading": 2, "door_number": 0, "fire_rating": 3 }
+  },
+  "extraction_summary": { "triage": { "rejected": 0, "by_others": 10, "doors_found": 86, "flagged_count": 10, "accepted_count": 76 }, "partial": false, "qty_flags": 0, "sets_extracted": 46, "doors_extracted": 86, "compliance_issues": 0 },
+  "extraction_confidence": {
+    "score": 71,
+    "overall": "medium",
+    "signals": [
+      "Set EX10.0 has expected categories (hinges, lockset, closer)",
+      "Set DH9.0 has expected categories (hinges, lockset, closer)",
+      "All doors have valid door numbers",
+      "6 door(s) assigned to undefined hardware sets",
+      "Darrin made 13 correction(s)",
+      "45 set(s) used statistical quantity convention fallback"
+    ],
+    "suggest_deep_extraction": false
+  },
+  "darrin_observations": [
+    {
+      "id": "00000000-0000-0000-0000-000000000410",
+      "checkpoint": 2,
+      "checkpoint_name": "post-extraction review",
+      "parse_ok": true,
+      "input_tokens": 66866,
+      "output_tokens": 2736,
+      "latency_ms": 24757,
+      "created_at": "2026-04-02T15:21:00.181701+00:00",
+      "input_snapshot": { "doors_count": 86, "hw_sets_count": 46 },
+      "response": {
+        "overall_confidence": "low",
+        "notes": "This extraction has SIGNIFICANT structural issues. Field boundaries are corrupted, manufacturer/model/finish columns are misaligned across many sets. A full re-extraction or manual QC is strongly recommended.",
+        "critical_issues": [
+          { "issue": "Field alignment corruption across multiple sets", "example": "In EX3.1, 'Hinges' row has manufacturer='', model='5BB1 HW 4 1/2 x 4 1/', finish=''. Model truncated, mfr missing.", "confidence": "high", "sets_affected": ["EX3.1", "EX3.2", "DH5.0", "DH9.0"], "recommendation": "Re-extract using OCR with table-aware parsing." },
+          { "issue": "Finish codes embedded in model fields", "example": "Exit Device in EX3.0 has model='98L-F x 996L-R&V 06 RHR US26D,' — finish codes belong in finish column.", "confidence": "high" },
+          { "issue": "XGM0.0 set missing padlock item", "detail": "PDF page 43 shows '1 Padlock KS41F1200 SC' but extraction shows only 2 items.", "confidence": "high" }
+        ],
+        "hardware_sets_corrections": [
+          { "set_id": "EX3.0", "heading": "Heading #EX3.0 (Set #EX3-R)", "items_to_fix": [ { "name": "Exit Device", "field": "model", "old_value": "98L-F x 996L-R&V 06 RHR US26D,", "new_value": "98L-F x 996L-R&V 06", "confidence": "high" } ] },
+          { "set_id": "DH9.0", "heading": "Heading #DH9.0", "items_to_fix": [
+            { "name": "Hinges", "field": "manufacturer", "old_value": "5BB1 HW 4 1/2 x", "new_value": "IV", "confidence": "high" },
+            { "name": "Hinges", "field": "model", "old_value": "", "new_value": "5BB1 HW 4 1/2 x 4 1/2 NRP", "confidence": "high" }
+          ] }
+        ]
+      }
+    },
+    {
+      "id": "00000000-0000-0000-0000-000000000411",
+      "checkpoint": 3,
+      "checkpoint_name": "quantity sanity check",
+      "parse_ok": true,
+      "input_tokens": 58828,
+      "output_tokens": 4096,
+      "latency_ms": 40859,
+      "created_at": "2026-04-02T15:21:41.174551+00:00",
+      "response": [
+        { "set_id": "EX3.0", "item_name": "Hinges", "from_qty": 3, "to_qty": 4, "confidence": "high", "reason": "Set includes 3 standard hinges + 1 electric transfer hinge (CON TW8). CON TW8 is additive for electrified doors." },
+        { "set_id": "EX10.0", "item_name": "Hinges", "from_qty": 3, "to_qty": 4, "confidence": "high", "reason": "Same CON TW8 additive rule." },
+        { "set_id": "DH1.02", "item_name": "Smoke Seal", "from_qty": 4, "to_qty": 4, "confidence": "high", "reason": "Parsed qty is 4 (per 2 pair doors = 2 openings). Correct per opening, not a correction." }
+      ]
+    }
+  ]
+}
