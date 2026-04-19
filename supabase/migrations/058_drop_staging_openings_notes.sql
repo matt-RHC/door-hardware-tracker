@@ -38,9 +38,15 @@
 -- validation, same items loop, same SECURITY/search_path surface. The function
 -- was not redefined between 023 and this migration — verified by grep.
 
+-- Parameter order MUST match the live function signature
+-- (p_extraction_run_id, p_project_id, p_payload). CREATE OR REPLACE FUNCTION
+-- can change the body but cannot rename a parameter at a given position; an
+-- earlier draft of this migration had project_id first and was rejected with
+-- "cannot change name of input parameter" (SQLSTATE 42P13). Order verified
+-- against pg_get_function_arguments(...) on prod 2026-04-19.
 CREATE OR REPLACE FUNCTION write_staging_data(
-  p_project_id UUID,
   p_extraction_run_id UUID,
+  p_project_id UUID,
   p_payload JSONB
 )
 RETURNS JSONB
