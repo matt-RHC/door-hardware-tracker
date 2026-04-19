@@ -18,6 +18,7 @@ import PropagationSuggestionModal from "./review/PropagationSuggestionModal";
 import { isOrphanDoor, getDoorIssues, getConfidence } from "./review/utils";
 import type { PropagationSuggestion } from "@/lib/types";
 import { applyFieldToDoors, applyPropagationSuggestions } from "./review/rescan-apply";
+import { bulkApplyField, type BulkFixField } from "./review/bulk-apply";
 import type {
   DoorGroup,
   DoorStringField,
@@ -585,6 +586,19 @@ export default function StepReview({
     [],
   );
 
+  // Bulk-fix from Issue view's "Fix all N" modal. Separate from
+  // handleFieldApply because bulk-fix supports the wider writable-field
+  // set (location / hand / fire_rating + door_type + frame_type) and
+  // doesn't trigger the sibling-propagation server round-trip — the
+  // user already confirmed the whole cluster, there's nothing to
+  // propagate. See bulk-apply.ts for the field whitelist.
+  const handleBulkFieldApply = useCallback(
+    (field: BulkFixField, value: string, doorNumbers: string[]) => {
+      setDoors((prev) => bulkApplyField(prev, field, value, doorNumbers));
+    },
+    [],
+  );
+
   const handleFieldApplyWithPropagation = useCallback(
     (field: RegionExtractField, value: string, doorNumbers: string[]) => {
       handleFieldApply(field, value, doorNumbers);
@@ -742,6 +756,7 @@ export default function StepReview({
             auditTrailOpen={auditTrailOpen}
             onToggleAuditTrail={toggleAuditTrail}
             registerRef={registerRef}
+            onBulkApply={handleBulkFieldApply}
           />
         ) : (
           <SetView
