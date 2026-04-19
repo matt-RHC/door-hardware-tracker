@@ -53,7 +53,10 @@ CREATE TABLE IF NOT EXISTS darrin_decisions (
   siblings_considered JSONB NULL,
 
   -- Reasoning ----------------------------------------------------------------
-  confidence          NUMERIC(4,3) NULL,
+  -- confidence is a 0–1 probability. Bound via CHECK so a scale error at the
+  -- writer (e.g. passing 85 instead of 0.85) fails at insert time rather than
+  -- silently poisoning rule-mining roll-ups downstream.
+  confidence          NUMERIC(4,3) NULL CHECK (confidence IS NULL OR confidence BETWEEN 0 AND 1),
   reasoning           TEXT NULL,
   -- prompt_version = sha256(promptString) truncated to first 16 hex chars.
   -- Cheap to compute, unique enough to correlate accuracy shifts to prompt edits.

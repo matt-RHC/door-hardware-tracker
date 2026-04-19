@@ -21,10 +21,14 @@
 import { createHash } from 'crypto'
 import * as Sentry from '@sentry/nextjs'
 import { createAdminSupabaseClient } from './supabase/admin'
+import type { Database } from './types/database'
 import {
   classifyDarrinInfrastructureError,
   type DarrinInfrastructureErrorCategory,
 } from './parse-pdf-helpers'
+
+type DarrinDecisionInsert = Database['public']['Tables']['darrin_decisions']['Insert']
+type DarrinDecisionUpdate = Database['public']['Tables']['darrin_decisions']['Update']
 
 // ─── Cost model ──────────────────────────────────────────────────────────
 
@@ -159,9 +163,6 @@ export interface DarrinDecisionInput {
 /**
  * Insert one row into darrin_decisions. Returns the new id, or null if the
  * insert failed. Never throws.
- *
- * Cast through `any` because `darrin_decisions` isn't in the generated
- * Database type yet (TODO(darrin-decisions types) — see below).
  */
 export async function recordDarrinDecision(
   input: DarrinDecisionInput,
@@ -171,36 +172,33 @@ export async function recordDarrinDecision(
     const reasoning = input.reasoning
       ? input.reasoning.slice(0, MAX_REASONING_LENGTH)
       : null
-    // TODO(darrin-decisions types): hand-add the `darrin_decisions` table to
-    // src/lib/types/database.ts after this migration applies, then remove the
-    // `as any` cast here. (No `gen:supabase-types` script exists in this repo;
-    // types/database.ts is hand-edited.)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data, error } = await (supabase.from('darrin_decisions') as any)
-      .insert({
-        project_id: input.projectId,
-        extraction_run_id: input.extractionRunId ?? null,
-        opening_id: input.openingId ?? null,
-        hardware_item_id: input.hardwareItemId ?? null,
-        source_page: input.sourcePage ?? null,
-        checkpoint: input.checkpoint,
-        lane: input.lane ?? null,
-        action: input.action,
-        target_field: input.targetField ?? null,
-        proposed_value: input.proposedValue ?? null,
-        prior_value: input.priorValue ?? null,
-        siblings_considered: input.siblingsConsidered ?? null,
-        confidence: input.confidence ?? null,
-        reasoning,
-        prompt_version: input.promptVersion ?? null,
-        model: input.model ?? null,
-        input_tokens: input.inputTokens ?? null,
-        output_tokens: input.outputTokens ?? null,
-        cost_usd: input.costUsd ?? null,
-        latency_ms: input.latencyMs ?? null,
-        error_kind: input.errorKind ?? null,
-        error_detail: input.errorDetail ?? null,
-      })
+    const row: DarrinDecisionInsert = {
+      project_id: input.projectId,
+      extraction_run_id: input.extractionRunId ?? null,
+      opening_id: input.openingId ?? null,
+      hardware_item_id: input.hardwareItemId ?? null,
+      source_page: input.sourcePage ?? null,
+      checkpoint: input.checkpoint,
+      lane: input.lane ?? null,
+      action: input.action,
+      target_field: input.targetField ?? null,
+      proposed_value: (input.proposedValue ?? null) as DarrinDecisionInsert['proposed_value'],
+      prior_value: (input.priorValue ?? null) as DarrinDecisionInsert['prior_value'],
+      siblings_considered: (input.siblingsConsidered ?? null) as DarrinDecisionInsert['siblings_considered'],
+      confidence: input.confidence ?? null,
+      reasoning,
+      prompt_version: input.promptVersion ?? null,
+      model: input.model ?? null,
+      input_tokens: input.inputTokens ?? null,
+      output_tokens: input.outputTokens ?? null,
+      cost_usd: input.costUsd ?? null,
+      latency_ms: input.latencyMs ?? null,
+      error_kind: input.errorKind ?? null,
+      error_detail: input.errorDetail ?? null,
+    }
+    const { data, error } = await supabase
+      .from('darrin_decisions')
+      .insert(row)
       .select('id')
       .single()
     if (error) {
@@ -249,17 +247,17 @@ export async function patchDarrinDecisionOutcome(
   if (!id) return
   try {
     const supabase = createAdminSupabaseClient()
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const query = (supabase.from('darrin_decisions') as any)
-      .update({
-        outcome,
-        outcome_set_at: new Date().toISOString(),
-        outcome_source: source,
-        ...(opts?.errorKind !== undefined ? { error_kind: opts.errorKind } : {}),
-        ...(opts?.errorDetail !== undefined ? { error_detail: opts.errorDetail } : {}),
-      })
+    const patch: DarrinDecisionUpdate = {
+      outcome,
+      outcome_set_at: new Date().toISOString(),
+      outcome_source: source,
+      ...(opts?.errorKind !== undefined ? { error_kind: opts.errorKind } : {}),
+      ...(opts?.errorDetail !== undefined ? { error_detail: opts.errorDetail } : {}),
+    }
+    const { error } = await supabase
+      .from('darrin_decisions')
+      .update(patch)
       .eq('id', id)
-    const { error } = await query
     if (error) {
       try {
         Sentry.addBreadcrumb({
