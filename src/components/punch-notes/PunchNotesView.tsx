@@ -22,6 +22,7 @@
  *     even after dismissing the toast.
  */
 
+import Link from 'next/link'
 import { useMemo, useState } from 'react'
 import type { Note } from '@/lib/types/notes'
 import { Markdown } from './Markdown'
@@ -66,6 +67,11 @@ export function PunchNotesView({ project: projectProp, openings: openingsProp, p
   const [openingBusy, setOpeningBusy] = useState<Record<string, 'idle' | 'summarize' | 'revert'>>({})
   const [projectError, setProjectError] = useState<string | null>(null)
   const [openingErrors, setOpeningErrors] = useState<Record<string, string | null>>({})
+  /** Transient inline notice — used to surface the server's `debounced:true`
+   *  response so the user knows the click was a no-op rather than a fresh
+   *  regen. Cleared on next action. */
+  const [projectNotice, setProjectNotice] = useState<string | null>(null)
+  const [openingNotices, setOpeningNotices] = useState<Record<string, string | null>>({})
 
   const totalNotes = useMemo(
     () => openings.reduce((sum, o) => sum + o.notes.length, 0) + projectScopeNotes.length,
@@ -81,17 +87,28 @@ export function PunchNotesView({ project: projectProp, openings: openingsProp, p
   const setOpeningErrorFor = (id: string, value: string | null) => {
     setOpeningErrors(prev => ({ ...prev, [id]: value }))
   }
+  const setOpeningNoticeFor = (id: string, value: string | null) => {
+    setOpeningNotices(prev => ({ ...prev, [id]: value }))
+  }
 
   // ── Project summary actions ───────────────────────────────────────────
 
   const regenerateProject = async () => {
     setProjectBusy('summarize')
     setProjectError(null)
+    setProjectNotice(null)
     try {
       const res = await fetch(`/api/projects/${project.id}/punch-notes/summarize`, { method: 'POST' })
       const body = await res.json().catch(() => ({}))
       if (!res.ok) {
         setProjectError(body.error ?? `Regenerate failed (${res.status})`)
+        return
+      }
+      // Server returns { debounced: true } when called within 5s of the last
+      // regen — avoids double-spending tokens. Surface so the user knows the
+      // click was a no-op rather than a silent re-render of the same content.
+      if (body.debounced) {
+        setProjectNotice('Already up to date — recently regenerated.')
         return
       }
       setProject(prev => ({
@@ -139,11 +156,16 @@ export function PunchNotesView({ project: projectProp, openings: openingsProp, p
   const regenerateOpening = async (id: string) => {
     setOpeningBusyFor(id, 'summarize')
     setOpeningErrorFor(id, null)
+    setOpeningNoticeFor(id, null)
     try {
       const res = await fetch(`/api/openings/${id}/notes/summarize`, { method: 'POST' })
       const body = await res.json().catch(() => ({}))
       if (!res.ok) {
         setOpeningErrorFor(id, body.error ?? `Regenerate failed (${res.status})`)
+        return
+      }
+      if (body.debounced) {
+        setOpeningNoticeFor(id, 'Already up to date — recently regenerated.')
         return
       }
       updateOpening(id, {
@@ -195,6 +217,7 @@ export function PunchNotesView({ project: projectProp, openings: openingsProp, p
         projectScopeNotes={projectScopeNotes}
         busy={projectBusy}
         error={projectError}
+        notice={projectNotice}
         onRegenerate={regenerateProject}
         onRevert={revertProject}
       />
@@ -208,10 +231,12 @@ export function PunchNotesView({ project: projectProp, openings: openingsProp, p
           openings.map(o => (
             <OpeningCard
               key={o.id}
+              projectId={project.id}
               opening={o}
               itemNames={itemNames}
               busy={openingBusy[o.id] ?? 'idle'}
               error={openingErrors[o.id] ?? null}
+              notice={openingNotices[o.id] ?? null}
               onRegenerate={() => regenerateOpening(o.id)}
               onRevert={() => revertOpening(o.id)}
             />
@@ -229,11 +254,12 @@ interface ProjectSummaryCardProps {
   projectScopeNotes: Note[]
   busy: 'idle' | 'summarize' | 'revert'
   error: string | null
+  notice: string | null
   onRegenerate: () => void
   onRevert: () => void
 }
 
-function ProjectSummaryCard({ project, projectScopeNotes, busy, error, onRegenerate, onRevert }: ProjectSummaryCardProps) {
+function ProjectSummaryCard({ project, projectScopeNotes, busy, error, notice, onRegenerate, onRevert }: ProjectSummaryCardProps) {
   return (
     <section className="border border-th-border rounded-md bg-surface/30 p-4 space-y-3">
       <header className="flex items-baseline justify-between gap-4">
@@ -279,8 +305,14 @@ function ProjectSummaryCard({ project, projectScopeNotes, busy, error, onRegener
       )}
 
       {error && <div className="text-[12px] text-danger">{error}</div>}
+      {notice && <div className="text-[12px] text-tertiary">{notice}</div>}
 
-      {project.summary ? (
+      {busy === 'summarize' ? (
+        <div className="text-[13px] text-tertiary italic flex items-center gap-2">
+          <span className="inline-block w-3 h-3 rounded-full border-2 border-tertiary border-t-transparent animate-spin" />
+          Generating summary{project.summary ? ' (this may take 30-60 seconds for large projects)' : ' (this may take 30-60 seconds)'}…
+        </div>
+      ) : project.summary ? (
         <Markdown source={project.summary} />
       ) : (
         <div className="text-[13px] text-tertiary italic">
@@ -309,23 +341,34 @@ function ProjectSummaryCard({ project, projectScopeNotes, busy, error, onRegener
 // ── OpeningCard ─────────────────────────────────────────────────────────
 
 interface OpeningCardProps {
+  projectId: string
   opening: PunchNotesOpeningState
   itemNames: Record<string, string | null>
   busy: 'idle' | 'summarize' | 'revert'
   error: string | null
+  notice: string | null
   onRegenerate: () => void
   onRevert: () => void
 }
 
-function OpeningCard({ opening, itemNames, busy, error, onRegenerate, onRevert }: OpeningCardProps) {
+function OpeningCard({ projectId, opening, itemNames, busy, error, notice, onRegenerate, onRevert }: OpeningCardProps) {
   const grouped = useMemo(() => groupNotesForDisplay(opening.notes, itemNames), [opening.notes, itemNames])
 
   return (
     <section className="border border-th-border rounded-md bg-surface/20 p-4 space-y-3">
       <header className="flex items-baseline justify-between gap-4">
-        <div className="space-y-0.5">
+        <div className="space-y-0.5 min-w-0">
           <div className="text-[11px] uppercase tracking-wider text-tertiary">Opening</div>
-          <h3 className="text-[14px] font-semibold text-primary">Door {opening.door_number}</h3>
+          <div className="flex items-baseline gap-2 flex-wrap">
+            <h3 className="text-[14px] font-semibold text-primary">Door {opening.door_number}</h3>
+            <Link
+              href={`/project/${projectId}/door/${opening.id}`}
+              className="text-[11px] text-tertiary hover:text-accent transition-colors"
+              title="Open the door detail page"
+            >
+              View door →
+            </Link>
+          </div>
         </div>
         <div className="flex items-center gap-3">
           {opening.stale && opening.summary && (
@@ -365,8 +408,14 @@ function OpeningCard({ opening, itemNames, busy, error, onRegenerate, onRevert }
       )}
 
       {error && <div className="text-[12px] text-danger">{error}</div>}
+      {notice && <div className="text-[12px] text-tertiary">{notice}</div>}
 
-      {opening.summary ? (
+      {busy === 'summarize' ? (
+        <div className="text-[13px] text-tertiary italic flex items-center gap-2">
+          <span className="inline-block w-3 h-3 rounded-full border-2 border-tertiary border-t-transparent animate-spin" />
+          Generating summary…
+        </div>
+      ) : opening.summary ? (
         <Markdown source={opening.summary} />
       ) : (
         <div className="text-[13px] text-tertiary italic">
