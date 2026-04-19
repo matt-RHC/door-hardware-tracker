@@ -588,6 +588,27 @@ export async function POST(request: NextRequest) {
       console.error('Auto-promote failed:', promoteResult.error, {
         orphanDoors: promoteResult.orphanDoors,
       })
+      // Close the observability gap that let PRs #341 / #343 ship silently:
+      // merge_extraction's EXCEPTION WHEN OTHERS handler converts real DB
+      // errors (column drift, CHECK violations) into the same failure JSON
+      // as user-facing validation rejections (orphan doors, wrong status).
+      // The orphan-doors path is a benign user-recoverable rejection — log
+      // as warning. Anything else is either a bug or a rare auth/race edge
+      // that's still worth a human eyeball.
+      const isOrphanDoorsRejection = Array.isArray(promoteResult.orphanDoors) && promoteResult.orphanDoors.length > 0
+      Sentry.captureMessage('merge_extraction promotion failed', {
+        level: isOrphanDoorsRejection ? 'warning' : 'error',
+        tags: {
+          promote_failure_kind: isOrphanDoorsRejection ? 'orphan_doors' : 'unexpected',
+          extraction_run_id: runId,
+          project_id: projectId,
+        },
+        extra: {
+          error: promoteResult.error,
+          orphanDoors: promoteResult.orphanDoors,
+          partial: isPartialSave,
+        },
+      })
       return NextResponse.json({
         success: false,
         partial: isPartialSave,
