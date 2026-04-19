@@ -2,6 +2,7 @@
 
 import type { DoorEntry } from "../types";
 import ConfidenceBadge from "../ConfidenceBadge";
+import ConfidenceChiclets from "./ConfidenceChiclets";
 import { getConfidence, getDoorIssues, confBorder } from "./utils";
 import { ISSUE_LABELS } from "./types";
 
@@ -65,8 +66,16 @@ export default function DoorRow({
             {door.fire_rating}
           </span>
         )}
+        {/* Per-field chiclet strip — shows only flagged fields
+            (high-confidence fields are intentionally hidden so the eye
+            lands on what needs a look). On narrow screens the strip
+            yields to the textual topIssues fallback below to keep the
+            row on one line. */}
+        <span className="hidden lg:inline-flex shrink-0">
+          <ConfidenceChiclets door={door} />
+        </span>
         {topIssues.length > 0 && (
-          <span className="hidden md:inline text-[10px] text-warning shrink-0 truncate max-w-[14rem]">
+          <span className="hidden md:inline lg:hidden text-[10px] text-warning shrink-0 truncate max-w-[14rem]">
             {topIssues.map((i) => ISSUE_LABELS[i] ?? i.replace(/_/g, ' ')).join(', ')}
           </span>
         )}

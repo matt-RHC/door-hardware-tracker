@@ -61,3 +61,14 @@ const STYLES: Record<ConfidenceLevel, ConfidenceStyle> = {
 export function getConfidenceStyle(level: ConfidenceLevel): ConfidenceStyle {
   return STYLES[level] ?? STYLES.unverified;
 }
+
+// Numeric score → level. Thresholds match the attention-first design handoff:
+// ≥0.85 = high, 0.6–0.85 = medium, <0.6 = low. The 0.6 cutoff matches the
+// existing `low_confidence_{field}` threshold in review/utils.ts::getDoorIssues
+// so row-border severity and chiclet color never disagree.
+export function scoreToLevel(score: number | null | undefined): ConfidenceLevel {
+  if (score == null || Number.isNaN(score)) return "unverified";
+  if (score >= 0.85) return "high";
+  if (score >= 0.6) return "medium";
+  return "low";
+}
