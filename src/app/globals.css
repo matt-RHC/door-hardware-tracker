@@ -1,5 +1,6 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap');
 
 @import "tailwindcss";
 
@@ -19,6 +20,7 @@
 
   --font-inter: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
   --font-display: 'Orbitron', 'Inter', monospace;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 
   /* ── Dark Theme Neutrals (blue-gray base, not pure black — reduces halation) ── */
   --background: #0F1117;
@@ -159,6 +161,7 @@
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --font-sans: var(--font-inter);
+  --font-mono: var(--font-mono);
 
   /* Surfaces → bg-surface, bg-surface-hover, bg-surface-raised */
   --color-surface: var(--surface);
@@ -753,4 +756,211 @@ body {
   body::after {
     display: none;
   }
+}
+
+/* ═══════════════════════════════════════════════
+   ATTENTION-FIRST REVIEW — TYPOGRAPHY + CHROME
+   Port of design_handoff_attention_first_review.
+   These utilities standardize the review-screen
+   look without changing functionality.
+   ═══════════════════════════════════════════════ */
+
+/* Eyebrow — uppercase, tracked, mono, tertiary color.
+   Used above page headers and section titles. */
+.eyebrow {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-tertiary);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+/* Page H1 — Orbitron display, tight leading, primary color. */
+.page-h1 {
+  font-family: var(--font-display);
+  font-size: 28px;
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+}
+
+/* Lede — 14px body copy under the H1. Numbers inside
+   <strong> get bumped to primary color. */
+.lede {
+  font-size: 14px;
+  color: var(--text-secondary);
+  line-height: 1.55;
+}
+.lede strong {
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+/* Export-gate pill — sits next to the progress meter.
+   Blocked = red on red-dim, ready = green on green-dim. */
+.gate-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: var(--radius-pill);
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  line-height: 1.4;
+}
+.gate-pill--blocked {
+  background: var(--red-dim);
+  color: var(--red);
+}
+.gate-pill--ready {
+  background: var(--green-dim);
+  color: var(--green);
+}
+
+/* Segmented toggle — "Door view | Set view" style.
+   Active segment sits on --surface with a hairline; others
+   hover to primary text. */
+.segmented {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px;
+  background: var(--surface-raised);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-pill);
+}
+.segmented__btn {
+  padding: 4px 12px;
+  border-radius: var(--radius-pill);
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: color 0.12s ease, background 0.12s ease;
+  min-height: 28px;
+}
+.segmented__btn:hover {
+  color: var(--text-primary);
+}
+.segmented__btn--active {
+  background: var(--surface);
+  color: var(--text-primary);
+  box-shadow: 0 0 0 1px var(--border);
+}
+.segmented__btn--active:hover {
+  color: var(--text-primary);
+}
+
+/* Progress meter — 6px bar, --surface-hover track, --green fill.
+   Used above the group list. */
+.progress-meter {
+  height: 6px;
+  background: var(--surface-hover);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.progress-meter__fill {
+  height: 100%;
+  background: var(--green);
+  transition: width 0.25s ease;
+}
+
+/* Confidence chiclet — small mono pill for abbreviated field
+   confidence (HW, FIN, HND, …). Color-tiered by confidence.
+   Used inside the row confidence strip. */
+.chiclet {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  line-height: 1.4;
+  white-space: nowrap;
+}
+.chiclet--high  { background: var(--green-dim);  color: var(--green); }
+.chiclet--med   { background: var(--orange-dim); color: var(--orange); }
+.chiclet--low   { background: var(--red-dim);    color: var(--red); }
+
+/* Review section heading — used inside group cards and review body. */
+.review-section-title {
+  font-family: var(--font-inter);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.35;
+  letter-spacing: -0.005em;
+}
+
+/* Darrin-says disclosure — collapsed rationale block above the
+   row table. The caret rotates on open. */
+.darrin-disclosure {
+  border-top: 1px solid var(--border-dim);
+  padding: 10px 16px;
+}
+.darrin-disclosure__button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: transparent;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-primary);
+  letter-spacing: 0.02em;
+}
+.darrin-disclosure__caret {
+  display: inline-block;
+  transition: transform 0.15s ease;
+  color: var(--text-tertiary);
+}
+.darrin-disclosure[data-open="true"] .darrin-disclosure__caret {
+  transform: rotate(90deg);
+}
+.darrin-disclosure__body {
+  margin-top: 8px;
+  font-size: 13px;
+  font-style: italic;
+  color: var(--text-secondary);
+  line-height: 1.55;
+}
+.darrin-disclosure__body code {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-primary);
+  background: var(--tint);
+  padding: 1px 4px;
+  border-radius: 3px;
+  font-style: normal;
+}
+
+/* Wizard bottom nav — bordered top bar matching handoff's
+   scrolls-with-page treatment. Existing sticky WizardNav
+   keeps its positioning; this class only updates the chrome. */
+.wizard-bottom-nav {
+  padding: 14px 0;
+  background: var(--surface);
+  border-top: 1px solid var(--border);
+}
+
+/* Modal chrome refinement — larger radius and deeper shadow
+   per the handoff's modal-dialog spec. Applies additively to
+   `.panel`-based modals via a second class. */
+.panel--modal {
+  border-radius: 10px;
+  box-shadow: 0 24px 48px -8px rgba(0, 0, 0, 0.28);
+}
+[data-theme="light"] .panel--modal {
+  box-shadow: 0 24px 48px -8px rgba(10, 12, 18, 0.18);
 }
