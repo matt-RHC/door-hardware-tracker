@@ -160,31 +160,64 @@ export default function DoorDetailPage() {
     return () => { cancelled = true; };
   }, [supabase]);
 
-  // Lazy-load notes for an item the first time its panel opens. Subsequent
-  // opens render from cache; CRUD callbacks update the cache in place.
+  // Prefetch every item-scope note for this opening on mount, so the count
+  // badges are populated before any panel is opened. One round-trip; subsequent
+  // panel opens use this cache + a refresh fetch for staleness.
+  useEffect(() => {
+    let cancelled = false;
+    fetch(`/api/notes?project_id=${projectId}&scope=item&opening_id=${doorId}`)
+      .then(async (res) => {
+        if (!res.ok) {
+          console.error(`[door-detail] item notes prefetch failed (${res.status})`);
+          return;
+        }
+        const { notes: rows } = (await res.json()) as { notes: Note[] };
+        if (cancelled) return;
+        const grouped: Record<string, Note[]> = {};
+        for (const n of rows) {
+          if (n.hardware_item_id) {
+            (grouped[n.hardware_item_id] ??= []).push(n);
+          }
+        }
+        setNotesByItem(grouped);
+      })
+      .catch((err) => {
+        console.error('[door-detail] item notes prefetch error:', err);
+      });
+    return () => { cancelled = true; };
+  }, [projectId, doorId]);
+
+  // Refresh notes for a single item. Called on every panel open so a second
+  // user's writes show up — accepting a flash of stale data while the
+  // request is in flight is preferable to indefinitely caching stale rows
+  // in a multi-user workflow (foremen + PMs writing simultaneously).
   const fetchItemNotes = useCallback(async (itemId: string) => {
     try {
       const res = await fetch(
         `/api/notes?project_id=${projectId}&scope=item&hardware_item_id=${itemId}`
       );
-      if (!res.ok) return;
+      if (!res.ok) {
+        console.error(`[door-detail] item notes fetch failed (${res.status})`);
+        return;
+      }
       const { notes: rows } = (await res.json()) as { notes: Note[] };
       setNotesByItem(prev => ({ ...prev, [itemId]: rows }));
-    } catch {
-      /* fail silently — UI shows "No notes yet" */
+    } catch (err) {
+      console.error('[door-detail] item notes fetch error:', err);
     }
   }, [projectId]);
 
   const toggleNotesPanel = useCallback((itemId: string) => {
     setNotesPanelItemId(prev => {
       const next = prev === itemId ? null : itemId;
-      // Fetch on open; skip when closing or when already cached.
-      if (next === itemId && !(itemId in notesByItem)) {
+      // Always refetch on open — multi-user means cached rows go stale fast.
+      // Cached list keeps rendering until the request resolves (no flash).
+      if (next === itemId) {
         void fetchItemNotes(itemId);
       }
       return next;
     });
-  }, [notesByItem, fetchItemNotes]);
+  }, [fetchItemNotes]);
 
   const fetchOpeningData = useCallback(async () => {
     try {
@@ -1442,6 +1475,7 @@ export default function DoorDetailPage() {
                                  Notebook icon + count badge when notes exist. */}
                             <button
                               onClick={() => toggleNotesPanel(item.id)}
+                              aria-label={(notesByItem[item.id]?.length ?? 0) > 0 ? `${notesByItem[item.id]?.length} note(s) on ${item.name}` : `Add note to ${item.name}`}
                               className={`relative w-9 h-9 flex items-center justify-center transition-colors rounded-md border border-th-border ${
                                 notesPanelItemId === item.id
                                   ? 'text-accent border-accent'
@@ -1481,9 +1515,11 @@ export default function DoorDetailPage() {
                     </tr>
                   )}
                   {/* Punch-notes panel (PR 2) — opens below the row when 📝 toggled.
-                       Render once per item (only when leafIndex===1) so pair-leaf rows
-                       don't double-render the same notes list. */}
-                  {notesPanelItemId === item.id && leafIndex === 1 && (
+                       Items partition into shared/leaf1/leaf2 (one bucket each)
+                       and only one tab renders at a time, so the panel naturally
+                       renders once. No leafIndex guard needed — and adding one
+                       would make leaf2 items' panels unreachable. */}
+                  {notesPanelItemId === item.id && (
                     <tr key={`notes-${item.id}`} className="border-b border-th-border bg-surface/30">
                       <td colSpan={10} className="px-3 py-3">
                         <div className="space-y-3">
