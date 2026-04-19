@@ -2830,8 +2830,10 @@ export function detectIsPairWithTrace(
   context: { runId?: string; set_id?: string | null; door_number?: string | null; source: 'save' | 'jobs_run' },
 ): PairSignalResult {
   // Returns the full PairSignalResult so the caller can persist the
-  // winning tier alongside leaf_count (migration 048 added the
-  // staging_openings.leaf_count_signal_tier column for that purpose).
+  // winning tier in the per-run audit (migration 048 added
+  // extraction_runs.opening_audit JSONB; see buildOpeningAudit in
+  // src/lib/extraction-opening-audit.ts for the payload shape — tier
+  // lives at openings[].pair_signal_tier, not on a dedicated column).
   // Existing call sites that only need the boolean read `.isPair`.
   const result = detectPairSignal(hwSet, doorInfo)
   console.log(
