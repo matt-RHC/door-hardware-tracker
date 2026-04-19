@@ -1071,7 +1071,6 @@ export type Database = {
           is_active: boolean
           leaf_count: number
           location: string | null
-          notes: string | null
           pdf_page: number | null
           project_id: string
           zone_name: string | null
@@ -1090,7 +1089,6 @@ export type Database = {
           is_active?: boolean
           leaf_count?: number
           location?: string | null
-          notes?: string | null
           pdf_page?: number | null
           project_id: string
           zone_name?: string | null
@@ -1109,7 +1107,6 @@ export type Database = {
           is_active?: boolean
           leaf_count?: number
           location?: string | null
-          notes?: string | null
           pdf_page?: number | null
           project_id?: string
           zone_name?: string | null
@@ -1967,7 +1964,6 @@ export interface OpeningWithHardware {
   frame_type: string | null
   fire_rating: string | null
   hand: string | null
-  notes: string | null
   floor_number: number | null
   hardware_items: Array<{
     id: string
