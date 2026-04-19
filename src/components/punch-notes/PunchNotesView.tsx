@@ -259,6 +259,11 @@ interface ProjectSummaryCardProps {
 }
 
 function ProjectSummaryCard({ project, projectScopeNotes, busy, error, notice, onRegenerate, onRevert }: ProjectSummaryCardProps) {
+  // PDF export is a same-origin download — easiest pattern is to set
+  // window.location.href so the browser handles the Content-Disposition
+  // attachment header. Mirrors the existing CSV export at /api/projects/.../export-csv.
+  const exportPdfUrl = `/api/projects/${project.id}/punch-notes/export-pdf`
+
   return (
     <section className="border border-th-border rounded-md bg-surface/30 p-4 space-y-3">
       <header className="flex items-baseline justify-between gap-4">
@@ -276,6 +281,13 @@ function ProjectSummaryCard({ project, projectScopeNotes, busy, error, notice, o
               Out of date
             </span>
           )}
+          <a
+            href={exportPdfUrl}
+            className="text-[12px] text-tertiary hover:text-secondary px-2 py-1 rounded-md border border-th-border hover:border-th-border-hover transition-colors"
+            title="Download a client-quality PDF of all punch notes"
+          >
+            Export PDF
+          </a>
           {project.previous && (
             <button
               type="button"
