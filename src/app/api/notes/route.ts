@@ -18,13 +18,15 @@ function badRequest(message: string) {
  * passing a foreign opening/item id. RLS would also catch this, but
  * surfacing it here gives a cleaner 400 instead of an opaque RLS denial.
  *
- * For item scope, also returns opening_id since the caller needs to set
- * it on the new row (RLS check + scope CHECK constraint both require it),
- * and we already have it from the hardware_items join.
+ * The success variants are tagged by scope so the call site can narrow
+ * without a non-null assertion — `item` scope always carries openingId
+ * (encoded in the type, not in a comment).
  */
 type ResolvedScope =
-  | { projectId: string; openingId?: undefined }
-  | { projectId: string; openingId: string }
+  | { scope: 'project'; projectId: string }
+  | { scope: 'opening'; projectId: string }
+  | { scope: 'leaf';    projectId: string }
+  | { scope: 'item';    projectId: string; openingId: string }
   | { error: string; status: number }
 
 async function resolveProjectId(
@@ -33,7 +35,7 @@ async function resolveProjectId(
   input: CreateNoteInput,
 ): Promise<ResolvedScope> {
   if (input.scope === 'project') {
-    return { projectId: input.project_id }
+    return { scope: 'project', projectId: input.project_id }
   }
   if (input.scope === 'opening' || input.scope === 'leaf') {
     const { data, error } = await supabase
@@ -44,7 +46,10 @@ async function resolveProjectId(
     if (error || !data) {
       return { error: 'Opening not found', status: 404 }
     }
-    return { projectId: (data as { project_id: string }).project_id }
+    return {
+      scope: input.scope,
+      projectId: (data as { project_id: string }).project_id,
+    }
   }
   // item scope: single round-trip via hardware_items → openings join.
   // Returns both opening_id (needed on the new row) and project_id.
@@ -61,7 +66,7 @@ async function resolveProjectId(
   if (!openings) {
     return { error: 'Hardware item has no parent opening', status: 400 }
   }
-  return { projectId: openings.project_id, openingId: row.opening_id }
+  return { scope: 'item', projectId: openings.project_id, openingId: row.opening_id }
 }
 
 /**
@@ -188,11 +193,12 @@ export async function POST(request: NextRequest) {
     if (input.scope === 'leaf') {
       insertRow.leaf_side = input.leaf_side
     }
-    if (input.scope === 'item') {
+    if (input.scope === 'item' && resolved.scope === 'item') {
+      // Both checks narrow their respective unions: input gives us
+      // hardware_item_id, resolved gives us openingId — no `!` needed.
+      // resolveProjectId fetched openingId in the same hardware_items join.
       insertRow.hardware_item_id = input.hardware_item_id
-      // opening_id was already fetched in resolveProjectId via the join.
-      // Asserted non-null because resolveProjectId returns it for item scope.
-      insertRow.opening_id = resolved.openingId!
+      insertRow.opening_id = resolved.openingId
     }
 
     // See note above on `notes` table cast.
