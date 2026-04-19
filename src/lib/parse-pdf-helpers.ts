@@ -118,6 +118,111 @@ function logDarrinCall(opts: {
   }
 }
 
+// --- Darrin infrastructure-error classification ---
+//
+// When a Darrin API call fails, the catch blocks log it and return a
+// fallback value so the extraction keeps going. That's correct behavior
+// for transient model errors. BUT — a subset of errors indicate the
+// pipeline is broken at a configuration/billing level and won't recover
+// on retry:
+//
+//   - credit_balance:  prepaid credits exhausted — every call will fail
+//                      until a top-up. Caused 60% of Darrin calls to
+//                      silently return fallbacks in April 2026.
+//   - rate_limit:      burst exceeded the Anthropic workspace tier's
+//                      req/min or tokens/min cap.
+//   - context_length:  prompt > 200k tokens — means PDF + summary are
+//                      too big for the model; extraction will degrade.
+//   - auth:            key revoked / workspace access removed.
+//
+// Classifier is exported so unit tests can pin down the pattern matching.
+
+/**
+ * Category of Anthropic-infrastructure error that Darrin can return.
+ * null means "this is a normal extraction error, not an ops issue."
+ */
+export type DarrinInfrastructureErrorCategory =
+  | 'credit_balance'
+  | 'rate_limit'
+  | 'context_length'
+  | 'auth'
+  | null
+
+/**
+ * Classify a Darrin error message into an infrastructure category.
+ *
+ * Patterns come from real Anthropic API error bodies observed in
+ * `darrin_logs.response.error` (stored as the raw `400 { ... }` string
+ * the SDK throws). Matching is substring + lowercased so surrounding
+ * HTTP/JSON wrapping doesn't break detection.
+ *
+ * Exported for unit testing. Keep the patterns narrow — a false positive
+ * here triggers a fatal-level Sentry alert and an on-call page.
+ */
+export function classifyDarrinInfrastructureError(
+  message: string,
+): DarrinInfrastructureErrorCategory {
+  if (!message) return null
+  const m = message.toLowerCase()
+  // Anthropic's exact message: "Your credit balance is too low to access
+  // the Anthropic API. Please go to Plans & Billing to upgrade..."
+  if (m.includes('credit balance is too low')) return 'credit_balance'
+  // "rate_limit_error" (error.type) + messages containing "rate limit"
+  if (m.includes('rate_limit_error') || m.includes('rate_limit_exceeded')) return 'rate_limit'
+  // Context overflow: "prompt is too long: 211811 tokens > 200000 maximum"
+  if (m.includes('prompt is too long') || m.includes('max_tokens')) return 'context_length'
+  // Auth: "invalid x-api-key", "authentication_error", "permission_error"
+  if (
+    m.includes('invalid x-api-key')
+    || m.includes('authentication_error')
+    || m.includes('permission_error')
+  ) return 'auth'
+  return null
+}
+
+/**
+ * If the error is a known Anthropic infrastructure error, emit a
+ * Sentry.captureMessage with a distinct fingerprint so it groups
+ * cleanly in the Sentry UI and can trigger alerting rules.
+ *
+ * Fire-and-forget — never throws, never blocks the parse flow. Normal
+ * (non-infrastructure) errors are ignored here — they're already
+ * logged via console.error at the call site and don't warrant paging.
+ */
+function captureDarrinInfrastructureError(
+  checkpoint: 1 | 2 | 3,
+  err: unknown,
+  opts?: { projectId?: string; extractionRunId?: string },
+): void {
+  const message = err instanceof Error ? err.message : String(err)
+  const category = classifyDarrinInfrastructureError(message)
+  if (!category) return
+  try {
+    // credit_balance and auth are fatal — they block ALL future
+    // extractions until a human acts. rate_limit and context_length
+    // degrade one extraction; elevate to 'error' so they still alert.
+    const level = category === 'credit_balance' || category === 'auth' ? 'fatal' : 'error'
+    Sentry.captureMessage(`Darrin ${category} error (CP${checkpoint})`, {
+      level,
+      fingerprint: ['darrin-infra', category, `cp${checkpoint}`],
+      tags: {
+        'darrin.checkpoint': `cp${checkpoint}`,
+        'darrin.error_category': category,
+      },
+      extra: {
+        checkpoint,
+        category,
+        projectId: opts?.projectId,
+        extractionRunId: opts?.extractionRunId,
+        // Bounded — raw SDK error bodies can be huge.
+        messageSnippet: message.substring(0, 500),
+      },
+    })
+  } catch {
+    // Never let a Sentry hiccup break extraction.
+  }
+}
+
 // --- Category classification for quantity normalization ---
 
 /**
@@ -429,6 +534,7 @@ export async function callDarrinColumnReview(
       checkpoint: 1, inputSnapshot: { columnMapping }, response: { error: err instanceof Error ? err.message : String(err) },
       parseOk: false, latencyMs: Date.now() - startMs,
     })
+    captureDarrinInfrastructureError(1, err, opts)
     console.error('Darrin column review failed:', err instanceof Error ? err.message : String(err))
     return { unmapped_fields: [], mapping_issues: [], notes: `Darrin column review failed: ${err instanceof Error ? err.message : String(err)}` }
   }
@@ -677,6 +783,7 @@ export async function callDarrinPostExtraction(
       checkpoint: 2, inputSnapshot, response: { error: err instanceof Error ? err.message : String(err) },
       parseOk: false, latencyMs: Date.now() - startMs,
     })
+    captureDarrinInfrastructureError(2, err, opts)
     console.error('Darrin post-extraction review failed:', err instanceof Error ? err.message : String(err))
     return { notes: `Darrin review failed: ${err instanceof Error ? err.message : String(err)}` }
   }
@@ -804,6 +911,7 @@ export async function callDarrinQuantityCheck(
       checkpoint: 3, inputSnapshot, response: { error: err instanceof Error ? err.message : String(err) },
       parseOk: false, latencyMs: Date.now() - startMs,
     })
+    captureDarrinInfrastructureError(3, err, opts)
     console.error('Darrin quantity check failed:', err instanceof Error ? err.message : String(err))
     return { flags: [], compliance_issues: [], notes: `Darrin quantity check failed: ${err instanceof Error ? err.message : String(err)}` }
   }
