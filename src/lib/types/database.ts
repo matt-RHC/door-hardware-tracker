@@ -1284,6 +1284,125 @@ export type Database = {
         }
         Relationships: []
       }
+      darrin_decisions: {
+        Row: {
+          action: string
+          checkpoint: string
+          confidence: number | null
+          cost_usd: number | null
+          created_at: string
+          error_detail: string | null
+          error_kind: string | null
+          extraction_run_id: string | null
+          hardware_item_id: string | null
+          id: string
+          input_tokens: number | null
+          lane: string | null
+          latency_ms: number | null
+          model: string | null
+          opening_id: string | null
+          outcome: string
+          outcome_set_at: string | null
+          outcome_source: string | null
+          output_tokens: number | null
+          prior_value: Json | null
+          project_id: string
+          prompt_version: string | null
+          proposed_value: Json | null
+          reasoning: string | null
+          siblings_considered: Json | null
+          source_page: number | null
+          target_field: string | null
+        }
+        Insert: {
+          action: string
+          checkpoint: string
+          confidence?: number | null
+          cost_usd?: number | null
+          created_at?: string
+          error_detail?: string | null
+          error_kind?: string | null
+          extraction_run_id?: string | null
+          hardware_item_id?: string | null
+          id?: string
+          input_tokens?: number | null
+          lane?: string | null
+          latency_ms?: number | null
+          model?: string | null
+          opening_id?: string | null
+          outcome?: string
+          outcome_set_at?: string | null
+          outcome_source?: string | null
+          output_tokens?: number | null
+          prior_value?: Json | null
+          project_id: string
+          prompt_version?: string | null
+          proposed_value?: Json | null
+          reasoning?: string | null
+          siblings_considered?: Json | null
+          source_page?: number | null
+          target_field?: string | null
+        }
+        Update: {
+          action?: string
+          checkpoint?: string
+          confidence?: number | null
+          cost_usd?: number | null
+          created_at?: string
+          error_detail?: string | null
+          error_kind?: string | null
+          extraction_run_id?: string | null
+          hardware_item_id?: string | null
+          id?: string
+          input_tokens?: number | null
+          lane?: string | null
+          latency_ms?: number | null
+          model?: string | null
+          opening_id?: string | null
+          outcome?: string
+          outcome_set_at?: string | null
+          outcome_source?: string | null
+          output_tokens?: number | null
+          prior_value?: Json | null
+          project_id?: string
+          prompt_version?: string | null
+          proposed_value?: Json | null
+          reasoning?: string | null
+          siblings_considered?: Json | null
+          source_page?: number | null
+          target_field?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "darrin_decisions_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "darrin_decisions_extraction_run_id_fkey"
+            columns: ["extraction_run_id"]
+            isOneToOne: false
+            referencedRelation: "extraction_runs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "darrin_decisions_opening_id_fkey"
+            columns: ["opening_id"]
+            isOneToOne: false
+            referencedRelation: "openings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "darrin_decisions_hardware_item_id_fkey"
+            columns: ["hardware_item_id"]
+            isOneToOne: false
+            referencedRelation: "hardware_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       darrin_logs: {
         Row: {
           checkpoint: number

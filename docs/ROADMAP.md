@@ -2,7 +2,7 @@
 
 > **Guiding principle:** Hardware counts coming out of PDFs must be accurate before we build features on top of them. Scope is DFH only — door, frame, hardware submittals. All other submittal types, trade data, and non-DFH features go to the Parking Lot.
 
-Last updated: 2026-04-17 (extraction-invariants layer landed; see Track 1 §1C)
+Last updated: 2026-04-18 (Track 1 §1D extraction architecture sequence added; Track 4 UX/Review Polish parked)
 
 ---
 
@@ -68,6 +68,35 @@ Key behaviors:
 - Staging-first: Darrin writes candidates to staging, human confirms before promote
 - Confidence scoring gates which items need human review vs. auto-accept
 
+#### 1D. Extraction Architecture (5-piece sequence)
+
+The extraction pipeline today relies on **implicit row typing** scattered across four regexes (`NON_HARDWARE_PATTERN` in `extract-tables.py`, `_PAIR_LEAF_NAMED_DOOR_RE` in `parse-pdf-helpers.ts`, the PRIMARY tier in `detectIsPair`, and the Fix 1 guard in `applyCorrections`). That works, but it makes the next phase of Darrin work (lane-based review, grouped questions, infill proposals) harder than it needs to be — every lane has to re-derive what kind of row it's looking at.
+
+The 5-piece sequence below lands the structural changes needed to make lanes and the "Darrin resolved everything" ready-state achievable without rewrites.
+
+| # | Piece | Type of fix | Size (est) | Why it comes here |
+|---|-------|-------------|-----------|-------------------|
+| 1 | **Row typing** | Information fix | M | Prerequisite — lanes and the ledger both reason about typed rows. Consolidates 4 implicit regexes into one explicit classifier: `hardware_item` / `door_leaf` / `door_frame`. Opening stays the parent entity. |
+| 2 | **Darrin decision ledger** | Observability fix | S | Small, landable standalone. Supabase table `darrin_decisions` captures every Darrin action (confidence, reasoning, siblings, cost, outcome). Unblocks diagnosis of the lane work once it ships. Lane-agnostic, so it pays off even if lanes slip. |
+| 3 | **Lane-based Darrin review** | Behavior fix | L | The actual product win — multi-lane CP2 (hardware / opening / leaf / frame) producing typed proposals (`infill_proposals`, `grouped_questions`) instead of free-form corrections. Needs #1 to know what kind of row each lane owns; needs #2 to prove the lanes are doing the right thing in prod. |
+| 4 | **Canonical two-slot representation** | Shape fix | M | Every opening gets L1 + L2 slots; singles have L2 empty. Uniform shape downstream (review, export, simulation). Cleaner to land after lanes because lanes already write typed leaf rows. |
+| 5 | **Rule-mining loop** | Process fix (ongoing) | Ongoing | Rides on top of the ledger. Accept-heavy Darrin actions promote to deterministic rules (no more LLM cost); reject-heavy actions get guardrails. Turns the ledger into a feedback loop for extraction accuracy. |
+
+**Sequencing rationale**
+
+- **Why ledger before lanes:** the ledger is lane-agnostic, so every lane inherits observability. Without it, we can't tell in production whether lanes are noticing the right things, grouping questions correctly, or burning cost on re-extracts that should have been infills.
+- **Why typing first:** lanes reason about row kinds. If we skip typing, each lane re-implements the regex classification and they WILL diverge ("two implementations of the same rule WILL diverge").
+- **Alternative lighter path:** ledger (#2) can ship against today's implicit typing, and the typing refactor (#1) can land alongside lanes (#3) — the first consumer that actually benefits from explicit types. Default sequence above is the cleaner path; this is the smaller first step if we want faster signal.
+
+**Success criteria (Track 1 as a whole)**
+
+- Extraction + Darrin resolves to 100% on Grid-RR and Lyft/Waymo corpora, DFH-only.
+- `/debug/darrin/:projectId` shows every Darrin decision with reasoning and outcome.
+- Rule-mining loop promotes at least one Darrin pattern to a deterministic rule within 30 days of ledger going live.
+- Users see a clear "Darrin has resolved everything, this project is ready" state (per the Extraction + Darrin = 100% product promise).
+
+Status: **Piece #2 IN PROGRESS** (this PR — foundation only, no behavior change). Pieces #1, #3, #4, #5 NOT STARTED.
+
 ---
 
 ### Track 2 — Demo-Ready Dashboard
@@ -103,6 +132,22 @@ Status: **NOT STARTED**
 Build on the existing Receive/Install/QA workflow (PRs #217–#221) to close the loop: link delivery records to install events, flag backorders, surface blocked openings.
 
 Status: **IN PROGRESS** — foundational schemas merged (PRs #222–#224); UI phase pending
+
+---
+
+### Track 4 — UX / Review Polish (DEFERRED, post-accuracy)
+
+Captured here so it doesn't get lost. **Do not schedule until Track 1 pieces 1–3 are merged and verified in production.**
+
+Source: Matthew's Google Drive review doc `TrackDoorHardware`, notes dated 2026-04-18.
+
+- **Landing page cleanup** — remove PDF import, QR, and checklist buttons; remove "passkey coming soon" copy; brand SSO URL.
+- **Post-creation auto-navigation** — jump into new project automatically; add 1/2/3/4 explainer on the project page.
+- **Wizard sub-stage refactor** — 7 sub-stages spelled out in Matthew's notes. Maps almost 1:1 to the lane proposal (Track 1 §1D, piece #3), so revisit order once lanes ship: may be trivial after lanes.
+- **Visual-updates-on-answer UX bug** — when a user answers "page 43 isn't the door schedule," the page should visibly disappear from the review UI. Today it doesn't.
+- **Product families page redesign** — "overwhelming, I skip it every time."
+
+Status: **DEFERRED** — gated on Track 1 §1D pieces 1–3.
 
 ---
 
