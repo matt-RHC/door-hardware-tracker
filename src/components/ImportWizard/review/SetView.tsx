@@ -7,6 +7,7 @@ import { FIELD_KEYS, FIELD_LABELS } from "./types";
 import { findPageForSet } from "@/lib/punch-cards";
 import PDFPagePreview from "../PDFPagePreview";
 import SetPanel from "./SetPanel";
+import DarrinSays from "./DarrinSays";
 import { confBorder, getConfidence } from "./utils";
 
 interface SetViewProps {
@@ -155,6 +156,10 @@ export default function SetView(props: SetViewProps) {
                 )}
               </span>
             </button>
+
+            {/* Per-group rationale — quietly collapses to nothing when
+                the group has no flagged openings, so clean sets stay clean. */}
+            <DarrinSays group={group} />
 
             {/* PDF preview toggle + region re-scan — only when we have PDF data and a valid page */}
             {pdfBuffer && pdfPageIdx != null && (
