@@ -1,0 +1,40 @@
+{
+  "_note": "SYNTHETIC SHAPE — production `issues` table has 0 rows (or 1 seed row from the screenshot-dispatch session). Columns mirror the real schema.",
+  "id": "00000000-0000-0000-0000-000000000500",
+  "project_id": "00000000-0000-0000-0000-000000000100",
+  "opening_id": "00000000-0000-0000-0000-000000000200",
+  "hardware_item_id": "00000000-0000-0000-0000-000000000300",
+  "door_number": "1315",
+  "hardware_item_name": "Mortise Lockset",
+  "issue_id_short": "ISS-0042",
+  "title": "Lockset finish mismatch — US26D specified, US32D delivered",
+  "description": "Receiving inspection on 2026-04-10 found that the mortise locksets for openings 1315 and 1314 were shipped in US32D rather than the submittal-approved US26D. Packing slip confirms mis-pick at distributor.",
+  "severity": "high",
+  "status": "awaiting_response",
+  "category": "delivery",
+  "issue_type": "wrong_finish",
+  "assigned_to": "user2@example.com",
+  "reported_by": "user1@example.com",
+  "awaiting_from": "supplier",
+  "awaited_since": "2026-04-12T14:05:00.000+00:00",
+  "due_at": "2026-04-22T17:00:00.000+00:00",
+  "date_reported": "2026-04-10T16:22:00.000+00:00",
+  "date_resolved": null,
+  "resolved_at": null,
+  "source": "field_report",
+  "source_data": { "packing_slip_no": "PS-88214", "po_no": "PO-2026-3311" },
+  "notes": "Distributor agreed to RMA and reship; confirming lead time.",
+  "created_at": "2026-04-10T16:22:14.000+00:00",
+  "updated_at": "2026-04-12T14:05:30.000+00:00",
+  "comments": [
+    {
+      "id": "00000000-0000-0000-0000-000000000501",
+      "issue_id": "00000000-0000-0000-0000-000000000500",
+      "author_email": "user2@example.com",
+      "comment_type": "comment",
+      "visibility": "internal",
+      "body": "Called distributor rep — they confirmed mis-pick and are preparing RMA paperwork. Tracking by EOD Monday.",
+      "created_at": "2026-04-12T14:05:30.000+00:00"
+    }
+  ]
+}

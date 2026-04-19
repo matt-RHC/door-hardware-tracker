@@ -1,0 +1,23 @@
+{
+  "_note": "SYNTHETIC SHAPE — production `checklist_progress` table has 0 rows. QA findings live on checklist_progress.qa_findings[].",
+  "checklist_progress_id": "00000000-0000-0000-0000-000000000600",
+  "opening_id": "00000000-0000-0000-0000-000000000200",
+  "item_id": "00000000-0000-0000-0000-000000000300",
+  "leaf_index": 0,
+  "door_number": "1315",
+  "hardware_item_name": "Closer",
+  "finding": {
+    "code": "CLOSER_ADJUSTMENT",
+    "severity": "minor",
+    "status": "open",
+    "description": "Closer sweep speed too fast — door slams against strike. Does not meet ADA closing-time minimum (5 sec from 90° to 12°).",
+    "ada_ref": "ICC A117.1 §404.2.8",
+    "photo_storage_paths": ["<redacted-storage-path>"],
+    "flagged_at": "2026-04-15T10:12:44.000+00:00",
+    "flagged_by": "user3@example.com"
+  },
+  "qa_qc": false,
+  "qa_notes": "Measured 3.2 sec with stopwatch; spec requires ≥5 sec. Installer returning 2026-04-17 to adjust.",
+  "created_at": "2026-04-15T10:12:44.000+00:00",
+  "sync_status": "synced"
+}

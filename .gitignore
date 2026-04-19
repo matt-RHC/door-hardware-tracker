@@ -57,3 +57,6 @@ tests/darrin-cache/
 .env*.local
 /supabase/.temp
 CLAUDE.local.md
+
+# redesign handoff — binary screenshots not useful in git history
+/design/screenshots/

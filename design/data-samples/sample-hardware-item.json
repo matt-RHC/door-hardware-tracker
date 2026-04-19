@@ -1,0 +1,31 @@
+{
+  "id": "00000000-0000-0000-0000-000000000300",
+  "opening_id": "00000000-0000-0000-0000-000000000200",
+  "name": "Hinges",
+  "qty": 4,
+  "manufacturer": "IV",
+  "model": "5BB1 HW 4 1/2 x 4 1/2 NRP",
+  "finish": "US26D",
+  "options": null,
+  "sort_order": 3,
+  "created_at": "2026-04-02T15:22:43.808959+00:00",
+  "install_type": null,
+  "leaf_side": "active",
+  "qty_total": 8,
+  "qty_door_count": 2,
+  "qty_source": "divided",
+  "stage": "ordered",
+  "checklist_progress": {
+    "received": false,
+    "received_at": null,
+    "received_by": null,
+    "pre_install": false,
+    "pre_install_at": null,
+    "installed": false,
+    "installed_at": null,
+    "qa_qc": false,
+    "qa_qc_at": null,
+    "qa_findings": [],
+    "qa_notes": null
+  }
+}
