@@ -62,16 +62,28 @@ export async function PATCH(
       return badRequest('no editable fields supplied')
     }
 
-    // Guard: display_mode='ai' requires ai_text to be present (in this PATCH
-    // or already on the row). Without this an empty 'ai' render slips through.
-    // v2 will add a CHECK constraint at the table level when AI ships; for
-    // v1 the API guard is sufficient and avoids an extra round-trip in the
-    // common path. See migration 051 + PR #336.
+    // Guard: display_mode='ai' requires ai_text to be present after this
+    // patch is applied. Compute the effective post-update ai_text from
+    // (incoming patch ?? persisted row), then reject if it would be empty.
+    //
+    // WHY this shape: an earlier draft only checked `incomingAiText === null`
+    // for "is the patch clearing ai_text?", which let `{display_mode: 'ai',
+    // ai_text: ''}` slip through against a non-null persisted value — the
+    // empty string overwrote the real text and produced an empty 'ai' panel.
+    // Computing the effective state collapses null / empty / undefined into
+    // one truthy check, so future edge cases (whitespace-only, etc.) only
+    // need this one guard tightened.
+    //
+    // v2 will add a table-level CHECK when AI ships; the API guard is
+    // sufficient for v1 since display_mode never flips to 'ai' yet.
     if (updates.display_mode === 'ai') {
-      const incomingAiText = updates.ai_text as string | null | undefined
-      if (typeof incomingAiText !== 'string' || incomingAiText.length === 0) {
-        // Need to check the persisted row — only block if THIS patch isn't
-        // setting ai_text AND the row doesn't already have it.
+      let effectiveAiText: string | null
+      if ('ai_text' in body) {
+        // Patch is touching ai_text — use the incoming value (already
+        // length-validated above; null is the explicit "clear" signal).
+        effectiveAiText = (body.ai_text ?? null) as string | null
+      } else {
+        // Patch leaves ai_text alone — read the persisted value.
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const { data: existing, error: readErr } = await (supabase.from('notes' as never) as any)
           .select('ai_text')
@@ -84,11 +96,11 @@ export async function PATCH(
           console.error('[notes PATCH] ai_text precheck failed:', readErr.message)
           return NextResponse.json({ error: 'Failed to update note' }, { status: 500 })
         }
-        const persistedAiText = (existing as { ai_text: string | null }).ai_text
-        const incomingClearsAi = incomingAiText === null
-        if (incomingClearsAi || !persistedAiText) {
-          return badRequest("display_mode='ai' requires ai_text to be set")
-        }
+        effectiveAiText = (existing as { ai_text: string | null }).ai_text
+      }
+
+      if (!effectiveAiText) {
+        return badRequest("display_mode='ai' requires ai_text to be set")
       }
     }
 
