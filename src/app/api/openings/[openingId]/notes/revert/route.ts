@@ -27,8 +27,8 @@ export async function POST(
     const { openingId } = await params
 
     // Read project_id (for activity log) + both summary slots in one round-trip.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: row, error: readErr } = await (supabase.from('openings' as never) as any)
+    const { data: state, error: readErr } = await supabase
+      .from('openings')
       .select('project_id, notes_ai_summary, notes_ai_summary_previous')
       .eq('id', openingId)
       .single()
@@ -40,11 +40,6 @@ export async function POST(
       console.error('[openings/notes/revert] read failed:', readErr.message)
       return NextResponse.json({ error: 'Failed to read opening' }, { status: 500 })
     }
-    const state = row as {
-      project_id: string
-      notes_ai_summary: string | null
-      notes_ai_summary_previous: string | null
-    }
 
     if (!state.notes_ai_summary_previous) {
       return NextResponse.json(
@@ -54,8 +49,8 @@ export async function POST(
     }
 
     // Swap. Keep both slots populated so a second revert call swaps back.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error: updateErr } = await (supabase.from('openings' as never) as any)
+    const { error: updateErr } = await supabase
+      .from('openings')
       .update({
         notes_ai_summary: state.notes_ai_summary_previous,
         notes_ai_summary_previous: state.notes_ai_summary,

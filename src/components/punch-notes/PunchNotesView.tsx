@@ -17,9 +17,8 @@
  *     returned summary into local state without re-fetching the page.
  *   - Per-section busy state: regenerating one opening doesn't lock the
  *     others. Project-level regen IS exclusive — see disabled props.
- *   - Errors surface inline (per-card) plus toast. The card error stays
- *     until the next successful action so the user can see what failed
- *     even after dismissing the toast.
+ *   - Errors surface inline per-card. The card error stays until the next
+ *     successful action so the user can see what failed.
  */
 
 import Link from 'next/link'
@@ -473,12 +472,26 @@ function groupNotesForDisplay(notes: Note[], itemNames: Record<string, string | 
   const byLeafSide: Record<'active' | 'inactive' | 'shared', Note[]> = { active: [], inactive: [], shared: [] }
   const byItemMap = new Map<string, Note[]>()
   for (const n of notes) {
-    if (n.scope === 'opening') openingScope.push(n)
-    else if (n.scope === 'leaf' && n.leaf_side) byLeafSide[n.leaf_side].push(n)
-    else if (n.scope === 'item' && n.hardware_item_id) {
+    if (n.scope === 'opening') {
+      openingScope.push(n)
+    } else if (n.scope === 'leaf' && n.leaf_side) {
+      byLeafSide[n.leaf_side].push(n)
+    } else if (n.scope === 'item' && n.hardware_item_id) {
       const arr = byItemMap.get(n.hardware_item_id) ?? []
       arr.push(n)
       byItemMap.set(n.hardware_item_id, arr)
+    } else {
+      // Defensive: an item-scope note with null hardware_item_id violates
+      // the DB CHECK constraint (notes_scope_fk_consistency in mig 051), so
+      // this branch should be unreachable. If it ever fires (a row sneaks
+      // through, an upstream type drift, etc.) we'd rather surface the note
+      // at the opening level than silently drop it. The console.warn flags
+      // the data integrity issue without hard-failing the page.
+      console.warn(
+        '[PunchNotesView] orphan note with no usable scope/leaf/item key — surfacing at opening level',
+        { id: n.id, scope: n.scope, leaf_side: n.leaf_side, hardware_item_id: n.hardware_item_id },
+      )
+      openingScope.push(n)
     }
   }
   const byItem = Array.from(byItemMap.entries()).map(([itemId, list]) => ({

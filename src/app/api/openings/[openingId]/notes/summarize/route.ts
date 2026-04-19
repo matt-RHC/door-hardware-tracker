@@ -37,47 +37,28 @@ export async function POST(
 
     const { openingId } = await params
 
-    // Read opening + current summary state. RLS gates membership.
-    const { data: opening, error: openingErr } = await supabase
+    // Read opening + current summary state. RLS gates membership. Single
+    // round-trip — id/project_id/door_number plus the summary slots.
+    const { data: openingRow, error: openingErr } = await supabase
       .from('openings')
-      .select('id, project_id, door_number')
+      .select('id, project_id, door_number, notes_ai_summary, notes_ai_summary_previous, notes_ai_summary_at, notes_ai_summary_stale')
       .eq('id', openingId)
       .single()
 
-    if (openingErr || !opening) {
+    if (openingErr || !openingRow) {
       return NextResponse.json({ error: 'Opening not found' }, { status: 404 })
-    }
-    const openingRow = opening as { id: string; project_id: string; door_number: string }
-
-    // notes_ai_summary columns were added by migration 051; database.ts isn't
-    // regenerated for them. Same `as never as any` pattern used elsewhere.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: summaryRow, error: summaryErr } = await (supabase.from('openings' as never) as any)
-      .select('notes_ai_summary, notes_ai_summary_previous, notes_ai_summary_at, notes_ai_summary_stale')
-      .eq('id', openingId)
-      .single()
-
-    if (summaryErr) {
-      console.error('[openings/notes/summarize] summary read failed:', summaryErr.message)
-      return NextResponse.json({ error: 'Failed to read existing summary' }, { status: 500 })
-    }
-    const summaryState = summaryRow as {
-      notes_ai_summary: string | null
-      notes_ai_summary_previous: string | null
-      notes_ai_summary_at: string | null
-      notes_ai_summary_stale: boolean | null
     }
 
     // Debounce: if a summary was written within the last DEBOUNCE_MS, return
     // it as-is rather than spending tokens to regenerate. Two foremen hitting
     // Regenerate at the same time should not double-charge the project.
-    if (summaryState.notes_ai_summary && summaryState.notes_ai_summary_at) {
-      const ageMs = Date.now() - new Date(summaryState.notes_ai_summary_at).getTime()
+    if (openingRow.notes_ai_summary && openingRow.notes_ai_summary_at) {
+      const ageMs = Date.now() - new Date(openingRow.notes_ai_summary_at).getTime()
       if (ageMs < DEBOUNCE_MS) {
         return NextResponse.json({
-          summary: summaryState.notes_ai_summary,
+          summary: openingRow.notes_ai_summary,
           debounced: true,
-          stale: summaryState.notes_ai_summary_stale ?? false,
+          stale: openingRow.notes_ai_summary_stale,
         })
       }
     }
@@ -141,11 +122,11 @@ export async function POST(
 
     // Persist: previous ← current, current ← new, timestamp + clear stale.
     // Single UPDATE so the swap is atomic.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error: updateErr } = await (supabase.from('openings' as never) as any)
+    const { error: updateErr } = await supabase
+      .from('openings')
       .update({
         notes_ai_summary: result.summary,
-        notes_ai_summary_previous: summaryState.notes_ai_summary,
+        notes_ai_summary_previous: openingRow.notes_ai_summary,
         notes_ai_summary_at: new Date().toISOString(),
         notes_ai_summary_stale: false,
       })
@@ -172,7 +153,7 @@ export async function POST(
 
     return NextResponse.json({
       summary: result.summary,
-      previous: summaryState.notes_ai_summary,
+      previous: openingRow.notes_ai_summary,
       generated_at: new Date().toISOString(),
       token_usage: result.tokenUsage,
     })

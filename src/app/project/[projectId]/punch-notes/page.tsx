@@ -32,11 +32,9 @@ export default async function PunchNotesPage({ params }: PageProps) {
     redirect(`/login?redirectTo=/project/${projectId}/punch-notes`)
   }
 
-  // Project + summary state. notes_ai_summary_* columns aren't in the
-  // generated database.ts yet — same `as never as any` pattern used
-  // throughout the punch-notes code.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: projectRow, error: projectErr } = await (supabase.from('projects' as never) as any)
+  // Project + summary state.
+  const { data: projectRow, error: projectErr } = await supabase
+    .from('projects')
     .select('id, name, punch_notes_ai_summary, punch_notes_ai_summary_previous, punch_notes_ai_summary_at, punch_notes_ai_summary_stale')
     .eq('id', projectId)
     .single()
@@ -44,22 +42,14 @@ export default async function PunchNotesPage({ params }: PageProps) {
   if (projectErr || !projectRow) {
     notFound()
   }
-  const projectData = projectRow as {
-    id: string
-    name: string
-    punch_notes_ai_summary: string | null
-    punch_notes_ai_summary_previous: string | null
-    punch_notes_ai_summary_at: string | null
-    punch_notes_ai_summary_stale: boolean | null
-  }
 
   const project: PunchNotesProjectState = {
-    id: projectData.id,
-    name: projectData.name,
-    summary: projectData.punch_notes_ai_summary,
-    previous: projectData.punch_notes_ai_summary_previous,
-    generated_at: projectData.punch_notes_ai_summary_at,
-    stale: projectData.punch_notes_ai_summary_stale ?? false,
+    id: projectRow.id,
+    name: projectRow.name,
+    summary: projectRow.punch_notes_ai_summary,
+    previous: projectRow.punch_notes_ai_summary_previous,
+    generated_at: projectRow.punch_notes_ai_summary_at,
+    stale: projectRow.punch_notes_ai_summary_stale,
   }
 
   // All notes in the project + label lookups for door numbers + item names.
@@ -83,8 +73,8 @@ export default async function PunchNotesPage({ params }: PageProps) {
   let openings: PunchNotesOpeningState[] = []
 
   if (openingIds.length > 0) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: openingRows, error: openingsErr } = await (supabase.from('openings' as never) as any)
+    const { data: openingRows, error: openingsErr } = await supabase
+      .from('openings')
       .select('id, door_number, notes_ai_summary, notes_ai_summary_previous, notes_ai_summary_at, notes_ai_summary_stale')
       .in('id', openingIds)
 
@@ -93,15 +83,7 @@ export default async function PunchNotesPage({ params }: PageProps) {
       console.error('[punch-notes page] opening summary fetch failed:', openingsErr.message)
     }
 
-    const rows = (openingRows ?? []) as Array<{
-      id: string
-      door_number: string
-      notes_ai_summary: string | null
-      notes_ai_summary_previous: string | null
-      notes_ai_summary_at: string | null
-      notes_ai_summary_stale: boolean | null
-    }>
-    const summaryById = new Map(rows.map(r => [r.id, r]))
+    const summaryById = new Map((openingRows ?? []).map(r => [r.id, r]))
 
     openings = openingIds.map(openingId => {
       const summary = summaryById.get(openingId)
@@ -112,13 +94,18 @@ export default async function PunchNotesPage({ params }: PageProps) {
         summary: summary?.notes_ai_summary ?? null,
         previous: summary?.notes_ai_summary_previous ?? null,
         generated_at: summary?.notes_ai_summary_at ?? null,
+        // notes_ai_summary_stale is `BOOLEAN NOT NULL DEFAULT FALSE` (mig 051);
+        // the only way `summary?.notes_ai_summary_stale` is undefined is if
+        // `summary` itself is undefined, which collapses to `false` here.
         stale: summary?.notes_ai_summary_stale ?? false,
         notes: notesByOpening.get(openingId) ?? [],
       }
     })
 
-    // Stable sort by door_number for predictable rendering.
-    openings.sort((a, b) => a.door_number.localeCompare(b.door_number))
+    // Natural sort by door_number so 1, 2, 10 don't sort as 1, 10, 2 for
+    // un-padded numbers. Padded numbers ("001") were already correct.
+    const collator = new Intl.Collator(undefined, { numeric: true })
+    openings.sort((a, b) => collator.compare(a.door_number, b.door_number))
   }
 
   return (

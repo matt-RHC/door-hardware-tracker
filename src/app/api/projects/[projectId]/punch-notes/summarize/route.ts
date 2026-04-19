@@ -36,21 +36,6 @@ import type { Note } from '@/lib/types/notes'
 
 const DEBOUNCE_MS = 5_000
 
-interface OpeningSummaryRow {
-  id: string
-  door_number: string
-  notes_ai_summary: string | null
-  notes_ai_summary_stale: boolean | null
-}
-
-interface ProjectSummaryRow {
-  name: string
-  punch_notes_ai_summary: string | null
-  punch_notes_ai_summary_previous: string | null
-  punch_notes_ai_summary_at: string | null
-  punch_notes_ai_summary_stale: boolean | null
-}
-
 export async function POST(
   _request: NextRequest,
   { params }: { params: Promise<{ projectId: string }> },
@@ -65,8 +50,8 @@ export async function POST(
     const { projectId } = await params
 
     // Read project + current summary state in one round-trip.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: projRow, error: projErr } = await (supabase.from('projects' as never) as any)
+    const { data: projectState, error: projErr } = await supabase
+      .from('projects')
       .select('name, punch_notes_ai_summary, punch_notes_ai_summary_previous, punch_notes_ai_summary_at, punch_notes_ai_summary_stale')
       .eq('id', projectId)
       .single()
@@ -78,7 +63,6 @@ export async function POST(
       console.error('[projects/punch-notes/summarize] project read failed:', projErr.message)
       return NextResponse.json({ error: 'Failed to read project' }, { status: 500 })
     }
-    const projectState = projRow as ProjectSummaryRow
 
     // Debounce against rapid double-fires.
     if (projectState.punch_notes_ai_summary && projectState.punch_notes_ai_summary_at) {
@@ -87,7 +71,7 @@ export async function POST(
         return NextResponse.json({
           summary: projectState.punch_notes_ai_summary,
           debounced: true,
-          stale: projectState.punch_notes_ai_summary_stale ?? false,
+          stale: projectState.punch_notes_ai_summary_stale,
         })
       }
     }
@@ -96,8 +80,8 @@ export async function POST(
     const bundle = await fetchProjectNotes(supabase, projectId)
     if (bundle.notes.length === 0) {
       // No notes anywhere → no summary. Clear any existing and exit.
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (supabase.from('projects' as never) as any)
+      await supabase
+        .from('projects')
         .update({
           punch_notes_ai_summary: null,
           punch_notes_ai_summary_previous: projectState.punch_notes_ai_summary,
@@ -136,8 +120,8 @@ export async function POST(
     let openingSummaries: Array<{ door_number: string; summary: string }> = []
 
     if (openingIds.length > 0) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: openingRows, error: openingErr } = await (supabase.from('openings' as never) as any)
+      const { data: openingRows, error: openingErr } = await supabase
+        .from('openings')
         .select('id, door_number, notes_ai_summary, notes_ai_summary_stale')
         .in('id', openingIds)
 
@@ -145,8 +129,7 @@ export async function POST(
         console.error('[projects/punch-notes/summarize] openings read failed:', openingErr.message)
         return NextResponse.json({ error: 'Failed to read opening summaries' }, { status: 500 })
       }
-      const rows = (openingRows ?? []) as OpeningSummaryRow[]
-      const byId = new Map(rows.map(r => [r.id, r]))
+      const byId = new Map((openingRows ?? []).map(r => [r.id, r]))
 
       // Sequential regeneration to keep token usage observable and avoid
       // hammering Anthropic with parallel requests during a single
@@ -158,7 +141,8 @@ export async function POST(
 
         const needsRegen = !row.notes_ai_summary || row.notes_ai_summary_stale === true
         if (!needsRegen) {
-          openingSummaries.push({ door_number: row.door_number, summary: row.notes_ai_summary as string })
+          // notes_ai_summary is non-null here per the !needsRegen check above.
+          openingSummaries.push({ door_number: row.door_number, summary: row.notes_ai_summary! })
           continue
         }
 
@@ -170,8 +154,8 @@ export async function POST(
             bundle.itemNames,
           )
           // Persist the refreshed opening summary.
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          await (supabase.from('openings' as never) as any)
+          await supabase
+            .from('openings')
             .update({
               notes_ai_summary: result.summary,
               notes_ai_summary_previous: row.notes_ai_summary,
@@ -195,8 +179,10 @@ export async function POST(
         }
       }
 
-      // Sort by door_number so the prompt has a stable ordering across runs.
-      openingSummaries = openingSummaries.sort((a, b) => a.door_number.localeCompare(b.door_number))
+      // Natural sort by door_number so the prompt has a stable ordering
+      // across runs (matches the page UI's natural sort).
+      const collator = new Intl.Collator(undefined, { numeric: true })
+      openingSummaries = openingSummaries.sort((a, b) => collator.compare(a.door_number, b.door_number))
     }
 
     // ── Phase B: assemble project summary ─────────────────────────────
@@ -224,8 +210,8 @@ export async function POST(
     }
 
     // Persist project-level summary: previous ← current, current ← new.
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error: updateErr } = await (supabase.from('projects' as never) as any)
+    const { error: updateErr } = await supabase
+      .from('projects')
       .update({
         punch_notes_ai_summary: result.summary,
         punch_notes_ai_summary_previous: projectState.punch_notes_ai_summary,

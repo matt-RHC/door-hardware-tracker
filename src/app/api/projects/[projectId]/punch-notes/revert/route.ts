@@ -25,8 +25,8 @@ export async function POST(
 
     const { projectId } = await params
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: row, error: readErr } = await (supabase.from('projects' as never) as any)
+    const { data: state, error: readErr } = await supabase
+      .from('projects')
       .select('punch_notes_ai_summary, punch_notes_ai_summary_previous')
       .eq('id', projectId)
       .single()
@@ -38,10 +38,6 @@ export async function POST(
       console.error('[projects/punch-notes/revert] read failed:', readErr.message)
       return NextResponse.json({ error: 'Failed to read project' }, { status: 500 })
     }
-    const state = row as {
-      punch_notes_ai_summary: string | null
-      punch_notes_ai_summary_previous: string | null
-    }
 
     if (!state.punch_notes_ai_summary_previous) {
       return NextResponse.json(
@@ -50,8 +46,8 @@ export async function POST(
       )
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error: updateErr } = await (supabase.from('projects' as never) as any)
+    const { error: updateErr } = await supabase
+      .from('projects')
       .update({
         punch_notes_ai_summary: state.punch_notes_ai_summary_previous,
         punch_notes_ai_summary_previous: state.punch_notes_ai_summary,
