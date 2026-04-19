@@ -69,7 +69,7 @@
     "src/app/api/cron/reap-stuck-runs/route.ts": {
       "maxDuration": 30
     },
-    "src/app/api/projects/[projectId]/punch-notes/export-pdf/route.ts": {
+    "src/app/api/projects/[projectId]/punch-notes/export-pdf/route.tsx": {
       "maxDuration": 60
     },
     "api/extract-tables.py": {
