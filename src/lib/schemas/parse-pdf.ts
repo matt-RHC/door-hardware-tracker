@@ -43,11 +43,20 @@ export type ParsePdfRequest = z.infer<typeof ParsePdfRequestSchema>
 /**
  * save and compare share the same request shape: projectId + the wizard's
  * in-memory doors and hardware sets. Both require at least one door.
+ *
+ * `acknowledgedOrphans` is the list of door_numbers the client showed the
+ * user as "would produce zero items" and the user confirmed should be
+ * dropped. The server compares this against its own server-side orphan
+ * detection — any orphan NOT on the client list is a client/server
+ * disagreement, which is itself a bug. Optional for backwards compatibility:
+ * an absent field is treated as an empty acknowledgement list, which means
+ * any server-detected orphan triggers the pre-stage check.
  */
 export const ParsePdfSaveRequestSchema = z.object({
   projectId: UuidSchema,
   hardwareSets: z.array(HardwareSetSchema),
   doors: z.array(DoorEntrySchema).min(1, 'At least one door is required'),
+  acknowledgedOrphans: z.array(z.string()).optional(),
 })
 export type ParsePdfSaveRequest = z.infer<typeof ParsePdfSaveRequestSchema>
 

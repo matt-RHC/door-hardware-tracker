@@ -9,6 +9,7 @@
  */
 
 import { SupabaseClient } from '@supabase/supabase-js'
+import { normalizeDoorNumber } from '@/lib/parse-pdf-helpers'
 
 // --- Types ---
 
@@ -230,16 +231,36 @@ export async function writeStagingData(
   openings: StagingOpening[],
   hardwareSets: Array<{ set_id: string; generic_set_id?: string; heading: string; heading_doors?: string[]; pdf_page?: number | null; items: StagingHardwareItem[] }>
 ): Promise<{ openingsCount: number; itemsCount: number }> {
+  // Field-level pre-stage guards. Two failure modes from the 2026-04-18
+  // Radius DC regression: the parser silently emitting a blank door_number
+  // (poisons every downstream join) and silently defaulting a missing
+  // leaf_count to 1 (classifies a pair as a single). Both must be caught
+  // here, in-memory, before the RPC writes a single row.
+  for (const o of openings) {
+    if (!normalizeDoorNumber(o.door_number)) {
+      throw new Error(
+        `Pre-stage invariant violated: opening has empty/invalid door_number ` +
+        `(raw value: ${JSON.stringify(o.door_number)})`
+      )
+    }
+    if (o.leaf_count == null) {
+      throw new Error(
+        `Pre-stage invariant violated: opening ${o.door_number} missing leaf_count. ` +
+        `The parser must resolve leaf_count explicitly — silent defaults caused ` +
+        `the 2026-04-18 Radius DC pair-as-single regression.`
+      )
+    }
+  }
+
   // Build set lookup — register under BOTH set_id and generic_set_id
   // because doors may be assigned to either (heading "DH1.01" vs set "DH1-10")
   const setMap = new Map<string, typeof hardwareSets[number]>()
   // Door-number lookup for multi-heading sub-sets (DH4A.0 vs DH4A.1)
   const doorToSetMap = new Map<string, typeof hardwareSets[number]>()
-  const normalizeDoor = (s: string) => (s ?? '').trim().toUpperCase().replace(/\s+/g, '')
   for (const s of hardwareSets) {
     setMap.set(s.set_id, s)
     for (const dn of s.heading_doors ?? []) {
-      const key = normalizeDoor(dn)
+      const key = normalizeDoorNumber(dn)
       if (key && !doorToSetMap.has(key)) doorToSetMap.set(key, s)
     }
     if (s.generic_set_id && s.generic_set_id !== s.set_id) {
@@ -249,7 +270,7 @@ export async function writeStagingData(
 
   // Build the full payload: each opening with its matched hardware items
   const payload = openings.map(o => {
-    const doorKey = normalizeDoor(o.door_number)
+    const doorKey = normalizeDoorNumber(o.door_number)
     const hwSet = doorToSetMap.get(doorKey) ?? setMap.get(o.hw_set ?? '')
     const items = (hwSet?.items ?? []).map(item => ({
       name: item.name,
@@ -275,7 +296,7 @@ export async function writeStagingData(
       fire_rating: o.fire_rating ?? null,
       hand: o.hand ?? null,
       pdf_page: o.pdf_page ?? setMap.get(o.hw_set ?? '')?.pdf_page ?? null,
-      leaf_count: o.leaf_count ?? 1,
+      leaf_count: o.leaf_count,
       is_flagged: o.is_flagged ?? false,
       flag_reason: o.flag_reason ?? null,
       field_confidence: o.field_confidence ?? null,

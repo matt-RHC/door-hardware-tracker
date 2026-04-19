@@ -23,7 +23,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/lib/types/database'
 import type { HardwareSet } from '@/lib/types'
-import { classifyItemScope, normalizeDoorNumber } from '@/lib/parse-pdf-helpers'
+import { buildPerOpeningItems, classifyItemScope, normalizeDoorNumber } from '@/lib/parse-pdf-helpers'
 import { inferHandingDirection } from '@/lib/hardware-handing-filter'
 import { classifyItem } from '@/lib/hardware-taxonomy'
 
@@ -482,6 +482,79 @@ export function runInvariants(
   }
 
   return violations
+}
+
+/**
+ * Minimal opening shape required for pre-stage invariant checks. Built by
+ * the save route from its in-memory StagingOpening list, BEFORE the RPC
+ * writes anything to staging. `leaf_count` is required (non-optional) here
+ * because the field-level guard in writeStagingData() proves it is set
+ * before any pre-stage call would run.
+ */
+export interface PreStageOpening {
+  door_number: string
+  hw_set: string | null
+  location: string | null
+  hand: string | null
+  leaf_count: number
+}
+
+/**
+ * In-memory pre-stage equivalent of validateExtractionRun.
+ *
+ * Runs the same `runInvariants` rule set against the wizard's in-memory
+ * payload before writeStagingData() touches the DB. Synthesizes per-opening
+ * items via the shared buildPerOpeningItems helper (using door_number as a
+ * synthetic id since real staging IDs don't exist yet) so structural rules
+ * see the same item shapes they would post-promote.
+ *
+ * The `leaf_count_consistency` rule is the highest-value one to catch here
+ * — it fires when leaf_count and per-leaf hardware items disagree, which is
+ * the exact signature of the 2026-04-18 Radius DC regression. Catching it
+ * pre-stage means the save never commits the bad state.
+ */
+export function runPreStageInvariants(args: {
+  openings: ReadonlyArray<PreStageOpening>
+  hardwareSets: ReadonlyArray<HardwareSet>
+  setMap: Map<string, HardwareSet>
+  doorToSetMap: Map<string, HardwareSet>
+  doorInfoMap: Map<string, { door_type: string; frame_type: string }>
+}): InvariantViolation[] {
+  const { openings, hardwareSets, setMap, doorToSetMap, doorInfoMap } = args
+
+  // Synthesize OpeningRow[] — runInvariants only uses `id` for grouping.
+  // Using door_number as the id is safe because writeStagingData's pre-stage
+  // guard already rejected empty/duplicate door_numbers upstream.
+  const openingRows = openings.map(o => ({
+    id: o.door_number,
+    door_number: o.door_number,
+    hw_set: o.hw_set,
+    leaf_count: o.leaf_count,
+    location: o.location,
+    hand: o.hand,
+  }))
+
+  // Reuse the post-stage item-building path so structural rules see the
+  // same shapes they would post-promote. fkColumn='opening_id' matches the
+  // HardwareItemRow.opening_id field that runInvariants reads.
+  const builtItems = buildPerOpeningItems(
+    openingRows.map(o => ({ id: o.id, door_number: o.door_number, hw_set: o.hw_set })),
+    doorInfoMap,
+    setMap,
+    doorToSetMap,
+    'opening_id',
+  )
+
+  const itemRows = builtItems.map((row, idx) => ({
+    id: `prestage-${idx}`,
+    opening_id: typeof row.opening_id === 'string' ? row.opening_id : '',
+    name: typeof row.name === 'string' ? row.name : '',
+    qty: typeof row.qty === 'number' ? row.qty : null,
+    leaf_side: typeof row.leaf_side === 'string' ? row.leaf_side : null,
+    model: typeof row.model === 'string' ? row.model : null,
+  }))
+
+  return runInvariants(openingRows, itemRows, hardwareSets)
 }
 
 /**

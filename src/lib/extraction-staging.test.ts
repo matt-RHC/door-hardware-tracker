@@ -10,7 +10,7 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { reapStuckExtractionRuns } from './extraction-staging'
+import { reapStuckExtractionRuns, writeStagingData, type StagingOpening } from './extraction-staging'
 
 // ── reapStuckExtractionRuns ──────────────────────────────────────────
 
@@ -143,5 +143,94 @@ describe('reapStuckExtractionRuns', () => {
       }),
     } as unknown as SupabaseClient
     await expect(reapStuckExtractionRuns(supabase, 30)).rejects.toThrow(/rls denied/)
+  })
+})
+
+// ── writeStagingData field-level pre-stage guards ───────────────────────────
+//
+// These guards run in-memory BEFORE the supabase RPC call. They catch the
+// silent-default failure modes that produced the 2026-04-18 Radius DC
+// regression (parser emitting blank door_number, missing leaf_count silently
+// defaulting to 1). The supabase mock here would only be touched if the
+// guard let the call through — every assertion below proves it didn't.
+
+describe('writeStagingData field-level pre-stage guards', () => {
+  // Supabase mock that throws if it's reached — proves the guard fired
+  // BEFORE the RPC, not after. The previous code's `?? 1` silent default
+  // would have let these through.
+  const supabaseMustNotBeCalled = {
+    rpc: () => {
+      throw new Error('TEST FAILURE: writeStagingData called supabase.rpc despite invalid input')
+    },
+  } as unknown as SupabaseClient
+
+  function makeOpening(overrides: Partial<StagingOpening> = {}): StagingOpening {
+    return {
+      door_number: '101',
+      hw_set: 'DH1',
+      leaf_count: 1,
+      ...overrides,
+    }
+  }
+
+  it('throws on empty door_number', async () => {
+    const openings = [makeOpening({ door_number: '' })]
+    await expect(
+      writeStagingData(supabaseMustNotBeCalled, 'run-1', 'proj-1', openings, []),
+    ).rejects.toThrow(/empty\/invalid door_number/)
+  })
+
+  it('throws on whitespace-only door_number', async () => {
+    const openings = [makeOpening({ door_number: '   ' })]
+    await expect(
+      writeStagingData(supabaseMustNotBeCalled, 'run-1', 'proj-1', openings, []),
+    ).rejects.toThrow(/empty\/invalid door_number/)
+  })
+
+  it('throws on null door_number (defensive — type says string but JS reality is fluid)', async () => {
+    const openings = [makeOpening({ door_number: null as unknown as string })]
+    await expect(
+      writeStagingData(supabaseMustNotBeCalled, 'run-1', 'proj-1', openings, []),
+    ).rejects.toThrow(/empty\/invalid door_number/)
+  })
+
+  it('throws when leaf_count is missing — Radius DC regression class', async () => {
+    const openings = [makeOpening({ leaf_count: undefined })]
+    await expect(
+      writeStagingData(supabaseMustNotBeCalled, 'run-1', 'proj-1', openings, []),
+    ).rejects.toThrow(/missing leaf_count/)
+  })
+
+  it('throws when leaf_count is null', async () => {
+    const openings = [makeOpening({ leaf_count: null as unknown as number })]
+    await expect(
+      writeStagingData(supabaseMustNotBeCalled, 'run-1', 'proj-1', openings, []),
+    ).rejects.toThrow(/missing leaf_count/)
+  })
+
+  it('reports the offending door_number in the leaf_count error', async () => {
+    const openings = [makeOpening({ door_number: 'A1', leaf_count: undefined })]
+    await expect(
+      writeStagingData(supabaseMustNotBeCalled, 'run-1', 'proj-1', openings, []),
+    ).rejects.toThrow(/A1/)
+  })
+
+  it('passes valid input through to supabase.rpc', async () => {
+    // Now we DO want supabase to be called — wire up a minimal happy-path mock.
+    const rpcCalls: unknown[] = []
+    const supabase = {
+      rpc: (...args: unknown[]) => {
+        rpcCalls.push(args)
+        return Promise.resolve({
+          data: { success: true, openings_count: 1, items_count: 0 },
+          error: null,
+        })
+      },
+    } as unknown as SupabaseClient
+
+    const openings = [makeOpening({ door_number: '101', leaf_count: 1 })]
+    const result = await writeStagingData(supabase, 'run-1', 'proj-1', openings, [])
+    expect(result).toEqual({ openingsCount: 1, itemsCount: 0 })
+    expect(rpcCalls).toHaveLength(1)
   })
 })

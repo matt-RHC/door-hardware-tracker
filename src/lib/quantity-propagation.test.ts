@@ -200,3 +200,88 @@ describe('propagateQuantityDecision', () => {
     expect(result.modifiedSetIds).toEqual([])
   })
 })
+
+// ── propagateQuantityDecision input guard ───────────────────────────────────
+//
+// One bad value fans out to dozens of openings, so the function refuses to
+// run on degenerate input. Every test below uses a valid `sets` array — the
+// fail mode under test is the qty itself, not the propagation target.
+describe('propagateQuantityDecision input validation', () => {
+  const validSets = [makeSet('DH1', [{ name: 'Hinge', qty: 3 }])]
+
+  it('throws on NaN qty', () => {
+    expect(() =>
+      propagateQuantityDecision(
+        { item_category: 'hinges', resolved_qty: NaN, source_set_id: 'DH9', reason: 'test' },
+        validSets,
+      ),
+    ).toThrow(/not a valid positive integer/)
+  })
+
+  it('throws on zero qty (no opening has zero of any hardware)', () => {
+    expect(() =>
+      propagateQuantityDecision(
+        { item_category: 'hinges', resolved_qty: 0, source_set_id: 'DH9', reason: 'test' },
+        validSets,
+      ),
+    ).toThrow(/not a valid positive integer/)
+  })
+
+  it('throws on negative qty', () => {
+    expect(() =>
+      propagateQuantityDecision(
+        { item_category: 'hinges', resolved_qty: -3, source_set_id: 'DH9', reason: 'test' },
+        validSets,
+      ),
+    ).toThrow(/not a valid positive integer/)
+  })
+
+  it('throws on non-integer (e.g. 2.5)', () => {
+    expect(() =>
+      propagateQuantityDecision(
+        { item_category: 'hinges', resolved_qty: 2.5, source_set_id: 'DH9', reason: 'test' },
+        validSets,
+      ),
+    ).toThrow(/not a valid positive integer/)
+  })
+
+  it('throws on Infinity', () => {
+    expect(() =>
+      propagateQuantityDecision(
+        { item_category: 'hinges', resolved_qty: Infinity, source_set_id: 'DH9', reason: 'test' },
+        validSets,
+      ),
+    ).toThrow(/not a valid positive integer/)
+  })
+
+  it('accepts a valid positive integer', () => {
+    expect(() =>
+      propagateQuantityDecision(
+        { item_category: 'hinges', resolved_qty: 4, source_set_id: 'DH9', reason: 'test' },
+        validSets,
+      ),
+    ).not.toThrow()
+  })
+})
+
+// ── buildDecisionFromAnswer input guard ─────────────────────────────────────
+//
+// Returns null (no decision) for degenerate quantities so a bad answer
+// can't become a propagation explosion downstream.
+describe('buildDecisionFromAnswer rejects degenerate quantities', () => {
+  it('returns null for "0 hinges per leaf"', () => {
+    const result = buildDecisionFromAnswer('DH1', 'Butt Hinge', '0 hinges per leaf')
+    expect(result).toBeNull()
+  })
+
+  it('returns a valid decision for "4 per leaf (tall/heavy)"', () => {
+    const result = buildDecisionFromAnswer('DH1', 'Butt Hinge', '4 per leaf (tall/heavy)')
+    expect(result).not.toBeNull()
+    expect(result?.resolved_qty).toBe(4)
+  })
+
+  it('returns null when the answer has no leading number', () => {
+    const result = buildDecisionFromAnswer('DH1', 'Butt Hinge', 'unknown')
+    expect(result).toBeNull()
+  })
+})

@@ -133,6 +133,11 @@ export default function StepConfirm({
           projectId,
           hardwareSets,
           doors,
+          // Acknowledge the orphan doors the user confirmed in the UI gate
+          // above. Server-side check (DHT_INVARIANT_PRESTAGE strict) rejects
+          // the save if its own orphan detection finds a door that isn't on
+          // this list.
+          acknowledgedOrphans: orphanDoors.map(d => d.door_number),
         }),
       });
 
@@ -212,6 +217,11 @@ export default function StepConfirm({
           projectId,
           hardwareSets,
           doors,
+          // Acknowledge the orphan doors the user confirmed in the UI gate
+          // above. Server-side check (DHT_INVARIANT_PRESTAGE strict) rejects
+          // the save if its own orphan detection finds a door that isn't on
+          // this list.
+          acknowledgedOrphans: orphanDoors.map(d => d.door_number),
         }),
       });
 
