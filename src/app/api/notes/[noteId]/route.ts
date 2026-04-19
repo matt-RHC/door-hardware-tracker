@@ -62,6 +62,36 @@ export async function PATCH(
       return badRequest('no editable fields supplied')
     }
 
+    // Guard: display_mode='ai' requires ai_text to be present (in this PATCH
+    // or already on the row). Without this an empty 'ai' render slips through.
+    // v2 will add a CHECK constraint at the table level when AI ships; for
+    // v1 the API guard is sufficient and avoids an extra round-trip in the
+    // common path. See migration 051 + PR #336.
+    if (updates.display_mode === 'ai') {
+      const incomingAiText = updates.ai_text as string | null | undefined
+      if (typeof incomingAiText !== 'string' || incomingAiText.length === 0) {
+        // Need to check the persisted row — only block if THIS patch isn't
+        // setting ai_text AND the row doesn't already have it.
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data: existing, error: readErr } = await (supabase.from('notes' as never) as any)
+          .select('ai_text')
+          .eq('id', noteId)
+          .single()
+        if (readErr) {
+          if (readErr.code === 'PGRST116') {
+            return NextResponse.json({ error: 'Note not found' }, { status: 404 })
+          }
+          console.error('[notes PATCH] ai_text precheck failed:', readErr.message)
+          return NextResponse.json({ error: 'Failed to update note' }, { status: 500 })
+        }
+        const persistedAiText = (existing as { ai_text: string | null }).ai_text
+        const incomingClearsAi = incomingAiText === null
+        if (incomingClearsAi || !persistedAiText) {
+          return badRequest("display_mode='ai' requires ai_text to be set")
+        }
+      }
+    }
+
     // `notes` table cast — same pattern as darrin_logs until types are regenerated.
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data, error } = await (supabase.from('notes' as never) as any)
