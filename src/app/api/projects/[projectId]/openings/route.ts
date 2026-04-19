@@ -13,7 +13,6 @@ interface OpeningWithCounts {
   frame_type: string | null
   fire_rating: string | null
   hand: string | null
-  notes: string | null
   pdf_page: number | null
   leaf_count: number
   is_active: boolean
