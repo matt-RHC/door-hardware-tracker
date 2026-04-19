@@ -686,6 +686,10 @@ body {
 .row-accent-green { border-left: 3px solid var(--green); }
 .row-accent-amber { border-left: 3px solid var(--orange); }
 .row-accent-red { border-left: 3px solid var(--red); }
+/* Soft/advisory tier — used for low-confidence clusters in IssueView.
+   Matches the attention-first handoff's soft=yellow taxonomy and keeps
+   green reserved for "clean / auto-approved" everywhere else. */
+.row-accent-yellow { border-left: 3px solid var(--yellow); }
 
 /* ── Confidence Bar (segmented progress) ── */
 .confidence-bar {

@@ -141,4 +141,22 @@ describe("computeGroupRationale", () => {
     expect(r!.body).toContain("2");
     expect(r!.body).toContain("DH2-00");
   });
+
+  it("escapes HTML-significant characters in hardware-set ids", () => {
+    // Real submittals shouldn't contain angle brackets in set ids, but
+    // the parser is not a source of truth on format — rationale text is
+    // rendered via dangerouslySetInnerHTML so we guard the substitution.
+    const group = makeGroup(
+      [
+        makeDoor({ door_number: "100", location: "" }),
+        makeDoor({ door_number: "101", location: "" }),
+      ],
+      { high: 0, med: 2, low: 0 },
+      "DH<script>",
+    );
+    const r = computeGroupRationale(group);
+    expect(r).not.toBeNull();
+    expect(r!.body).not.toContain("<script>");
+    expect(r!.body).toContain("&lt;script&gt;");
+  });
 });

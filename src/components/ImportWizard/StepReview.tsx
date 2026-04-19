@@ -11,6 +11,7 @@ import ReviewSummary from "./review/ReviewSummary";
 import ReviewFilters from "./review/ReviewFilters";
 import SetView from "./review/SetView";
 import DoorView from "./review/DoorView";
+import IssueView from "./review/IssueView";
 import InlineRescan, { type InlineRescanMode } from "./review/InlineRescan";
 import PropagationSuggestionModal from "./review/PropagationSuggestionModal";
 import { isOrphanDoor, getDoorIssues, getConfidence } from "./review/utils";
@@ -24,7 +25,7 @@ import type {
   SortDir,
 } from "./review/types";
 
-type ViewMode = 'door' | 'set';
+type ViewMode = 'door' | 'set' | 'issue';
 
 const VIEW_MODE_STORAGE_KEY = 'review.viewMode';
 
@@ -32,7 +33,7 @@ function loadInitialViewMode(): ViewMode {
   if (typeof window === 'undefined') return 'door';
   try {
     const stored = window.localStorage.getItem(VIEW_MODE_STORAGE_KEY);
-    if (stored === 'door' || stored === 'set') return stored;
+    if (stored === 'door' || stored === 'set' || stored === 'issue') return stored;
   } catch {
     // localStorage may be unavailable (private browsing, etc.) — fall through
   }
@@ -645,6 +646,26 @@ export default function StepReview({
       <div className="flex-1 overflow-y-auto min-h-0">
         {viewMode === 'door' ? (
           <DoorView
+            doors={sortedDoors}
+            hardwareSets={hardwareSets}
+            doorToSetMap={doorToSetMap}
+            setMap={setMap}
+            classifyResult={classifyResult}
+            pdfBuffer={pdfBuffer}
+            reconciledSetMap={reconciledSetMap}
+            expandedDoors={expandedDoors}
+            onToggleDoor={toggleDoor}
+            onRequestRescan={handleRequestRescan}
+            onRequestFieldRescan={handleRequestFieldRescan}
+            onRevert={handleRevert}
+            collapsedLeafSections={collapsedLeafSections}
+            onToggleLeafSection={toggleLeafSection}
+            auditTrailOpen={auditTrailOpen}
+            onToggleAuditTrail={toggleAuditTrail}
+            registerRef={registerRef}
+          />
+        ) : viewMode === 'issue' ? (
+          <IssueView
             doors={sortedDoors}
             hardwareSets={hardwareSets}
             doorToSetMap={doorToSetMap}
