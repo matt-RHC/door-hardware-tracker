@@ -79,7 +79,6 @@ export interface StagingOpening {
   frame_type?: string
   fire_rating?: string
   hand?: string
-  notes?: string
   /** 0-based PDF page index where this opening's hardware set is defined.
    *  Populated from HardwareSet.pdf_page at save time. Copied to
    *  openings.pdf_page on promote_extraction(). */
@@ -275,7 +274,6 @@ export async function writeStagingData(
       frame_type: o.frame_type ?? null,
       fire_rating: o.fire_rating ?? null,
       hand: o.hand ?? null,
-      notes: o.notes ?? null,
       pdf_page: o.pdf_page ?? setMap.get(o.hw_set ?? '')?.pdf_page ?? null,
       leaf_count: o.leaf_count ?? 1,
       is_flagged: o.is_flagged ?? false,

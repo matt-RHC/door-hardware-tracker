@@ -1468,7 +1468,6 @@ export type Database = {
           is_flagged: boolean | null
           leaf_count: number
           location: string | null
-          notes: string | null
           pdf_page: number | null
           project_id: string
         }
@@ -1488,7 +1487,6 @@ export type Database = {
           is_flagged?: boolean | null
           leaf_count?: number
           location?: string | null
-          notes?: string | null
           pdf_page?: number | null
           project_id: string
         }
@@ -1508,7 +1506,6 @@ export type Database = {
           is_flagged?: boolean | null
           leaf_count?: number
           location?: string | null
-          notes?: string | null
           pdf_page?: number | null
           project_id?: string
         }
