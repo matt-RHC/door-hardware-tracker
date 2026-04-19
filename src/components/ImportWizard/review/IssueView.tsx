@@ -8,6 +8,8 @@ import DoorRow from "./DoorRow";
 import DoorDetailPanel from "./DoorDetailPanel";
 import { computeIssueGroups, type IssueGroup, type IssueSeverity } from "./issueGrouping";
 import { computeIssueRationale } from "./darrinRationale";
+import BulkFixModal from "./BulkFixModal";
+import { isBulkFixField, type BulkFixField } from "./bulk-apply";
 
 interface IssueViewProps {
   doors: Array<{ door: DoorEntry; originalIndex: number }>;
@@ -27,6 +29,10 @@ interface IssueViewProps {
   auditTrailOpen: Set<string>;
   onToggleAuditTrail: (setId: string) => void;
   registerRef: (doorNumber: string, el: HTMLElement | null) => void;
+  /** Fired when the reviewer hits Apply or Mark N/A inside the bulk-fix
+   *  modal. StepReview mutates the canonical doors array — this prop is
+   *  the only place Issue view reaches back into parent state. */
+  onBulkApply: (field: BulkFixField, value: string, doorNumbers: string[]) => void;
 }
 
 // Severity → row-accent class. Matches the attention-first handoff's
@@ -73,6 +79,7 @@ export default function IssueView({
   auditTrailOpen,
   onToggleAuditTrail,
   registerRef,
+  onBulkApply,
 }: IssueViewProps) {
   const groups = useMemo(() => computeIssueGroups(doors), [doors]);
 
@@ -87,6 +94,15 @@ export default function IssueView({
       else next.add(key);
       return next;
     });
+
+  // Bulk-fix modal state. Held at IssueView (not inside the card)
+  // because only one modal should ever be open at a time regardless of
+  // which cluster triggered it.
+  const [bulkFixCluster, setBulkFixCluster] = useState<IssueGroup | null>(null);
+  const bulkFixField: BulkFixField | null = useMemo(() => {
+    if (!bulkFixCluster?.field) return null;
+    return isBulkFixField(bulkFixCluster.field) ? bulkFixCluster.field : null;
+  }, [bulkFixCluster]);
 
   if (doors.length === 0) {
     return (
@@ -108,31 +124,44 @@ export default function IssueView({
   }
 
   return (
-    <div className="space-y-3">
-      {groups.map((group) => (
-        <IssueGroupCard
-          key={group.issueKey}
-          group={group}
-          isCollapsed={collapsed.has(group.issueKey)}
-          onToggleCollapsed={() => toggle(group.issueKey)}
-          expandedDoors={expandedDoors}
-          onToggleDoor={onToggleDoor}
-          doorToSetMap={doorToSetMap}
-          setMap={setMap}
-          classifyResult={classifyResult}
-          pdfBuffer={pdfBuffer}
-          reconciledSetMap={reconciledSetMap}
-          onRequestRescan={onRequestRescan}
-          onRequestFieldRescan={onRequestFieldRescan}
-          onRevert={onRevert}
-          collapsedLeafSections={collapsedLeafSections}
-          onToggleLeafSection={onToggleLeafSection}
-          auditTrailOpen={auditTrailOpen}
-          onToggleAuditTrail={onToggleAuditTrail}
-          registerRef={registerRef}
-        />
-      ))}
-    </div>
+    <>
+      <div className="space-y-3">
+        {groups.map((group) => (
+          <IssueGroupCard
+            key={group.issueKey}
+            group={group}
+            isCollapsed={collapsed.has(group.issueKey)}
+            onToggleCollapsed={() => toggle(group.issueKey)}
+            expandedDoors={expandedDoors}
+            onToggleDoor={onToggleDoor}
+            doorToSetMap={doorToSetMap}
+            setMap={setMap}
+            classifyResult={classifyResult}
+            pdfBuffer={pdfBuffer}
+            reconciledSetMap={reconciledSetMap}
+            onRequestRescan={onRequestRescan}
+            onRequestFieldRescan={onRequestFieldRescan}
+            onRevert={onRevert}
+            collapsedLeafSections={collapsedLeafSections}
+            onToggleLeafSection={onToggleLeafSection}
+            auditTrailOpen={auditTrailOpen}
+            onToggleAuditTrail={onToggleAuditTrail}
+            registerRef={registerRef}
+            onOpenBulkFix={() => setBulkFixCluster(group)}
+          />
+        ))}
+      </div>
+      {/* Keying on issueKey forces a fresh mount when the user opens a
+          different cluster — resets transient modal state (value, per-
+          row exclusions) without a reset-on-change useEffect. */}
+      <BulkFixModal
+        key={bulkFixCluster?.issueKey ?? "closed"}
+        cluster={bulkFixCluster}
+        field={bulkFixField}
+        onApply={onBulkApply}
+        onClose={() => setBulkFixCluster(null)}
+      />
+    </>
   );
 }
 
@@ -155,6 +184,9 @@ interface IssueGroupCardProps {
   auditTrailOpen: Set<string>;
   onToggleAuditTrail: (setId: string) => void;
   registerRef: (doorNumber: string, el: HTMLElement | null) => void;
+  /** Open the bulk-fix modal for this cluster. Hidden when the
+   *  cluster's field isn't one of BULK_FIX_FIELDS. */
+  onOpenBulkFix: () => void;
 }
 
 function IssueGroupCard({
@@ -176,6 +208,7 @@ function IssueGroupCard({
   auditTrailOpen,
   onToggleAuditTrail,
   registerRef,
+  onOpenBulkFix,
 }: IssueGroupCardProps) {
   const [darrinOpen, setDarrinOpen] = useState(false);
   const rationale = useMemo(
@@ -195,29 +228,48 @@ function IssueGroupCard({
       ? group.setIds[0]
       : `${group.setIds.length} sets`;
 
+  // `Fix all N` is only meaningful when the cluster's field is one we
+  // can bulk-write. Unique-per-door issues (missing_door_number) and
+  // lookup-key fields (hw_set) have no sensible single value — hide
+  // the button rather than disabling it so there's no dead chrome.
+  const canBulkFix = group.field != null && isBulkFixField(group.field);
+
   return (
     <section
       className={`bg-surface border border-border-dim rounded-md ${ACCENT_CLASS[group.severity]} overflow-hidden`}
     >
-      {/* Header */}
-      <button
-        onClick={onToggleCollapsed}
-        className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-surface-hover transition-colors"
-        aria-expanded={!isCollapsed}
-      >
-        <span
-          className="text-tertiary text-xs transition-transform inline-block"
-          style={{ transform: isCollapsed ? "rotate(-90deg)" : "rotate(0deg)" }}
-          aria-hidden="true"
+      {/* Header — split into a collapse-toggle button and (when the
+          cluster is bulk-fixable) a separate "Fix all" button so we
+          don't nest `<button>` elements. */}
+      <div className="flex items-stretch">
+        <button
+          onClick={onToggleCollapsed}
+          className="flex-1 min-w-0 flex items-center gap-3 px-4 py-3 text-left hover:bg-surface-hover transition-colors"
+          aria-expanded={!isCollapsed}
         >
-          ▾
-        </span>
-        <span className={`w-2 h-2 rounded-full ${DOT_CLASS[group.severity]}`} aria-hidden="true" />
-        <span className="review-section-title">{group.label}</span>
-        <span className="text-tertiary text-[12px] font-mono">
-          {group.doors.length} opening{group.doors.length === 1 ? "" : "s"} &middot; {setSummary}
-        </span>
-      </button>
+          <span
+            className="text-tertiary text-xs transition-transform inline-block shrink-0"
+            style={{ transform: isCollapsed ? "rotate(-90deg)" : "rotate(0deg)" }}
+            aria-hidden="true"
+          >
+            ▾
+          </span>
+          <span className={`w-2 h-2 rounded-full shrink-0 ${DOT_CLASS[group.severity]}`} aria-hidden="true" />
+          <span className="review-section-title truncate">{group.label}</span>
+          <span className="text-tertiary text-[12px] font-mono truncate">
+            {group.doors.length} opening{group.doors.length === 1 ? "" : "s"} &middot; {setSummary}
+          </span>
+        </button>
+        {canBulkFix && (
+          <button
+            type="button"
+            onClick={onOpenBulkFix}
+            className="px-4 py-3 shrink-0 text-[12px] font-medium text-accent border-l border-border-dim hover:bg-surface-hover transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent"
+          >
+            Fix all {group.doors.length}
+          </button>
+        )}
+      </div>
 
       {/* Darrin-says disclosure — only shown when there's a rationale. */}
       {!isCollapsed && rationale && (
