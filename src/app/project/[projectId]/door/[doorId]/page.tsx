@@ -25,6 +25,9 @@ import PDFRegionSelector from "@/components/ImportWizard/PDFRegionSelector";
 import SyncStatusDot from "@/components/SyncStatusDot";
 import QAFindingsChips from "@/components/QAFindingsChips";
 import { ACTION_LABELS } from "@/lib/constants/activity-actions";
+import { NoteEditor } from "@/components/notes/NoteEditor";
+import { NoteList } from "@/components/notes/NoteList";
+import type { Note } from "@/lib/types/notes";
 
 interface RescanFieldDiff {
   field: string;
@@ -111,6 +114,14 @@ export default function DoorDetailPage() {
   const [activePhase, setActivePhase] = useState<'all' | 'receive' | 'install' | 'qa'>('all');
   const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
 
+  // ── Punch-notes (item-level, PR 2) ─────────────────────────────────
+  // Which item row currently has its notes panel open (one at a time).
+  const [notesPanelItemId, setNotesPanelItemId] = useState<string | null>(null);
+  // Cached notes per hardware_item_id. Lazy-loaded when the panel opens.
+  const [notesByItem, setNotesByItem] = useState<Record<string, Note[]>>({});
+  // Current user id — feeds NoteList to show edit/delete only on own notes.
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+
   // Recent activity for this opening
   const [recentActivity, setRecentActivity] = useState<Array<{
     id: string; action: string; user_id: string | null;
@@ -138,6 +149,42 @@ export default function DoorDetailPage() {
       return () => { document.body.style.overflow = ""; };
     }
   }, [rescanItem]);
+
+  // Resolve current user id once on mount — used by NoteList to gate
+  // edit/delete affordances on the user's own notes only.
+  useEffect(() => {
+    let cancelled = false;
+    void supabase.auth.getUser().then(({ data }) => {
+      if (!cancelled) setCurrentUserId(data.user?.id ?? null);
+    });
+    return () => { cancelled = true; };
+  }, [supabase]);
+
+  // Lazy-load notes for an item the first time its panel opens. Subsequent
+  // opens render from cache; CRUD callbacks update the cache in place.
+  const fetchItemNotes = useCallback(async (itemId: string) => {
+    try {
+      const res = await fetch(
+        `/api/notes?project_id=${projectId}&scope=item&hardware_item_id=${itemId}`
+      );
+      if (!res.ok) return;
+      const { notes: rows } = (await res.json()) as { notes: Note[] };
+      setNotesByItem(prev => ({ ...prev, [itemId]: rows }));
+    } catch {
+      /* fail silently — UI shows "No notes yet" */
+    }
+  }, [projectId]);
+
+  const toggleNotesPanel = useCallback((itemId: string) => {
+    setNotesPanelItemId(prev => {
+      const next = prev === itemId ? null : itemId;
+      // Fetch on open; skip when closing or when already cached.
+      if (next === itemId && !(itemId in notesByItem)) {
+        void fetchItemNotes(itemId);
+      }
+      return next;
+    });
+  }, [notesByItem, fetchItemNotes]);
 
   const fetchOpeningData = useCallback(async () => {
     try {
@@ -1391,6 +1438,28 @@ export default function DoorDetailPage() {
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
                               </svg>
                             </button>
+                            {/* Punch-notes (PR 2): open per-item notes panel below the row.
+                                 Notebook icon + count badge when notes exist. */}
+                            <button
+                              onClick={() => toggleNotesPanel(item.id)}
+                              className={`relative w-9 h-9 flex items-center justify-center transition-colors rounded-md border border-th-border ${
+                                notesPanelItemId === item.id
+                                  ? 'text-accent border-accent'
+                                  : (notesByItem[item.id]?.length ?? 0) > 0
+                                    ? 'text-secondary hover:text-primary'
+                                    : 'text-tertiary hover:text-secondary'
+                              }`}
+                              title={(notesByItem[item.id]?.length ?? 0) > 0 ? `${notesByItem[item.id]?.length} note(s)` : 'Add note'}
+                            >
+                              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                              </svg>
+                              {(notesByItem[item.id]?.length ?? 0) > 0 && (
+                                <span className="absolute -top-1 -right-1 text-[9px] bg-accent text-background rounded-full min-w-[14px] h-[14px] flex items-center justify-center font-bold tabular-nums px-[3px]">
+                                  {notesByItem[item.id]?.length}
+                                </span>
+                              )}
+                            </button>
                           </div>
                         </div>
                       </td>
@@ -1408,6 +1477,48 @@ export default function DoorDetailPage() {
                           currentNotes={(getLeafProgress(item, leafIndex)?.qa_notes as string) ?? null}
                           onUpdate={() => fetchOpeningData()}
                         />
+                      </td>
+                    </tr>
+                  )}
+                  {/* Punch-notes panel (PR 2) — opens below the row when 📝 toggled.
+                       Render once per item (only when leafIndex===1) so pair-leaf rows
+                       don't double-render the same notes list. */}
+                  {notesPanelItemId === item.id && leafIndex === 1 && (
+                    <tr key={`notes-${item.id}`} className="border-b border-th-border bg-surface/30">
+                      <td colSpan={10} className="px-3 py-3">
+                        <div className="space-y-3">
+                          <div className="text-[11px] uppercase tracking-wider text-tertiary">
+                            Notes on {item.name}
+                          </div>
+                          <NoteList
+                            notes={notesByItem[item.id] ?? []}
+                            currentUserId={currentUserId}
+                            onUpdated={(updated) => {
+                              setNotesByItem(prev => ({
+                                ...prev,
+                                [item.id]: (prev[item.id] ?? []).map(n => n.id === updated.id ? updated : n),
+                              }));
+                            }}
+                            onDeleted={(noteId) => {
+                              setNotesByItem(prev => ({
+                                ...prev,
+                                [item.id]: (prev[item.id] ?? []).filter(n => n.id !== noteId),
+                              }));
+                            }}
+                            emptyMessage="No notes yet — add one below."
+                          />
+                          <NoteEditor
+                            scope={{ scope: 'item', hardware_item_id: item.id }}
+                            onCreated={(created) => {
+                              setNotesByItem(prev => ({
+                                ...prev,
+                                [item.id]: [...(prev[item.id] ?? []), created],
+                              }));
+                            }}
+                            onCancel={() => setNotesPanelItemId(null)}
+                            placeholder={`Add a note about ${item.name}…`}
+                          />
+                        </div>
                       </td>
                     </tr>
                   )}
