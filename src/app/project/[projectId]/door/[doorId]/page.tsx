@@ -27,7 +27,7 @@ import QAFindingsChips from "@/components/QAFindingsChips";
 import { ACTION_LABELS } from "@/lib/constants/activity-actions";
 import { NoteEditor } from "@/components/notes/NoteEditor";
 import { NoteList } from "@/components/notes/NoteList";
-import type { Note } from "@/lib/types/notes";
+import type { Note, LeafSide } from "@/lib/types/notes";
 
 interface RescanFieldDiff {
   field: string;
@@ -101,8 +101,6 @@ export default function DoorDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notes, setNotes] = useState("");
-  const [savingNotes, setSavingNotes] = useState(false);
-  const [notesSaved, setNotesSaved] = useState(false);
   const [attachmentLoading, setAttachmentLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'hardware' | 'files' | 'notes' | 'qr'>('hardware');
   const [viewingAttachment, setViewingAttachment] = useState<Attachment | null>(null);
@@ -114,11 +112,16 @@ export default function DoorDetailPage() {
   const [activePhase, setActivePhase] = useState<'all' | 'receive' | 'install' | 'qa'>('all');
   const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
 
-  // ── Punch-notes (item-level, PR 2) ─────────────────────────────────
+  // ── Punch-notes (PR 2 + PR 3) ──────────────────────────────────────
   // Which item row currently has its notes panel open (one at a time).
   const [notesPanelItemId, setNotesPanelItemId] = useState<string | null>(null);
-  // Cached notes per hardware_item_id. Lazy-loaded when the panel opens.
+  // Cached notes for this opening, partitioned by scope. Populated by a
+  // single prefetch on mount (?opening_id=Y), refreshed per-item on panel open.
   const [notesByItem, setNotesByItem] = useState<Record<string, Note[]>>({});
+  const [notesByLeaf, setNotesByLeaf] = useState<Record<LeafSide, Note[]>>({
+    active: [], inactive: [], shared: [],
+  });
+  const [openingNotes, setOpeningNotes] = useState<Note[]>([]);
   // Current user id — feeds NoteList to show edit/delete only on own notes.
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
@@ -160,29 +163,39 @@ export default function DoorDetailPage() {
     return () => { cancelled = true; };
   }, [supabase]);
 
-  // Prefetch every item-scope note for this opening on mount, so the count
-  // badges are populated before any panel is opened. One round-trip; subsequent
-  // panel opens use this cache + a refresh fetch for staleness.
+  // Prefetch every note bound to this opening (item + leaf + opening scope)
+  // in one round-trip, then partition client-side. The opening_id filter on
+  // the GET endpoint matches notes whose opening_id column equals this door,
+  // which covers all three scopes — project-scope notes have opening_id NULL
+  // and are excluded by design.
   useEffect(() => {
     let cancelled = false;
-    fetch(`/api/notes?project_id=${projectId}&scope=item&opening_id=${doorId}`)
+    fetch(`/api/notes?project_id=${projectId}&opening_id=${doorId}`)
       .then(async (res) => {
         if (!res.ok) {
-          console.error(`[door-detail] item notes prefetch failed (${res.status})`);
+          console.error(`[door-detail] notes prefetch failed (${res.status})`);
           return;
         }
         const { notes: rows } = (await res.json()) as { notes: Note[] };
         if (cancelled) return;
-        const grouped: Record<string, Note[]> = {};
+        const byItem: Record<string, Note[]> = {};
+        const byLeaf: Record<LeafSide, Note[]> = { active: [], inactive: [], shared: [] };
+        const opening: Note[] = [];
         for (const n of rows) {
-          if (n.hardware_item_id) {
-            (grouped[n.hardware_item_id] ??= []).push(n);
+          if (n.scope === 'item' && n.hardware_item_id) {
+            (byItem[n.hardware_item_id] ??= []).push(n);
+          } else if (n.scope === 'leaf' && n.leaf_side) {
+            byLeaf[n.leaf_side].push(n);
+          } else if (n.scope === 'opening') {
+            opening.push(n);
           }
         }
-        setNotesByItem(grouped);
+        setNotesByItem(byItem);
+        setNotesByLeaf(byLeaf);
+        setOpeningNotes(opening);
       })
       .catch((err) => {
-        console.error('[door-detail] item notes prefetch error:', err);
+        console.error('[door-detail] notes prefetch error:', err);
       });
     return () => { cancelled = true; };
   }, [projectId, doorId]);
@@ -566,30 +579,6 @@ export default function DoorDetailPage() {
       } else {
         showToast("error", "Failed to update item. Check your connection and try again.");
       }
-    }
-  };
-
-  const handleSaveNotes = async () => {
-    setSavingNotes(true);
-    setNotesSaved(false);
-    try {
-      const response = await fetch(
-        `/api/projects/${projectId}/openings/${doorId}`,
-        {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ notes }),
-        }
-      );
-
-      if (!response.ok) throw new Error("Failed to save notes");
-      setNotesSaved(true);
-      setTimeout(() => setNotesSaved(false), 2000);
-    } catch (err) {
-      console.error("Error saving notes:", err);
-      showToast("error", "Failed to save notes. Please try again.");
-    } finally {
-      setSavingNotes(false);
     }
   };
 
@@ -1886,6 +1875,53 @@ export default function DoorDetailPage() {
 
                     {/* Active leaf section content */}
                     <div>
+                      {/* Leaf-scope notes for the active tab. Mapping:
+                            'shared' tab → leaf_side='shared'
+                            'leaf1'  tab → leaf_side='active'   (primary leaf)
+                            'leaf2'  tab → leaf_side='inactive' (secondary leaf)
+                          Notes here belong to the leaf as a whole, distinct
+                          from per-item notes (which appear inline in the table). */}
+                      {(() => {
+                        const leafSide: LeafSide =
+                          activeLeafTab === 'shared' ? 'shared'
+                          : activeLeafTab === 'leaf1' ? 'active'
+                          : 'inactive';
+                        return (
+                          <div className="mb-4 space-y-2">
+                            <div className="text-[11px] uppercase tracking-wider text-tertiary">
+                              Notes for this leaf
+                            </div>
+                            <NoteList
+                              notes={notesByLeaf[leafSide]}
+                              currentUserId={currentUserId}
+                              onUpdated={(updated) => {
+                                setNotesByLeaf(prev => ({
+                                  ...prev,
+                                  [leafSide]: prev[leafSide].map(n => n.id === updated.id ? updated : n),
+                                }));
+                              }}
+                              onDeleted={(noteId) => {
+                                setNotesByLeaf(prev => ({
+                                  ...prev,
+                                  [leafSide]: prev[leafSide].filter(n => n.id !== noteId),
+                                }));
+                              }}
+                              emptyMessage="No leaf-level notes yet."
+                            />
+                            <NoteEditor
+                              scope={{ scope: 'leaf', opening_id: doorId, leaf_side: leafSide }}
+                              onCreated={(created) => {
+                                setNotesByLeaf(prev => ({
+                                  ...prev,
+                                  [leafSide]: [...prev[leafSide], created],
+                                }));
+                              }}
+                              autoFocus={false}
+                              placeholder={`Add a note about the ${leafSide} leaf…`}
+                            />
+                          </div>
+                        );
+                      })()}
                       {activeLeafTab === 'shared' && renderItemsTable(shared, 1)}
                       {activeLeafTab === 'leaf1' && renderItemsTable(leaf1, 1)}
                       {activeLeafTab === 'leaf2' && renderItemsTable(leaf2, 2)}
@@ -2045,22 +2081,50 @@ export default function DoorDetailPage() {
           </div>
         )}
 
-        {/* Notes Tab */}
+        {/* Notes Tab — opening-scope notes via the new punch-notes system.
+             Replaces the bare textarea bound to openings.notes (audit finding
+             #10 dead column). The legacy column value still renders read-only
+             if non-empty; migration 053 will backfill into the notes table
+             and drop the column. */}
         {activeTab === 'notes' && !editingOpening && (
-          <div className="mb-8">
-            <textarea
-              value={notes}
-              onChange={(e) => setNotes(e.target.value)}
-              placeholder="Add notes about this opening..."
-              className="w-full px-4 py-3 bg-surface border border-th-border rounded-md text-primary placeholder-tertiary focus:border-accent focus:outline-none min-h-32 resize-none text-[15px]"
-            />
-            <button
-              onClick={handleSaveNotes}
-              disabled={savingNotes}
-              className="mt-4 px-4 py-2.5 min-h-[44px] bg-accent hover:bg-accent/80 disabled:bg-surface text-white disabled:text-tertiary rounded transition-colors text-[15px] font-medium"
-            >
-              {savingNotes ? "Saving..." : notesSaved ? "Saved!" : "Save Notes"}
-            </button>
+          <div className="mb-8 space-y-4">
+            {notes && notes.trim().length > 0 && (
+              <div className="border border-th-border rounded-md px-3 py-2 bg-surface/40">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-[10px] uppercase tracking-wider text-tertiary px-1.5 py-0.5 border border-th-border rounded">
+                    Legacy
+                  </span>
+                  <span className="text-[11px] text-tertiary">
+                    Pre-PR-3 note from openings.notes — read-only
+                  </span>
+                </div>
+                <div className="text-[13px] text-primary whitespace-pre-wrap">{notes}</div>
+              </div>
+            )}
+            <div className="space-y-2">
+              <div className="text-[11px] uppercase tracking-wider text-tertiary">
+                Notes for this opening
+              </div>
+              <NoteList
+                notes={openingNotes}
+                currentUserId={currentUserId}
+                onUpdated={(updated) => {
+                  setOpeningNotes(prev => prev.map(n => n.id === updated.id ? updated : n));
+                }}
+                onDeleted={(noteId) => {
+                  setOpeningNotes(prev => prev.filter(n => n.id !== noteId));
+                }}
+                emptyMessage="No notes yet."
+              />
+              <NoteEditor
+                scope={{ scope: 'opening', opening_id: doorId }}
+                onCreated={(created) => {
+                  setOpeningNotes(prev => [...prev, created]);
+                }}
+                autoFocus={false}
+                placeholder="Add a note about this opening…"
+              />
+            </div>
           </div>
         )}
 
