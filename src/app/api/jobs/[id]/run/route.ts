@@ -1285,13 +1285,18 @@ export async function POST(
     }
     const doorToSetMap = buildDoorToSetMap(extractedSets)
 
+    // Filter doors that would produce zero items at staging time. Distinct
+    // from the triage `orphanDoors` array above (line ~1239), which captures
+    // a different population (only hw_set='' / 'N/A' cases) for telemetry.
+    // This filter is broader: any door that resolves to no items AND has no
+    // door/frame model to fall back on. Mirrors the save/route.ts pattern.
     const isOrphan = (d: typeof acceptedDoors[number]) =>
       wouldProduceZeroItems(d, setMap, doorToSetMap)
-    const orphanDoors = acceptedDoors.filter(isOrphan)
+    const orphanDoorsForStaging = acceptedDoors.filter(isOrphan)
     const filteredDoors = acceptedDoors.filter(d => !isOrphan(d))
-    if (orphanDoors.length > 0) {
+    if (orphanDoorsForStaging.length > 0) {
       console.log(
-        `[job-orchestrator] Job ${jobId}: filtered ${orphanDoors.length} orphan door(s) with no hardware set/items: ${orphanDoors.map(d => d.door_number).join(', ')}`
+        `[job-orchestrator] Job ${jobId}: filtered ${orphanDoorsForStaging.length} orphan door(s) with no hardware set/items: ${orphanDoorsForStaging.map(d => d.door_number).join(', ')}`
       )
     }
 
