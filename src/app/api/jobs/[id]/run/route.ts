@@ -1253,6 +1253,23 @@ export async function POST(
       }
     }
 
+    // Telemetry parity: the staging filter (using wouldProduceZeroItems)
+    // is broader than the narrow loop above — it also catches doors with a
+    // present hw_set value (e.g. 'H07') that resolves to no items AND have
+    // no door_type / frame_type to fall back on. Append those here with a
+    // distinct reason so phase_data.triage.orphan_doors faithfully reflects
+    // the full population that gets dropped at staging time.
+    const triageOrphanNumbers = new Set(orphanDoors.map(o => o.door_number))
+    for (const d of acceptedDoors) {
+      if (triageOrphanNumbers.has(d.door_number)) continue
+      if (wouldProduceZeroItems(d, setMapForPhase, doorToSetMapForPhase)) {
+        orphanDoors.push({
+          door_number: d.door_number,
+          reason: 'zero_items_no_fallback',
+        })
+      }
+    }
+
     const fireRatedCount = fireRatedDoors.length
     const fireRatedPct = acceptedDoors.length > 0
       ? Math.round((fireRatedCount / acceptedDoors.length) * 100)
@@ -1287,18 +1304,16 @@ export async function POST(
     }
     const doorToSetMap = buildDoorToSetMap(extractedSets)
 
-    // Filter doors that would produce zero items at staging time. Distinct
-    // from the triage `orphanDoors` array above (line ~1239), which captures
-    // a different population (only hw_set='' / 'N/A' cases) for telemetry.
-    // This filter is broader: any door that resolves to no items AND has no
-    // door/frame model to fall back on. Mirrors the save/route.ts pattern.
-    const isOrphan = (d: typeof acceptedDoors[number]) =>
-      wouldProduceZeroItems(d, setMap, doorToSetMap)
-    const orphanDoorsForStaging = acceptedDoors.filter(isOrphan)
-    const filteredDoors = acceptedDoors.filter(d => !isOrphan(d))
-    if (orphanDoorsForStaging.length > 0) {
+    // Derive filteredDoors from the augmented triage `orphanDoors` array
+    // (built above at line ~1239). The triage loop now captures both narrow
+    // (hw_set='' / 'N/A') and broad (zero-items-no-fallback) cases via the
+    // shared wouldProduceZeroItems helper, so this filter is just a
+    // membership check — no duplicate helper call needed.
+    const stagingOrphanNumbers = new Set(orphanDoors.map(o => o.door_number))
+    const filteredDoors = acceptedDoors.filter(d => !stagingOrphanNumbers.has(d.door_number))
+    if (stagingOrphanNumbers.size > 0) {
       console.log(
-        `[job-orchestrator] Job ${jobId}: filtered ${orphanDoorsForStaging.length} orphan door(s) with no hardware set/items: ${orphanDoorsForStaging.map(d => d.door_number).join(', ')}`
+        `[job-orchestrator] Job ${jobId}: filtered ${stagingOrphanNumbers.size} orphan door(s) with no hardware set/items: ${Array.from(stagingOrphanNumbers).join(', ')}`
       )
     }
 
