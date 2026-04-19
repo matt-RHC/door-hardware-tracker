@@ -1,8 +1,17 @@
 -- Migration 050: Narrow the extraction_runs.status CHECK to the 4 live values.
 --
--- The original CHECK constraint (from migration 019) allows:
+-- The original CHECK constraint (from migration 007, which created the
+-- extraction_runs table) allows:
 --   pending | extracting | reviewing | promoted | rejected | failed |
 --   completed_with_issues
+--
+-- Migration 007 also sets DEFAULT 'pending' on the column. Narrowing the
+-- CHECK without changing the default would silently break any future
+-- INSERT path that omits status — the row would default to 'pending',
+-- which the new CHECK rejects. Today both writers (createExtractionRun
+-- in extraction-staging.ts) explicitly pass status='extracting', so the
+-- bug is dormant. Update the default in the same transaction so a
+-- future contributor can't trip it.
 --
 -- After 6+ months of production traffic, only 4 are ever written:
 --   extracting          — createExtractionRun() insert
@@ -48,6 +57,13 @@ ALTER TABLE extraction_runs
     'completed_with_issues'::text,
     'failed'::text
   ]));
+
+-- Migration 007's DEFAULT 'pending' is no longer in the allowed set.
+-- 'extracting' is the natural new default — it's what every code path
+-- already sets explicitly on insert, and it matches the row's actual
+-- lifecycle entry state.
+ALTER TABLE extraction_runs
+  ALTER COLUMN status SET DEFAULT 'extracting';
 
 COMMENT ON COLUMN extraction_runs.status IS
   'Run lifecycle state. Live values: extracting (created, in flight) → '
