@@ -12,14 +12,34 @@ import { SupabaseClient } from '@supabase/supabase-js'
 
 // --- Types ---
 
+/**
+ * Run lifecycle states for `extraction_runs.status`. The DB CHECK
+ * constraint (migration 050) enforces the same set — keep these
+ * aligned or writes will start failing.
+ *
+ * Transition diagram:
+ *
+ *   [insert]
+ *     ↓
+ *   extracting ──────────────────────────────────── failed
+ *     ↓                                                ↑
+ *     ├─────────→ reviewing                            │ (catch handler
+ *     │           (success, awaiting user promote)     │  or stuck-run
+ *     │                                                │  reaper)
+ *     └─────────→ completed_with_issues ───────────────┘
+ *                 (partial chunks or orphan doors —
+ *                  user can still promote after review)
+ *
+ * Prior to migration 050, the enum also included `'pending' | 'promoted'
+ * | 'rejected'`. None were ever written in 6+ months of production and
+ * were removed to prevent drift. Re-add them with a new migration if
+ * the lifecycle grows.
+ */
 export type ExtractionStatus =
-  | 'pending'
   | 'extracting'
   | 'reviewing'
-  | 'promoted'
-  | 'rejected'
-  | 'failed'
   | 'completed_with_issues'
+  | 'failed'
 
 export type PdfSourceType =
   | 'comsense'
