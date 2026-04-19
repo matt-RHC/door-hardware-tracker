@@ -73,18 +73,33 @@ export default function BulkFixModal({
   const [value, setValue] = useState("");
   const [excluded, setExcluded] = useState<Set<string>>(new Set());
   const inputRef = useRef<HTMLInputElement | null>(null);
+  // Element that held focus when the modal opened — we return focus
+  // here when the modal closes so keyboard-driven users don't get
+  // dumped at the top of the document. Captured once on mount; the
+  // parent remounts the modal per cluster (key=issueKey) so this
+  // ref is implicitly fresh per instance.
+  const returnFocusRef = useRef<HTMLElement | null>(null);
 
-  // Focus the input when the modal mounts. State (value / excluded)
-  // is reset via React's key-based remount in the parent (IssueView
-  // keys this component on cluster.issueKey) rather than a state-
-  // resetting effect — avoids the "setState in effect" cascade the
-  // lint rule flags and keeps each modal instance logically isolated.
+  // Focus the input when the modal mounts + capture the previous focus
+  // so it can be restored on close. State (value / excluded) is reset
+  // via React's key-based remount in the parent (IssueView keys this
+  // component on cluster.issueKey) rather than a state-resetting
+  // effect — avoids the "setState in effect" cascade the lint rule
+  // flags and keeps each modal instance logically isolated.
   useEffect(() => {
     if (!cluster) return;
+    returnFocusRef.current =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
     // rAF defers focus until after layout so fast typers can hit
     // value + Enter without the browser eating the first keystroke.
     const raf = requestAnimationFrame(() => inputRef.current?.focus());
-    return () => cancelAnimationFrame(raf);
+    return () => {
+      cancelAnimationFrame(raf);
+      const target = returnFocusRef.current;
+      if (target && document.body.contains(target)) {
+        target.focus();
+      }
+    };
   }, [cluster]);
 
   // Esc handler — registered on window so it fires even when focus
@@ -223,7 +238,7 @@ export default function BulkFixModal({
                       setValue(chip);
                       inputRef.current?.focus();
                     }}
-                    className="chiclet chiclet--high hover:brightness-110 transition"
+                    className="chip"
                   >
                     {chip}
                   </button>
