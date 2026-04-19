@@ -13,7 +13,8 @@ interface UpdateOpeningRequest {
   frame_type?: string | null
   fire_rating?: string | null
   hand?: string | null
-  notes?: string | null
+  // `notes` removed in migration 054 — per-opening notes now live in the
+  // `notes` table (scope='opening'), written via /api/notes.
 }
 
 export async function GET(
@@ -170,7 +171,6 @@ export async function PATCH(
     if ('frame_type' in body) updateData.frame_type = body.frame_type
     if ('fire_rating' in body) updateData.fire_rating = body.fire_rating
     if ('hand' in body) updateData.hand = body.hand
-    if ('notes' in body) updateData.notes = body.notes
 
     const { data: updatedOpening, error: updateError } = await (adminSupabase as any)
       .from('openings')
