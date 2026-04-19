@@ -5,7 +5,7 @@ import type { DoorEntry } from "../types";
 import { ISSUE_LABELS } from "./types";
 import DarrinMessage from "../DarrinMessage";
 
-type ViewMode = 'door' | 'set';
+type ViewMode = 'door' | 'set' | 'issue';
 
 interface ReviewSummaryProps {
   totalDoors: number;
@@ -166,6 +166,14 @@ export default function ReviewSummary({
                     aria-pressed={viewMode === 'set'}
                   >
                     Set view
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onViewModeChange!('issue')}
+                    className={`segmented__btn ${viewMode === 'issue' ? 'segmented__btn--active' : ''}`}
+                    aria-pressed={viewMode === 'issue'}
+                  >
+                    Issue view
                   </button>
                 </div>
               )}

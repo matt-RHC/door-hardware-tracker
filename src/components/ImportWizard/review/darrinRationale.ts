@@ -153,3 +153,59 @@ export function computeGroupRationale(
     summary: `${topCount} ${s(topCount, "opening")} · ${topIssueKey.replace(/^(missing|low_confidence)_/, "").replace(/_/g, " ")}`,
   };
 }
+
+// ─── Issue-cluster variant ──────────────────────────────────────────
+// In Issue view the grouping is flipped: one cluster = one issue key
+// across many sets. The set-centric templates above mostly still fit,
+// but the leading sentence needs to be about the *cluster*, not a
+// single set. We build the body by (a) leading with a cluster-wide
+// sentence that mentions set spread, then (b) tacking on the existing
+// per-set template with the dominant set substituted in, so the copy
+// stays concrete without the template library growing twice.
+
+export interface IssueClusterContext {
+  /** Raw issue key — same value used in `computeIssueGroups` output. */
+  issueKey: string;
+  /** Doors flagged with this issue (across however many sets). */
+  doors: DoorEntry[];
+  /** Distinct hardware-set ids represented in the cluster, in
+   *  first-seen order. */
+  setIds: string[];
+}
+
+/**
+ * Rationale for an issue-type cluster (Issue view). Returns null when
+ * the cluster is empty so the disclosure can skip render.
+ */
+export function computeIssueRationale(
+  cluster: IssueClusterContext,
+): DarrinRationale | null {
+  const count = cluster.doors.length;
+  if (count === 0) return null;
+
+  const setCount = cluster.setIds.length;
+  const leadSet = cluster.setIds[0] ?? "";
+  const human = cluster.issueKey
+    .replace(/^(missing|low_confidence)_/, "")
+    .replace(/_/g, " ");
+
+  // Multi-set cluster: lead with the spread, then re-use the set
+  // template for the biggest slice so the copy gets specific.
+  const bodyLead =
+    setCount > 1
+      ? `${count} ${s(count, "opening")} across ${setCount} sets ${s(count, "is", "are")} flagged for ${human}.`
+      : leadSet
+      ? `${count} ${s(count, "opening")} in <code>${leadSet}</code> ${s(count, "is", "are")} flagged for ${human}.`
+      : `${count} ${s(count, "opening")} ${s(count, "is", "are")} flagged for ${human}.`;
+
+  const template = TEMPLATES[cluster.issueKey];
+  const bodyDetail = template
+    ? template({ count, total: count, setId: leadSet || "this set" })
+    : "";
+
+  const body = bodyDetail ? `${bodyLead} ${bodyDetail}` : bodyLead;
+  const summary = `${count} ${s(count, "opening")}${setCount > 1 ? ` · ${setCount} sets` : leadSet ? ` · ${leadSet}` : ""}`;
+
+  return { body, summary };
+}
+
