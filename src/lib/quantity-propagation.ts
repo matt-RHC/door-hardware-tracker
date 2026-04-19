@@ -62,6 +62,17 @@ export function propagateQuantityDecision(
   decision: QtyDecision,
   hardwareSets: HardwareSet[],
 ): PropagationResult {
+  // Invariant: a propagated quantity must be a positive integer. The blast
+  // radius is real — one bad value fans out to dozens of openings — so a
+  // NaN, zero, or negative would silently corrupt many rows at once.
+  const q = decision.resolved_qty
+  if (!Number.isInteger(q) || q <= 0 || !Number.isFinite(q)) {
+    throw new Error(
+      `Pre-propagation invariant violated: resolved_qty=${q} (category=${decision.item_category}, ` +
+      `source=${decision.source_set_id}) is not a valid positive integer`
+    )
+  }
+
   let appliedCount = 0
   const modifiedSetIds: string[] = []
 
@@ -118,6 +129,11 @@ export function buildDecisionFromAnswer(
   if (!numMatch) return null
 
   const resolvedQty = parseInt(numMatch[1], 10)
+  // Reject answers that yielded a degenerate qty (e.g. matched "0 hinges"
+  // or somehow parsed to NaN). Returning null here surfaces the bad answer
+  // upstream as "no decision built" rather than letting it become a
+  // propagation explosion that runs through propagateQuantityDecision().
+  if (!Number.isInteger(resolvedQty) || resolvedQty <= 0) return null
   const category = classifyItemCategory(questionItemName)
   if (!category) return null
 

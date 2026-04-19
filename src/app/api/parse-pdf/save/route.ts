@@ -14,7 +14,7 @@ import {
   type PairSignalResult,
 } from '@/lib/parse-pdf-helpers'
 import { buildOpeningAudit } from '@/lib/extraction-opening-audit'
-import { validateExtractionRun, summarizeReport } from '@/lib/extraction-invariants'
+import { runPreStageInvariants, validateExtractionRun, summarizeReport } from '@/lib/extraction-invariants'
 import type { InvariantViolation } from '@/lib/extraction-invariants'
 import {
   filterAllItemsByOpeningHand,
@@ -51,6 +51,27 @@ function leafCountConsistencyEnforced(): boolean {
 // save potentially fail where it previously succeeded.
 const ENFORCE_ALWAYS_RULES: ReadonlyArray<InvariantViolation['rule']> = ['leaf_count_consistency']
 
+// Pre-stage invariants mode. Runs the structural invariant suite + orphan
+// acknowledgement check against the IN-MEMORY payload before writeStagingData
+// touches the DB. Modes:
+//   - 'off'    : skip pre-stage checks entirely (emergency only)
+//   - 'warn'   : run checks, log violations + return them in response, but
+//                let the save proceed (default during the rollout window)
+//   - 'strict' : run checks, throw on any blocker so the save never reaches
+//                the DB (target steady-state)
+//
+// Field-level guards (door_number non-empty, leaf_count not-null,
+// resolved_qty positive integer) are NOT gated on this flag — they are
+// strict from day one because they have zero false-positive risk and they
+// catch the exact class of silent-default that produced Radius DC.
+type PrestageMode = 'off' | 'warn' | 'strict'
+function prestageMode(): PrestageMode {
+  const v = (process.env.DHT_INVARIANT_PRESTAGE ?? '').toLowerCase()
+  if (v === 'off') return 'off'
+  if (v === 'strict') return 'strict'
+  return 'warn'
+}
+
 // --- Shared: check for unmatched sets ---
 //
 // Doors with `by_others === true` are intentionally unassigned (hardware
@@ -85,10 +106,11 @@ export async function POST(request: NextRequest) {
 
     const parsed = await validateJson(request, ParsePdfSaveRequestSchema)
     if (!parsed.ok) return parsed.response
-    const { projectId, hardwareSets, doors } = parsed.data as {
+    const { projectId, hardwareSets, doors, acknowledgedOrphans } = parsed.data as {
       projectId: string
       hardwareSets: HardwareSet[]
       doors: DoorEntry[]
+      acknowledgedOrphans?: string[]
     }
 
     // Project membership check (finding #9): verify the authenticated user is
@@ -172,6 +194,34 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Pre-stage orphan acknowledgement check. The client (StepConfirm) shows
+    // the user the orphan list and forces them to tick a confirm box before
+    // the save button enables. The client should send those door_numbers as
+    // `acknowledgedOrphans`. Any orphan the server detects that the client
+    // did NOT acknowledge is a client/server disagreement (or a save submitted
+    // without the UI gate) — both are bugs that previously resulted in
+    // silent dropped doors.
+    const mode = prestageMode()
+    const acknowledged = new Set(acknowledgedOrphans ?? [])
+    const unacknowledgedOrphans = orphanDoors
+      .map(d => d.door_number)
+      .filter(num => !acknowledged.has(num))
+    if (unacknowledgedOrphans.length > 0 && mode !== 'off') {
+      const message =
+        `Pre-stage orphan acknowledgement missing for ${unacknowledgedOrphans.length} ` +
+        `door(s): ${unacknowledgedOrphans.join(', ')}. The client must acknowledge ` +
+        `dropped orphans before save.`
+      if (mode === 'strict') {
+        return errorResponse('VALIDATION_ERROR', message, {
+          rule: 'prestage_orphan_unacknowledged',
+          unacknowledgedOrphans,
+        })
+      }
+      // warn mode: log + continue. Surfaced in response below as
+      // prestageWarnings so the wizard can display a banner.
+      console.warn(`[save] [prestage:warn] ${message}`)
+    }
+
     // Build doorInfoMap (needed by both staging and production paths)
     const doorInfoMap = new Map<string, { door_type: string; frame_type: string }>()
     for (const door of activeDoors) {
@@ -229,6 +279,58 @@ export async function POST(request: NextRequest) {
         field_confidence: d.field_confidence || undefined,
       }
     })
+
+    // 2b. Pre-stage invariants. Runs the structural rule set (the same one
+    // validateExtractionRun runs post-promote) against the in-memory payload
+    // BEFORE writeStagingData touches the DB. The leaf_count_consistency
+    // rule is the highest-value catch here — it fires on the Radius DC
+    // signature where pair-detected leaf_count disagrees with the per-leaf
+    // hardware item shape. Throwing pre-stage means the bad save never
+    // commits anything; running in 'warn' first lets us measure false-
+    // positive rate before flipping to 'strict' enforcement.
+    let prestageBlockers: InvariantViolation[] = []
+    let prestageWarnings: InvariantViolation[] = []
+    if (mode !== 'off') {
+      try {
+        const violations = runPreStageInvariants({
+          openings: stagingOpenings.map(o => ({
+            door_number: o.door_number,
+            hw_set: o.hw_set ?? null,
+            location: o.location ?? null,
+            hand: o.hand ?? null,
+            leaf_count: o.leaf_count ?? 1,
+          })),
+          hardwareSets,
+          setMap,
+          doorToSetMap,
+          doorInfoMap,
+        })
+        prestageBlockers = violations.filter(v => v.severity === 'blocker')
+        prestageWarnings = violations.filter(v => v.severity === 'warning')
+        if (prestageBlockers.length > 0) {
+          console.warn(
+            `[save] [prestage:${mode}] ${prestageBlockers.length} blocker(s), ` +
+            `${prestageWarnings.length} warning(s):`,
+            prestageBlockers.map(v => `${v.rule}@${v.door_number ?? 'n/a'}`).join('; '),
+          )
+          if (mode === 'strict') {
+            return errorResponse(
+              'VALIDATION_ERROR',
+              `Pre-stage invariants blocked the save: ${prestageBlockers[0].details}`,
+              { prestageBlockers, prestageWarnings },
+            )
+          }
+        }
+      } catch (preErr) {
+        // Validator bug — never block the save because the pre-stage layer
+        // itself broke. Log and continue; post-promote invariants are still
+        // a backstop. Same defensive posture as the post-promote try/catch.
+        console.error('[save] Pre-stage invariant check errored:', preErr)
+        Sentry.captureException(preErr, {
+          tags: { invariant_violation: 'false', invariant_validator_error: 'true', stage: 'pre' },
+        })
+      }
+    }
 
     // 3. Write staging openings (empty hardwareSets — items handled separately)
     const stagingResult = await writeStagingData(supabase, runId, projectId, stagingOpenings, [])
@@ -629,6 +731,14 @@ export async function POST(request: NextRequest) {
       orphanDoorsFiltered: orphanDoors.length > 0
         ? { count: orphanDoors.length, doorNumbers: orphanDoors.map(d => d.door_number) }
         : undefined,
+      // Pre-stage findings — surfaced in warn mode so the wizard can show a
+      // banner without blocking the user. Strict mode would have returned a
+      // 400 earlier; reaching this success response means either no blockers
+      // or warn-mode pass-through.
+      prestageMode: mode,
+      prestageBlockers: prestageBlockers.length > 0 ? prestageBlockers : undefined,
+      prestageWarnings: prestageWarnings.length > 0 ? prestageWarnings : undefined,
+      unacknowledgedOrphans: unacknowledgedOrphans.length > 0 ? unacknowledgedOrphans : undefined,
       invariantBlockers,
       invariantWarnings,
       invariantSkippedRules: invariantSkipped.length > 0 ? invariantSkipped : undefined,
