@@ -1191,20 +1191,23 @@ export async function POST(
       constraint_flags: allQtyFlags,
     })
 
-    // ── Compute triage-phase signals for the conversational wizard ──
+    // ── Build shared lookup maps for triage signals + staging filter ──
     //
-    // Pair detection mirrors the logic used later when building staging
-    // openings; orphan detection mirrors the filteredDoors filter below.
-    // Duplicating the math here keeps the UX responsive (Darrin can ask
-    // these questions before staging writes happen).
-    const setMapForPhase = new Map<string, HardwareSet>()
+    // These maps serve two call sites: (1) the triage loops immediately
+    // below, which feed the conversational wizard so Darrin can ask
+    // pair/orphan questions before staging writes happen, and (2) the
+    // staging block further down, which reuses the same maps when calling
+    // buildPerOpeningItems. Building them once here (the earliest point
+    // both branches need them) avoids the prior copy-pasted construction
+    // at the top of the staging block.
+    const setMap = new Map<string, HardwareSet>()
     for (const set of extractedSets) {
-      setMapForPhase.set(set.set_id, set)
+      setMap.set(set.set_id, set)
       if (set.generic_set_id && set.generic_set_id !== set.set_id) {
-        setMapForPhase.set(set.generic_set_id, set)
+        setMap.set(set.generic_set_id, set)
       }
     }
-    const doorToSetMapForPhase = buildDoorToSetMap(extractedSets)
+    const doorToSetMap = buildDoorToSetMap(extractedSets)
 
     const fireRatedDoors = acceptedDoors.filter(d => {
       const fr = (d.fire_rating ?? '').trim()
@@ -1228,7 +1231,7 @@ export async function POST(
     const pairDoors: Array<{ door_a: string; door_b: string | null }> = []
     for (const door of acceptedDoors) {
       const doorKey = normalizeDoorNumber(door.door_number)
-      const hwSet = doorToSetMapForPhase.get(doorKey) ?? setMapForPhase.get(door.hw_set ?? '')
+      const hwSet = doorToSetMap.get(doorKey) ?? setMap.get(door.hw_set ?? '')
       const doorInfo = {
         door_type: door.door_type ?? '',
         location: door.location ?? '',
@@ -1243,7 +1246,7 @@ export async function POST(
       const hwSetVal = (d.hw_set ?? '').trim()
       if (hwSetVal === '' || hwSetVal === 'N/A') {
         const doorKey = normalizeDoorNumber(d.door_number)
-        const resolvedSet = doorToSetMapForPhase.get(doorKey) ?? setMapForPhase.get(hwSetVal)
+        const resolvedSet = doorToSetMap.get(doorKey) ?? setMap.get(hwSetVal)
         if (!resolvedSet || resolvedSet.items.length === 0) {
           orphanDoors.push({
             door_number: d.door_number,
@@ -1262,7 +1265,7 @@ export async function POST(
     const triageOrphanNumbers = new Set(orphanDoors.map(o => o.door_number))
     for (const d of acceptedDoors) {
       if (triageOrphanNumbers.has(d.door_number)) continue
-      if (wouldProduceZeroItems(d, setMapForPhase, doorToSetMapForPhase)) {
+      if (wouldProduceZeroItems(d, setMap, doorToSetMap)) {
         orphanDoors.push({
           door_number: d.door_number,
           reason: 'zero_items_no_fallback',
@@ -1294,15 +1297,10 @@ export async function POST(
     checkDeadline('writing_staging')
     console.log(`[job-orchestrator] Job ${jobId}: writing staging data`)
 
-    // Build lookup maps for buildPerOpeningItems (same pattern as save/route.ts)
-    const setMap = new Map<string, HardwareSet>()
-    for (const set of extractedSets) {
-      setMap.set(set.set_id, set)
-      if (set.generic_set_id && set.generic_set_id !== set.set_id) {
-        setMap.set(set.generic_set_id, set)
-      }
-    }
-    const doorToSetMap = buildDoorToSetMap(extractedSets)
+    // setMap / doorToSetMap are built once at the top of the triage block
+    // above and reused here for buildPerOpeningItems (same pattern as
+    // save/route.ts, where the same pair feeds both the orphan filter and
+    // the item builder).
 
     // Derive filteredDoors from the augmented triage `orphanDoors` array
     // (built above at line ~1239). The triage loop now captures both narrow
@@ -1312,8 +1310,15 @@ export async function POST(
     const stagingOrphanNumbers = new Set(orphanDoors.map(o => o.door_number))
     const filteredDoors = acceptedDoors.filter(d => !stagingOrphanNumbers.has(d.door_number))
     if (stagingOrphanNumbers.size > 0) {
+      // Emit door_numbers in original acceptedDoors order (not Set insertion
+      // order — which is triage-append order, narrow cases first then broad).
+      // Matching the upstream sequence makes the log easier to correlate with
+      // the triage payload in phase_data when debugging a specific run.
+      const orphanNumbersInOrder = acceptedDoors
+        .filter(d => stagingOrphanNumbers.has(d.door_number))
+        .map(d => d.door_number)
       console.log(
-        `[job-orchestrator] Job ${jobId}: filtered ${stagingOrphanNumbers.size} orphan door(s) with no hardware set/items: ${Array.from(stagingOrphanNumbers).join(', ')}`
+        `[job-orchestrator] Job ${jobId}: filtered ${stagingOrphanNumbers.size} orphan door(s) with no hardware set/items: ${orphanNumbersInOrder.join(', ')}`
       )
     }
 
