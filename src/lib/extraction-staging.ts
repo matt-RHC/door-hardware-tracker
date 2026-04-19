@@ -65,9 +65,23 @@ export interface StagingOpening {
 
 export interface StagingHardwareItem {
   name: string
+  /** Per-opening qty AFTER normalization + any post-write mutation
+   *  (pair-leaf hinge split subtracts electric-hinge count on the active
+   *  leaf, handing filter, user edits). Authoritative value for the UI. */
   qty?: number
+  /** RAW per-set PDF qty at extraction time. Records what the PDF said —
+   *  NOT a recomputable derivation of qty. Stays constant across leaf-
+   *  split / handing-filter mutations. Use for audit, not math
+   *  (qty !== ceil(qty_total/qty_door_count) on pair-leaf or sub-
+   *  aggregate cases — see migration 049 for full semantics). */
   qty_total?: number
+  /** Divisor Python recommended at extraction time (door or leaf count
+   *  depending on qty_convention). May exceed qty_total when Python
+   *  detected per-opening qty (no division applied). Same audit-only
+   *  caveat as qty_total. */
   qty_door_count?: number
+  /** How qty was derived. See NEVER_RENORMALIZE in parse-pdf-helpers.ts
+   *  for the terminal values that lock qty from further division. */
   qty_source?: string
   manufacturer?: string
   model?: string
