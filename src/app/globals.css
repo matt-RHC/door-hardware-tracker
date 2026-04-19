@@ -895,6 +895,37 @@ body {
 .chiclet--med   { background: var(--orange-dim); color: var(--orange); }
 .chiclet--low   { background: var(--red-dim);    color: var(--red); }
 
+/* Action chip — quick-fill pills, suggestion shortcuts, etc. Distinct
+   from `.chiclet` because those carry semantic meaning (confidence
+   tier via hue). `.chip` is purely a clickable shortcut with no
+   hue-as-signal; it uses neutral surface/border tokens so a chip
+   never reads as "this is high confidence." */
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: var(--radius-pill);
+  border: 1px solid var(--border);
+  background: var(--surface-raised);
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.4;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+.chip:hover {
+  background: var(--surface-hover);
+  border-color: var(--border-hover);
+}
+.chip:focus-visible {
+  outline: 2px solid var(--accent, var(--blue));
+  outline-offset: 2px;
+}
+
 /* Review section heading — used inside group cards and review body. */
 .review-section-title {
   font-family: var(--font-inter);
