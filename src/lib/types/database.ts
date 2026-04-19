@@ -1071,6 +1071,10 @@ export type Database = {
           is_active: boolean
           leaf_count: number
           location: string | null
+          notes_ai_summary: string | null
+          notes_ai_summary_at: string | null
+          notes_ai_summary_previous: string | null
+          notes_ai_summary_stale: boolean
           pdf_page: number | null
           project_id: string
           zone_name: string | null
@@ -1089,6 +1093,10 @@ export type Database = {
           is_active?: boolean
           leaf_count?: number
           location?: string | null
+          notes_ai_summary?: string | null
+          notes_ai_summary_at?: string | null
+          notes_ai_summary_previous?: string | null
+          notes_ai_summary_stale?: boolean
           pdf_page?: number | null
           project_id: string
           zone_name?: string | null
@@ -1107,6 +1115,10 @@ export type Database = {
           is_active?: boolean
           leaf_count?: number
           location?: string | null
+          notes_ai_summary?: string | null
+          notes_ai_summary_at?: string | null
+          notes_ai_summary_previous?: string | null
+          notes_ai_summary_stale?: boolean
           pdf_page?: number | null
           project_id?: string
           zone_name?: string | null
@@ -1250,6 +1262,10 @@ export type Database = {
           name: string
           pdf_page_count: number | null
           pdf_storage_path: string | null
+          punch_notes_ai_summary: string | null
+          punch_notes_ai_summary_at: string | null
+          punch_notes_ai_summary_previous: string | null
+          punch_notes_ai_summary_stale: boolean
           submittal_date: string | null
         }
         Insert: {
@@ -1265,6 +1281,10 @@ export type Database = {
           name: string
           pdf_page_count?: number | null
           pdf_storage_path?: string | null
+          punch_notes_ai_summary?: string | null
+          punch_notes_ai_summary_at?: string | null
+          punch_notes_ai_summary_previous?: string | null
+          punch_notes_ai_summary_stale?: boolean
           submittal_date?: string | null
         }
         Update: {
@@ -1280,6 +1300,10 @@ export type Database = {
           name?: string
           pdf_page_count?: number | null
           pdf_storage_path?: string | null
+          punch_notes_ai_summary?: string | null
+          punch_notes_ai_summary_at?: string | null
+          punch_notes_ai_summary_previous?: string | null
+          punch_notes_ai_summary_stale?: boolean
           submittal_date?: string | null
         }
         Relationships: []

@@ -321,6 +321,13 @@ export default function ProjectDetailPage() {
                 </span>
               )}
             </button>
+            <button
+              onClick={() => router.push(`/project/${projectId}/punch-notes`)}
+              className="shrink-0 glow-btn glow-btn--ghost text-[13px] rounded"
+              style={{ padding: "0.5rem 0.875rem" }}
+            >
+              Punch Notes
+            </button>
             <div className="shrink-0 relative">
               <button
                 onClick={() => setShowCsvMenu((v) => !v)}
