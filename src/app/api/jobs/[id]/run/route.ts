@@ -34,6 +34,7 @@ import {
   detectIsPair,
   detectIsPairWithTrace,
   normalizeDoorNumber,
+  wouldProduceZeroItems,
   type PdfplumberResult,
   type VisionExtractionResult,
   type PairSignalResult,
@@ -1286,22 +1287,13 @@ export async function POST(
     }
     const doorToSetMap = buildDoorToSetMap(extractedSets)
 
-    // Filter orphan doors — doors with hw_set "N/A" (or empty) that resolve
-    // to no hardware set with items. Matching save/route.ts logic.
-    const filteredDoors = acceptedDoors.filter(d => {
-      const hwSetVal = (d.hw_set ?? '').trim()
-      if (hwSetVal !== '' && hwSetVal !== 'N/A') return true
-      const doorKey = normalizeDoorNumber(d.door_number)
-      const resolvedSet = doorToSetMap.get(doorKey) ?? setMap.get(hwSetVal)
-      return resolvedSet != null && resolvedSet.items.length > 0
-    })
-    if (filteredDoors.length < acceptedDoors.length) {
-      const orphanCount = acceptedDoors.length - filteredDoors.length
-      const orphanNumbers = acceptedDoors
-        .filter(d => !filteredDoors.includes(d))
-        .map(d => d.door_number)
+    const isOrphan = (d: typeof acceptedDoors[number]) =>
+      wouldProduceZeroItems(d, setMap, doorToSetMap)
+    const orphanDoors = acceptedDoors.filter(isOrphan)
+    const filteredDoors = acceptedDoors.filter(d => !isOrphan(d))
+    if (orphanDoors.length > 0) {
       console.log(
-        `[job-orchestrator] Job ${jobId}: filtered ${orphanCount} orphan door(s) with no hardware set/items: ${orphanNumbers.join(', ')}`
+        `[job-orchestrator] Job ${jobId}: filtered ${orphanDoors.length} orphan door(s) with no hardware set/items: ${orphanDoors.map(d => d.door_number).join(', ')}`
       )
     }
 
