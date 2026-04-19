@@ -100,7 +100,6 @@ export default function DoorDetailPage() {
   const [opening, setOpening] = useState<OpeningDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [notes, setNotes] = useState("");
   const [attachmentLoading, setAttachmentLoading] = useState(false);
   const [activeTab, setActiveTab] = useState<'hardware' | 'files' | 'notes' | 'qr'>('hardware');
   const [viewingAttachment, setViewingAttachment] = useState<Attachment | null>(null);
@@ -240,7 +239,6 @@ export default function DoorDetailPage() {
       if (!response.ok) throw new Error("Failed to fetch opening");
       const data: OpeningDetail = await response.json();
       setOpening(data);
-      setNotes(data.notes || "");
       setError(null);
       // Cache is non-critical — don't let IndexedDB errors block the page
       try { await cacheOpening(data); } catch { /* IndexedDB unavailable */ }
@@ -2088,19 +2086,9 @@ export default function DoorDetailPage() {
              and drop the column. */}
         {activeTab === 'notes' && !editingOpening && (
           <div className="mb-8 space-y-4">
-            {notes && notes.trim().length > 0 && (
-              <div className="border border-th-border rounded-md px-3 py-2 bg-surface/40">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="text-[10px] uppercase tracking-wider text-tertiary px-1.5 py-0.5 border border-th-border rounded">
-                    Legacy
-                  </span>
-                  <span className="text-[11px] text-tertiary">
-                    Pre-PR-3 note from openings.notes — read-only
-                  </span>
-                </div>
-                <div className="text-[13px] text-primary whitespace-pre-wrap">{notes}</div>
-              </div>
-            )}
+            {/* Legacy openings.notes banner removed in migration 054.
+                Any non-empty values were backfilled into the notes table
+                as opening-scope notes and now appear in the list below. */}
             <div className="space-y-2">
               <div className="text-[11px] uppercase tracking-wider text-tertiary">
                 Notes for this opening

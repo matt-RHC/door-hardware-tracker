@@ -9,10 +9,12 @@
  * All routes import from this file, so one update propagates everywhere.
  */
 
-/** All columns from the openings table. */
+/** All columns from the openings table.
+ *  `notes` was removed in migration 054 (audit finding #10). Per-opening
+ *  notes now live in the `notes` table with scope='opening'. */
 export const OPENING_COLUMNS = `
   id, project_id, door_number, hw_set, hw_heading, location,
-  door_type, frame_type, fire_rating, hand, notes, pdf_page,
+  door_type, frame_type, fire_rating, hand, pdf_page,
   leaf_count, is_active, floor_number, zone_name, created_at
 `
 

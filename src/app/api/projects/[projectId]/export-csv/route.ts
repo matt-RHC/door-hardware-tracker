@@ -138,7 +138,9 @@ export async function GET(
       'Finish',
       'Extraction Source',
       'Checked',
-      'Notes',
+      // 'Notes' column removed in migration 054 (audit finding #10).
+      // Future: wire to opening-scope notes from the new notes table
+      // when the punch-notes export work lands (PR 6).
     ]
 
     const rows: string[] = [headers.map(escapeCSV).join(',')]
@@ -163,7 +165,6 @@ export async function GET(
           '', '', '', '', '',
           '',
           '',
-          escapeCSV(opening.notes),
         ].join(','))
       } else {
         for (const item of items) {
@@ -185,7 +186,6 @@ export async function GET(
             escapeCSV(item.finish),
             escapeCSV(item.qty_source),
             escapeCSV(checked),
-            escapeCSV(opening.notes),
           ].join(','))
         }
       }
