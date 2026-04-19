@@ -12,6 +12,7 @@ import ReviewFilters from "./review/ReviewFilters";
 import SetView from "./review/SetView";
 import DoorView from "./review/DoorView";
 import IssueView from "./review/IssueView";
+import SourceRail from "./review/SourceRail";
 import InlineRescan, { type InlineRescanMode } from "./review/InlineRescan";
 import PropagationSuggestionModal from "./review/PropagationSuggestionModal";
 import { isOrphanDoor, getDoorIssues, getConfidence } from "./review/utils";
@@ -352,6 +353,63 @@ export default function StepReview({
     });
   }, []);
 
+  // ─── Rail focus: which set is the reviewer currently on ───
+  // Derived from existing expand/collapse state so there's no extra
+  // click needed to "activate" the rail — the rail just follows
+  // wherever the eye went. Priority:
+  //   1. (set view)            first non-collapsed group
+  //   2. (door / issue view)   set of the first expanded door
+  //   3. fallback (any view)   first group with attention,
+  //                            else first group overall
+  // Issue view shares the door-expansion state, so when the reviewer
+  // expands a door inside an issue cluster the rail tracks its set.
+  // Returned as { setId, heading, doorCount } so the rail header can
+  // label the page without re-doing the lookups.
+  const railTarget = useMemo(() => {
+    const fromSet = () => {
+      const firstOpen = groups.find((g) => !collapsedGroups.has(g.setId));
+      if (!firstOpen) return null;
+      return {
+        setId: firstOpen.setId,
+        heading: firstOpen.heading ?? null,
+        doorCount: firstOpen.doors.length,
+      };
+    };
+    const fromDoor = () => {
+      if (expandedDoors.size === 0) return null;
+      const firstKey = Array.from(expandedDoors)[0];
+      const lastDash = firstKey.lastIndexOf("-");
+      if (lastDash < 0) return null;
+      const idx = parseInt(firstKey.substring(lastDash + 1), 10);
+      const door = Number.isFinite(idx) ? doors[idx] : undefined;
+      if (!door) return null;
+      const normalizedKey = normalizeDoorNumber(door.door_number);
+      const specificSet = doorToSetMap.get(normalizedKey);
+      const setId = specificSet?.set_id ?? door.hw_set ?? null;
+      if (!setId) return null;
+      const matchingGroup = groups.find((g) => g.setId === setId);
+      return {
+        setId,
+        heading: matchingGroup?.heading ?? specificSet?.heading ?? null,
+        doorCount: matchingGroup?.doors.length ?? null,
+      };
+    };
+    const fromFallback = () => {
+      const firstFlagged = groups.find(
+        (g) => g.medCount > 0 || g.lowCount > 0,
+      );
+      const target = firstFlagged ?? groups[0];
+      if (!target) return null;
+      return {
+        setId: target.setId,
+        heading: target.heading ?? null,
+        doorCount: target.doors.length,
+      };
+    };
+    if (viewMode === "set") return fromSet() ?? fromFallback();
+    return fromDoor() ?? fromFallback();
+  }, [viewMode, groups, collapsedGroups, expandedDoors, doors, doorToSetMap]);
+
   const togglePreview = useCallback((setId: string) => {
     setPreviewOpen((prev) => {
       const next = new Set(prev);
@@ -621,7 +679,7 @@ export default function StepReview({
   );
 
   return (
-    <div className="flex flex-col h-full max-w-5xl mx-auto">
+    <div className="flex flex-col h-full max-w-5xl xl:max-w-[1800px] mx-auto">
       <ReviewSummary
         totalDoors={totalDoors}
         highCount={highCount}
@@ -643,7 +701,8 @@ export default function StepReview({
         />
       </ReviewSummary>
 
-      <div className="flex-1 overflow-y-auto min-h-0">
+      <div className="flex-1 flex min-h-0 gap-0">
+        <div className="flex-1 overflow-y-auto min-w-0">
         {viewMode === 'door' ? (
           <DoorView
             doors={sortedDoors}
@@ -715,6 +774,25 @@ export default function StepReview({
             registerRef={registerRef}
           />
         )}
+        </div>
+
+        {/* Source PDF rail — persistent reference pane, only on wide
+            screens. Below xl the existing inline set-expansion previews
+            remain the single source of PDF context so narrow layouts
+            aren't penalised with a cramped two-column squeeze. */}
+        <aside
+          className="hidden xl:flex xl:flex-col w-[420px] shrink-0 border-l border-th-border bg-surface"
+          aria-label="Source PDF preview"
+        >
+          <SourceRail
+            activeSetId={railTarget?.setId ?? null}
+            activeSetHeading={railTarget?.heading ?? null}
+            activeSetDoorCount={railTarget?.doorCount ?? null}
+            pdfBuffer={pdfBuffer}
+            classifyResult={classifyResult}
+            hardwareSets={hardwareSets}
+          />
+        </aside>
       </div>
 
       <WizardNav
