@@ -29,12 +29,14 @@ interface IssueViewProps {
   registerRef: (doorNumber: string, el: HTMLElement | null) => void;
 }
 
-// Severity → row-accent class. Matches the Set view severity dots in
-// group headers + the card left-border convention already in globals.css.
+// Severity → row-accent class. Matches the attention-first handoff's
+// high=red / med=orange / soft=yellow taxonomy. `row-accent-green` is
+// reserved for clean/auto-approved rows elsewhere in the review and
+// would read as "this is fine" on an advisory cluster card.
 const ACCENT_CLASS: Record<IssueSeverity, string> = {
   high: "row-accent-red",
   med: "row-accent-amber",
-  soft: "row-accent-green",
+  soft: "row-accent-yellow",
 };
 
 // Header dot color. Matches the severity taxonomy used in SetView.
@@ -94,9 +96,13 @@ export default function IssueView({
     );
   }
   if (groups.length === 0) {
+    // Could be a genuinely clean project *or* the user filtered flagged
+    // openings out (e.g. `filterLevel === 'high'` keeps only auto-
+    // approved rows, which by definition have no issues). Keep the copy
+    // neutral so it's accurate in both cases.
     return (
       <p className="text-tertiary text-sm text-center py-8">
-        Everything looks clean — no openings are flagged.
+        No flagged openings in this view.
       </p>
     );
   }
