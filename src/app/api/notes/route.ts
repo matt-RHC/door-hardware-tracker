@@ -17,12 +17,21 @@ function badRequest(message: string) {
  * derivation prevents a malicious client from spoofing project_id while
  * passing a foreign opening/item id. RLS would also catch this, but
  * surfacing it here gives a cleaner 400 instead of an opaque RLS denial.
+ *
+ * For item scope, also returns opening_id since the caller needs to set
+ * it on the new row (RLS check + scope CHECK constraint both require it),
+ * and we already have it from the hardware_items join.
  */
+type ResolvedScope =
+  | { projectId: string; openingId?: undefined }
+  | { projectId: string; openingId: string }
+  | { error: string; status: number }
+
 async function resolveProjectId(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   supabase: any,
   input: CreateNoteInput,
-): Promise<{ projectId: string } | { error: string; status: number }> {
+): Promise<ResolvedScope> {
   if (input.scope === 'project') {
     return { projectId: input.project_id }
   }
@@ -37,7 +46,8 @@ async function resolveProjectId(
     }
     return { projectId: (data as { project_id: string }).project_id }
   }
-  // item scope: hardware_items → openings → project_id
+  // item scope: single round-trip via hardware_items → openings join.
+  // Returns both opening_id (needed on the new row) and project_id.
   const { data, error } = await supabase
     .from('hardware_items')
     .select('opening_id, openings!inner(project_id)')
@@ -51,7 +61,7 @@ async function resolveProjectId(
   if (!openings) {
     return { error: 'Hardware item has no parent opening', status: 400 }
   }
-  return { projectId: openings.project_id }
+  return { projectId: openings.project_id, openingId: row.opening_id }
 }
 
 /**
@@ -180,16 +190,9 @@ export async function POST(request: NextRequest) {
     }
     if (input.scope === 'item') {
       insertRow.hardware_item_id = input.hardware_item_id
-      // RLS needs opening_id on the row too — derive from the item.
-      const { data: itemRow, error: itemErr } = await supabase
-        .from('hardware_items')
-        .select('opening_id')
-        .eq('id', input.hardware_item_id)
-        .single()
-      if (itemErr || !itemRow) {
-        return NextResponse.json({ error: 'Hardware item not found' }, { status: 404 })
-      }
-      insertRow.opening_id = (itemRow as { opening_id: string }).opening_id
+      // opening_id was already fetched in resolveProjectId via the join.
+      // Asserted non-null because resolveProjectId returns it for item scope.
+      insertRow.opening_id = resolved.openingId!
     }
 
     // See note above on `notes` table cast.

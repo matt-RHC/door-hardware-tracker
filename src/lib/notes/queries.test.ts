@@ -119,6 +119,26 @@ describe('fetchProjectNotes', () => {
     expect(inCall[1]).toEqual(['op-A'])
   })
 
+  it('dedupes hardware_item_ids when multiple notes share an item', async () => {
+    // Symmetric coverage for the items lookup — same dedupe pattern as
+    // opening_id. 3 notes on the same hardware_item should produce one
+    // entry in hardware_items.in() (verified via the call args).
+    const { supabase, builders } = makeSupabaseMock({
+      notes: [
+        { id: 'n1', project_id: 'p1', scope: 'item', opening_id: 'op-A', hardware_item_id: 'hw-1' },
+        { id: 'n2', project_id: 'p1', scope: 'item', opening_id: 'op-A', hardware_item_id: 'hw-1' },
+        { id: 'n3', project_id: 'p1', scope: 'item', opening_id: 'op-A', hardware_item_id: 'hw-1' },
+      ],
+      openings: [{ id: 'op-A', door_number: '110-02C' }],
+      items: [{ id: 'hw-1', name: 'Hinges' }],
+    })
+    const bundle = await fetchProjectNotes(supabase, 'p1')
+    expect(bundle.itemNames).toEqual({ 'hw-1': 'Hinges' })
+    const inCall = builders.itemsBuilder.in.mock.calls[0]
+    expect(inCall[0]).toBe('id')
+    expect(inCall[1]).toEqual(['hw-1'])
+  })
+
   it('throws a clear error when the notes query fails', async () => {
     const supabase = {
       from: () => ({
