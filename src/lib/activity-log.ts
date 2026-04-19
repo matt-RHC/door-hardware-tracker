@@ -57,6 +57,7 @@ export type EntityType =
   | 'checklist_progress'
   | 'delivery'
   | 'issue'
+  | 'note'
 
 interface LogActivityParams {
   projectId: string

@@ -40,6 +40,14 @@ export const ACTIVITY_ACTIONS = {
 
   // Extraction hygiene
   EXTRACTION_HANDING_FILTER_APPLIED: 'extraction_handing_filter_applied',
+
+  // Punch notes (migration 051)
+  NOTE_CREATED: 'note_created',
+  NOTE_UPDATED: 'note_updated',
+  NOTE_DELETED: 'note_deleted',
+  PUNCH_NOTES_SUMMARIZED: 'punch_notes_summarized',
+  PUNCH_NOTES_REVERTED: 'punch_notes_reverted',
+  PUNCH_NOTES_EXPORTED: 'punch_notes_exported',
 } as const
 
 export type ActivityAction = typeof ACTIVITY_ACTIONS[keyof typeof ACTIVITY_ACTIONS]
@@ -73,4 +81,10 @@ export const ACTION_LABELS: Record<string, string> = {
   item_edited: 'Item Edited',
   item_deleted: 'Item Deleted',
   extraction_handing_filter_applied: 'Handing Filter Applied',
+  note_created: 'Note Added',
+  note_updated: 'Note Edited',
+  note_deleted: 'Note Removed',
+  punch_notes_summarized: 'Punch Notes Summarized',
+  punch_notes_reverted: 'Punch Notes Reverted',
+  punch_notes_exported: 'Punch Notes Exported (PDF)',
 }
