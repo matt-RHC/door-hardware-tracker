@@ -27,10 +27,21 @@
  *   - Only auto-audits INSERT and UPDATE column LHS. SELECT/WHERE column
  *     refs are harder (require alias resolution) and weren't the bug
  *     class we got burned by.
+ *   - UPDATE parsing terminates the SET clause at the first WHERE it
+ *     sees. A SET clause containing a subquery with its own WHERE —
+ *     e.g. `UPDATE t SET col = (SELECT x FROM y WHERE ...), col2 = z`
+ *     `WHERE ...` — would be truncated and `col2` missed. No migration
+ *     today triggers this pattern; lift the limitation if one does.
  *   - Skips dynamic SQL (EXECUTE '...') since it can't be statically
  *     analyzed.
  *   - Skips quoted identifiers — this codebase doesn't use them in RPCs.
- *   - Skips ALTER TABLE ... RENAME TO (table rename) — we don't do those.
+ *   - Skips ALTER TABLE ... RENAME TO (table rename). Migration 035 DID
+ *     do one — punchy_logs → darrin_logs — so this IS relevant even if
+ *     neither table is touched by the currently-audited functions. If a
+ *     future audited function references either table, the parser will
+ *     treat pre- and post-rename column states as belonging to separate
+ *     tables and produce false positives. Add a known-renames map
+ *     (old → new) if that becomes an issue.
  *   - String literals in VALUES / WHERE / CHECK are values, not columns —
  *     this test only flags column *references*, matching the actual bug
  *     class. Value-vs-CHECK drift is covered by migration-schema-drift.
