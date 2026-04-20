@@ -106,7 +106,15 @@ function getLatestExtractionRunsStatusCheck(): Set<string> {
  */
 function getLatestMergeExtractionStatusWrites(): Set<string> {
   const migs = loadMigrations()
-  const fnStartRe = /CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+merge_extraction\b/i
+  // `(?:public\.)?` is required — migrations 055 and 059 define the function
+  // as `CREATE OR REPLACE FUNCTION public.merge_extraction(...)`, while
+  // earlier migrations (021, 025, 034, 037) use the unqualified form. Without
+  // the optional schema prefix this regex silently fell through to mig 037
+  // as "latest", which still passed the assertion because mig 037 also writes
+  // `status = 'promoted'` — but it meant the guard was auditing an obsolete
+  // definition. The backport below keeps the sister file's drift detector
+  // in sync with `migration-column-drift.test.ts::getLatestFunctionBody`.
+  const fnStartRe = /CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+(?:public\.)?merge_extraction\b/i
   let latestBody: string | null = null
   for (const { body } of migs) {
     if (fnStartRe.test(body)) latestBody = body
@@ -138,5 +146,51 @@ describe('migration schema-drift guard', () => {
     const required = ['extracting', 'reviewing', 'completed_with_issues', 'failed', 'promoted']
     const missing = required.filter(v => !allowed.has(v))
     expect(missing, `the latest CHECK dropped these canonical states: ${missing.join(', ')}`).toEqual([])
+  })
+
+  // Regression guard for the regex fix in this file: before backporting
+  // `(?:public\.)?` to fnStartRe, this test would silently parse mig 037
+  // as "latest" because the pattern required `FUNCTION merge_extraction`
+  // (unqualified) and mig 055/059 use `FUNCTION public.merge_extraction`.
+  // The assertion above still passed because mig 037 also wrote 'promoted'.
+  //
+  // Mig 059 removed the catch-all `EXCEPTION WHEN OTHERS` handler that all
+  // earlier merge_extraction definitions had. Asserting the parsed function
+  // body does NOT contain that handler proves we're correctly picking up
+  // mig 059 as the latest definition, not falling through to an older one.
+  //
+  // We scope the check to just the function body between `AS $function$ ...
+  // $function$` — mig 059's header comments talk about the removed handler
+  // in prose, so a whole-file regex would false-positive.
+  it('latest merge_extraction body is from mig 059 (no EXCEPTION WHEN OTHERS handler)', () => {
+    const migs = loadMigrations()
+    const fnStartRe = /CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+(?:public\.)?merge_extraction\b/i
+    let latestMigFile: string | null = null
+    for (const { body } of migs) {
+      if (fnStartRe.test(body)) latestMigFile = body
+    }
+    expect(latestMigFile, 'could not locate any merge_extraction definition').not.toBeNull()
+
+    // Extract just the function body between the dollar-quote delimiters.
+    const dollarMatch = /AS\s+(\$\w*\$)([\s\S]*?)\1/i.exec(latestMigFile!)
+    expect(dollarMatch, 'merge_extraction definition has no $$-delimited body — parser drift?').not.toBeNull()
+    const fnBody = dollarMatch![2]
+
+    // Strip SQL line comments so prose like "removed `EXCEPTION WHEN OTHERS`"
+    // (which mig 059's in-body comment contains, explaining the change)
+    // doesn't trip the match. Only executable `EXCEPTION WHEN OTHERS` should
+    // count — that's the pattern that would indicate a regression.
+    const codeOnly = fnBody
+      .split('\n')
+      .map(line => {
+        const idx = line.indexOf('--')
+        return idx >= 0 ? line.slice(0, idx) : line
+      })
+      .join('\n')
+
+    expect(
+      /EXCEPTION\s+WHEN\s+OTHERS/i.test(codeOnly),
+      'latest merge_extraction function body still contains executable `EXCEPTION WHEN OTHERS` — either mig 059 was reverted, a new migration reintroduced the handler, or this regex is falling through to an older migration (the bug this test guards against).',
+    ).toBe(false)
   })
 })
